@@ -10,9 +10,6 @@ r = requests.get(f'{BASE_URL}/metadata/_search?q=*&size=1000')
 
 metadatas = [md['_source'] for md in json.loads(r.text)['hits']['hits']]
 
-# todo rm
-metadatas = metadatas[0:1]
-
 metadata_field_conversion = {
     "Assay Type": "assay_type",
     "AvgSpotLen": "avg_spot_len",

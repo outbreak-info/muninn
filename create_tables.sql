@@ -73,7 +73,7 @@ create table if not exists metadata (
 	avg_spot_len double precision not null, -- todo
 	bases bigint not null,
 	bio_project text not null,
-	bio_sample text not null,
+	bio_sample text, -- nullable
 	bio_sample_accession text not null,
 	bio_sample_model text not null,
 	bytes bigint not null,
@@ -87,7 +87,7 @@ create table if not exists metadata (
 	experiment text not null,
 	geo_loc_name text not null, -- todo
 	geo_loc_name_country text not null, -- todo
-	geo_loc_name_country_continent text not null, -- todo look into if there's a slick way to do this
+	geo_loc_name_country_continent text, -- nullable todo look into if there's a slick way to do this
 	host text not null,
 	instrument text not null, 
 	isolate text not null, 
