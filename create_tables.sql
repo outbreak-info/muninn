@@ -21,14 +21,14 @@ drop table if exists demixed_lineages;
 
 create type consent_level as enum ('public', 'other');
 
-create type nucleotide as enum ('a', 'c', 'g', 't', 'u', 'n');
+create type nucleotide as enum ('A', 'C', 'G', 'T', 'U', 'N');
 
 create type amino_acid as enum (
 	'A', 'C', 'D', 'E',
 	'F', 'G', 'H', 'I',
 	'K', 'L', 'M', 'N',
 	'P', 'Q', 'R', 'S',
-	'T', 'V', 'W', 'Y'
+	'T', 'V', 'W', 'Y', '*'
 );
 
 create type flu_region as enum (
@@ -131,8 +131,8 @@ create table mutations (
 	ref_nt nucleotide not null, 
 	alt_nt nucleotide not null,
 	position_aa integer not null,
-	alt_aa amino_acid not null,
 	ref_aa amino_acid not null,
+	alt_aa amino_acid not null,
 	region flu_region not null
 );
 
@@ -150,31 +150,15 @@ create table variants (
 	ref_aa amino_acid not null,
 	alt_aa amino_acid not null,
 
+	ref_dp integer not null, -- todo
 	alt_dp integer not null, -- todo name
-	alt_freq double precision not null,
+	ref_qual double precision not null, -- todo
 	alt_qual double precision not null,
+	ref_rv integer not null, 
 	alt_rv integer not null,
-	-- antibody_set text not null, -- todo dms
-	-- dms_region text not null, -- todo dms
-	-- entry_in_293_t_cells real not null, -- dms
-	-- ferret_sera_escape real not null, -- dms
-	-- gff_feature text not null,
-	-- ha1_ha2_h5_site text not null, -- dms
-	-- mature_h5_site real not null,-- dms
-	-- mouse_sera_escape real not null,-- dms
-	-- nt_changes_to_codon real not null,-- dms
+	alt_freq double precision not null,
 	pass boolean not null,
 	pval double precision not null,
-	ref_dp integer not null, -- todo
-	ref_qual double precision not null, -- todo
-	ref_rv integer not null, 
-	-- reference_h1_site bigint not null, -- dms 
-	-- region flu_region not null, -- this is REGION from es dms
-	-- region_other text not null, -- this is region from es dms
-	-- sa26_usage_increase real not null, -- dms
-	-- sequential_site real not null, -- dms
-	-- species_sera_escape real not null, -- dms
-	-- stability real not null, -- dms
 	total_dp integer not null,
 	dms_result_id bigint references dms_results (id)
 );
