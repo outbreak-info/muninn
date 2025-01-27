@@ -101,7 +101,7 @@ create table if not exists metadata (
 	release_date date not null,
 	run text not null,
 	sample_name text not null,
-	serotype text not null, -- todo
+	serotype text not null,
 	sra_study text not null,
 	version text not null -- ???
 );
@@ -140,19 +140,19 @@ create table variants (
 	id bigserial primary key,
 	metadata_id bigint references metadata (id) not null, -- replaces sra
 
-	position bigint not null, -- was pos
+	position_nt bigint not null, -- was pos
 	ref_nt nucleotide not null, -- was ref
 	alt_nt nucleotide not null, -- was alt
-	ref_codon codon not null, -- todo
-	alt_codon codon not null, -- could make an enum?
+	ref_codon codon not null,
+	alt_codon codon not null,
 
 	position_aa double precision not null, -- was pos_aa
 	ref_aa amino_acid not null,
 	alt_aa amino_acid not null,
 
-	ref_dp integer not null, -- todo
-	alt_dp integer not null, -- todo name
-	ref_qual double precision not null, -- todo
+	ref_dp integer not null,
+	alt_dp integer not null,
+	ref_qual double precision not null,
 	alt_qual double precision not null,
 	ref_rv integer not null, 
 	alt_rv integer not null,
@@ -163,20 +163,6 @@ create table variants (
 	dms_result_id bigint references dms_results (id)
 );
 
--- create table demixed (
--- 	id bigserial primary key,
--- 	metadata_id bigint references metadata (id) not null, -- replaces sra
--- 	abundances real[] not null,
--- 	coverage real not null,
--- 	filename text not null,
--- 	lineages text[] not null,
--- 	resid real not null, -- todo: unabbreviate name?
--- 	summarized_score real not null,
--- 	variants_filename text not null
--- );
-
-
--- let's try a fancier version of this?
 
 -- eventually this could have parents and implement a DAG via check constraint?
 create table lineages (
