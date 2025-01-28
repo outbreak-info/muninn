@@ -106,22 +106,25 @@ create table if not exists metadata (
 	version text not null -- ???
 );
 
+/*
+ do we need more "location" data associated with these results?
+*/
 create table dms_results (
 	id bigserial primary key,
 	antibody_set text not null,
-	entry_in_293_t_cells real not null, 
-	ferret_sera_escape real not null, 
+	entry_in_293_t_cells double precision not null, 
+	ferret_sera_escape double precision not null, 
 	ha1_ha2_h5_site text not null, 
-	mature_h5_site real not null,
-	mouse_sera_escape real not null,
-	nt_changes_to_codon real not null,
+	mature_h5_site double precision not null,
+	mouse_sera_escape double precision not null,
+	nt_changes_to_codon double precision not null,
 	reference_h1_site bigint not null, 
 	region flu_region not null, -- this is REGION from es
 	region_other text not null, -- this is region from es
-	sa26_usage_increase real not null,
-	sequential_site real not null,
-	species_sera_escape real not null,
-	stability real not null
+	sa26_usage_increase double precision not null,
+	sequential_site double precision not null,
+	species_sera_escape double precision not null,
+	stability double precision not null
 );
 
 create table mutations (
@@ -174,17 +177,17 @@ create table lineages (
 create table demixed (
 	id bigserial primary key,
 	metadata_id bigint references metadata (id) not null, -- replaces sra
-	coverage real not null,
+	coverage double precision not null,
 	filename text not null, -- maybe don't need
-	resid real not null, -- todo: unabbreviate name?
-	summarized_score real not null,
+	resid double precision not null, -- todo: unabbreviate name?
+	summarized_score double precision not null,
 	variants_filename text not null
 );
 
 create table demixed_lineages (
 	demixed_id bigint references demixed (id) not null,
 	lineage_id bigint references lineages (id) not null,
-	demixed_position integer not null, -- this saves this entry's position in the array
-	abundance real not null,
+	demixed_position integer not null, -- this saves this entry's position in the array todo: should have a better name?
+	abundance double precision not null,
 	primary key (demixed_id, lineage_id)
 );
