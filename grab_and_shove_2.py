@@ -1,6 +1,11 @@
 import requests
 import json
 import sqlalchemy
+from sqlalchemy import insert
+from sqlalchemy.orm import Session
+
+import DB.engine
+from DB.models import Metadata, Mutation
 
 BASE_URL = "http://kenny.scripps.edu:9200"
 
@@ -49,46 +54,39 @@ metadata_field_conversion = {
 }
 
 mds_translated = [{v: md[k] for k, v in metadata_field_conversion.items()} for md in metadatas]
-# mds_translated = mds_translated[0:1] #todo rm
+
 # fix collection date formats
 for md in mds_translated:
     if md['collection_date'] in {'2023', '2024'}:
         md['collection_date'] = f'{md['collection_date']}-1-1'
 
-def create_pg_engine():
-    db_name = "postgres"
-    db_user = "postgres"
-    db_password = ""
-    db_host = "localhost"
-    db_port = 5432
-    return sqlalchemy.create_engine(f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}")
 
-engine = create_pg_engine()
+engine = DB.engine.create_pg_engine()
 
-metadata_table = sqlalchemy.Table('metadata', sqlalchemy.MetaData(), autoload_with=engine)
-
-with engine.connect() as conn:
-    conn.execute(sqlalchemy.insert(metadata_table), mds_translated)
-
-sras = [md['run'] for md in mds_translated]
+with Session(engine) as session:
+    res = session.scalars(
+        insert(Metadata).returning(Metadata.id, sort_by_parameter_order=True),
+        mds_translated
+    )
+    session.commit()
+    metadata_ids_ordered = res.all()
 
 print('metadata done')
 
-#### Now do mutations ####
+# todo: have to check that the match is happening correctly
+sra_to_id = dict(zip([md['run'] for md in mds_translated], metadata_ids_ordered))
 
-# get the db ids for each sra
-with engine.connect() as conn:
-    sras_formatted = ','.join([f"'{sra}'" for sra in sras])
-    r = conn.execute(sqlalchemy.text(f'select run, id from metadata where run in ({sras_formatted});'))
-    sra_to_id = {i['run']: i['id'] for i in r.mappings().all()}
+#### Now do mutations ####
 
 # get mutations data
 mutations = []
-for sra in sras:
+for sra in sra_to_id.keys():
     r = requests.get(f'{BASE_URL}/mutations/_search?q=sra:{sra}&size=1000')
     mutations += [mut['_source'] for mut in json.loads(r.text)['hits']['hits']]
 
-mutations = [m for m in mutations if m['sra'] in sras]
+# we filter b/c this is search and there will always be results, even if the sra doesn't match
+# todo: check up on metadatas with no mutations
+mutations = [m for m in mutations if m['sra'] in sra_to_id.keys()]
 
 # shim values not in es
 for m in mutations:
@@ -110,6 +108,7 @@ mutations_field_conversion = {
 
 mutations_translated = [{v: m[k] for k, v in mutations_field_conversion.items()} for m in mutations]
 
+# use 'STAR' in DB instead of '*' to keep sqlalchemy appeased
 for m in mutations_translated:
     if m['ref_aa'] == '*':
         m['ref_aa'] = 'STAR'
@@ -117,11 +116,12 @@ for m in mutations_translated:
     if m['alt_aa'] == '*':
         m['alt_aa'] = 'STAR'
 
-# mutations_translated = mutations_translated[0:3] #rm
-
-mutations_table = sqlalchemy.Table('mutations', sqlalchemy.MetaData(), autoload_with=engine)
-
-with engine.connect() as conn:
-    conn.execute(sqlalchemy.insert(mutations_table), mutations_translated)
-
+with Session(engine) as session:
+    res = session.scalars(
+        insert(Mutation).returning(Mutation.id, sort_by_parameter_order=True),
+        mutations_translated
+    )
+    session.commit()
+    mutation_ids_ordered = res.all()
+print(mutation_ids_ordered)
 print('mutations done')

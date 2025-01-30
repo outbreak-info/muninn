@@ -28,7 +28,7 @@ create type amino_acid as enum (
 	'F', 'G', 'H', 'I',
 	'K', 'L', 'M', 'N',
 	'P', 'Q', 'R', 'S',
-	'T', 'V', 'W', 'Y', '*'
+	'T', 'V', 'W', 'Y', 'STAR'
 );
 
 create type flu_region as enum (
