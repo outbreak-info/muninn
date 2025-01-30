@@ -5,7 +5,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship, DeclarativeBase
 
 
 class ConsentLevel(Enum):
-
     public = 'public'
     other = 'other'
 
@@ -17,7 +16,6 @@ class Nucleotide(Enum):
     T = 'T'
     U = 'U'
     N = 'N'
-
 
 
 class AminoAcid(Enum):
@@ -59,7 +57,6 @@ class FluRegion(Enum):
     M2 = 'M2'
     NS1 = 'NS1'
     NS2 = 'NS2'
-
 
 
 class Codon(Enum):
@@ -149,7 +146,7 @@ class Metadata(BaseModel):
     bytes = sa.Column(sa.BigInteger, nullable=False)
     center_name = sa.Column(sa.String, nullable=False)
     collection_date = sa.Column(sa.Date, nullable=False)
-    consent = sa.Column(sa.Enum(ConsentLevel, name = 'consent_level'), nullable=False)
+    consent = sa.Column(sa.Enum(ConsentLevel, name='consent_level'), nullable=False)
     create_date = sa.Column(sa.Date, nullable=False)
     datastore_filetype = sa.Column(sa.String, nullable=False)
     datastore_provider = sa.Column(sa.String, nullable=False)
@@ -179,7 +176,7 @@ class Metadata(BaseModel):
 class Mutation(BaseModel):
     __tablename__ = 'mutations'
 
-    id: Mapped[int] =  mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
     metadata_id: Mapped[int] = mapped_column(sa.ForeignKey('metadata.id'), nullable=False)
     linked_metadata: Mapped['Metadata'] = relationship(back_populates='mutations')
     position_nt = sa.Column(sa.BigInteger, nullable=False)
