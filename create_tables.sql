@@ -69,41 +69,25 @@ create type codon as enum (
 -- todo: sort out int/bigint and real/double
 create table if not exists metadata (
 	id bigserial primary key,
-	assay_type text not null,
-	avg_spot_len double precision not null, -- todo
-	bases bigint not null,
-	bio_project text not null,
-	bio_sample text, -- nullable
-	bio_sample_accession text not null,
-	bio_sample_model text not null,
-	bytes bigint not null,
-	center_name text not null,
-	collection_date date not null,
-	consent consent_level not null,
-	create_date date not null,
-	datastore_filetype text not null,
-	datastore_provider text not null,
-	datastore_region text not null,
-	experiment text not null,
-	geo_loc_name text not null, -- todo
-	geo_loc_name_country text not null, -- todo
-	geo_loc_name_country_continent text, -- nullable todo look into if there's a slick way to do this
-	host text not null,
-	instrument text not null, 
-	isolate text not null, 
-	isolation_source text, -- nullable
-	library_layout text not null, 
-	library_name text not null, 
-	library_selection text not null, 
-	library_source text not null, 
-	organism text not null,
-	platform text not null,
-	release_date date not null,
-	run text not null,
-	sample_name text not null,
-	serotype text not null,
-	sra_study text not null,
-	version text not null -- ???
+	run text not null
+);
+
+create table mutations (
+	id bigserial primary key,
+	position_nt bigint,
+	ref_nt nucleotide,
+	alt_nt nucleotide,
+	position_aa integer not null,
+	ref_aa amino_acid not null,
+	alt_aa amino_acid not null,
+	region flu_region not null,
+	unique(region, position_aa, ref_aa, alt_aa)
+);
+
+create table metadata_mutations (
+    metadata_id bigint references metadata (id),
+    mutation_id bigint references mutations (id),
+    primary key (metadata_id, mutation_id)
 );
 
 /*
@@ -112,13 +96,13 @@ create table if not exists metadata (
 create table dms_results (
 	id bigserial primary key,
 	antibody_set text not null,
-	entry_in_293_t_cells double precision not null, 
-	ferret_sera_escape double precision not null, 
-	ha1_ha2_h5_site text not null, 
+	entry_in_293_t_cells double precision not null,
+	ferret_sera_escape double precision not null,
+	ha1_ha2_h5_site text not null,
 	mature_h5_site double precision not null,
 	mouse_sera_escape double precision not null,
 	nt_changes_to_codon double precision not null,
-	reference_h1_site bigint not null, 
+	reference_h1_site bigint not null,
 	region flu_region not null, -- this is REGION from es
 	region_other text not null, -- this is region from es
 	sa26_usage_increase double precision not null,
@@ -127,31 +111,27 @@ create table dms_results (
 	stability double precision not null
 );
 
-create table mutations (
-	id bigserial primary key,
-	metadata_id bigint references metadata (id) not null, -- replaces sra
-	position_nt bigint not null,
-	ref_nt nucleotide not null, 
-	alt_nt nucleotide not null,
-	position_aa integer not null,
-	ref_aa amino_acid not null,
-	alt_aa amino_acid not null,
-	region flu_region not null
-);
-
 create table variants (
 	id bigserial primary key,
 	metadata_id bigint references metadata (id) not null, -- replaces sra
 
 	position_nt bigint not null, -- was pos
 	ref_nt nucleotide not null, -- was ref
-	alt_nt nucleotide not null, -- was alt
-	ref_codon codon not null,
-	alt_codon codon not null,
+	alt_nt nucleotide, -- was alt
+	alt_nt_indel text,
+	-- Must have either alt nt or an indel, can't have both
+	constraint has_nt_alt_xor_indel check ((alt_nt is null) >< (alt_nt_indel is null)),
 
-	position_aa double precision not null, -- was pos_aa
-	ref_aa amino_acid not null,
-	alt_aa amino_acid not null,
+	ref_codon codon,
+	alt_codon codon,
+
+	position_aa double precision, -- was pos_aa todo: should be int?
+	ref_aa amino_acid,
+	alt_aa amino_acid,
+
+	gff_feature text,
+	region flu_region not null,
+	region_full_text text not null,
 
 	ref_dp integer not null,
 	alt_dp integer not null,
@@ -163,9 +143,9 @@ create table variants (
 	pass boolean not null,
 	pval double precision not null,
 	total_dp integer not null,
+
 	dms_result_id bigint references dms_results (id)
 );
-
 
 -- eventually this could have parents and implement a DAG via check constraint?
 create table lineages (
