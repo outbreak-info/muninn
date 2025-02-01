@@ -120,7 +120,7 @@ create table variants (
 	alt_nt nucleotide, -- was alt
 	alt_nt_indel text,
 	-- Must have either alt nt or an indel, can't have both
-	constraint has_nt_alt_xor_indel check ((alt_nt is null) >< (alt_nt_indel is null)),
+	constraint must_have_nt_alt_xor_indel check ((alt_nt is null) >< (alt_nt_indel is null)),
 
 	ref_codon codon,
 	alt_codon codon,

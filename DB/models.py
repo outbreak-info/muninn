@@ -176,13 +176,14 @@ class Variant(BaseModel):
     position_nt = sa.Column(sa.BigInteger, nullable=False)
     ref_nt = sa.Column(sa.Enum(Nucleotide), nullable=False)
     alt_nt = sa.Column(sa.Enum(Nucleotide))
+    alt_nt_indel = sa.Column(sa.String)
 
     ref_codon = sa.Column(sa.Enum(Codon))
     alt_codon = sa.Column(sa.Enum(Codon))
 
     position_aa = sa.Column(sa.Float)
-    ref_aa = sa.Column(sa.Enum(AminoAcid, name='amino_acid'), nullable=False)
-    alt_aa = sa.Column(sa.Enum(AminoAcid, name='amino_acid'), nullable=False)
+    ref_aa = sa.Column(sa.Enum(AminoAcid, name='amino_acid'))
+    alt_aa = sa.Column(sa.Enum(AminoAcid, name='amino_acid'))
 
     gff_feature = sa.Column(sa.String)
     region = sa.Column(sa.Enum(FluRegion, name='flu_region'), nullable=False)
