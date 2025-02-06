@@ -60,7 +60,7 @@ create table mutations (
 	alt_nt_indel text,
 	check (alt_nt_indel <> ''),
 	unique nulls not distinct (gff_feature, region, position_nt, alt_nt, alt_nt_indel),
-	constraint must_have_nt_alt_xor_indel check ((alt_nt is null) <> (alt_nt_indel is null))
+	constraint must_have_nt_alt_xor_indel check num_nulls(alt_nt, alt_nt_indel) = 1
 );
 
 
