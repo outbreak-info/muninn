@@ -1,24 +1,3 @@
--- create user flu with superuser password 'h5n1';
--- drop database if exists flu;
--- create database flu with owner flu;
--- alter role flu superuser;
-
--- set role flu;
-
-drop type if exists consent_level;
-drop type if exists nucleotide;
-drop type if exists amino_acid;
-drop type if exists flu_region;
-drop type if exists codon;
-drop table if exists metadata;
-drop table if exists mutations;
-drop table if exists variants;
-drop table if exists demixed;
-drop table if exists lineages;
-drop table if exists demixed;
-drop table if exists demixed_lineages;
-
-
 create type consent_level as enum ('public', 'other');
 
 create type nucleotide as enum ('A', 'C', 'G', 'T', 'U', 'N');
@@ -61,7 +40,7 @@ create type codon as enum (
 	'TTA', 'TTC', 'TTG', 'TTT'
 );
 
-create table if not exists samples (
+create table samples (
 	id bigserial primary key,
 	accession text not null
 );
@@ -74,12 +53,12 @@ create table mutations (
 	region flu_region,
 	unique(region, position_aa, ref_aa, alt_aa),
 
-	gff_feature text not null,
-	constraint no_empty_strings check (gff_feature <> ''),
+	gff_feature text,
+	check (gff_feature <> ''),
 	position_nt integer not null,
 	alt_nt nucleotide,
 	alt_nt_indel text,
-	constraint no_empty_strings check (alt_nt_indel <> ''),
+	check (alt_nt_indel <> ''),
 	unique nulls not distinct (gff_feature, region, position_nt, alt_nt, alt_nt_indel),
 	constraint must_have_nt_alt_xor_indel check ((alt_nt is null) <> (alt_nt_indel is null))
 );

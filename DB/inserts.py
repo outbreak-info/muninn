@@ -28,50 +28,6 @@ def get_amino(s):
         return AminoAcid(s)
 
 
-# def read_mutations_csvs(files: List[str], sra_to_md: Dict):
-#     region_re = re.compile('^mutations_(\\w+)\\.csv$')
-#     mut_code_re = re.compile('^(.)(\\d+)(.)$')
-#
-#     mutations_intermediates = []
-#     for file in files:
-#         with open(file, 'r') as f:
-#             filename = os.path.basename(f.name)
-#             region = FluRegion(region_re.match(filename).group(1))
-#
-#             csvreader = csv.DictReader(f)
-#             csvreader.fieldnames[0] = 'mutation_code'
-#
-#             for row in csvreader:
-#                 mut_match = mut_code_re.match(row['mutation_code'])
-#                 ref_aa = get_amino(mut_match.group(1))
-#                 position_aa = int(mut_match.group(2))
-#                 alt_aa = get_amino(mut_match.group(3))
-#
-#                 sras_present = set()
-#                 for k, v in row.items():
-#                     if k.startswith('Consensus') and bool(int(v)):
-#                         sras_present.add(k.split('_')[1])
-#
-#                 mutations_intermediates.append(
-#                     Mutation(
-#                         region=region,
-#                         position_aa=position_aa,
-#                         ref_aa=ref_aa,
-#                         alt_aa=alt_aa,
-#                         linked_metadatas=[sra_to_md[sra] for sra in sras_present]
-#                     )
-#                 )
-#
-#     return mutations_intermediates
-#
-#
-# def insert_mutations(data: List['Mutation']):
-#     with Session(engine) as session:
-#         for mut in data:
-#             session.add(mut)
-#         session.commit()
-
-
 def get_codon(s):
     if s is None or s == '':
         return None
@@ -97,6 +53,9 @@ def parse_and_insert_variants(files: List[str]):
 
                 position_nt = int(row['POS'])
                 gff_feature = row['GFF_FEATURE']
+
+                if gff_feature == '':
+                    gff_feature = None
 
                 query = select(Mutation).where(
                     and_(
