@@ -21,7 +21,7 @@ def compile_create_uc(create, compiler, **kw):
         return stmt.rstrip().replace("UNIQUE (", "UNIQUE NULLS NOT DISTINCT (")
     return stmt
 
-
+# todo: a way to turn enums into check constraints
 class ConsentLevel(Enum):
     public = 0
     other = 1
