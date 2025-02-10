@@ -7,6 +7,7 @@ from sqlalchemy.ext.compiler import compiles
 # from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import Mapped, mapped_column, relationship, DeclarativeBase
 
+# This is magic and I don't understand it at all.
 # From https://stackoverflow.com/a/77475375
 UniqueConstraint.argument_for("postgresql", 'nulls_not_distinct', None)
 
@@ -20,6 +21,7 @@ def compile_create_uc(create, compiler, **kw):
     if postgresql_opts.get("nulls_not_distinct"):
         return stmt.rstrip().replace("UNIQUE (", "UNIQUE NULLS NOT DISTINCT (")
     return stmt
+
 
 # todo: a way to turn enums into check constraints
 class ConsentLevel(Enum):
@@ -151,6 +153,7 @@ class BaseModel(DeclarativeBase):
         naming_convention={
             "ix": "ix_%(column_0_label)s",
             "uq": "uq_%(table_name)s_%(column_0_name)s",
+            # you always have to name check constraints, they just get a prefix
             "ck": "ck_%(table_name)s_`%(constraint_name)s`",
             "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
             "pk": "pk_%(table_name)s"
@@ -162,30 +165,29 @@ class Sample(BaseModel):
     __tablename__ = 'samples'
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
-    accession = sa.Column(sa.Text, nullable=False)
+    accession: Mapped[str] = mapped_column(sa.Text, nullable=False)
 
-    related_mutations: Mapped[List['IntraHostVariant']] = relationship(back_populates='sample')
+    related_intra_host_variants: Mapped[List['IntraHostVariant']] = relationship(back_populates='related_sample')
+    related_alleles: Mapped[List['Mutation']] = relationship(back_populates='related_sample')
 
 
-class Mutation(BaseModel):
-    __tablename__ = 'mutations'
+class Allele(BaseModel):
+    __tablename__ = 'alleles'
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
-    position_aa = sa.Column(sa.BigInteger)
-    ref_aa = sa.Column(sa.BigInteger, nullable=False)
-    alt_aa = sa.Column(sa.BigInteger, nullable=False)
-    region = sa.Column(sa.BigInteger, nullable=False)
+    position_aa: Mapped[int] = mapped_column(sa.BigInteger)
+    ref_aa: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
+    alt_aa: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
+    region: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
 
-    gff_feature = sa.Column(sa.Text, nullable=False)
-    position_nt = sa.Column(sa.BigInteger, nullable=False)
-    alt_nt = sa.Column(sa.BigInteger, nullable=False)
-    alt_nt_indel = sa.Column(sa.Text)
-
+    gff_feature: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    position_nt: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
+    alt_nt: Mapped[int] = mapped_column(sa.BigInteger)
+    alt_nt_indel: Mapped[str] = mapped_column(sa.Text)
 
     __table_args__ = tuple(
         [
-            # todo: nulls not distinct here?
-            UniqueConstraint('region', 'position_aa', 'ref_aa', 'alt_aa', name='uq_mutations_aa_values'),
+            UniqueConstraint('region', 'position_aa', 'ref_aa', 'alt_aa', name='uq_alleles_aa_values'),
             UniqueConstraint(
                 'gff_feature',
                 'region',
@@ -193,7 +195,7 @@ class Mutation(BaseModel):
                 'alt_nt',
                 'alt_nt_indel',
                 postgresql_nulls_not_distinct=True,
-                name='uq_mutations_nt_values'
+                name='uq_alleles_nt_values'
             ),
             CheckConstraint(
                 'num_nulls(alt_nt, alt_nt_indel) = 1',
@@ -203,7 +205,26 @@ class Mutation(BaseModel):
             CheckConstraint("alt_nt_indel <> ''", name='alt_nt_indel_not_empty')
         ]
     )
-    related_samples: Mapped[List['IntraHostVariant']] = relationship(back_populates='mutation')
+
+    related_samples: Mapped[List['Mutation']] = relationship(back_populates='related_allele')
+
+
+class Mutation(BaseModel):
+    __tablename__ = 'mutations'
+
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+
+    sample_id: Mapped[int] = mapped_column(sa.ForeignKey('samples.id'), nullable=False)
+    allele_id: Mapped[int] = mapped_column(sa.ForeignKey('alleles.id'), nullable=False)
+
+    __table_args__ = tuple(
+        [
+            UniqueConstraint('sample_id', 'allele_id', name='uq_mutations_sample_allele_pair')
+        ]
+    )
+
+    related_sample: Mapped['Sample'] = relationship(back_populates='related_alleles')
+    related_allele: Mapped['Allele'] = relationship(back_populates='related_samples')
 
 
 class IntraHostVariant(BaseModel):
@@ -212,25 +233,32 @@ class IntraHostVariant(BaseModel):
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
     sample_id: Mapped[int] = mapped_column(sa.ForeignKey('samples.id'), nullable=False)
-    mutation_id: Mapped[int] = mapped_column(sa.ForeignKey('mutations.id'), nullable=False)
+    allele_id: Mapped[int] = mapped_column(sa.ForeignKey('alleles.id'), nullable=False)
 
-    ref_dp = sa.Column(sa.BigInteger, nullable=False)
-    alt_dp = sa.Column(sa.BigInteger, nullable=False)
-    alt_freq = sa.Column(sa.Double, nullable=False)
+    ref_dp: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
+    alt_dp: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
+    alt_freq: Mapped[float] = mapped_column(sa.Double, nullable=False)
 
-    sample: Mapped['Sample'] = relationship(back_populates='related_mutations')
-    mutation: Mapped['Mutation'] = relationship(back_populates='related_samples')
+    __table_args__ = tuple(
+        [
+            UniqueConstraint('sample_id', 'allele_id', name='uq_intra_host_variants_sample_allele_pair')
+        ]
+    )
 
-    __table_args__ = tuple([
-        UniqueConstraint('sample_id', 'mutation_id', name='uq_intra_host_variants_sample_id_mutation_id')
-    ])
+    related_sample: Mapped['Sample'] = relationship(back_populates='related_intra_host_variants')
 
 
 class DmsResult(BaseModel):
     __tablename__ = 'dms_results'
 
-    id = sa.Column(sa.BigInteger, primary_key=True, autoincrement=True)
-    ferret_sera_escape = sa.Column(sa.Double, nullable=False)
-    stability = sa.Column(sa.Double, nullable=False)
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    ferret_sera_escape: Mapped[float] = mapped_column(sa.Double, nullable=False)
+    stability: Mapped[float] = sa.Column(sa.Double, nullable=False)
 
-    mutation_id: Mapped[int] = mapped_column(sa.ForeignKey('mutations.id'), nullable=False)
+    allele_id: Mapped[int] = mapped_column(sa.ForeignKey('alleles.id'), nullable=False)
+
+    __table_args__ = tuple(
+        [
+            UniqueConstraint('allele_id')
+        ]
+    )

@@ -5,7 +5,7 @@ from sqlalchemy import select, and_
 from sqlalchemy.orm import Session
 
 from DB.engine import engine
-from DB.models import Sample, FluRegion, AminoAcid, Mutation, Nucleotide, IntraHostVariant, Codon, BaseModel
+from DB.models import Sample, FluRegion, AminoAcid, Allele, Nucleotide, IntraHostVariant, Codon, BaseModel
 
 
 def insert_samples(data: List['Sample']):
@@ -57,13 +57,13 @@ def parse_and_insert_variants(files: List[str]):
                 if gff_feature == '':
                     gff_feature = None
 
-                query = select(Mutation).where(
+                query = select(Allele).where(
                     and_(
-                        Mutation.region == region,
-                        Mutation.position_nt == position_nt,
-                        Mutation.alt_nt == alt_nt,
-                        Mutation.alt_nt_indel == alt_nt_indel,
-                        Mutation.gff_feature == gff_feature
+                        Allele.region == region,
+                        Allele.position_nt == position_nt,
+                        Allele.alt_nt == alt_nt,
+                        Allele.alt_nt_indel == alt_nt_indel,
+                        Allele.gff_feature == gff_feature
                     )
                 )
 
@@ -76,7 +76,7 @@ def parse_and_insert_variants(files: List[str]):
 
                     mutation = session.execute(query).scalar()
                     if mutation is None:
-                        mutation = Mutation(
+                        mutation = Allele(
                             position_nt=position_nt,
                             alt_nt=alt_nt,
                             alt_nt_indel=alt_nt_indel,

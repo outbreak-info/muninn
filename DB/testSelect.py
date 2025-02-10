@@ -2,7 +2,7 @@ from sqlalchemy import select, insert
 from sqlalchemy.orm import Session
 import json
 
-from DB.models import Metadata, Mutation, Nucleotide, AminoAcid, FluRegion
+from DB.models import Metadata, Allele, Nucleotide, AminoAcid, FluRegion
 from engine import  create_pg_engine
 
 engine = create_pg_engine()
@@ -21,7 +21,7 @@ data = [moo, noo]
 
 with Session(engine) as session:
     res = session.scalars(
-        insert(Mutation).returning(Mutation.id, sort_by_parameter_order=True),
+        insert(Allele).returning(Allele.id, sort_by_parameter_order=True),
         data
     )
     session.commit()
