@@ -11,6 +11,7 @@
 
 - Update the nucleotides enum to allow for all the iupac values
 - Drop the enum for region, it can just be text
+  - I think we acually want to revisit this. I think it might be a lot faster to select by an integer than by a string.
 
 ### Deployment Stuff
 
