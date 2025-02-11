@@ -51,8 +51,10 @@ class Sample(BaseModel):
         ]
     )
 
+
     related_intra_host_variants: Mapped[List['IntraHostVariant']] = relationship(back_populates='related_sample')
-    related_alleles: Mapped[List['Mutation']] = relationship(back_populates='related_sample')
+
+    alleles_related_via_mutation: Mapped[List['Mutation']] = relationship(back_populates='related_sample')
 
 
 class Allele(BaseModel):
@@ -94,7 +96,8 @@ class Allele(BaseModel):
         ]
     )
 
-    related_samples: Mapped[List['Mutation']] = relationship(back_populates='related_allele')
+    samples_related_via_mutation: Mapped[List['Mutation']] = relationship(back_populates='related_allele')
+    related_intra_host_variants: Mapped[List['IntraHostVariant']] = relationship(back_populates='related_allele')
 
 
 class Mutation(BaseModel):
@@ -111,8 +114,8 @@ class Mutation(BaseModel):
         ]
     )
 
-    related_sample: Mapped['Sample'] = relationship(back_populates='related_alleles')
-    related_allele: Mapped['Allele'] = relationship(back_populates='related_samples')
+    related_sample: Mapped['Sample'] = relationship(back_populates='alleles_related_via_mutation')
+    related_allele: Mapped['Allele'] = relationship(back_populates='samples_related_via_mutation')
 
 
 class IntraHostVariant(BaseModel):
@@ -134,7 +137,7 @@ class IntraHostVariant(BaseModel):
     )
 
     related_sample: Mapped['Sample'] = relationship(back_populates='related_intra_host_variants')
-
+    related_allele: Mapped['Allele'] = relationship(back_populates='related_intra_host_variants')
 
 class DmsResult(BaseModel):
     __tablename__ = 'dms_results'

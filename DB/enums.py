@@ -15,7 +15,8 @@ class IntEnum(sa.TypeDecorator):
     def process_bind_param(self, value, dialect):
         if isinstance(value, int):
             return value
-
+        if value is None:
+            return None
         return value.value
 
     def process_result_value(self, value, dialect):
