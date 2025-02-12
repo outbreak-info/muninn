@@ -2,17 +2,18 @@
 
 source .env
 
-# todo: these are temporary for testing with containers
-podman build -q --tag 'flu_db' .
-podman run -qd -e POSTGRES_PASSWORD="$FLU_DB_SUPERUSER_PASSWORD" -p 127.0.0.1:5432:5432 flu_db
-sleep 10
+docker-compose -f docker-compose.yml up -d
 
-export PGPASSWORD=$FLU_DB_SUPERUSER_PASSWORD
 
-psql -U postgres -h 127.0.0.1 -p 5432 -c "create user flu password '$FLU_DB_PASSWORD';"
-psql -U postgres -h 127.0.0.1 -p 5432 -c "create database flu owner flu;"
+while [ "$(docker inspect -f "{{.State.Health.Status}}" "flu_db_pg")" != "healthy" ]; do
+  docker inspect -f "{{.State.Health.Status}}" "flu_db_pg"
+  sleep 1
+done
 
-#export PGPASSWORD=$FLU_DB_PASSWORD
-#psql -U flu -h 127.0.0.1 -p 5432 -f create_tables.sql
-#
-#unset PGPASSWORD
+# for later use when not running in docker
+while ! pg_isready -p "$FLU_DB_PORT" -U flu -h localhost; do
+  echo 'wait'
+  sleep 1
+done
+
+# and we're done here. The app startup will handle running the migration to
