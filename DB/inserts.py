@@ -230,6 +230,6 @@ def main(basedir):
 
 if __name__ == '__main__':
     basedir = '/home/james/Documents/andersen_lab'
-    if len(sys.argv) >= 1:
-        basedir = sys.argv[0]
+    if len(sys.argv) >= 2:
+        basedir = sys.argv[1]
     main(basedir)
