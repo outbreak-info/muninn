@@ -1,5 +1,17 @@
 # Bird Flu Database
 
+
+## Testing Setup (containerized)
+
+1. Clone repository
+2. Create `.env` file
+3. `source db_setup.sh`
+    - We're going to skip over creating a less-privileged user for now.
+4. Install python dependencies
+    1. `virtualenv venv`
+    2. `source venv/bin/activate`
+    3. `pip install -r requirements.txt` 
+
 ## James's To Do List:
 
 ### Schema Updates
@@ -12,6 +24,7 @@
 - ~~Update the nucleotides enum to allow for all the iupac values~~
 - Drop the enum for region, it can just be text
   - I think we acually want to revisit this. I think it might be a lot faster to select by an integer than by a string.
+- Figure out how to automate the IntEnums in alembic migrations
 
 ### Deployment Stuff
 

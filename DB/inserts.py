@@ -1,4 +1,6 @@
 import csv
+import json
+from glob import glob
 from typing import List, Type
 
 from sqlalchemy import select, and_
@@ -6,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from DB.engine import engine
-from DB.models import Sample, Allele, IntraHostVariant, BaseModel
+from DB.models import Sample, Allele, IntraHostVariant, BaseModel, Mutation
 from DB.enums import AminoAcid, Codon, FluRegion, Nucleotide, ConsentLevel
 
 
@@ -23,11 +25,11 @@ def insert_samples(data: List['Sample']):
 
 def get_amino(s):
     if s in {'*', '-'}:
-        return AminoAcid.STAR
+        return AminoAcid.STOP
     elif s is None or s == '':
         return None
     else:
-        return AminoAcid(s)
+        return AminoAcid[s]
 
 
 def get_codon(s):
@@ -38,7 +40,7 @@ def get_codon(s):
 
 def parse_and_insert_variants(files: List[str]):
     for filename in files:
-        with open(filename, 'r') as f:
+        with (open(filename, 'r') as f):
             csvreader = csv.DictReader(f, delimiter='\t')
             for row in csvreader:
 
@@ -56,15 +58,16 @@ def parse_and_insert_variants(files: List[str]):
                 position_nt = int(row['POS'])
                 gff_feature = row['GFF_FEATURE']
 
+                # todo: need a way to handle * and - aminos better
                 ref_aa = None
                 try:
-                    ref_aa = AminoAcid[row['REF_AA']]
+                    ref_aa = get_amino(row['REF_AA'])
                 except KeyError:
                     pass
 
                 alt_aa = None
                 try:
-                    alt_aa = AminoAcid[row['ALT_AA']]
+                    alt_aa = get_amino(row['ALT_AA'])
                 except KeyError:
                     pass
 
@@ -84,8 +87,7 @@ def parse_and_insert_variants(files: List[str]):
                         Allele.region == region,
                         Allele.position_nt == position_nt,
                         Allele.alt_nt == alt_nt,
-                        Allele.alt_nt_indel == alt_nt_indel,
-                        Allele.gff_feature == gff_feature
+                        Allele.alt_nt_indel == alt_nt_indel
                     )
                 )
 
@@ -98,20 +100,44 @@ def parse_and_insert_variants(files: List[str]):
                         )
 
                         allele = session.execute(query).scalar()
+                        # todo: for now I'm going to totally ignore amino acids
                         if allele is None:
                             allele = Allele(
                                 position_nt=position_nt,
-                                alt_nt=alt_nt,
                                 alt_nt_indel=alt_nt_indel,
+                                alt_nt=alt_nt,
                                 region=region,
-                                gff_feature=gff_feature,
-                                position_aa=position_aa,
-                                ref_aa=ref_aa,
-                                alt_aa=alt_aa
+                                # gff_feature=gff_feature,
+                                # position_aa=position_aa,
+                                # ref_aa=ref_aa,
+                                # alt_aa=alt_aa
                             )
 
                             session.add(allele)
                             session.commit()
+
+                        # else:
+                        #     # check for mismatches in AA data
+                        #     if (
+                        #             allele.gff_feature is not None and gff_feature is not None and allele.gff_feature != gff_feature) or (
+                        #             allele.ref_aa is not None and ref_aa is not None and allele.ref_aa != ref_aa) or (
+                        #             allele.alt_aa is not None and alt_aa is not None and allele.alt_aa != alt_aa) or (
+                        #             allele.position_aa is not None and position_aa is not None and allele.position_aa != position_aa
+                        #     ):
+                        #         print(
+                        #             f'AA data mismatch (existing / new): gff_feature: {allele.gff_feature} / {gff_feature}, position_aa: {allele.position_aa} / {position_aa}, ref_aa: {allele.ref_aa} / {ref_aa}, alt_aa: {allele.alt_aa} / {alt_aa}'
+                        #             )
+                        #         # todo: need to figure out what to do with these, for now just skip them
+                        #         continue
+                        #
+                        #
+                        #     # If the existing allele doesn't have aa data, and this one does, add it.
+                        #     if not allele.has_aa_data() and None not in {gff_feature, position_aa, ref_aa, alt_aa}:
+                        #         allele.gff_feature = gff_feature
+                        #         allele.position_aa = position_aa
+                        #         allele.ref_aa = ref_aa
+                        #         allele.alt_aa = alt_aa
+                        #         allele.has_aa_data()
 
                         variant.related_allele = allele
 
@@ -125,6 +151,43 @@ def parse_and_insert_variants(files: List[str]):
                     except IntegrityError as e:
                         print(e)
 
+
+def parse_and_insert_mutations(mutations_files):
+    for file in mutations_files:
+        with open(file, 'r') as f:
+            for row in json.load(f):
+                accession = row['sra']
+                region = FluRegion[row['region']]
+                position_nt = int(row['pos'])
+                alt_nt = Nucleotide[row['alt']]
+                # todo: we're just going to totally ignore AA stuff for the moment
+
+                with Session(engine) as session:
+                    sample = session.execute(
+                            select(Sample).where(Sample.accession == accession)
+                        ).scalar()
+                    if sample is None:
+                        sample = Sample(accession=accession, consent_level=ConsentLevel.public)
+                        session.add(sample)
+
+                    # todo: since we're ignoring aa stuff, just grab the first one that matches on nt data
+                    allele = session.execute(
+                        select(Allele).where(and_(
+                            Allele.region == region,
+                            Allele.position_nt == position_nt,
+                            Allele.alt_nt == alt_nt
+                        ))
+                    ).scalar()
+                    if allele is None:
+                        allele = Allele(
+                            position_nt=position_nt,
+                            region=region,
+                            alt_nt=alt_nt
+                        )
+                        session.add(allele)
+                    mutation = Mutation(related_sample=sample, related_allele=allele)
+                    session.add(mutation)
+                    session.commit()
 
 def table_has_rows(table: Type['BaseModel']) -> bool:
     with Session(engine) as session:
@@ -145,9 +208,11 @@ def main():
     else:
         print('Samples already has data, skipping...')
 
-    # mutations_files = glob(f'{basedir}/mutations/*.csv')
-    # mutations = read_mutations_csvs(mutations_files, sra_to_sample)
-    # insert_mutations(mutations)
+    if not table_has_rows(Mutation):
+        mutations_files = glob(f'{basedir}/mutdata_complete/*.json')
+        parse_and_insert_mutations(mutations_files)
+    else:
+        print('Mutations already has data, skipping...')
 
     # I didn't realize there was a combined version and I'm not rewriting the reader
     variants_files = [f'{basedir}/intrahost_dms/combined_variants.tsv']

@@ -5,7 +5,7 @@ services:
     container_name: "flu_db_pg"
     image: postgres:16.6
     ports:
-      - "5430:5432"
+      - "${FLU_DB_PORT}:5432"
     # todo: eventually I'd like to not use the superuser for everything
     # The superuser should be postgres, and flu just own the flu db
     environment:
