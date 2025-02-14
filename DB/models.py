@@ -61,21 +61,20 @@ class Allele(BaseModel):
     __tablename__ = 'alleles'
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
-    position_aa: Mapped[int] = mapped_column(sa.BigInteger, nullable=True)
-    ref_aa: Mapped[int] = mapped_column(IntEnum(AminoAcid), nullable=False)
-    alt_aa: Mapped[int] = mapped_column(IntEnum(AminoAcid), nullable=False)
-    region: Mapped[int] = mapped_column(IntEnum(FluRegion), nullable=False)
 
-    gff_feature: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    region: Mapped[int] = mapped_column(IntEnum(FluRegion), nullable=False)
     position_nt: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
     alt_nt: Mapped[int] = mapped_column(IntEnum(Nucleotide), nullable=True)
     alt_nt_indel: Mapped[str] = mapped_column(sa.Text, nullable=True)
 
+    position_aa: Mapped[int] = mapped_column(sa.BigInteger, nullable=True)
+    ref_aa: Mapped[int] = mapped_column(IntEnum(AminoAcid), nullable=True)
+    alt_aa: Mapped[int] = mapped_column(IntEnum(AminoAcid), nullable=True)
+    gff_feature: Mapped[str] = mapped_column(sa.Text, nullable=True)
+
     __table_args__ = tuple(
         [
-            UniqueConstraint('region', 'position_aa', 'ref_aa', 'alt_aa', name='uq_alleles_aa_values'),
             UniqueConstraint(
-                'gff_feature',
                 'region',
                 'position_nt',
                 'alt_nt',
@@ -99,6 +98,9 @@ class Allele(BaseModel):
     samples_related_via_mutation: Mapped[List['Mutation']] = relationship(back_populates='related_allele')
     related_intra_host_variants: Mapped[List['IntraHostVariant']] = relationship(back_populates='related_allele')
 
+
+    def has_aa_data(self):
+        return not None in {self.gff_feature, self.position_aa, self.alt_aa, self.ref_aa}
 
 class Mutation(BaseModel):
     __tablename__ = 'mutations'

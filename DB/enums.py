@@ -20,6 +20,8 @@ class IntEnum(sa.TypeDecorator):
         return value.value
 
     def process_result_value(self, value, dialect):
+        if value is None:
+            return None
         return self._enumtype(value)
 
 
@@ -97,6 +99,7 @@ class AminoAcid(ConstrainableEnum):
     W = 18
     Y = 19
     STOP = 20
+    X = 21
 
 
 @unique
