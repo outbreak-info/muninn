@@ -17,15 +17,17 @@
 ### Schema Updates
 
 - ~~Make changes to add alleles table and change relationships~~
-- Figure out what data we're using to identify mutations. 
+- Figure out what data we're using to identify alleles.
+- Consider splitting off the AA part of the alleles
 
 ### Python Work
 
 - ~~Update the nucleotides enum to allow for all the iupac values~~
 - Drop the enum for region, it can just be text
   - I think we acually want to revisit this. I think it might be a lot faster to select by an integer than by a string.
-- Figure out how to automate the IntEnums in alembic migrations
-
+- ~~Figure out how to automate the IntEnums in alembic migrations~~
+- Look into extensions to alembic
+- 
 ### Deployment Stuff
 
 - Get pg 16 installed on kenny

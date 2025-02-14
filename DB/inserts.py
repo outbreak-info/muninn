@@ -1,5 +1,6 @@
 import csv
 import json
+import sys
 from glob import glob
 from typing import List, Type
 
@@ -8,8 +9,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from DB.engine import engine
-from DB.models import Sample, Allele, IntraHostVariant, BaseModel, Mutation
 from DB.enums import AminoAcid, Codon, FluRegion, Nucleotide, ConsentLevel
+from DB.models import Sample, Allele, IntraHostVariant, BaseModel, Mutation
 
 
 def insert_samples(data: List['Sample']):
@@ -36,6 +37,16 @@ def get_codon(s):
     if s is None or s == '':
         return None
     return Codon(s)
+
+
+def find_or_add_sample(session: Session, accession: str) -> Sample:
+    sample = session.execute(
+        select(Sample).where(Sample.accession == accession)
+    ).scalar()
+    if sample is None:
+        sample = Sample(accession=accession, consent_level=ConsentLevel.public)
+        session.add(sample)
+    return sample
 
 
 def parse_and_insert_variants(files: List[str]):
@@ -141,9 +152,7 @@ def parse_and_insert_variants(files: List[str]):
 
                         variant.related_allele = allele
 
-                        sample = session.execute(
-                            select(Sample).where(Sample.accession == row['sra'])
-                        ).scalar()
+                        sample = find_or_add_sample(session, row['sra'])
                         sample.related_intra_host_variants.append(variant)
                         session.add(variant)
                         session.commit()
@@ -163,20 +172,17 @@ def parse_and_insert_mutations(mutations_files):
                 # todo: we're just going to totally ignore AA stuff for the moment
 
                 with Session(engine) as session:
-                    sample = session.execute(
-                            select(Sample).where(Sample.accession == accession)
-                        ).scalar()
-                    if sample is None:
-                        sample = Sample(accession=accession, consent_level=ConsentLevel.public)
-                        session.add(sample)
+                    sample = find_or_add_sample(session, accession)
 
                     # todo: since we're ignoring aa stuff, just grab the first one that matches on nt data
                     allele = session.execute(
-                        select(Allele).where(and_(
-                            Allele.region == region,
-                            Allele.position_nt == position_nt,
-                            Allele.alt_nt == alt_nt
-                        ))
+                        select(Allele).where(
+                            and_(
+                                Allele.region == region,
+                                Allele.position_nt == position_nt,
+                                Allele.alt_nt == alt_nt
+                            )
+                        )
                     ).scalar()
                     if allele is None:
                         allele = Allele(
@@ -189,24 +195,23 @@ def parse_and_insert_mutations(mutations_files):
                     session.add(mutation)
                     session.commit()
 
+
 def table_has_rows(table: Type['BaseModel']) -> bool:
     with Session(engine) as session:
         return session.query(table).count() > 0
 
 
-def main():
-    basedir = '/home/james/Documents/andersen_lab'
-
-    unique_srr_file = f'{basedir}/mutations/unique_srr.txt'
-    with open(unique_srr_file, 'r') as f:
-        uniq_srrs = [l.strip() for l in f.readlines()]
-
-    samples = [Sample(accession=srr, consent_level=ConsentLevel.public) for srr in uniq_srrs]
-
-    if not table_has_rows(Sample):
-        sra_to_sample = insert_samples(samples)
-    else:
-        print('Samples already has data, skipping...')
+def main(basedir):
+    # unique_srr_file = f'{basedir}/mutations/unique_srr.txt'
+    # with open(unique_srr_file, 'r') as f:
+    #     uniq_srrs = [l.strip() for l in f.readlines()]
+    #
+    # samples = [Sample(accession=srr, consent_level=ConsentLevel.public) for srr in uniq_srrs]
+    #
+    # if not table_has_rows(Sample):
+    #     sra_to_sample = insert_samples(samples)
+    # else:
+    #     print('Samples already has data, skipping...')
 
     if not table_has_rows(Mutation):
         mutations_files = glob(f'{basedir}/mutdata_complete/*.json')
@@ -224,4 +229,7 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    basedir = '/home/james/Documents/andersen_lab'
+    if len(sys.argv) >= 1:
+        basedir = sys.argv[0]
+    main(basedir)
