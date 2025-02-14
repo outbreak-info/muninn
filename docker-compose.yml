@@ -3,7 +3,7 @@ version: "3.8"
 services:
   postgres:
     container_name: "flu_db_pg"
-    image: postgres:16.6
+    image: postgres:16-bullseye
     ports:
       - "${FLU_DB_PORT}:5432"
     # todo: eventually I'd like to not use the superuser for everything
