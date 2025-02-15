@@ -51,7 +51,6 @@ class Sample(BaseModel):
         ]
     )
 
-
     related_intra_host_variants: Mapped[List['IntraHostVariant']] = relationship(back_populates='related_sample')
 
     alleles_related_via_mutation: Mapped[List['Mutation']] = relationship(back_populates='related_sample')
@@ -67,11 +66,6 @@ class Allele(BaseModel):
     alt_nt: Mapped[int] = mapped_column(IntEnum(Nucleotide), nullable=True)
     alt_nt_indel: Mapped[str] = mapped_column(sa.Text, nullable=True)
 
-    position_aa: Mapped[int] = mapped_column(sa.BigInteger, nullable=True)
-    ref_aa: Mapped[int] = mapped_column(IntEnum(AminoAcid), nullable=True)
-    alt_aa: Mapped[int] = mapped_column(IntEnum(AminoAcid), nullable=True)
-    gff_feature: Mapped[str] = mapped_column(sa.Text, nullable=True)
-
     __table_args__ = tuple(
         [
             UniqueConstraint(
@@ -86,10 +80,7 @@ class Allele(BaseModel):
                 'num_nulls(alt_nt, alt_nt_indel) = 1',
                 name='must_have_nt_alt_xor_indel',
             ),
-            CheckConstraint("gff_feature <> ''", name='gff_feature_not_empty'),
             CheckConstraint("alt_nt_indel <> ''", name='alt_nt_indel_not_empty'),
-            AminoAcid.get_check_constraint('ref_aa'),
-            AminoAcid.get_check_constraint('alt_aa'),
             FluRegion.get_check_constraint('region'),
             Nucleotide.get_check_constraint('alt_nt')
         ]
@@ -97,10 +88,42 @@ class Allele(BaseModel):
 
     samples_related_via_mutation: Mapped[List['Mutation']] = relationship(back_populates='related_allele')
     related_intra_host_variants: Mapped[List['IntraHostVariant']] = relationship(back_populates='related_allele')
+    related_amino_acid_substitutions: Mapped[List['AminoAcidSubstitution']] = relationship(
+        back_populates='related_allele'
+    )
 
 
-    def has_aa_data(self):
-        return not None in {self.gff_feature, self.position_aa, self.alt_aa, self.ref_aa}
+class AminoAcidSubstitution(BaseModel):
+    __tablename__ = 'amino_acid_substitutions'
+
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+
+    allele_id: Mapped[int] = mapped_column(sa.ForeignKey('alleles.id'), nullable=False)
+
+    position_aa: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
+    ref_aa: Mapped[int] = mapped_column(IntEnum(AminoAcid), nullable=False)
+    alt_aa: Mapped[int] = mapped_column(IntEnum(AminoAcid), nullable=False)
+    gff_feature: Mapped[str] = mapped_column(sa.Text, nullable=False)
+
+    __table_args__ = tuple(
+        [
+            CheckConstraint("gff_feature <> ''", name='gff_feature_not_empty'),
+            AminoAcid.get_check_constraint('ref_aa'),
+            AminoAcid.get_check_constraint('alt_aa'),
+            UniqueConstraint(
+                'allele_id',
+                'position_aa',
+                'ref_aa',
+                'alt_aa',
+                'gff_feature',
+                postgresql_nulls_not_distinct=True,
+                name='uq_amino_acid_substitutions_aa_values'
+            )
+        ]
+    )
+
+    related_allele: Mapped['Allele'] = relationship(back_populates='related_amino_acid_substitutions')
+
 
 class Mutation(BaseModel):
     __tablename__ = 'mutations'
@@ -140,6 +163,7 @@ class IntraHostVariant(BaseModel):
 
     related_sample: Mapped['Sample'] = relationship(back_populates='related_intra_host_variants')
     related_allele: Mapped['Allele'] = relationship(back_populates='related_intra_host_variants')
+
 
 class DmsResult(BaseModel):
     __tablename__ = 'dms_results'
