@@ -2,7 +2,7 @@ from sqlalchemy import select, insert
 from sqlalchemy.orm import Session
 import json
 
-from DB.models import Metadata, Allele, Nucleotide, AminoAcid, FluRegion
+from DB.models import Sample, Allele
 from engine import  create_pg_engine
 
 engine = create_pg_engine()

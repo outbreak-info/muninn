@@ -5,8 +5,6 @@ from sqlalchemy import UniqueConstraint, CheckConstraint, MetaData
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import Mapped, mapped_column, relationship, DeclarativeBase
 
-from DB.enums import ConsentLevel, Nucleotide, AminoAcid, FluRegion, IntEnum
-
 # This is magic and I don't understand it at all.
 # From https://stackoverflow.com/a/77475375
 UniqueConstraint.argument_for("postgresql", 'nulls_not_distinct', None)
@@ -43,16 +41,11 @@ class Sample(BaseModel):
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
     accession: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    consent_level: Mapped[int] = mapped_column(IntEnum(ConsentLevel), nullable=False)
-
-    __table_args__ = tuple(
-        [
-            ConsentLevel.get_check_constraint('consent_level')
-        ]
-    )
+    consent_level: Mapped[str] = mapped_column(sa.Text, nullable=False)
 
     related_intra_host_variants: Mapped[List['IntraHostVariant']] = relationship(back_populates='related_sample')
 
+    # alleles_related_via_intra_host_variants: Mapped[List['Allele']] = relationship()
     alleles_related_via_mutation: Mapped[List['Mutation']] = relationship(back_populates='related_sample')
 
 
@@ -61,10 +54,9 @@ class Allele(BaseModel):
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
-    region: Mapped[int] = mapped_column(IntEnum(FluRegion), nullable=False)
+    region: Mapped[str] = mapped_column(sa.Text, nullable=False)
     position_nt: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
-    alt_nt: Mapped[int] = mapped_column(IntEnum(Nucleotide), nullable=True)
-    alt_nt_indel: Mapped[str] = mapped_column(sa.Text, nullable=True)
+    alt_nt: Mapped[str] = mapped_column(sa.Text, nullable=False)
 
     __table_args__ = tuple(
         [
@@ -72,17 +64,10 @@ class Allele(BaseModel):
                 'region',
                 'position_nt',
                 'alt_nt',
-                'alt_nt_indel',
                 postgresql_nulls_not_distinct=True,
                 name='uq_alleles_nt_values'
             ),
-            CheckConstraint(
-                'num_nulls(alt_nt, alt_nt_indel) = 1',
-                name='must_have_nt_alt_xor_indel',
-            ),
-            CheckConstraint("alt_nt_indel <> ''", name='alt_nt_indel_not_empty'),
-            FluRegion.get_check_constraint('region'),
-            Nucleotide.get_check_constraint('alt_nt')
+            CheckConstraint("alt_nt <> ''", name='alt_nt_not_empty')
         ]
     )
 
@@ -101,19 +86,18 @@ class AminoAcidSubstitution(BaseModel):
     allele_id: Mapped[int] = mapped_column(sa.ForeignKey('alleles.id'), nullable=False)
 
     position_aa: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
-    ref_aa: Mapped[int] = mapped_column(IntEnum(AminoAcid), nullable=False)
-    alt_aa: Mapped[int] = mapped_column(IntEnum(AminoAcid), nullable=False)
+    ref_aa: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    alt_aa: Mapped[str] = mapped_column(sa.Text, nullable=False)
     gff_feature: Mapped[str] = mapped_column(sa.Text, nullable=False)
 
     __table_args__ = tuple(
         [
             CheckConstraint("gff_feature <> ''", name='gff_feature_not_empty'),
-            AminoAcid.get_check_constraint('ref_aa'),
-            AminoAcid.get_check_constraint('alt_aa'),
+            CheckConstraint("ref_aa <> ''", name='ref_aa_not_empty'),
+            CheckConstraint("alt_aa <> ''", name='alt_aa_not_empty'),
             UniqueConstraint(
                 'allele_id',
                 'position_aa',
-                'ref_aa',
                 'alt_aa',
                 'gff_feature',
                 postgresql_nulls_not_distinct=True,
