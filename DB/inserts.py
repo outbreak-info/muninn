@@ -9,8 +9,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from DB.engine import engine
-from DB.enums import AminoAcid, Codon, FluRegion, Nucleotide, ConsentLevel
-from DB.models import Sample, Allele, IntraHostVariant, BaseModel, Mutation
+
+from DB.models import Sample, Allele, IntraHostVariant, BaseModel, Mutation, AminoAcidSubstitution
 
 
 def insert_samples(data: List['Sample']):
@@ -24,27 +24,12 @@ def insert_samples(data: List['Sample']):
     return sra_to_sample
 
 
-def get_amino(s):
-    if s in {'*', '-'}:
-        return AminoAcid.STOP
-    elif s is None or s == '':
-        return None
-    else:
-        return AminoAcid[s]
-
-
-def get_codon(s):
-    if s is None or s == '':
-        return None
-    return Codon(s)
-
-
 def find_or_add_sample(session: Session, accession: str) -> Sample:
     sample = session.execute(
         select(Sample).where(Sample.accession == accession)
     ).scalar()
     if sample is None:
-        sample = Sample(accession=accession, consent_level=ConsentLevel.public)
+        sample = Sample(accession=accession, consent_level='public')
         session.add(sample)
     return sample
 
@@ -56,15 +41,9 @@ def parse_and_insert_variants(files: List[str]):
             for row in csvreader:
 
                 region_full_text = row['REGION']
-                region = FluRegion[region_full_text.split('|')[0]]
+                region = region_full_text.split('|')[0]
 
-                alt_nt_indel = row['ALT']
-                alt_nt = None
-                try:
-                    alt_nt = Nucleotide[alt_nt_indel]
-                    alt_nt_indel = None
-                except KeyError:
-                    pass
+                alt_nt = row['ALT']
 
                 position_nt = int(row['POS'])
                 gff_feature = row['GFF_FEATURE']
@@ -72,13 +51,13 @@ def parse_and_insert_variants(files: List[str]):
                 # todo: need a way to handle * and - aminos better
                 ref_aa = None
                 try:
-                    ref_aa = get_amino(row['REF_AA'])
+                    ref_aa = row['REF_AA']
                 except KeyError:
                     pass
 
                 alt_aa = None
                 try:
-                    alt_aa = get_amino(row['ALT_AA'])
+                    alt_aa = row['ALT_AA']
                 except KeyError:
                     pass
 
@@ -93,14 +72,16 @@ def parse_and_insert_variants(files: List[str]):
                 if gff_feature == '':
                     gff_feature = None
 
-                query = select(Allele).where(
+                query_allele = select(Allele).where(
                     and_(
                         Allele.region == region,
                         Allele.position_nt == position_nt,
-                        Allele.alt_nt == alt_nt,
-                        Allele.alt_nt_indel == alt_nt_indel
+                        Allele.alt_nt == alt_nt
                     )
                 )
+
+                # for now just use gff_feature to tell if aa sub info is present
+                aa_info_present = gff_feature is not None
 
                 with(Session(engine)) as session:
                     try:
@@ -110,45 +91,37 @@ def parse_and_insert_variants(files: List[str]):
                             alt_freq=float(row['ALT_FREQ'])
                         )
 
-                        allele = session.execute(query).scalar()
-                        # todo: for now I'm going to totally ignore amino acids
+                        aa_sub = None
+                        if aa_info_present:
+                            aa_sub = session.execute(
+                                select(AminoAcidSubstitution).where(
+                                    and_(
+                                        AminoAcidSubstitution.gff_feature == gff_feature,
+                                        AminoAcidSubstitution.alt_aa == alt_aa,
+                                        AminoAcidSubstitution.ref_aa == ref_aa,
+                                        AminoAcidSubstitution.position_aa == position_aa
+                                    )
+                                )
+                            ).scalar()
+                            if aa_sub is None:
+                                aa_sub = AminoAcidSubstitution(
+                                    gff_feature=gff_feature,
+                                    position_aa=position_aa,
+                                    ref_aa=ref_aa,
+                                    alt_aa=alt_aa
+                                )
+
+                        allele = session.execute(query_allele).scalar()
                         if allele is None:
                             allele = Allele(
                                 position_nt=position_nt,
-                                alt_nt_indel=alt_nt_indel,
                                 alt_nt=alt_nt,
-                                region=region,
-                                # gff_feature=gff_feature,
-                                # position_aa=position_aa,
-                                # ref_aa=ref_aa,
-                                # alt_aa=alt_aa
+                                region=region
                             )
-
+                            if aa_sub is not None:
+                                allele.related_amino_acid_substitutions.append(aa_sub)
                             session.add(allele)
                             session.commit()
-
-                        # else:
-                        #     # check for mismatches in AA data
-                        #     if (
-                        #             allele.gff_feature is not None and gff_feature is not None and allele.gff_feature != gff_feature) or (
-                        #             allele.ref_aa is not None and ref_aa is not None and allele.ref_aa != ref_aa) or (
-                        #             allele.alt_aa is not None and alt_aa is not None and allele.alt_aa != alt_aa) or (
-                        #             allele.position_aa is not None and position_aa is not None and allele.position_aa != position_aa
-                        #     ):
-                        #         print(
-                        #             f'AA data mismatch (existing / new): gff_feature: {allele.gff_feature} / {gff_feature}, position_aa: {allele.position_aa} / {position_aa}, ref_aa: {allele.ref_aa} / {ref_aa}, alt_aa: {allele.alt_aa} / {alt_aa}'
-                        #             )
-                        #         # todo: need to figure out what to do with these, for now just skip them
-                        #         continue
-                        #
-                        #
-                        #     # If the existing allele doesn't have aa data, and this one does, add it.
-                        #     if not allele.has_aa_data() and None not in {gff_feature, position_aa, ref_aa, alt_aa}:
-                        #         allele.gff_feature = gff_feature
-                        #         allele.position_aa = position_aa
-                        #         allele.ref_aa = ref_aa
-                        #         allele.alt_aa = alt_aa
-                        #         allele.has_aa_data()
 
                         variant.related_allele = allele
 
@@ -166,34 +139,61 @@ def parse_and_insert_mutations(mutations_files):
         with open(file, 'r') as f:
             for row in json.load(f):
                 accession = row['sra']
-                region = FluRegion[row['region']]
+                region = row['region']
                 position_nt = int(row['pos'])
-                alt_nt = Nucleotide[row['alt']]
-                # todo: we're just going to totally ignore AA stuff for the moment
+                alt_nt = row['alt']
 
                 with Session(engine) as session:
-                    sample = find_or_add_sample(session, accession)
+                    try:
+                        sample = find_or_add_sample(session, accession)
 
-                    # todo: since we're ignoring aa stuff, just grab the first one that matches on nt data
-                    allele = session.execute(
-                        select(Allele).where(
-                            and_(
-                                Allele.region == region,
-                                Allele.position_nt == position_nt,
-                                Allele.alt_nt == alt_nt
+                        allele = session.execute(
+                            select(Allele).where(
+                                and_(
+                                    Allele.region == region,
+                                    Allele.position_nt == position_nt,
+                                    Allele.alt_nt == alt_nt
+                                )
                             )
-                        )
-                    ).scalar()
-                    if allele is None:
-                        allele = Allele(
-                            position_nt=position_nt,
-                            region=region,
-                            alt_nt=alt_nt
-                        )
-                        session.add(allele)
-                    mutation = Mutation(related_sample=sample, related_allele=allele)
-                    session.add(mutation)
-                    session.commit()
+                        ).scalar()
+                        if allele is None:
+                            allele = Allele(
+                                position_nt=position_nt,
+                                region=region,
+                                alt_nt=alt_nt
+                            )
+                            session.add(allele)
+
+                        for aa_data in row['aa_mutations']:
+                            gff_feature = aa_data['GFF_FEATURE']
+                            ref_aa = aa_data['ref_aa']
+                            alt_aa = aa_data['alt_aa']
+                            position_aa = aa_data['pos_aa']
+
+                            aa_sub = session.execute(
+                                select(AminoAcidSubstitution).where(
+                                    and_(
+                                        AminoAcidSubstitution.gff_feature == gff_feature,
+                                        AminoAcidSubstitution.alt_aa == alt_aa,
+                                        AminoAcidSubstitution.ref_aa == ref_aa,
+                                        AminoAcidSubstitution.position_aa == position_aa
+                                    )
+                                )
+                            ).scalar()
+                            if aa_sub is None:
+                                aa_sub = AminoAcidSubstitution(
+                                    gff_feature=gff_feature,
+                                    position_aa=position_aa,
+                                    ref_aa=ref_aa,
+                                    alt_aa=alt_aa
+                                )
+                            allele.related_amino_acid_substitutions.append(aa_sub)
+
+                        mutation = Mutation(related_sample=sample, related_allele=allele)
+                        session.add(mutation)
+                        session.commit()
+                    except IntegrityError as e:
+                        print(e)
 
 
 def table_has_rows(table: Type['BaseModel']) -> bool:
