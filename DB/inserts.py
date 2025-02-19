@@ -4,7 +4,7 @@ import sys
 from glob import glob
 from typing import List, Type
 
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, Select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -87,11 +87,6 @@ def parse_and_insert_variants(files: List[str]):
 
                 with(Session(engine)) as session:
                     try:
-                        variant = IntraHostVariant(
-                            ref_dp=int(row['REF_DP']),
-                            alt_dp=int(row['ALT_DP']),
-                            alt_freq=float(row['ALT_FREQ'])
-                        )
 
                         allele = session.execute(query_allele).scalar()
                         if allele is None:
@@ -104,9 +99,6 @@ def parse_and_insert_variants(files: List[str]):
                             session.commit()
                             session.refresh(allele)
 
-                        variant.allele_id = allele.id
-
-                        aa_sub = None
                         if aa_info_present:
                             aa_sub = session.execute(
                                 select(AminoAcidSubstitution).where(
@@ -131,10 +123,24 @@ def parse_and_insert_variants(files: List[str]):
 
 
                         sample = find_or_add_sample(session, row['sra'])
-                        variant.sample_id = sample.id
 
-                        session.add(variant)
-                        session.commit()
+                        variant = session.execute(
+                            Select(IntraHostVariant).where(and_(
+                                IntraHostVariant.allele_id == allele.id,
+                                IntraHostVariant.sample_id == sample.id
+                            ))
+                        ).scalar()
+
+                        if variant is None:
+                            variant = IntraHostVariant(
+                                sample_id=sample.id,
+                                allele_id=allele.id,
+                                ref_dp=int(row['REF_DP']),
+                                alt_dp=int(row['ALT_DP']),
+                                alt_freq=float(row['ALT_FREQ'])
+                            )
+                            session.add(variant)
+                            session.commit()
 
                     except IntegrityError as e:
                         print(e)
