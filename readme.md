@@ -1,5 +1,11 @@
 # Bird Flu Database
 
+Database system to store mutation and variant data for avian influenza. 
+
+### Dependencies:
+
+- SQLAlchemy: Using ORM, but handling relationships manually for now
+- Alembic: for migrations, generated based on models code.
 
 ## Testing Setup (containerized)
 
@@ -18,7 +24,7 @@
 
 - ~~Make changes to add alleles table and change relationships~~
 - Figure out what data we're using to identify alleles.
-- Consider splitting off the AA part of the alleles
+- ~~Consider splitting off the AA part of the alleles~~
 
 ### Python Work
 
@@ -31,9 +37,9 @@
 ### Deployment Stuff
 
 - Get pg 16 installed on kenny
-- Create basic .conf files for local access on unix sockets
-- Figure out how to make deployment and config less manual
-- Decide on resource allocation to postgres
+- ~~Create basic .conf files for local access on unix sockets~~
+- ~~Figure out how to make deployment and config less manual~~
+- ~~Decide on resource allocation to postgres~~
 - Update postgres memory settings, esp. shared_buffers, maybe work_mem.
 - Set up pg stat statements as part of deployment.
 
