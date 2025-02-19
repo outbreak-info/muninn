@@ -14,7 +14,7 @@ def get_aa_subs_via_mutation_by_sample_accession(accession: str) -> List['AminoA
 
     mutations_query = select(Mutation).filter(
         Mutation.sample_id.in_(sample_id_query)
-    ).with_only_columns(Mutation.id)
+    ).with_only_columns(Mutation.allele_id)
 
     alleles_query = select(Allele).filter(Allele.id.in_(mutations_query)).with_only_columns(Allele.id)
 

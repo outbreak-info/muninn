@@ -31,6 +31,8 @@ def find_or_add_sample(session: Session, accession: str) -> Sample:
     if sample is None:
         sample = Sample(accession=accession, consent_level='public')
         session.add(sample)
+        session.commit()
+        session.refresh(sample)
     return sample
 
 
@@ -91,6 +93,19 @@ def parse_and_insert_variants(files: List[str]):
                             alt_freq=float(row['ALT_FREQ'])
                         )
 
+                        allele = session.execute(query_allele).scalar()
+                        if allele is None:
+                            allele = Allele(
+                                position_nt=position_nt,
+                                alt_nt=alt_nt,
+                                region=region
+                            )
+                            session.add(allele)
+                            session.commit()
+                            session.refresh(allele)
+
+                        variant.allele_id = allele.id
+
                         aa_sub = None
                         if aa_info_present:
                             aa_sub = session.execute(
@@ -111,22 +126,13 @@ def parse_and_insert_variants(files: List[str]):
                                     alt_aa=alt_aa
                                 )
 
-                        allele = session.execute(query_allele).scalar()
-                        if allele is None:
-                            allele = Allele(
-                                position_nt=position_nt,
-                                alt_nt=alt_nt,
-                                region=region
-                            )
-                            if aa_sub is not None:
-                                allele.related_amino_acid_substitutions.append(aa_sub)
-                            session.add(allele)
-                            session.commit()
+                            aa_sub.allele_id = allele.id
+                            session.add(aa_sub)
 
-                        variant.related_allele = allele
 
                         sample = find_or_add_sample(session, row['sra'])
-                        sample.related_intra_host_variants.append(variant)
+                        variant.sample_id = sample.id
+
                         session.add(variant)
                         session.commit()
 
@@ -163,6 +169,8 @@ def parse_and_insert_mutations(mutations_files):
                                 alt_nt=alt_nt
                             )
                             session.add(allele)
+                            session.commit()
+                            session.refresh(allele)
 
                         for aa_data in row['aa_mutations']:
                             gff_feature = aa_data['GFF_FEATURE']
@@ -187,9 +195,9 @@ def parse_and_insert_mutations(mutations_files):
                                     ref_aa=ref_aa,
                                     alt_aa=alt_aa
                                 )
-                            allele.related_amino_acid_substitutions.append(aa_sub)
+                                aa_sub.allele_id = allele.id
 
-                        mutation = Mutation(related_sample=sample, related_allele=allele)
+                        mutation = Mutation(sample_id=sample.id, allele_id=allele.id)
                         session.add(mutation)
                         session.commit()
                     except IntegrityError as e:

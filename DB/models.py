@@ -43,13 +43,6 @@ class Sample(BaseModel):
     accession: Mapped[str] = mapped_column(sa.Text, nullable=False)
     consent_level: Mapped[str] = mapped_column(sa.Text, nullable=False)
 
-    related_intra_host_variants: Mapped[List['IntraHostVariant']] = relationship(back_populates='related_sample')
-
-    # alleles_related_via_intra_host_variants: Mapped[List['Allele']] = relationship()
-    # todo: rename to be less confusing, double check that I'm doing it right.
-    alleles_related_via_mutation: Mapped[List['Mutation']] = relationship(back_populates='related_sample')
-
-
 class Allele(BaseModel):
     __tablename__ = 'alleles'
 
@@ -70,12 +63,6 @@ class Allele(BaseModel):
             ),
             CheckConstraint("alt_nt <> ''", name='alt_nt_not_empty')
         ]
-    )
-
-    samples_related_via_mutation: Mapped[List['Mutation']] = relationship(back_populates='related_allele')
-    related_intra_host_variants: Mapped[List['IntraHostVariant']] = relationship(back_populates='related_allele')
-    related_amino_acid_substitutions: Mapped[List['AminoAcidSubstitution']] = relationship(
-        back_populates='related_allele'
     )
 
 
@@ -107,7 +94,6 @@ class AminoAcidSubstitution(BaseModel):
         ]
     )
 
-    related_allele: Mapped['Allele'] = relationship(back_populates='related_amino_acid_substitutions')
 
 
 class Mutation(BaseModel):
@@ -123,9 +109,6 @@ class Mutation(BaseModel):
             UniqueConstraint('sample_id', 'allele_id', name='uq_mutations_sample_allele_pair')
         ]
     )
-
-    related_sample: Mapped['Sample'] = relationship(back_populates='alleles_related_via_mutation')
-    related_allele: Mapped['Allele'] = relationship(back_populates='samples_related_via_mutation')
 
 
 class IntraHostVariant(BaseModel):
@@ -145,9 +128,6 @@ class IntraHostVariant(BaseModel):
             UniqueConstraint('sample_id', 'allele_id', name='uq_intra_host_variants_sample_allele_pair')
         ]
     )
-
-    related_sample: Mapped['Sample'] = relationship(back_populates='related_intra_host_variants')
-    related_allele: Mapped['Allele'] = relationship(back_populates='related_intra_host_variants')
 
 
 class DmsResult(BaseModel):

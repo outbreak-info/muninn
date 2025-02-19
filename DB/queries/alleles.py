@@ -25,7 +25,7 @@ def get_alleles_via_mutation_by_sample_accession(accession: str) -> List['Allele
 
     mutations_query = select(Mutation).filter(
         Mutation.sample_id.in_(sample_id_query)
-    ).with_only_columns(Mutation.id)
+    ).with_only_columns(Mutation.allele_id)
 
     alleles_query = select(Allele).filter(Allele.id.in_(mutations_query))
 
@@ -41,7 +41,7 @@ def get_alleles_via_intra_host_variant_by_sample_accession(accession: str) -> li
 
     ihv_query = select(IntraHostVariant).filter(
         IntraHostVariant.sample_id.in_(sample_id_query)
-    ).with_only_columns(IntraHostVariant.id)
+    ).with_only_columns(IntraHostVariant.allele_id)
 
     alleles_query = select(Allele).filter(Allele.id.in_(ihv_query))
 
