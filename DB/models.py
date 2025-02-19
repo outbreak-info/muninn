@@ -46,6 +46,7 @@ class Sample(BaseModel):
     related_intra_host_variants: Mapped[List['IntraHostVariant']] = relationship(back_populates='related_sample')
 
     # alleles_related_via_intra_host_variants: Mapped[List['Allele']] = relationship()
+    # todo: rename to be less confusing, double check that I'm doing it right.
     alleles_related_via_mutation: Mapped[List['Mutation']] = relationship(back_populates='related_sample')
 
 
