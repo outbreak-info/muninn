@@ -5,9 +5,10 @@ from sqlalchemy.orm import Session
 
 from DB.engine import engine
 from DB.models import AminoAcidSubstitution, Sample, Mutation, Allele
+from api.models import PydAminoAcidSubstitution
 
 
-def get_aa_subs_via_mutation_by_sample_accession(accession: str) -> List['AminoAcidSubstitution']:
+def get_aa_subs_via_mutation_by_sample_accession(accession: str) -> List['PydAminoAcidSubstitution']:
     sample_id_query = select(Sample).where(
         Sample.accession == accession
     ).with_only_columns(Sample.id)
@@ -22,4 +23,4 @@ def get_aa_subs_via_mutation_by_sample_accession(accession: str) -> List['AminoA
 
     with (Session(engine) as session):
         aa_subs = session.execute(aa_subs_query).scalars()
-        return [a for a in aa_subs]
+        return [a.to_pyd_model() for a in aa_subs]

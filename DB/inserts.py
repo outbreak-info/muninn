@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from DB.engine import engine
 
-from DB.models import Sample, Allele, IntraHostVariant, BaseModel, Mutation, AminoAcidSubstitution
+from DB.models import Sample, Allele, IntraHostVariant, Base, Mutation, AminoAcidSubstitution
 
 
 def insert_samples(data: List['Sample']):
@@ -210,7 +210,7 @@ def parse_and_insert_mutations(mutations_files):
                         print(e)
 
 
-def table_has_rows(table: Type['BaseModel']) -> bool:
+def table_has_rows(table: Type['Base']) -> bool:
     with Session(engine) as session:
         return session.query(table).count() > 0
 

@@ -3,7 +3,9 @@ from typing import List
 import sqlalchemy as sa
 from sqlalchemy import UniqueConstraint, CheckConstraint, MetaData
 from sqlalchemy.ext.compiler import compiles
-from sqlalchemy.orm import Mapped, mapped_column, relationship, DeclarativeBase
+from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase, relationship
+
+from api.models import PydAminoAcidSubstitution
 
 # This is magic and I don't understand it at all.
 # From https://stackoverflow.com/a/77475375
@@ -21,7 +23,7 @@ def compile_create_uc(create, compiler, **kw):
     return stmt
 
 
-class BaseModel(DeclarativeBase):
+class Base(DeclarativeBase):
     metadata = MetaData(
         # This will automatically name constraints, but it's still best to name them manually
         # It's possible to get conflicting names from this convention
@@ -36,14 +38,16 @@ class BaseModel(DeclarativeBase):
     )
 
 
-class Sample(BaseModel):
+class Sample(Base):
     __tablename__ = 'samples'
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
     accession: Mapped[str] = mapped_column(sa.Text, nullable=False)
     consent_level: Mapped[str] = mapped_column(sa.Text, nullable=False)
 
-class Allele(BaseModel):
+    r_variants: Mapped[List['IntraHostVariant']] = relationship(back_populates='r_sample')
+
+class Allele(Base):
     __tablename__ = 'alleles'
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
@@ -65,8 +69,11 @@ class Allele(BaseModel):
         ]
     )
 
+    r_amino_subs: Mapped[List['AminoAcidSubstitution']] = relationship(back_populates='r_allele')
+    r_variants: Mapped[List['IntraHostVariant']] = relationship(back_populates='r_allele')
 
-class AminoAcidSubstitution(BaseModel):
+
+class AminoAcidSubstitution(Base):
     __tablename__ = 'amino_acid_substitutions'
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
@@ -94,9 +101,20 @@ class AminoAcidSubstitution(BaseModel):
         ]
     )
 
+    r_allele: Mapped['Allele'] = relationship(back_populates='r_amino_subs')
+
+    def to_pyd_model(self) -> 'PydAminoAcidSubstitution':
+        return PydAminoAcidSubstitution(
+            id=self.id,
+            allele_id=self.allele_id,
+            position_aa=self.position_aa,
+            ref_aa=self.ref_aa,
+            alt_aa=self.alt_aa,
+            gff_feature=self.gff_feature
+        )
 
 
-class Mutation(BaseModel):
+class Mutation(Base):
     __tablename__ = 'mutations'
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
@@ -111,7 +129,7 @@ class Mutation(BaseModel):
     )
 
 
-class IntraHostVariant(BaseModel):
+class IntraHostVariant(Base):
     __tablename__ = 'intra_host_variants'
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
@@ -129,8 +147,10 @@ class IntraHostVariant(BaseModel):
         ]
     )
 
+    r_sample: Mapped['Sample'] = relationship(back_populates='r_variants')
+    r_allele: Mapped['Allele'] = relationship(back_populates='r_variants')
 
-class DmsResult(BaseModel):
+class DmsResult(Base):
     __tablename__ = 'dms_results'
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
