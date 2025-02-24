@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List
 
 import sqlalchemy as sa
@@ -42,10 +43,80 @@ class Sample(Base):
     __tablename__ = 'samples'
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    # todo: change name to be specific about which accession this is
     accession: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    bio_project: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    bio_sample: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    bio_sample_accession: Mapped[str] = mapped_column(sa.Text, nullable=True)
+    bio_sample_model: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    center_name: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    experiment: Mapped[str] = mapped_column(sa.Text, nullable=False)
+
+    # todo: host should benefit from some normalization
+    # we've got various spellings of common names, plus some binomials and genus sp.
+    host: Mapped[str] = mapped_column(sa.Text, nullable=False)
+
+    # todo: could these be relationships?
+    instrument: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    platform: Mapped[str] = mapped_column(sa.Text, nullable=False)
+
+    isolate: Mapped[str] = mapped_column(sa.Text, nullable=False)
+
+    #todo: factor these out?
+    library_name: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    library_layout: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    library_selection: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    library_source: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    # todo: right now, this is all 'Influenza A virus'
+    organism: Mapped[str] = mapped_column(sa.Text, nullable=False)
+
+    # todo: if it is retracted it needs a date? and v/v?
+    is_retracted: Mapped[bool] = mapped_column(sa.Boolean, nullable=False)
+    # todo: this needs to come with its tz data attached
+    retraction_detected_date: Mapped[datetime] = mapped_column(sa.DateTime, nullable=True)
+
+    # todo: should have some normalization
+    isolation_source: Mapped[str] = mapped_column(sa.Text, nullable=True)
+
+    # todo: this is a messy field
+    # need to have nulls, year only, and some have multiple dates listed
+    # also deal with "missing" vs just null
+    # we could store it as a string, but then we'll lose out on postgres queries using the date type
+    # idea: store the raw string, and a 'searchable date' that's the pg type?
+    collection_date: Mapped[str] = mapped_column(sa.Text, nullable=True)
+
+    # these date fields aren't as messy
+    release_date: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    creation_date: Mapped[str] = mapped_column(sa.Text, nullable=False)
+
+    # todo: What is this? all = 1 in the file I have
+    version: Mapped[str] = mapped_column(sa.Text, nullable=False)
+
+    sample_name: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    sra_study: Mapped[str] = mapped_column(sa.Text, nullable=False)
+
+    serotype: Mapped[str] = mapped_column(sa.Text, nullable=True)
+
+
+    # todo: these are a mess
+    geo_loc_name: Mapped[str] = mapped_column(sa.Text, nullable=True)
+    geo_loc_name_country: Mapped[str] = mapped_column(sa.Text, nullable=True)
+    geo_loc_name_country_continent: Mapped[str] = mapped_column(sa.Text, nullable=True)
+
     consent_level: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    assay_type: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    avg_spot_length: Mapped[float] = mapped_column(sa.Double, nullable=False)
+    bases: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
+    bytes: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
+
+    # todo: I think these could maybe be factored out and stored differently?
+    datastore_filetype: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    datastore_region: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    datastore_provider: Mapped[str] = mapped_column(sa.Text, nullable=False)
+
 
     r_variants: Mapped[List['IntraHostVariant']] = relationship(back_populates='r_sample')
+
 
 class Allele(Base):
     __tablename__ = 'alleles'
@@ -149,6 +220,7 @@ class IntraHostVariant(Base):
 
     r_sample: Mapped['Sample'] = relationship(back_populates='r_variants')
     r_allele: Mapped['Allele'] = relationship(back_populates='r_variants')
+
 
 class DmsResult(Base):
     __tablename__ = 'dms_results'
