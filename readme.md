@@ -39,7 +39,7 @@ Database system to store mutation and variant data for avian influenza.
     1. Get back to the project root and make sure you still have the .env values set
     2. Run the script, providing it the absolute path to the test data directory:
         - `python3 runinserts.py /wherever/you/put/it/bird_flu_db/test_data`
-        - This will take a while, like half an hour. todo: I should really put a timer on it.
+        - This will take a while, like half an hour.
 9. If you want, run the web server and try out a request. This part is still very much WiP.
     1. `fastapi dev api/main.py` This will start up the server and restart it whenever the sources change.
     2. There's only one endpoint even marginally complete at the moment, so play with it:

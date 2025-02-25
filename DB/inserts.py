@@ -340,6 +340,8 @@ def table_has_rows(table: Type['Base']) -> bool:
 
 
 def main(basedir):
+    start = datetime.datetime.now()
+    print(f'start at {start}')
     samples_file = f'{basedir}/SraRunTable_automated.csv'
 
     if not table_has_rows(Sample):
@@ -347,6 +349,8 @@ def main(basedir):
         print('samples done')
     else:
         print('Samples already has data, skipping...')
+    samples_done = datetime.datetime.now()
+    print(f'Samples took: {samples_done - start}')
 
     # I didn't realize there was a combined version and I'm not rewriting the reader
     variants_files = [f'{basedir}/intrahost_dms/combined_variants.tsv']
@@ -356,12 +360,20 @@ def main(basedir):
     else:
         print("IntraHostVariants already has data, skipping...")
 
+    variants_done = datetime.datetime.now()
+    print(f'Variants took: {variants_done - samples_done}')
+
     if not table_has_rows(Mutation):
         mutations_files = glob(f'{basedir}/mutdata_complete/*.json')
         parse_and_insert_mutations(mutations_files)
     else:
         print('Mutations already has data, skipping...')
 
+    mutations_done = datetime.datetime.now()
+    print(f'Mutations took: {mutations_done - variants_done}')
+
+    end = datetime.datetime.now()
+    print(f'Total elapsed: {end - start}')
 
 if __name__ == '__main__':
     basedir_ = '/home/james/Documents/andersen_lab/bird_flu_db/test_data'
