@@ -4,6 +4,7 @@ from typing import List
 import sqlalchemy as sa
 from sqlalchemy import UniqueConstraint, CheckConstraint, MetaData
 from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase, relationship
 
 from api.models import PydAminoAcidSubstitution
@@ -46,7 +47,7 @@ class Sample(Base):
     # todo: change name to be specific about which accession this is
     accession: Mapped[str] = mapped_column(sa.Text, nullable=False)
     bio_project: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    bio_sample: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    bio_sample: Mapped[str] = mapped_column(sa.Text, nullable=True)
     bio_sample_accession: Mapped[str] = mapped_column(sa.Text, nullable=True)
     bio_sample_model: Mapped[str] = mapped_column(sa.Text, nullable=False)
     center_name: Mapped[str] = mapped_column(sa.Text, nullable=False)
@@ -54,15 +55,15 @@ class Sample(Base):
 
     # todo: host should benefit from some normalization
     # we've got various spellings of common names, plus some binomials and genus sp.
-    host: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    host: Mapped[str] = mapped_column(sa.Text, nullable=True)
 
     # todo: could these be relationships?
     instrument: Mapped[str] = mapped_column(sa.Text, nullable=False)
     platform: Mapped[str] = mapped_column(sa.Text, nullable=False)
 
-    isolate: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    isolate: Mapped[str] = mapped_column(sa.Text, nullable=True)
 
-    #todo: factor these out?
+    # todo: factor these out?
     library_name: Mapped[str] = mapped_column(sa.Text, nullable=False)
     library_layout: Mapped[str] = mapped_column(sa.Text, nullable=False)
     library_selection: Mapped[str] = mapped_column(sa.Text, nullable=False)
@@ -72,7 +73,7 @@ class Sample(Base):
 
     # todo: if it is retracted it needs a date? and v/v?
     is_retracted: Mapped[bool] = mapped_column(sa.Boolean, nullable=False)
-    # todo: this needs to come with its tz data attached
+    # todo: this needs to come with its tz data attached (it's utc)
     retraction_detected_date: Mapped[datetime] = mapped_column(sa.DateTime, nullable=True)
 
     # todo: should have some normalization
@@ -86,8 +87,9 @@ class Sample(Base):
     collection_date: Mapped[str] = mapped_column(sa.Text, nullable=True)
 
     # these date fields aren't as messy
-    release_date: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    creation_date: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    # todo: release date should come with tz info
+    release_date: Mapped[datetime] = mapped_column(sa.TIMESTAMP(timezone=True), nullable=False)
+    creation_date: Mapped[datetime] = mapped_column(sa.TIMESTAMP(timezone=True), nullable=False)
 
     # todo: What is this? all = 1 in the file I have
     version: Mapped[str] = mapped_column(sa.Text, nullable=False)
@@ -97,15 +99,14 @@ class Sample(Base):
 
     serotype: Mapped[str] = mapped_column(sa.Text, nullable=True)
 
-
     # todo: these are a mess
-    geo_loc_name: Mapped[str] = mapped_column(sa.Text, nullable=True)
-    geo_loc_name_country: Mapped[str] = mapped_column(sa.Text, nullable=True)
+    geo_loc_name: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    geo_loc_name_country: Mapped[str] = mapped_column(sa.Text, nullable=False)
     geo_loc_name_country_continent: Mapped[str] = mapped_column(sa.Text, nullable=True)
 
     consent_level: Mapped[str] = mapped_column(sa.Text, nullable=False)
     assay_type: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    avg_spot_length: Mapped[float] = mapped_column(sa.Double, nullable=False)
+    avg_spot_length: Mapped[float] = mapped_column(sa.Double, nullable=True)
     bases: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
     bytes: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
 
@@ -114,6 +115,15 @@ class Sample(Base):
     datastore_region: Mapped[str] = mapped_column(sa.Text, nullable=False)
     datastore_provider: Mapped[str] = mapped_column(sa.Text, nullable=False)
 
+    __table_args__ = tuple(
+        [
+            CheckConstraint(
+                '(not is_retracted and retraction_detected_date is null) or '
+                '(is_retracted and retraction_detected_date is not null)',
+                name='retraction_values_existence_in_harmony'
+                )
+        ]
+    )
 
     r_variants: Mapped[List['IntraHostVariant']] = relationship(back_populates='r_sample')
 
@@ -124,7 +134,10 @@ class Allele(Base):
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
     region: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    # todo: the ihv files have a much longer region string, what do with that?
+    # HA|PP755589.1|A/cattle/Texas/24-008749-003/2024(H5N1)
     position_nt: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
+    ref_nt: Mapped[str] = mapped_column(sa.Text, nullable=False)
     alt_nt: Mapped[str] = mapped_column(sa.Text, nullable=False)
 
     __table_args__ = tuple(
@@ -136,7 +149,8 @@ class Allele(Base):
                 postgresql_nulls_not_distinct=True,
                 name='uq_alleles_nt_values'
             ),
-            CheckConstraint("alt_nt <> ''", name='alt_nt_not_empty')
+            CheckConstraint("alt_nt <> ''", name='alt_nt_not_empty'),
+            CheckConstraint("ref_nt <> ''", name='ref_nt_not_empty')
         ]
     )
 
@@ -154,6 +168,8 @@ class AminoAcidSubstitution(Base):
     position_aa: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
     ref_aa: Mapped[str] = mapped_column(sa.Text, nullable=False)
     alt_aa: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    ref_codon: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    alt_codon: Mapped[str] = mapped_column(sa.Text, nullable=False)
     gff_feature: Mapped[str] = mapped_column(sa.Text, nullable=False)
 
     __table_args__ = tuple(
@@ -211,6 +227,14 @@ class IntraHostVariant(Base):
     ref_dp: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
     alt_dp: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
     alt_freq: Mapped[float] = mapped_column(sa.Double, nullable=False)
+    ref_rv: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
+    alt_rv: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
+    ref_qual: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
+    alt_qual: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
+    total_dp: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
+    pval: Mapped[float] = mapped_column(sa.Double, nullable=False)
+    # todo: check name, pass is a keyword in python
+    pass_qc: Mapped[bool] = mapped_column(sa.Boolean, nullable=False)
 
     __table_args__ = tuple(
         [
@@ -226,10 +250,13 @@ class DmsResult(Base):
     __tablename__ = 'dms_results'
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
-    ferret_sera_escape: Mapped[float] = mapped_column(sa.Double, nullable=False)
-    stability: Mapped[float] = sa.Column(sa.Double, nullable=False)
-
     allele_id: Mapped[int] = mapped_column(sa.ForeignKey('alleles.id'), nullable=False)
+
+    # todo: no data for any of these, so I'm guessing at the types
+    ferret_sera_escape: Mapped[float] = mapped_column(sa.Double, nullable=False)
+    stability: Mapped[float] = mapped_column(sa.Double, nullable=False)
+    entry_239T: Mapped[float] = mapped_column(sa.Double, nullable=False)
+    SA26_usage_increase: Mapped[float] = mapped_column(sa.Double, nullable=False)
 
     __table_args__ = tuple(
         [

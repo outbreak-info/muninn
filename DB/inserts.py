@@ -13,10 +13,11 @@ from DB.engine import engine
 from DB.models import Sample, Allele, IntraHostVariant, Base, Mutation, AminoAcidSubstitution
 
 
-def insert_samples(data: List['Sample']):
-    with Session(engine) as session:
-        for sample in data:
-            session.add(sample)
+def parse_and_insert_samples(samples_file: str):
+    with open(samples_file, 'r') as f:
+        csvreader = csv.DictReader(f, delimiter=',', quotechar='"')
+        for row in csvreader:
+
 
         session.flush()
         sra_to_sample = {s.accession: s for s in data}
@@ -216,16 +217,12 @@ def table_has_rows(table: Type['Base']) -> bool:
 
 
 def main(basedir):
-    # unique_srr_file = f'{basedir}/mutations/unique_srr.txt'
-    # with open(unique_srr_file, 'r') as f:
-    #     uniq_srrs = [l.strip() for l in f.readlines()]
-    #
-    # samples = [Sample(accession=srr, consent_level=ConsentLevel.public) for srr in uniq_srrs]
-    #
-    # if not table_has_rows(Sample):
-    #     sra_to_sample = insert_samples(samples)
-    # else:
-    #     print('Samples already has data, skipping...')
+    samples_file = f'{basedir}/SraRunTable_automated.csv'
+
+    if not table_has_rows(Sample):
+        parse_and_insert_samples(samples_file)
+    else:
+        print('Samples already has data, skipping...')
 
     if not table_has_rows(Mutation):
         mutations_files = glob(f'{basedir}/mutdata_complete/*.json')
