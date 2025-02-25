@@ -12,8 +12,6 @@ services:
       POSTGRES_USER: flu
       POSTGRES_PASSWORD: ${FLU_DB_PASSWORD}
       POSTGRES_DB: flu
-    volumes:
-      - /home/james/postgres/flu_db:/var/lib/postgresql/data
     command:
       - "postgres"
       - "-c"

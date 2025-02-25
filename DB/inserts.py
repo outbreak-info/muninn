@@ -364,7 +364,7 @@ def main(basedir):
 
 
 if __name__ == '__main__':
-    basedir = '/home/james/Documents/andersen_lab'
+    basedir_ = '/home/james/Documents/andersen_lab/bird_flu_db/test_data'
     if len(sys.argv) >= 2:
-        basedir = sys.argv[1]
-    main(basedir)
+        basedir_ = sys.argv[1]
+    main(basedir_)
