@@ -74,7 +74,7 @@ class Sample(Base):
     # todo: if it is retracted it needs a date? and v/v?
     is_retracted: Mapped[bool] = mapped_column(sa.Boolean, nullable=False)
     # todo: this needs to come with its tz data attached (it's utc)
-    retraction_detected_date: Mapped[datetime] = mapped_column(sa.DateTime, nullable=True)
+    retraction_detected_date: Mapped[datetime] = mapped_column(sa.TIMESTAMP(timezone=True), nullable=True)
 
     # todo: should have some normalization
     isolation_source: Mapped[str] = mapped_column(sa.Text, nullable=True)
