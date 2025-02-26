@@ -255,7 +255,7 @@ class DmsResult(Base):
     # todo: no data for any of these, so I'm guessing at the types
     ferret_sera_escape: Mapped[float] = mapped_column(sa.Double, nullable=False)
     stability: Mapped[float] = mapped_column(sa.Double, nullable=False)
-    entry_239T: Mapped[float] = mapped_column(sa.Double, nullable=False)
+    entry_293T: Mapped[float] = mapped_column(sa.Double, nullable=False)
     SA26_usage_increase: Mapped[float] = mapped_column(sa.Double, nullable=False)
 
     __table_args__ = tuple(

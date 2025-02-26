@@ -6,11 +6,11 @@ from glob import glob
 from typing import List, Type
 
 from sqlalchemy import select, and_, Select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, NoResultFound
 from sqlalchemy.orm import Session
 
 from DB.engine import engine
-from DB.models import Sample, Allele, IntraHostVariant, Base, Mutation, AminoAcidSubstitution
+from DB.models import Sample, Allele, IntraHostVariant, Base, Mutation, AminoAcidSubstitution, DmsResult
 
 
 def parse_and_insert_samples(samples_file: str):
@@ -334,6 +334,56 @@ def parse_and_insert_mutations(mutations_files):
     print(f'Mutations done with {len(errors)} errors')
 
 
+def parse_and_insert_dms_results(dms_files):
+    for file in dms_files:
+        with open(file, 'r') as f:
+            csvreader = csv.DictReader(f, delimiter=',')
+            for row in csvreader:
+                try:
+                    ref_aa = row['ref']
+                    alt_aa = row['mutant']
+                    position_aa = int(row['pos'])
+                    ferret_sera_escape = float(row['ferret sera escape'])
+                    stability = float(row['stability'])
+                    entry_293T = float(row['entry in 293T cells'])
+                    SA26_usage_increase = float(row['SA26 usage increase'])
+                except KeyError:
+                    continue
+                except ValueError:
+                    continue
+
+                # todo: just testing with HA data for now
+                region_alleles_query = select(Allele.id).where(Allele.region == 'HA')
+
+                with Session(engine) as session:
+                    try:
+                        aa_sub_allele_id = session.execute(
+                            select(AminoAcidSubstitution)
+                            .with_only_columns(AminoAcidSubstitution.allele_id)
+                            .where(and_(
+                                AminoAcidSubstitution.ref_aa == ref_aa,
+                                AminoAcidSubstitution.alt_aa == alt_aa,
+                                AminoAcidSubstitution.position_aa == position_aa,
+                                AminoAcidSubstitution.allele_id.in_(region_alleles_query)
+                            ))
+                        ).scalar_one()
+                    except NoResultFound:
+                        continue
+                    try:
+                        dms_result = DmsResult(
+                            allele_id=aa_sub_allele_id,
+                            ferret_sera_escape=ferret_sera_escape,
+                            stability=stability,
+                            entry_293T=entry_293T,
+                            SA26_usage_increase=SA26_usage_increase
+                        )
+                        session.add(dms_result)
+                        session.commit()
+                    except IntegrityError as e:
+                        print(e)
+                        print(row)
+
+
 def table_has_rows(table: Type['Base']) -> bool:
     with Session(engine) as session:
         return session.query(table).count() > 0
@@ -371,6 +421,17 @@ def main(basedir):
 
     mutations_done = datetime.datetime.now()
     print(f'Mutations took: {mutations_done - variants_done}')
+
+
+    # DMS data
+    if not table_has_rows(DmsResult):
+        dms_files = [f'{basedir}/{f}' for f in ['dms_HA.csv']]
+        parse_and_insert_dms_results(dms_files)
+    else:
+        print('DmsResults already has data, skipping...')
+    dms_done = datetime.datetime.now()
+    print(f'DmsResults took: {dms_done - mutations_done}')
+
 
     end = datetime.datetime.now()
     print(f'Total elapsed: {end - start}')
