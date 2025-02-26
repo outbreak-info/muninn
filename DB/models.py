@@ -156,6 +156,7 @@ class Allele(Base):
 
     r_amino_subs: Mapped[List['AminoAcidSubstitution']] = relationship(back_populates='r_allele')
     r_variants: Mapped[List['IntraHostVariant']] = relationship(back_populates='r_allele')
+    r_dms_results: Mapped[List['DmsResult']] = relationship(back_populates='r_allele')
 
 
 class AminoAcidSubstitution(Base):
@@ -263,3 +264,5 @@ class DmsResult(Base):
             UniqueConstraint('allele_id')
         ]
     )
+
+    r_allele: Mapped['Allele'] = relationship(back_populates='r_dms_results')
