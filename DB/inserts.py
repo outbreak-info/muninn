@@ -1,10 +1,11 @@
 import csv
-import datetime
 import json
 import sys
+from datetime import datetime
 from glob import glob
 from typing import List, Type
 
+from dateutil import parser
 from sqlalchemy import select, and_, Select
 from sqlalchemy.exc import IntegrityError, NoResultFound
 from sqlalchemy.orm import Session
@@ -57,8 +58,8 @@ def parse_and_insert_samples(samples_file: str):
             library_source = row['LibrarySource']
             organism = row['Organism']
             platform = row['Platform']
-            release_date = datetime.datetime.fromisoformat(row['ReleaseDate'])
-            creation_date = datetime.datetime.fromisoformat(row['create_date'])
+            release_date = parser.isoparse(row['ReleaseDate'])
+            creation_date = parser.isoparse(row['create_date'])
             version = row['version']
             sample_name = row['Sample Name']
             sra_study = row['SRA Study']
@@ -68,7 +69,7 @@ def parse_and_insert_samples(samples_file: str):
             is_retracted = row['is_retracted'].lower() == 'true'
             retraction_detected_date = row['retraction_detection_date_utc']
             if retraction_detected_date is not None:
-                retraction_detected_date = datetime.datetime.fromisoformat(retraction_detected_date + 'Z')
+                retraction_detected_date = parser.isoparse(retraction_detected_date + 'Z')
 
             sample = Sample(
                 accession=accession,
@@ -434,11 +435,13 @@ def find_or_insert_geo_location(session: Session, geo_loc_name: str):
 
     try:
         geo_loc = session.execute(
-            select(GeoLocation).where(and_(
-                GeoLocation.country_name == country,
-                GeoLocation.region_name == region,
-                GeoLocation.locality_name == locality
-            ))
+            select(GeoLocation).where(
+                and_(
+                    GeoLocation.country_name == country,
+                    GeoLocation.region_name == region,
+                    GeoLocation.locality_name == locality
+                )
+            )
         ).scalar_one()
 
     except NoResultFound:
@@ -454,13 +457,14 @@ def find_or_insert_geo_location(session: Session, geo_loc_name: str):
 
     return geo_loc
 
+
 def table_has_rows(table: Type['Base']) -> bool:
     with Session(engine) as session:
         return session.query(table).count() > 0
 
 
 def main(basedir):
-    start = datetime.datetime.now()
+    start = datetime.now()
     print(f'start at {start}')
     samples_file = f'{basedir}/SraRunTable_automated.csv'
 
@@ -469,7 +473,7 @@ def main(basedir):
         print('samples done')
     else:
         print('Samples already has data, skipping...')
-    samples_done = datetime.datetime.now()
+    samples_done = datetime.now()
     print(f'Samples took: {samples_done - start}')
 
     # I didn't realize there was a combined version and I'm not rewriting the reader
@@ -480,7 +484,7 @@ def main(basedir):
     else:
         print("IntraHostVariants already has data, skipping...")
 
-    variants_done = datetime.datetime.now()
+    variants_done = datetime.now()
     print(f'Variants took: {variants_done - samples_done}')
 
     if not table_has_rows(Mutation):
@@ -489,7 +493,7 @@ def main(basedir):
     else:
         print('Mutations already has data, skipping...')
 
-    mutations_done = datetime.datetime.now()
+    mutations_done = datetime.now()
     print(f'Mutations took: {mutations_done - variants_done}')
 
     # DMS data
@@ -498,10 +502,10 @@ def main(basedir):
         parse_and_insert_dms_results(dms_files)
     else:
         print('DmsResults already has data, skipping...')
-    dms_done = datetime.datetime.now()
+    dms_done = datetime.now()
     print(f'DmsResults took: {dms_done - mutations_done}')
 
-    end = datetime.datetime.now()
+    end = datetime.now()
     print(f'Total elapsed: {end - start}')
 
 

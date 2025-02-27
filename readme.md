@@ -45,43 +45,46 @@ Database system to store mutation and variant data for avian influenza.
     2. There's only one endpoint even marginally complete at the moment, so play with it:
         - http://localhost:8000/variants/by/sample/?accession=SRR28752446
 
+The database is kept in a docker container called `flu_db_pg`.
+To run psql (the postgres console) on the container, use the following command:
 
-### Installing a python 3.10 for testing
+```
+docker exec -it flu_db_pg psql -U flu -d flu -h localhost -p $FLU_DB_PORT
+```
 
-Here are the steps I took to allow testing against python 3.10 on my system, which shipped with a newer version.
+Or, if you have psql installed on the system hosting the container:
 
-1. Install pyenv as indicated in their [github](https://github.com/pyenv/pyenv)
-2. Make sure that requirements.txt is up to date, then delete any existing venv for this project.
-3. Install 3.10: `pyenv install 3.10`
-4. Make 3.10 the default within the project directory:
-   1. `cd /.../bird_flu_db`
-   2. `pyenv local 3.10`
-5. Make sure that the correct version of python is in use: `python3 --version` should respond `Python 3.10.16`
-6. Recreate the virtual environment. This is a minefield of options...
-   1. `python3 -m venv venv`
-7. `source venv/bin/activate`
-8. Install dependencies: `pip install -r requirements.txt`
-9. I use Pycharm. Pycharm will need some help to figure out what's going on. 
-   1. Open settings, go to `Project: bird_flu_db > Python Interpreter`
-   2. Click `Add Interpreter > add local interpreter`, and switch to `Select existing`.
-   3. It may find the python 3.10 interpreter, but that won't be good enough because that interpreter is installed
-   centrally, while the packages are installed in the venv. Click the little folder to browse your filesystem.
-   4. Select `bird_flu_db/venv/bin/python3.10`
-   5. And hopefully that's it.
-   
+```
+psql -U flu -d flu -h localhost -p $FLU_DB_PORT
+```
 
+**Note:**
+Any time there's a change in the database schema, you'll have to recreate the database.
+You can either drop the container entirely and rerun all the database setup steps, or use psql to truncate all the
+tables, then run the migrations and repopulate the db.
+
+psql allows you to run arbitrary sql statements, as well as some utility commands.
+Here's some psql commands that are useful in general:
+
+| Command                              | Use                                         |
+|--------------------------------------|---------------------------------------------|
+| `\?`                                 | Open help page                              |
+| `\dt+`                               | List all the tables and their sizes on disk |
+| `\d+ <table name>`                   | Describe the columns in a table             |
+| `select count(*) from <table name>;` | Count the entries in a table                |
+| `truncate table <name> cascade;`     | Delete all rows from a table                |
 
 ## Notes
 
 ### Geo Locations
 
 I want to know about the format in which `geo_loc_name` and its ilk are sent to me.
-[This link](https://www.ncbi.nlm.nih.gov/sra/docs/sra-cloud-based-metadata-table/) gives a  brief overview of the 
-metadata fields available for samples in the SRA, but it doesn't give any details about the formatting of those pesky 
+[This link](https://www.ncbi.nlm.nih.gov/sra/docs/sra-cloud-based-metadata-table/) gives a brief overview of the
+metadata fields available for samples in the SRA, but it doesn't give any details about the formatting of those pesky
 location strings.
-[Here](https://www.ncbi.nlm.nih.gov/biosample/docs/attributes/) we get some more details about the formatting 
+[Here](https://www.ncbi.nlm.nih.gov/biosample/docs/attributes/) we get some more details about the formatting
 (Ctrl-F for "geo_loc_name").
-And that entry will point us to 
+And that entry will point us to
 [this page from the INSDC](https://www.insdc.org/submitting-standards/geo_loc_name-qualifier-vocabulary/),
 which specifies the format for these country strings and gives the list of allowed country names.
 
@@ -92,3 +95,31 @@ Entries like `USA: Plympton, MA` go `<geo_loc_name>:<locality>, <region>`.
 But since these entries seem to always use a state postal code, we should be able to make a functional parsing system
 based on this.
 
+## Misc / Useless Info:
+
+### Installing a python 3.10 for testing
+
+**Never Mind...**
+This led to problems with the pycharm debugger that do not seem worth solving.
+I'll keep the instructions in case I need them again sometime.
+
+Here are the steps I took to allow testing against python 3.10 on my system, which shipped with a newer version.
+
+1. Install pyenv as indicated in their [github](https://github.com/pyenv/pyenv)
+2. Make sure that requirements.txt is up to date, then delete any existing venv for this project.
+3. Install 3.10: `pyenv install 3.10`
+4. Make 3.10 the default within the project directory:
+    1. `cd /.../bird_flu_db`
+    2. `pyenv local 3.10`
+5. Make sure that the correct version of python is in use: `python3 --version` should respond `Python 3.10.16`
+6. Recreate the virtual environment. This is a minefield of options...
+    1. `python3 -m venv venv`
+7. `source venv/bin/activate`
+8. Install dependencies: `pip install -r requirements.txt`
+9. I use Pycharm. Pycharm will need some help to figure out what's going on.
+    1. Open settings, go to `Project: bird_flu_db > Python Interpreter`
+    2. Click `Add Interpreter > add local interpreter`, and switch to `Select existing`.
+    3. It may find the python 3.10 interpreter, but that won't be good enough because that interpreter is installed
+       centrally, while the packages are installed in the venv. Click the little folder to browse your filesystem.
+    4. Select `bird_flu_db/venv/bin/python3.10`
+    5. And hopefully that's it.
