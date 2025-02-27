@@ -10,7 +10,8 @@ from sqlalchemy.exc import IntegrityError, NoResultFound
 from sqlalchemy.orm import Session
 
 from DB.engine import engine
-from DB.models import Sample, Allele, IntraHostVariant, Base, Mutation, AminoAcidSubstitution, DmsResult
+from DB.models import Sample, Allele, IntraHostVariant, Base, Mutation, AminoAcidSubstitution, DmsResult, GeoLocation
+from utils.geodata import INSDC_GEO_LOC_NAMES, ABBREV_TO_US_STATE
 
 
 def parse_and_insert_samples(samples_file: str):
@@ -43,8 +44,8 @@ def parse_and_insert_samples(samples_file: str):
             datastore_region = row['DATASTORE region']
             experiment = row['Experiment']
             geo_loc_name = row['geo_loc_name']
-            geo_loc_name_country = row['geo_loc_name_country']
-            geo_loc_name_country_continent = row['geo_loc_name_country_continent']
+            # geo_loc_name_country = row['geo_loc_name_country']
+            # geo_loc_name_country_continent = row['geo_loc_name_country_continent']
             host = row['Host']
             if host is not None:
                 host = host.lower()
@@ -85,9 +86,9 @@ def parse_and_insert_samples(samples_file: str):
                 datastore_provider=datastore_provider,
                 datastore_region=datastore_region,
                 experiment=experiment,
-                geo_loc_name=geo_loc_name,
-                geo_loc_name_country=geo_loc_name_country,
-                geo_loc_name_country_continent=geo_loc_name_country_continent,
+                # geo_loc_name=geo_loc_name,
+                # geo_loc_name_country=geo_loc_name_country,
+                # geo_loc_name_country_continent=geo_loc_name_country_continent,
                 host=host,
                 instrument=instrument,
                 isolate=isolate,
@@ -110,6 +111,11 @@ def parse_and_insert_samples(samples_file: str):
             )
 
             with Session(engine) as session:
+
+                if geo_loc_name is not None:
+                    geo_location_id = find_or_insert_geo_location(session, geo_loc_name).id
+                    sample.geo_location_id = geo_location_id
+
                 session.add(sample)
                 session.commit()
 
@@ -360,12 +366,14 @@ def parse_and_insert_dms_results(dms_files):
                         aa_sub_allele_id = session.execute(
                             select(AminoAcidSubstitution)
                             .with_only_columns(AminoAcidSubstitution.allele_id)
-                            .where(and_(
-                                AminoAcidSubstitution.ref_aa == ref_aa,
-                                AminoAcidSubstitution.alt_aa == alt_aa,
-                                AminoAcidSubstitution.position_aa == position_aa,
-                                AminoAcidSubstitution.allele_id.in_(region_alleles_query)
-                            ))
+                            .where(
+                                and_(
+                                    AminoAcidSubstitution.ref_aa == ref_aa,
+                                    AminoAcidSubstitution.alt_aa == alt_aa,
+                                    AminoAcidSubstitution.position_aa == position_aa,
+                                    AminoAcidSubstitution.allele_id.in_(region_alleles_query)
+                                )
+                            )
                         ).scalar_one()
                     except NoResultFound:
                         continue
@@ -383,6 +391,68 @@ def parse_and_insert_dms_results(dms_files):
                         print(e)
                         print(row)
 
+
+def parse_geo_loc(text: str):
+    """
+    Examples:
+        USA
+        USA: CA
+        USA: Alaska
+        USA: Plympton, MA
+        USA: Minnesota, Kandiyohi County
+        USA: Alaska, Matanuska-Susitna Borough
+    :param text: geo_loc_name from the SRA
+    :return: geo_loc_name (ie, country) , region, locality
+    """
+    # todo: deal with capitalization
+    s_colon = text.split(':')
+    # geo_loc_name
+    gln = s_colon[0].strip()
+    region = locality = None
+    if gln not in INSDC_GEO_LOC_NAMES:
+        raise ValueError('geo_loc_name should be from the approved list')
+    if len(s_colon) > 1:
+        s_comma = s_colon[1].split(',')
+        region = s_comma[0].strip()
+        if len(s_comma) > 1:
+            locality = s_comma[1].strip()
+            try:
+                # the second value should be locality, but some entries do 'city, CA'
+                region = ABBREV_TO_US_STATE[locality]
+                locality = s_comma[0].strip()
+            except KeyError:
+                pass
+        try:
+            region = ABBREV_TO_US_STATE[region]
+        except KeyError:
+            pass
+    return gln, region, locality
+
+
+def find_or_insert_geo_location(session: Session, geo_loc_name: str):
+    country, region, locality = parse_geo_loc(geo_loc_name)
+
+    try:
+        geo_loc = session.execute(
+            select(GeoLocation).where(and_(
+                GeoLocation.country_name == country,
+                GeoLocation.region_name == region,
+                GeoLocation.locality_name == locality
+            ))
+        ).scalar_one()
+
+    except NoResultFound:
+        geo_loc = GeoLocation(
+            full_text=geo_loc_name,
+            country_name=country,
+            region_name=region,
+            locality_name=locality
+        )
+        session.add(geo_loc)
+        session.commit()
+        session.refresh(geo_loc)
+
+    return geo_loc
 
 def table_has_rows(table: Type['Base']) -> bool:
     with Session(engine) as session:
@@ -422,7 +492,6 @@ def main(basedir):
     mutations_done = datetime.datetime.now()
     print(f'Mutations took: {mutations_done - variants_done}')
 
-
     # DMS data
     if not table_has_rows(DmsResult):
         dms_files = [f'{basedir}/{f}' for f in ['dms_HA.csv']]
@@ -432,9 +501,9 @@ def main(basedir):
     dms_done = datetime.datetime.now()
     print(f'DmsResults took: {dms_done - mutations_done}')
 
-
     end = datetime.datetime.now()
     print(f'Total elapsed: {end - start}')
+
 
 if __name__ == '__main__':
     basedir_ = '/home/james/Documents/andersen_lab/bird_flu_db/test_data'

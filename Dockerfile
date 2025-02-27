@@ -1,5 +1,0 @@
-FROM postgres:16.6
-WORKDIR /
-
-EXPOSE 5432
-

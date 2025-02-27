@@ -44,3 +44,51 @@ Database system to store mutation and variant data for avian influenza.
     1. `fastapi dev api/main.py` This will start up the server and restart it whenever the sources change.
     2. There's only one endpoint even marginally complete at the moment, so play with it:
         - http://localhost:8000/variants/by/sample/?accession=SRR28752446
+
+
+### Installing a python 3.10 for testing
+
+Here are the steps I took to allow testing against python 3.10 on my system, which shipped with a newer version.
+
+1. Install pyenv as indicated in their [github](https://github.com/pyenv/pyenv)
+2. Make sure that requirements.txt is up to date, then delete any existing venv for this project.
+3. Install 3.10: `pyenv install 3.10`
+4. Make 3.10 the default within the project directory:
+   1. `cd /.../bird_flu_db`
+   2. `pyenv local 3.10`
+5. Make sure that the correct version of python is in use: `python3 --version` should respond `Python 3.10.16`
+6. Recreate the virtual environment. This is a minefield of options...
+   1. `python3 -m venv venv`
+7. `source venv/bin/activate`
+8. Install dependencies: `pip install -r requirements.txt`
+9. I use Pycharm. Pycharm will need some help to figure out what's going on. 
+   1. Open settings, go to `Project: bird_flu_db > Python Interpreter`
+   2. Click `Add Interpreter > add local interpreter`, and switch to `Select existing`.
+   3. It may find the python 3.10 interpreter, but that won't be good enough because that interpreter is installed
+   centrally, while the packages are installed in the venv. Click the little folder to browse your filesystem.
+   4. Select `bird_flu_db/venv/bin/python3.10`
+   5. And hopefully that's it.
+   
+
+
+## Notes
+
+### Geo Locations
+
+I want to know about the format in which `geo_loc_name` and its ilk are sent to me.
+[This link](https://www.ncbi.nlm.nih.gov/sra/docs/sra-cloud-based-metadata-table/) gives a  brief overview of the 
+metadata fields available for samples in the SRA, but it doesn't give any details about the formatting of those pesky 
+location strings.
+[Here](https://www.ncbi.nlm.nih.gov/biosample/docs/attributes/) we get some more details about the formatting 
+(Ctrl-F for "geo_loc_name").
+And that entry will point us to 
+[this page from the INSDC](https://www.insdc.org/submitting-standards/geo_loc_name-qualifier-vocabulary/),
+which specifies the format for these country strings and gives the list of allowed country names.
+
+According to the INSDC page, the format is `<geo_loc_name>[:<region>][, <locality>]`, where `<geo_loc_name>` is the name
+of either a country or an ocean, from the approved list given on the page.
+They don't give much detail for the region and locality stuff, and worse, some of our examples don't follow this format.
+Entries like `USA: Plympton, MA` go `<geo_loc_name>:<locality>, <region>`.
+But since these entries seem to always use a state postal code, we should be able to make a functional parsing system
+based on this.
+

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List
+from typing import List, Tuple
 
 import sqlalchemy as sa
 from sqlalchemy import UniqueConstraint, CheckConstraint, MetaData
@@ -99,10 +99,7 @@ class Sample(Base):
 
     serotype: Mapped[str] = mapped_column(sa.Text, nullable=True)
 
-    # todo: these are a mess
-    geo_loc_name: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    geo_loc_name_country: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    geo_loc_name_country_continent: Mapped[str] = mapped_column(sa.Text, nullable=True)
+    geo_location_id: Mapped[int] = mapped_column(sa.ForeignKey('geo_locations.id'), nullable=True)
 
     consent_level: Mapped[str] = mapped_column(sa.Text, nullable=False)
     assay_type: Mapped[str] = mapped_column(sa.Text, nullable=False)
@@ -126,6 +123,7 @@ class Sample(Base):
     )
 
     r_variants: Mapped[List['IntraHostVariant']] = relationship(back_populates='r_sample')
+    r_geo_location: Mapped['GeoLocation'] = relationship(back_populates='r_samples')
 
 
 class Allele(Base):
@@ -266,3 +264,32 @@ class DmsResult(Base):
     )
 
     r_allele: Mapped['Allele'] = relationship(back_populates='r_dms_results')
+
+
+class GeoLocation(Base):
+    __tablename__ = 'geo_locations'
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+
+    full_text: Mapped[str] = mapped_column(sa.Text, nullable=False)
+
+    continent_name: Mapped[str] = mapped_column(sa.Text, nullable=True)
+    country_name: Mapped[str] = mapped_column(sa.Text, nullable=True)
+    region_name: Mapped[str] = mapped_column(sa.Text, nullable=True)
+    locality_name: Mapped[str] = mapped_column(sa.Text, nullable=True)
+
+    geo_center_lon: Mapped[float] = mapped_column(sa.Double, nullable=True)
+    geo_center_lat: Mapped[float] = mapped_column(sa.Double, nullable=True)
+
+    __table_args__ = tuple(
+        [
+            UniqueConstraint(
+                'country_name',
+                'region_name',
+                'locality_name',
+                postgresql_nulls_not_distinct=True,
+                name='uq_geo_locations_country_name_region_name_locality_name'
+            )
+        ]
+    )
+
+    r_samples: Mapped[List['Sample']] = relationship(back_populates='r_geo_location')
