@@ -143,6 +143,10 @@ class Sample(Base):
             CheckConstraint(
                 'num_nulls(collection_start_date, collection_end_date) in (0, 2)',
                 name='collection_start_and_end_both_absent_or_both_present'
+            ),
+            CheckConstraint(
+                'collection_start_date <= collection_end_date',
+                name='collection_start_not_after_collection_end'
             )
         ]
     )
