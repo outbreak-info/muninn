@@ -1,6 +1,6 @@
+import re
 from datetime import date
 
-import dateparser
 
 
 # todo: this method desperately needs to be unit tested.
@@ -13,12 +13,6 @@ def parse_collection_start_and_end(datestr: str) -> tuple[date, date]:
     :param datestr: String representing collection date for an SRA entry
     :return: tuple of two dates representing the start and end of the period of sample collection indicated by the input
     """
-    set_base = {'DATE_ORDER': 'YMD', 'RETURN_AS_TIMEZONE_AWARE': False}
-    set_full = set_base | {'STRICT_PARSING': True}
-    set_month = set_base | {'REQUIRE_PARTS': ['year', 'month']}
-    set_year = set_base | {'REQUIRE_PARTS': ['year']}
-    set_first = {'PREFER_DAY_OF_MONTH': 'first', 'PREFER_MONTH_OF_YEAR': 'first'}
-    set_last = {'PREFER_DAY_OF_MONTH': 'last', 'PREFER_MONTH_OF_YEAR': 'last'}
 
     raw_start_end = datestr.split('/')
 
@@ -26,19 +20,39 @@ def parse_collection_start_and_end(datestr: str) -> tuple[date, date]:
         raise ValueError(f'Unable to parse: {datestr}')
 
     raw_start = raw_start_end[0]
-    raw_end = raw_start_end[0]
+    # Discard any time
+    raw_start = re.split('[T ]', raw_start)[0]
 
+    start_parts = raw_start.split('-')
+    year = int(start_parts[0])
+    month = 1
+    if len(start_parts) >= 2:
+        month = int(start_parts[1])
+    day = 1
+    if len(start_parts) == 3:
+        day = int(start_parts[2])
+    if len(start_parts) > 3:
+        raise
+
+    d0 = date(year, month, day)
+
+    raw_end = raw_start_end[0]
     if len(raw_start_end) == 2:
         raw_end = raw_start_end[1]
 
-    if (d0 := dateparser.parse(raw_start, settings=set_full)) is None:
-        if (d0 := dateparser.parse(raw_start, settings=set_month | set_first)) is None:
-            if (d0 := dateparser.parse(raw_start, settings=set_year | set_first)) is None:
-                raise ValueError(f'Unable to parse begin date from: {datestr}')
+    raw_end = re.split('[T ]', raw_end)[0]
 
-    if (d1 := dateparser.parse(raw_end, settings=set_full)) is None:
-        if (d1 := dateparser.parse(raw_end, settings=set_month | set_last)) is None:
-            if (d1 := dateparser.parse(raw_end, settings=set_year | set_last)) is None:
-                raise ValueError(f'Unable to parse end date from: {datestr}')
+    end_parts = raw_end.split('-')
+    year = int(end_parts[0])
+    month = 12
+    if len(end_parts) >= 2:
+        month = int(end_parts[1])
+    day = 31
+    if len(end_parts) == 3:
+        day = int(end_parts[2])
+    if len(end_parts) > 3:
+        raise
 
-    return d0.date(), d1.date()
+    d1 = date(year, month, day)
+
+    return d0, d1
