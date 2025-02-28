@@ -1,0 +1,278 @@
+Created by PLY version 3.11 (http://www.dabeaz.com/ply)
+
+Grammar
+
+Rule 0     S' -> expression
+Rule 1     expression -> expression AND expression
+Rule 2     expression -> expression OR expression
+Rule 3     expression -> expression EQUALS term
+Rule 4     expression -> NOT expression
+Rule 5     expression -> WORD
+Rule 6     term -> WORD
+Rule 7     term -> NUMBER
+Rule 8     expression -> LPAREN expression RPAREN
+
+Terminals, with rules where they appear
+
+AND                  : 1
+EQUALS               : 3
+LPAREN               : 8
+NOT                  : 4
+NUMBER               : 7
+OR                   : 2
+RPAREN               : 8
+WORD                 : 5 6
+error                : 
+
+Nonterminals, with rules where they appear
+
+expression           : 1 1 2 2 3 4 8 0
+term                 : 3
+
+Parsing method: LALR
+
+state 0
+
+    (0) S' -> . expression
+    (1) expression -> . expression AND expression
+    (2) expression -> . expression OR expression
+    (3) expression -> . expression EQUALS term
+    (4) expression -> . NOT expression
+    (5) expression -> . WORD
+    (8) expression -> . LPAREN expression RPAREN
+
+    NOT             shift and go to state 2
+    WORD            shift and go to state 3
+    LPAREN          shift and go to state 4
+
+    expression                     shift and go to state 1
+
+state 1
+
+    (0) S' -> expression .
+    (1) expression -> expression . AND expression
+    (2) expression -> expression . OR expression
+    (3) expression -> expression . EQUALS term
+
+    AND             shift and go to state 5
+    OR              shift and go to state 6
+    EQUALS          shift and go to state 7
+
+
+state 2
+
+    (4) expression -> NOT . expression
+    (1) expression -> . expression AND expression
+    (2) expression -> . expression OR expression
+    (3) expression -> . expression EQUALS term
+    (4) expression -> . NOT expression
+    (5) expression -> . WORD
+    (8) expression -> . LPAREN expression RPAREN
+
+    NOT             shift and go to state 2
+    WORD            shift and go to state 3
+    LPAREN          shift and go to state 4
+
+    expression                     shift and go to state 8
+
+state 3
+
+    (5) expression -> WORD .
+
+    AND             reduce using rule 5 (expression -> WORD .)
+    OR              reduce using rule 5 (expression -> WORD .)
+    EQUALS          reduce using rule 5 (expression -> WORD .)
+    $end            reduce using rule 5 (expression -> WORD .)
+    RPAREN          reduce using rule 5 (expression -> WORD .)
+
+
+state 4
+
+    (8) expression -> LPAREN . expression RPAREN
+    (1) expression -> . expression AND expression
+    (2) expression -> . expression OR expression
+    (3) expression -> . expression EQUALS term
+    (4) expression -> . NOT expression
+    (5) expression -> . WORD
+    (8) expression -> . LPAREN expression RPAREN
+
+    NOT             shift and go to state 2
+    WORD            shift and go to state 3
+    LPAREN          shift and go to state 4
+
+    expression                     shift and go to state 9
+
+state 5
+
+    (1) expression -> expression AND . expression
+    (1) expression -> . expression AND expression
+    (2) expression -> . expression OR expression
+    (3) expression -> . expression EQUALS term
+    (4) expression -> . NOT expression
+    (5) expression -> . WORD
+    (8) expression -> . LPAREN expression RPAREN
+
+    NOT             shift and go to state 2
+    WORD            shift and go to state 3
+    LPAREN          shift and go to state 4
+
+    expression                     shift and go to state 10
+
+state 6
+
+    (2) expression -> expression OR . expression
+    (1) expression -> . expression AND expression
+    (2) expression -> . expression OR expression
+    (3) expression -> . expression EQUALS term
+    (4) expression -> . NOT expression
+    (5) expression -> . WORD
+    (8) expression -> . LPAREN expression RPAREN
+
+    NOT             shift and go to state 2
+    WORD            shift and go to state 3
+    LPAREN          shift and go to state 4
+
+    expression                     shift and go to state 11
+
+state 7
+
+    (3) expression -> expression EQUALS . term
+    (6) term -> . WORD
+    (7) term -> . NUMBER
+
+    WORD            shift and go to state 13
+    NUMBER          shift and go to state 14
+
+    term                           shift and go to state 12
+
+state 8
+
+    (4) expression -> NOT expression .
+    (1) expression -> expression . AND expression
+    (2) expression -> expression . OR expression
+    (3) expression -> expression . EQUALS term
+
+  ! shift/reduce conflict for AND resolved as shift
+  ! shift/reduce conflict for OR resolved as shift
+  ! shift/reduce conflict for EQUALS resolved as shift
+    $end            reduce using rule 4 (expression -> NOT expression .)
+    RPAREN          reduce using rule 4 (expression -> NOT expression .)
+    AND             shift and go to state 5
+    OR              shift and go to state 6
+    EQUALS          shift and go to state 7
+
+  ! AND             [ reduce using rule 4 (expression -> NOT expression .) ]
+  ! OR              [ reduce using rule 4 (expression -> NOT expression .) ]
+  ! EQUALS          [ reduce using rule 4 (expression -> NOT expression .) ]
+
+
+state 9
+
+    (8) expression -> LPAREN expression . RPAREN
+    (1) expression -> expression . AND expression
+    (2) expression -> expression . OR expression
+    (3) expression -> expression . EQUALS term
+
+    RPAREN          shift and go to state 15
+    AND             shift and go to state 5
+    OR              shift and go to state 6
+    EQUALS          shift and go to state 7
+
+
+state 10
+
+    (1) expression -> expression AND expression .
+    (1) expression -> expression . AND expression
+    (2) expression -> expression . OR expression
+    (3) expression -> expression . EQUALS term
+
+  ! shift/reduce conflict for AND resolved as shift
+  ! shift/reduce conflict for OR resolved as shift
+  ! shift/reduce conflict for EQUALS resolved as shift
+    $end            reduce using rule 1 (expression -> expression AND expression .)
+    RPAREN          reduce using rule 1 (expression -> expression AND expression .)
+    AND             shift and go to state 5
+    OR              shift and go to state 6
+    EQUALS          shift and go to state 7
+
+  ! AND             [ reduce using rule 1 (expression -> expression AND expression .) ]
+  ! OR              [ reduce using rule 1 (expression -> expression AND expression .) ]
+  ! EQUALS          [ reduce using rule 1 (expression -> expression AND expression .) ]
+
+
+state 11
+
+    (2) expression -> expression OR expression .
+    (1) expression -> expression . AND expression
+    (2) expression -> expression . OR expression
+    (3) expression -> expression . EQUALS term
+
+  ! shift/reduce conflict for AND resolved as shift
+  ! shift/reduce conflict for OR resolved as shift
+  ! shift/reduce conflict for EQUALS resolved as shift
+    $end            reduce using rule 2 (expression -> expression OR expression .)
+    RPAREN          reduce using rule 2 (expression -> expression OR expression .)
+    AND             shift and go to state 5
+    OR              shift and go to state 6
+    EQUALS          shift and go to state 7
+
+  ! AND             [ reduce using rule 2 (expression -> expression OR expression .) ]
+  ! OR              [ reduce using rule 2 (expression -> expression OR expression .) ]
+  ! EQUALS          [ reduce using rule 2 (expression -> expression OR expression .) ]
+
+
+state 12
+
+    (3) expression -> expression EQUALS term .
+
+    AND             reduce using rule 3 (expression -> expression EQUALS term .)
+    OR              reduce using rule 3 (expression -> expression EQUALS term .)
+    EQUALS          reduce using rule 3 (expression -> expression EQUALS term .)
+    $end            reduce using rule 3 (expression -> expression EQUALS term .)
+    RPAREN          reduce using rule 3 (expression -> expression EQUALS term .)
+
+
+state 13
+
+    (6) term -> WORD .
+
+    AND             reduce using rule 6 (term -> WORD .)
+    OR              reduce using rule 6 (term -> WORD .)
+    EQUALS          reduce using rule 6 (term -> WORD .)
+    $end            reduce using rule 6 (term -> WORD .)
+    RPAREN          reduce using rule 6 (term -> WORD .)
+
+
+state 14
+
+    (7) term -> NUMBER .
+
+    AND             reduce using rule 7 (term -> NUMBER .)
+    OR              reduce using rule 7 (term -> NUMBER .)
+    EQUALS          reduce using rule 7 (term -> NUMBER .)
+    $end            reduce using rule 7 (term -> NUMBER .)
+    RPAREN          reduce using rule 7 (term -> NUMBER .)
+
+
+state 15
+
+    (8) expression -> LPAREN expression RPAREN .
+
+    AND             reduce using rule 8 (expression -> LPAREN expression RPAREN .)
+    OR              reduce using rule 8 (expression -> LPAREN expression RPAREN .)
+    EQUALS          reduce using rule 8 (expression -> LPAREN expression RPAREN .)
+    $end            reduce using rule 8 (expression -> LPAREN expression RPAREN .)
+    RPAREN          reduce using rule 8 (expression -> LPAREN expression RPAREN .)
+
+WARNING: 
+WARNING: Conflicts:
+WARNING: 
+WARNING: shift/reduce conflict for AND in state 8 resolved as shift
+WARNING: shift/reduce conflict for OR in state 8 resolved as shift
+WARNING: shift/reduce conflict for EQUALS in state 8 resolved as shift
+WARNING: shift/reduce conflict for AND in state 10 resolved as shift
+WARNING: shift/reduce conflict for OR in state 10 resolved as shift
+WARNING: shift/reduce conflict for EQUALS in state 10 resolved as shift
+WARNING: shift/reduce conflict for AND in state 11 resolved as shift
+WARNING: shift/reduce conflict for OR in state 11 resolved as shift
+WARNING: shift/reduce conflict for EQUALS in state 11 resolved as shift
