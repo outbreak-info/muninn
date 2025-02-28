@@ -1,5 +1,6 @@
 # custom
 test_data/
+*.prof
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

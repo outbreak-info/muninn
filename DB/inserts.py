@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from DB.engine import engine
 from DB.models import Sample, Allele, IntraHostVariant, Base, Mutation, AminoAcidSubstitution, DmsResult, GeoLocation
+from utils.dates_and_times import parse_collection_start_and_end
 from utils.geodata import INSDC_GEO_LOC_NAMES, ABBREV_TO_US_STATE
 
 
@@ -36,20 +37,17 @@ def parse_and_insert_samples(samples_file: str):
             bio_sample_model = row['BioSampleModel']
             bytes_ = int(row['Bytes'])
             center_name = row['Center Name']
-            collection_date = row['Collection_Date']
-            if collection_date == 'missing':
-                collection_date = None
+
             consent_level = row['Consent']
             datastore_filetype = row['DATASTORE filetype']
             datastore_provider = row['DATASTORE provider']
             datastore_region = row['DATASTORE region']
             experiment = row['Experiment']
             geo_loc_name = row['geo_loc_name']
+            # todo: these are currently ignored
             # geo_loc_name_country = row['geo_loc_name_country']
             # geo_loc_name_country_continent = row['geo_loc_name_country_continent']
             host = row['Host']
-            if host is not None:
-                host = host.lower()
             instrument = row['Instrument']
             isolate = row['isolate']
             library_name = row['Library Name']
@@ -68,8 +66,16 @@ def parse_and_insert_samples(samples_file: str):
             bio_sample_accession = row['BioSample Accession']
             is_retracted = row['is_retracted'].lower() == 'true'
             retraction_detected_date = row['retraction_detection_date_utc']
+
             if retraction_detected_date is not None:
+                # todo: deal with tz better
                 retraction_detected_date = parser.isoparse(retraction_detected_date + 'Z')
+
+            collection_start_date = collection_end_date = None
+            collection_date = row['Collection_Date']
+            if collection_date != 'missing':
+                collection_start_date, collection_end_date = parse_collection_start_and_end(collection_date)
+
 
             sample = Sample(
                 accession=accession,
@@ -81,7 +87,8 @@ def parse_and_insert_samples(samples_file: str):
                 bio_sample_model=bio_sample_model,
                 bytes=bytes_,
                 center_name=center_name,
-                collection_date=collection_date,
+                collection_start_date=collection_start_date,
+                collection_end_date=collection_end_date,
                 consent_level=consent_level,
                 datastore_filetype=datastore_filetype,
                 datastore_provider=datastore_provider,
@@ -342,6 +349,7 @@ def parse_and_insert_mutations(mutations_files):
 
 
 def parse_and_insert_dms_results(dms_files):
+    errors = []
     for file in dms_files:
         with open(file, 'r') as f:
             csvreader = csv.DictReader(f, delimiter=',')
@@ -389,8 +397,8 @@ def parse_and_insert_dms_results(dms_files):
                         session.add(dms_result)
                         session.commit()
                     except IntegrityError as e:
-                        print(e)
-                        print(row)
+                        errors.append((e, row))
+    print(f'DMS done with {len(errors)} errors')
 
 
 def parse_geo_loc(text: str):

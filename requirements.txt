@@ -4,6 +4,7 @@ anyio==4.8.0
 certifi==2024.12.14
 charset-normalizer==3.4.1
 click==8.1.8
+dateparser==1.2.1
 dnspython==2.7.0
 email_validator==2.2.0
 fastapi==0.115.8
@@ -26,7 +27,9 @@ Pygments==2.19.1
 python-dateutil==2.9.0.post0
 python-dotenv==1.0.1
 python-multipart==0.0.20
+pytz==2025.1
 PyYAML==6.0.2
+regex==2024.11.6
 requests==2.32.3
 rich==13.9.4
 rich-toolkit==0.13.2
@@ -37,6 +40,7 @@ SQLAlchemy==2.0.37
 starlette==0.45.3
 typer==0.15.1
 typing_extensions==4.12.2
+tzlocal==5.3
 urllib3==2.3.0
 uvicorn==0.34.0
 uvloop==0.21.0

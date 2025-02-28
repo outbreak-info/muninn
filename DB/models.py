@@ -1,13 +1,22 @@
-from datetime import datetime
+from datetime import datetime, date
 from typing import List, Tuple
 
+from alembic import op
 import sqlalchemy as sa
 from sqlalchemy import UniqueConstraint, CheckConstraint, MetaData
 from sqlalchemy.ext.compiler import compiles
-from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase, relationship
 
 from api.models import PydAminoAcidSubstitution
+
+############################################################################
+# NOTE:
+# Alembic DOES NOT autogenerate check constraints!
+# If you add a check constraint, you must add it to the migration manually!
+# I've created a little system (or maybe an eldrich horror) that makes this a bit easier
+# Also, don't use unique=True, it will create an unnamed constraint
+############################################################################
+
 
 # This is magic and I don't understand it at all.
 # From https://stackoverflow.com/a/77475375
@@ -38,6 +47,19 @@ class Base(DeclarativeBase):
             "pk": "pk_%(table_name)s"
         }
     )
+
+    # todo: I think this might be a terrible idea...
+    @classmethod
+    def get_check_constraints_for_alembic(cls) -> List[tuple[str, str, str]]:
+        checks = []
+        for arg in cls.__table_args__:
+            if type(arg) != CheckConstraint:
+                continue
+            arg: CheckConstraint
+
+            checks.append((arg.name, cls.__tablename__, arg.sqltext.text))
+        return checks
+
 
 
 class Sample(Base):
@@ -79,12 +101,9 @@ class Sample(Base):
     # todo: should have some normalization
     isolation_source: Mapped[str] = mapped_column(sa.Text, nullable=True)
 
-    # todo: this is a messy field
-    # need to have nulls, year only, and some have multiple dates listed
-    # also deal with "missing" vs just null
-    # we could store it as a string, but then we'll lose out on postgres queries using the date type
-    # idea: store the raw string, and a 'searchable date' that's the pg type?
-    collection_date: Mapped[str] = mapped_column(sa.Text, nullable=True)
+    # split out from collection date
+    collection_start_date: Mapped[date] = mapped_column(sa.Date, nullable=True)
+    collection_end_date: Mapped[date] = mapped_column(sa.Date, nullable=True)
 
     # these date fields aren't as messy
     # todo: release date should come with tz info
@@ -99,6 +118,8 @@ class Sample(Base):
 
     serotype: Mapped[str] = mapped_column(sa.Text, nullable=True)
 
+    # from geo_loc_name
+    # todo: we are currently ignoring the continent and country fields
     geo_location_id: Mapped[int] = mapped_column(sa.ForeignKey('geo_locations.id'), nullable=True)
 
     consent_level: Mapped[str] = mapped_column(sa.Text, nullable=False)
@@ -118,7 +139,11 @@ class Sample(Base):
                 '(not is_retracted and retraction_detected_date is null) or '
                 '(is_retracted and retraction_detected_date is not null)',
                 name='retraction_values_existence_in_harmony'
-                )
+            ),
+            CheckConstraint(
+                'num_nulls(collection_start_date, collection_end_date) in (0, 2)',
+                name='collection_start_and_end_both_absent_or_both_present'
+            )
         ]
     )
 
