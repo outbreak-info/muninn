@@ -4,7 +4,6 @@ anyio==4.8.0
 certifi==2024.12.14
 charset-normalizer==3.4.1
 click==8.1.8
-dateparser==1.2.1
 dnspython==2.7.0
 email_validator==2.2.0
 fastapi==0.115.8
