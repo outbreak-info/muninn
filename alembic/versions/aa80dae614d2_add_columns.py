@@ -10,7 +10,6 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 
-
 # revision identifiers, used by Alembic.
 revision: str = 'aa80dae614d2'
 down_revision: Union[str, None] = '8168ddd69f0e'
@@ -68,6 +67,14 @@ def upgrade() -> None:
     op.add_column('samples', sa.Column('datastore_region', sa.Text(), nullable=False))
     op.add_column('samples', sa.Column('datastore_provider', sa.Text(), nullable=False))
     # ### end Alembic commands ###
+
+    op.create_check_constraint(
+        'ck_samples_`retraction_values_existence_in_harmony`',
+        'samples',
+        '(not is_retracted and retraction_detected_date is null) or '
+        '(is_retracted and retraction_detected_date is not null)'
+    )
+    op.create_check_constraint('ck_alleles_`ref_nt_not_empty`', 'alleles', "ref_nt <> ''")
 
 
 def downgrade() -> None:
