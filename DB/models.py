@@ -8,6 +8,7 @@ from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase, relationship
 
 from api.models import PydAminoAcidSubstitution
+from parser.parser import parser
 
 ############################################################################
 # NOTE:
@@ -60,7 +61,10 @@ class Base(DeclarativeBase):
             checks.append((arg.name, cls.__tablename__, arg.sqltext.text))
         return checks
 
-
+    @classmethod
+    def parse_query(cls, querytext):
+        q = parser.parse(querytext)
+        return f'SELECT {cls.__tablename__}.id FROM {cls.__tablename__} WHERE ({q});'
 
 class Sample(Base):
     __tablename__ = 'samples'

@@ -1,3 +1,4 @@
+import dateutil.parser
 import  ply.lex as lex
 tokens = (
     'EQUALS',
@@ -7,7 +8,13 @@ tokens = (
     'LPAREN',
     'RPAREN',
     'WORD',
-    'NUMBER'
+    'NUMBER',
+    'NOT_EQUALS',
+    'DATE',
+    'GT',
+    'LT',
+    'GTE',
+    'LTE',
 )
 
 
@@ -17,10 +24,24 @@ t_OR = r'\|'
 t_NOT = r'!'
 t_LPAREN = r'\('
 t_RPAREN = r'\)'
-t_WORD = r'\w+'
+t_WORD = r'\w[\w0-9 ]*[\w0-9]'
+t_NOT_EQUALS = r'!='
+t_GT = r'>'
+t_LT = r'<'
+t_GTE = r'>='
+t_LTE = r'<='
+
+
+
+def t_DATE(t):
+    r'\d{4}-\d{2}-\d{2}'
+    d = dateutil.parser.parse(t.value)
+    t.value = d.date().isoformat()
+    return t
+
 
 def t_NUMBER(t):
-    r'\d+(\.\d+)?'
+    r'-?\d+(\.\d+)?'
     if '.' in t.value:
         t.value = float(t.value)
     else:
@@ -30,7 +51,6 @@ def t_NUMBER(t):
 t_ignore = ' \t'
 
 def t_error(t):
-    print(f'Illegal character {t}')
-    t.lexer.skip(1)
+    raise ValueError(f'Illegal character {t}')
 
 lexer = lex.lex()
