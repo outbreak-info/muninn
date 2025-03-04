@@ -1,6 +1,6 @@
 from typing import List
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session, joinedload
 
 from DB.engine import engine
@@ -8,7 +8,7 @@ from DB.models import Sample, IntraHostVariant, Allele, AminoAcidSubstitution
 from api.models import VariantInfo, PydAminoAcidSubstitution
 
 
-def get_variants_for_sample(accession: str):
+def get_variants_for_sample(query: str) -> List['VariantInfo']:
 
     query = (
         select(IntraHostVariant, Allele, AminoAcidSubstitution)
@@ -18,14 +18,14 @@ def get_variants_for_sample(accession: str):
         .options(joinedload(Allele.r_amino_subs))
         .filter(
             IntraHostVariant.sample_id.in_(
-                select(Sample).where(Sample.accession == accession).with_only_columns(Sample.id)
+                text(Sample.parse_query(query))
             )
         )
     )
 
     with (Session(engine) as session):
         results = session.execute(query).unique().scalars()
-        foo = []
+        out_data = []
         for ihv in results:
             r_amino_subs: List['PydAminoAcidSubstitution'] = [aas.to_pyd_model() for aas in ihv.r_allele.r_amino_subs]
             variant_info = VariantInfo(
@@ -37,9 +37,9 @@ def get_variants_for_sample(accession: str):
                 alt_freq=ihv.alt_freq,
                 region=ihv.r_allele.region,
                 position_nt=ihv.r_allele.position_nt,
-                ref_nt='N',  # todo
+                ref_nt=ihv.r_allele.ref_nt,
                 alt_nt=ihv.r_allele.alt_nt,
                 amino_acid_mutations=r_amino_subs
             )
-            foo.append(variant_info)
-        return foo
+            out_data.append(variant_info)
+        return out_data

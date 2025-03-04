@@ -1,11 +1,6 @@
-import re
-
 import ply.yacc as yacc
 
-from DB.models import Sample
 from .tokenizer import tokens
-
-model = Sample
 
 assert len(tokens) > 0
 
@@ -74,7 +69,7 @@ def p_date_comparable(p):
     'comparable : DATE'
     p[0] = f'\'{p[1]}\''
 
-
+# todo: create a parsing error
 def p_error(p):
     raise ValueError(f'Syntax error in: {p}')
 

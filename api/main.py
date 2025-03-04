@@ -20,9 +20,9 @@ def get_aa_subs(sample_accession: str) -> Any:
 # Trying out a shift in naming convention
 # mutations = all data relevant to pop-level mutations
 # variants = all data relevant to intra-host variants
-@app.get('/variants/by/sample/', response_model=List[VariantInfo])
-def get_variants(accession: str):
-    if accession is None:
-        raise HTTPException(status_code=400, detail='Must provide accession')
+@app.get('/variants/by/sample/{query}', response_model=List[VariantInfo])
+def get_variants(query: str):
+    if query is None:
+        raise HTTPException(status_code=400, detail='Must provide query')
 
-    return DB.queries.variants.get_variants_for_sample(accession)
+    return DB.queries.variants.get_variants_for_sample(query)

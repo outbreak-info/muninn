@@ -64,7 +64,7 @@ class Base(DeclarativeBase):
     @classmethod
     def parse_query(cls, querytext):
         q = parser.parse(querytext)
-        return f'SELECT {cls.__tablename__}.id FROM {cls.__tablename__} WHERE ({q});'
+        return f'SELECT {cls.__tablename__}.id FROM {cls.__tablename__} WHERE ({q})'
 
 class Sample(Base):
     __tablename__ = 'samples'

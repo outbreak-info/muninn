@@ -50,6 +50,7 @@ def t_NUMBER(t):
 
 t_ignore = ' \t'
 
+# todo: create a special parsing error
 def t_error(t):
     raise ValueError(f'Illegal character {t}')
 
