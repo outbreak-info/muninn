@@ -43,7 +43,7 @@ Database system to store mutation and variant data for avian influenza.
 9. If you want, run the web server and try out a request. This part is still very much WiP.
     1. `fastapi dev api/main.py` This will start up the server and restart it whenever the sources change.
     2. There's only one endpoint even marginally complete at the moment, so play with it:
-        - http://localhost:8000/variants/by/sample/?accession=SRR28752446
+        - http://localhost:8000/variants/by/sample/accession=SRR28752446
 
 The database is kept in a docker container called `flu_db_pg`.
 To run psql (the postgres console) on the container, use the following command:
@@ -73,6 +73,82 @@ Here's some psql commands that are useful in general:
 | `\d+ <table name>`                   | Describe the columns in a table             |
 | `select count(*) from <table name>;` | Count the entries in a table                |
 | `truncate table <name> cascade;`     | Delete all rows from a table                |
+
+## Query Syntax
+
+The endpoints (which currently means just `/variants/by/sample`) use a restricted query syntax to allow the user to
+control part of the query.
+For example, in the case of `/variants/by/sample/`, here's how that works.
+When you hit this endpoint, the api will always run the following query:
+
+```sql
+SELECT * FROM intra_host_variants ihv LEFT JOIN (
+   alleles a LEFT JOIN amino_acid_substituions aas ON aas.allele_id = a.id
+) ON ihv.allele_id = a.id
+WHERE ihv.sample_id IN (
+   SELECT samples.id FROM samples WHERE <user defined> 
+);
+```
+
+Where `<user defined>` is filled in using the filters supplied by the user.
+That is, you always select all the variants and alleles associated with a set of samples.
+And the set of samples used to select those variants is based on a query that the user supplies.
+For example, `/variants/by/sample/collection_start_date >= 2024-01-01 & host = cat` will result in the following SQL
+being used in the query above:
+`SELECT samples.id FROM samples WHERE collection_start_date >= '2024-01-01' & host = 'cat'`.
+
+Here's a quick (and quite possibly outdated) guide to the available syntax:
+You can use equivalence relations: `=, !=, >, <, <=, >=`, boolean operators `&, |, !`, and parentheses to group terms.
+Greater than and less than are only usable with numeric or date values.
+Dates must be entered in the format `\d{4}-\d{2}-\d{2}`.
+In text inputs, only letters, numbers, hyphens and underscores are allowed.
+Numbers may contain decimal points.
+
+The only endpoint live allows you to select variants based on sample, so the user-defined part of the query is against
+the samples table. Here's a summary of the fields in that table:
+
+| Column Name              | Type                     |
+|--------------------------|--------------------------|
+| id                       | bigint                   |                   
+| accession                | text                     |                     
+| consent_level            | text                     |                     
+| bio_project              | text                     |                     
+| bio_sample               | text                     |                     
+| bio_sample_accession     | text                     |                     
+| bio_sample_model         | text                     |                     
+| center_name              | text                     |                     
+| experiment               | text                     |                     
+| host                     | text                     |                     
+| instrument               | text                     |                     
+| platform                 | text                     |                     
+| isolate                  | text                     |                     
+| library_name             | text                     |                     
+| library_layout           | text                     |                     
+| library_selection        | text                     |                     
+| library_source           | text                     |                     
+| organism                 | text                     |                     
+| is_retracted             | boolean                  |                  
+| retraction_detected_date | timestamp with time zone | 
+| isolation_source         | text                     |                     
+| release_date             | timestamp with time zone | 
+| creation_date            | timestamp with time zone | 
+| version                  | text                     |                     
+| sample_name              | text                     |                     
+| sra_study                | text                     |                     
+| serotype                 | text                     |                     
+| assay_type               | text                     |                     
+| avg_spot_length          | double precision         |         
+| bases                    | bigint                   |                   
+| bytes                    | bigint                   |                   
+| datastore_filetype       | text                     |                     
+| datastore_region         | text                     |                     
+| datastore_provider       | text                     |                     
+| geo_location_id          | bigint                   |                   
+| collection_start_date    | date                     |                     
+| collection_end_date      | date                     |     
+
+
+Have fun! 
 
 ## Notes
 
