@@ -22,6 +22,31 @@ services:
       - "work_mem=8MB"
     healthcheck:
       test: pg_isready -U flu -d flu
-      interval: 10s
+      interval: 2s
       timeout: 3s
-      retries: 5
+      retries: 15
+
+  server:
+    container_name: "flu_db_server"
+    build:
+      context: .
+      dockerfile: server.dockerfile
+    ports:
+      - 8000:8000
+    environment:
+      FLU_DB_PASSWORD: "${FLU_DB_PASSWORD}"
+      FLU_DB_SUPERUSER_PASSWORD: "${FLU_DB_SUPERUSER_PASSWORD}"
+      FLU_DB_USER: "${FLU_DB_USER}"
+      FLU_DB_HOST: "postgres"
+      FLU_DB_DB_NAME: "${FLU_DB_DB_NAME}"
+      FLU_DB_PORT: "${FLU_DB_PORT}"
+    command: bash -c "
+      alembic upgrade head
+      && python3 runinserts.py /usr/flu/test_data
+      && fastapi dev api/main.py
+      "
+    depends_on:
+      postgres:
+        condition: service_healthy
+    links:
+      - postgres

@@ -2,7 +2,7 @@
 
 source .env
 
-docker-compose -f docker-compose.yml up -d
+docker-compose -f docker-compose.yml up -d postgres
 
 
 while [ "$(docker inspect -f "{{.State.Health.Status}}" "flu_db_pg")" != "healthy" ]; do
