@@ -22,7 +22,7 @@ Database system to store mutation and variant data for avian influenza.
 3. Run docker compose to start the database and api containers.
    This will start up two containers, one for postgres, and one for the webserver. The webserver container will
    insert test data into the database, which will take about an hour.
-    1. `docker compose -f docker-compose.yml up -d`
+    1. `docker-compose -f docker-compose.yml up -d --build`
     2. Use `docker logs flu_db_server` to check on the progress of the insertion. (See below for more info.)
 4. Once the data is loaded, the webserver will start and you can try out a request.
    There's only one endpoint even marginally complete at the moment, so play with it:
@@ -69,7 +69,7 @@ Here's how you recreate just the server container without taking down the databa
 
 1. `docker stop flu_db_server`
 2. `docker rm flu_db_server`
-3. `docker-compose -f docker-compose.yml up -d --no-deps --no-recreate server` 
+3. `docker-compose -f docker-compose.yml up -d --no-deps --no-recreate --build server` 
 
 I've only tested these instructions using podman on my machine, so they may fail you.
 
