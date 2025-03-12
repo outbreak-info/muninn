@@ -32,7 +32,7 @@ services:
       context: .
       dockerfile: server.dockerfile
     ports:
-      - 8000:8000
+      - "8000:8000"
     environment:
       FLU_DB_PASSWORD: "${FLU_DB_PASSWORD}"
       FLU_DB_SUPERUSER_PASSWORD: "${FLU_DB_SUPERUSER_PASSWORD}"
@@ -41,12 +41,8 @@ services:
       FLU_DB_DB_NAME: "${FLU_DB_DB_NAME}"
       FLU_DB_PORT: "${FLU_DB_PORT}"
     command: bash -c "
-      alembic upgrade head
-      && python3 runinserts.py /usr/flu/test_data
-      && fastapi dev api/main.py
+      sleep 30
+      && alembic upgrade head
+      && python3 -u runinserts.py /usr/flu/test_data
+      && fastapi run api/main.py
       "
-    depends_on:
-      postgres:
-        condition: service_healthy
-    links:
-      - postgres

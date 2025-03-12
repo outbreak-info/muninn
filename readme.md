@@ -13,37 +13,20 @@ Database system to store mutation and variant data for avian influenza.
     export FLU_DB_USER="flu"
     export FLU_DB_HOST="localhost"
     export FLU_DB_DB_NAME="flu"
-    export FLU_DB_PORT="5430"
+    export FLU_DB_PORT="5432"
     ```
     - On kenny, you may need to mess with the port to avoid conflicting with the container I have running.
       Changing the setting in .env will cascade to everywhere else, so just change it there.
     - For now, 'flu' will be the postgres superuser and own everything, eventually we'll want to have less privileged
       roles.
-3. `source .env`
-4. `source db_setup.sh`
-    - Note that I've gotten rid of the docker volume, so if you delete the container, you'll have to set up the db from
-      scratch again.
-5. Create virtualenv and install python dependencies
-    1. `virtualenv venv`
-    2. `source venv/bin/activate`
-    3. `pip install -r requirements.txt`
-6. Run the alembic migrations: `alembic upgrade head`. (This requires .env values, make sure they're still set.)
-7. Obtain the archive of test data from James and unpack it. You can do this wherever you want, but I recommend in the
-   project root directory.
-    1. `cd /wherever/you/put/it/bird_flu_db`
-    2. `mkdir test_data`
-    3. `cd test_data`
-    4. `cp /wherever/flu_db_test_data.tar.gz .`
-    5. `tar -xzvf flu_db_test_data.tar.gz`
-8. Run the data insertion script.
-    1. Get back to the project root and make sure you still have the .env values set
-    2. Run the script, providing it the absolute path to the test data directory:
-        - `python3 runinserts.py /wherever/you/put/it/bird_flu_db/test_data`
-        - This will take a while, like half an hour.
-9. If you want, run the web server and try out a request. This part is still very much WiP.
-    1. `fastapi dev api/main.py` This will start up the server and restart it whenever the sources change.
-    2. There's only one endpoint even marginally complete at the moment, so play with it:
-        - http://localhost:8000/variants/by/sample/accession=SRR28752446
+3. Run docker compose to start the database and api containers.
+   This will start up two containers, one for postgres, and one for the webserver. The webserver container will
+   insert test data into the database, which will take about an hour.
+    1. `docker compose -f docker-compose.yml up -d`
+    2. Use `docker logs flu_db_server` to check on the progress of the insertion. (See below for more info.)
+4. Once the data is loaded, the webserver will start and you can try out a request.
+   There's only one endpoint even marginally complete at the moment, so play with it:
+    - http://localhost:8000/variants/by/sample/accession=SRR28752446
 
 The database is kept in a docker container called `flu_db_pg`.
 To run psql (the postgres console) on the container, use the following command:
@@ -73,6 +56,22 @@ Here's some psql commands that are useful in general:
 | `\d+ <table name>`                   | Describe the columns in a table             |
 | `select count(*) from <table name>;` | Count the entries in a table                |
 | `truncate table <name> cascade;`     | Delete all rows from a table                |
+
+While waiting on the insertions, use `\dt+` to view the sizes of the tables on disk.
+Most of the insertion time is spent loading variants and mutations.
+There are slightly over 200k of each.
+You can check the number of rows in those tables to get a sense of how much work is left.
+
+### Recreate Server Container without Changing Database
+
+If you recreate the database container, it takes a long time to reload all the data.
+Here's how you recreate just the server container without taking down the database.
+
+1. `docker stop flu_db_server`
+2. `docker rm flu_db_server`
+3. `docker-compose -f docker-compose.yml up -d --no-deps --no-recreate server` 
+
+I've only tested these instructions using podman on my machine, so they may fail you.
 
 ## Query Syntax
 
@@ -147,8 +146,7 @@ the samples table. Here's a summary of the fields in that table:
 | collection_start_date    | date                     |                     
 | collection_end_date      | date                     |     
 
-
-Have fun! 
+Have fun!
 
 ## Notes
 
