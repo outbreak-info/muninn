@@ -39,7 +39,7 @@ services:
       FLU_DB_USER: "${FLU_DB_USER}"
       FLU_DB_HOST: "postgres"
       FLU_DB_DB_NAME: "${FLU_DB_DB_NAME}"
-      FLU_DB_PORT: "${FLU_DB_PORT}"
+      FLU_DB_PORT: "5432" # b/c it's going through docker, it doesn't use the exposed port
     command: bash -c "
       sleep 30
       && alembic upgrade head
