@@ -3,427 +3,47 @@ Created by PLY version 3.11 (http://www.dabeaz.com/ply)
 Grammar
 
 Rule 0     S' -> expression
-Rule 1     expression -> term AND expression
-Rule 2     expression -> term OR expression
-Rule 3     expression -> term
-Rule 4     term -> field EQUALS value
-Rule 5     term -> field NOT_EQUALS value
-Rule 6     term -> field GT comparable
-Rule 7     term -> field LT comparable
-Rule 8     term -> field GTE comparable
-Rule 9     term -> field LTE comparable
-Rule 10    expression -> NOT expression
-Rule 11    expression -> LPAREN expression RPAREN
-Rule 12    value -> WORD
-Rule 13    field -> WORD
-Rule 14    value -> comparable
-Rule 15    comparable -> NUMBER
-Rule 16    comparable -> DATE
+Rule 1     expression -> expression AND term
+Rule 2     expression -> expression OR term
+Rule 3     expression -> NOT expression
+Rule 4     term -> expression
+Rule 5     expression -> LPAREN expression RPAREN
+Rule 6     term -> LPAREN term RPAREN
+Rule 7     term -> field EQUALS value
+Rule 8     term -> field NOT_EQUALS value
+Rule 9     term -> field GT comparable
+Rule 10    term -> field LT comparable
+Rule 11    term -> field GTE comparable
+Rule 12    term -> field LTE comparable
+Rule 13    value -> WORD
+Rule 14    field -> WORD
+Rule 15    value -> comparable
+Rule 16    comparable -> NUMBER
+Rule 17    comparable -> DATE
 
 Terminals, with rules where they appear
 
 AND                  : 1
-DATE                 : 16
-EQUALS               : 4
-GT                   : 6
-GTE                  : 8
-LPAREN               : 11
-LT                   : 7
-LTE                  : 9
-NOT                  : 10
-NOT_EQUALS           : 5
-NUMBER               : 15
+DATE                 : 17
+EQUALS               : 7
+GT                   : 9
+GTE                  : 11
+LPAREN               : 5 6
+LT                   : 10
+LTE                  : 12
+NOT                  : 3
+NOT_EQUALS           : 8
+NUMBER               : 16
 OR                   : 2
-RPAREN               : 11
-WORD                 : 12 13
+RPAREN               : 5 6
+WORD                 : 13 14
 error                : 
 
 Nonterminals, with rules where they appear
 
-comparable           : 6 7 8 9 14
-expression           : 1 2 10 11 0
-field                : 4 5 6 7 8 9
-term                 : 1 2 3
-value                : 4 5
-
-Parsing method: LALR
-
-state 0
-
-    (0) S' -> . expression
-    (1) expression -> . term AND expression
-    (2) expression -> . term OR expression
-    (3) expression -> . term
-    (10) expression -> . NOT expression
-    (11) expression -> . LPAREN expression RPAREN
-    (4) term -> . field EQUALS value
-    (5) term -> . field NOT_EQUALS value
-    (6) term -> . field GT comparable
-    (7) term -> . field LT comparable
-    (8) term -> . field GTE comparable
-    (9) term -> . field LTE comparable
-    (13) field -> . WORD
-
-    NOT             shift and go to state 3
-    LPAREN          shift and go to state 4
-    WORD            shift and go to state 6
-
-    expression                     shift and go to state 1
-    term                           shift and go to state 2
-    field                          shift and go to state 5
-
-state 1
-
-    (0) S' -> expression .
-
-
-
-state 2
-
-    (1) expression -> term . AND expression
-    (2) expression -> term . OR expression
-    (3) expression -> term .
-
-    AND             shift and go to state 7
-    OR              shift and go to state 8
-    $end            reduce using rule 3 (expression -> term .)
-    RPAREN          reduce using rule 3 (expression -> term .)
-
-
-state 3
-
-    (10) expression -> NOT . expression
-    (1) expression -> . term AND expression
-    (2) expression -> . term OR expression
-    (3) expression -> . term
-    (10) expression -> . NOT expression
-    (11) expression -> . LPAREN expression RPAREN
-    (4) term -> . field EQUALS value
-    (5) term -> . field NOT_EQUALS value
-    (6) term -> . field GT comparable
-    (7) term -> . field LT comparable
-    (8) term -> . field GTE comparable
-    (9) term -> . field LTE comparable
-    (13) field -> . WORD
-
-    NOT             shift and go to state 3
-    LPAREN          shift and go to state 4
-    WORD            shift and go to state 6
-
-    expression                     shift and go to state 9
-    term                           shift and go to state 2
-    field                          shift and go to state 5
-
-state 4
-
-    (11) expression -> LPAREN . expression RPAREN
-    (1) expression -> . term AND expression
-    (2) expression -> . term OR expression
-    (3) expression -> . term
-    (10) expression -> . NOT expression
-    (11) expression -> . LPAREN expression RPAREN
-    (4) term -> . field EQUALS value
-    (5) term -> . field NOT_EQUALS value
-    (6) term -> . field GT comparable
-    (7) term -> . field LT comparable
-    (8) term -> . field GTE comparable
-    (9) term -> . field LTE comparable
-    (13) field -> . WORD
-
-    NOT             shift and go to state 3
-    LPAREN          shift and go to state 4
-    WORD            shift and go to state 6
-
-    expression                     shift and go to state 10
-    term                           shift and go to state 2
-    field                          shift and go to state 5
-
-state 5
-
-    (4) term -> field . EQUALS value
-    (5) term -> field . NOT_EQUALS value
-    (6) term -> field . GT comparable
-    (7) term -> field . LT comparable
-    (8) term -> field . GTE comparable
-    (9) term -> field . LTE comparable
-
-    EQUALS          shift and go to state 11
-    NOT_EQUALS      shift and go to state 12
-    GT              shift and go to state 13
-    LT              shift and go to state 14
-    GTE             shift and go to state 15
-    LTE             shift and go to state 16
-
-
-state 6
-
-    (13) field -> WORD .
-
-    EQUALS          reduce using rule 13 (field -> WORD .)
-    NOT_EQUALS      reduce using rule 13 (field -> WORD .)
-    GT              reduce using rule 13 (field -> WORD .)
-    LT              reduce using rule 13 (field -> WORD .)
-    GTE             reduce using rule 13 (field -> WORD .)
-    LTE             reduce using rule 13 (field -> WORD .)
-
-
-state 7
-
-    (1) expression -> term AND . expression
-    (1) expression -> . term AND expression
-    (2) expression -> . term OR expression
-    (3) expression -> . term
-    (10) expression -> . NOT expression
-    (11) expression -> . LPAREN expression RPAREN
-    (4) term -> . field EQUALS value
-    (5) term -> . field NOT_EQUALS value
-    (6) term -> . field GT comparable
-    (7) term -> . field LT comparable
-    (8) term -> . field GTE comparable
-    (9) term -> . field LTE comparable
-    (13) field -> . WORD
-
-    NOT             shift and go to state 3
-    LPAREN          shift and go to state 4
-    WORD            shift and go to state 6
-
-    term                           shift and go to state 2
-    expression                     shift and go to state 17
-    field                          shift and go to state 5
-
-state 8
-
-    (2) expression -> term OR . expression
-    (1) expression -> . term AND expression
-    (2) expression -> . term OR expression
-    (3) expression -> . term
-    (10) expression -> . NOT expression
-    (11) expression -> . LPAREN expression RPAREN
-    (4) term -> . field EQUALS value
-    (5) term -> . field NOT_EQUALS value
-    (6) term -> . field GT comparable
-    (7) term -> . field LT comparable
-    (8) term -> . field GTE comparable
-    (9) term -> . field LTE comparable
-    (13) field -> . WORD
-
-    NOT             shift and go to state 3
-    LPAREN          shift and go to state 4
-    WORD            shift and go to state 6
-
-    term                           shift and go to state 2
-    expression                     shift and go to state 18
-    field                          shift and go to state 5
-
-state 9
-
-    (10) expression -> NOT expression .
-
-    $end            reduce using rule 10 (expression -> NOT expression .)
-    RPAREN          reduce using rule 10 (expression -> NOT expression .)
-
-
-state 10
-
-    (11) expression -> LPAREN expression . RPAREN
-
-    RPAREN          shift and go to state 19
-
-
-state 11
-
-    (4) term -> field EQUALS . value
-    (12) value -> . WORD
-    (14) value -> . comparable
-    (15) comparable -> . NUMBER
-    (16) comparable -> . DATE
-
-    WORD            shift and go to state 21
-    NUMBER          shift and go to state 23
-    DATE            shift and go to state 24
-
-    value                          shift and go to state 20
-    comparable                     shift and go to state 22
-
-state 12
-
-    (5) term -> field NOT_EQUALS . value
-    (12) value -> . WORD
-    (14) value -> . comparable
-    (15) comparable -> . NUMBER
-    (16) comparable -> . DATE
-
-    WORD            shift and go to state 21
-    NUMBER          shift and go to state 23
-    DATE            shift and go to state 24
-
-    value                          shift and go to state 25
-    comparable                     shift and go to state 22
-
-state 13
-
-    (6) term -> field GT . comparable
-    (15) comparable -> . NUMBER
-    (16) comparable -> . DATE
-
-    NUMBER          shift and go to state 23
-    DATE            shift and go to state 24
-
-    comparable                     shift and go to state 26
-
-state 14
-
-    (7) term -> field LT . comparable
-    (15) comparable -> . NUMBER
-    (16) comparable -> . DATE
-
-    NUMBER          shift and go to state 23
-    DATE            shift and go to state 24
-
-    comparable                     shift and go to state 27
-
-state 15
-
-    (8) term -> field GTE . comparable
-    (15) comparable -> . NUMBER
-    (16) comparable -> . DATE
-
-    NUMBER          shift and go to state 23
-    DATE            shift and go to state 24
-
-    comparable                     shift and go to state 28
-
-state 16
-
-    (9) term -> field LTE . comparable
-    (15) comparable -> . NUMBER
-    (16) comparable -> . DATE
-
-    NUMBER          shift and go to state 23
-    DATE            shift and go to state 24
-
-    comparable                     shift and go to state 29
-
-state 17
-
-    (1) expression -> term AND expression .
-
-    $end            reduce using rule 1 (expression -> term AND expression .)
-    RPAREN          reduce using rule 1 (expression -> term AND expression .)
-
-
-state 18
-
-    (2) expression -> term OR expression .
-
-    $end            reduce using rule 2 (expression -> term OR expression .)
-    RPAREN          reduce using rule 2 (expression -> term OR expression .)
-
-
-state 19
-
-    (11) expression -> LPAREN expression RPAREN .
-
-    $end            reduce using rule 11 (expression -> LPAREN expression RPAREN .)
-    RPAREN          reduce using rule 11 (expression -> LPAREN expression RPAREN .)
-
-
-state 20
-
-    (4) term -> field EQUALS value .
-
-    AND             reduce using rule 4 (term -> field EQUALS value .)
-    OR              reduce using rule 4 (term -> field EQUALS value .)
-    $end            reduce using rule 4 (term -> field EQUALS value .)
-    RPAREN          reduce using rule 4 (term -> field EQUALS value .)
-
-
-state 21
-
-    (12) value -> WORD .
-
-    AND             reduce using rule 12 (value -> WORD .)
-    OR              reduce using rule 12 (value -> WORD .)
-    $end            reduce using rule 12 (value -> WORD .)
-    RPAREN          reduce using rule 12 (value -> WORD .)
-
-
-state 22
-
-    (14) value -> comparable .
-
-    AND             reduce using rule 14 (value -> comparable .)
-    OR              reduce using rule 14 (value -> comparable .)
-    $end            reduce using rule 14 (value -> comparable .)
-    RPAREN          reduce using rule 14 (value -> comparable .)
-
-
-state 23
-
-    (15) comparable -> NUMBER .
-
-    AND             reduce using rule 15 (comparable -> NUMBER .)
-    OR              reduce using rule 15 (comparable -> NUMBER .)
-    $end            reduce using rule 15 (comparable -> NUMBER .)
-    RPAREN          reduce using rule 15 (comparable -> NUMBER .)
-
-
-state 24
-
-    (16) comparable -> DATE .
-
-    AND             reduce using rule 16 (comparable -> DATE .)
-    OR              reduce using rule 16 (comparable -> DATE .)
-    $end            reduce using rule 16 (comparable -> DATE .)
-    RPAREN          reduce using rule 16 (comparable -> DATE .)
-
-
-state 25
-
-    (5) term -> field NOT_EQUALS value .
-
-    AND             reduce using rule 5 (term -> field NOT_EQUALS value .)
-    OR              reduce using rule 5 (term -> field NOT_EQUALS value .)
-    $end            reduce using rule 5 (term -> field NOT_EQUALS value .)
-    RPAREN          reduce using rule 5 (term -> field NOT_EQUALS value .)
-
-
-state 26
-
-    (6) term -> field GT comparable .
-
-    AND             reduce using rule 6 (term -> field GT comparable .)
-    OR              reduce using rule 6 (term -> field GT comparable .)
-    $end            reduce using rule 6 (term -> field GT comparable .)
-    RPAREN          reduce using rule 6 (term -> field GT comparable .)
-
-
-state 27
-
-    (7) term -> field LT comparable .
-
-    AND             reduce using rule 7 (term -> field LT comparable .)
-    OR              reduce using rule 7 (term -> field LT comparable .)
-    $end            reduce using rule 7 (term -> field LT comparable .)
-    RPAREN          reduce using rule 7 (term -> field LT comparable .)
-
-
-state 28
-
-    (8) term -> field GTE comparable .
-
-    AND             reduce using rule 8 (term -> field GTE comparable .)
-    OR              reduce using rule 8 (term -> field GTE comparable .)
-    $end            reduce using rule 8 (term -> field GTE comparable .)
-    RPAREN          reduce using rule 8 (term -> field GTE comparable .)
-
-
-state 29
-
-    (9) term -> field LTE comparable .
-
-    AND             reduce using rule 9 (term -> field LTE comparable .)
-    OR              reduce using rule 9 (term -> field LTE comparable .)
-    $end            reduce using rule 9 (term -> field LTE comparable .)
-    RPAREN          reduce using rule 9 (term -> field LTE comparable .)
+comparable           : 9 10 11 12 15
+expression           : 1 2 3 4 5 0
+field                : 7 8 9 10 11 12
+term                 : 1 2 6
+value                : 7 8
 

@@ -1,5 +1,8 @@
 import dateutil.parser
 import  ply.lex as lex
+
+from parser.ParsingError import ParsingError
+
 tokens = (
     'EQUALS',
     'AND',
@@ -50,8 +53,8 @@ def t_NUMBER(t):
 
 t_ignore = ' \t'
 
-# todo: create a special parsing error
+
 def t_error(t):
-    raise ValueError(f'Illegal character {t}')
+    raise ParsingError(f'Illegal character {t}')
 
 lexer = lex.lex()

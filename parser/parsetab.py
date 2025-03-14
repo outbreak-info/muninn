@@ -6,9 +6,9 @@ _tabversion = '3.10'
 
 _lr_method = 'LALR'
 
-_lr_signature = 'AND DATE EQUALS GT GTE LPAREN LT LTE NOT NOT_EQUALS NUMBER OR RPAREN WORDexpression : term AND expressionexpression : term OR expressionexpression : termterm : field EQUALS valueterm : field NOT_EQUALS valueterm : field GT comparableterm : field LT comparableterm : field GTE comparableterm : field LTE comparableexpression : NOT expressionexpression : LPAREN expression RPARENvalue : WORDfield : WORDvalue : comparablecomparable : NUMBERcomparable : DATE'
+_lr_signature = 'AND DATE EQUALS GT GTE LPAREN LT LTE NOT NOT_EQUALS NUMBER OR RPAREN WORDexpression : expression AND termexpression : expression OR termexpression : NOT expressionexpression : termexpression : LPAREN expression RPARENterm : LPAREN term RPARENterm : field EQUALS valueterm : field NOT_EQUALS valueterm : field GT comparableterm : field LT comparableterm : field GTE comparableterm : field LTE comparablevalue : WORDfield : WORDvalue : comparablecomparable : NUMBERcomparable : DATE'
     
-_lr_action_items = {'NOT':([0,3,4,7,8,],[3,3,3,3,3,]),'LPAREN':([0,3,4,7,8,],[4,4,4,4,4,]),'WORD':([0,3,4,7,8,11,12,],[6,6,6,6,6,21,21,]),'$end':([1,2,9,17,18,19,20,21,22,23,24,25,26,27,28,29,],[0,-3,-10,-1,-2,-11,-4,-12,-14,-15,-16,-5,-6,-7,-8,-9,]),'AND':([2,20,21,22,23,24,25,26,27,28,29,],[7,-4,-12,-14,-15,-16,-5,-6,-7,-8,-9,]),'OR':([2,20,21,22,23,24,25,26,27,28,29,],[8,-4,-12,-14,-15,-16,-5,-6,-7,-8,-9,]),'RPAREN':([2,9,10,17,18,19,20,21,22,23,24,25,26,27,28,29,],[-3,-10,19,-1,-2,-11,-4,-12,-14,-15,-16,-5,-6,-7,-8,-9,]),'EQUALS':([5,6,],[11,-13,]),'NOT_EQUALS':([5,6,],[12,-13,]),'GT':([5,6,],[13,-13,]),'LT':([5,6,],[14,-13,]),'GTE':([5,6,],[15,-13,]),'LTE':([5,6,],[16,-13,]),'NUMBER':([11,12,13,14,15,16,],[23,23,23,23,23,23,]),'DATE':([11,12,13,14,15,16,],[24,24,24,24,24,24,]),}
+_lr_action_items = {'NOT':([0,3,4,],[3,3,3,]),'LPAREN':([0,3,4,7,8,19,],[4,4,4,19,19,19,]),'WORD':([0,3,4,7,8,12,13,19,],[6,6,6,6,6,24,24,6,]),'$end':([1,2,9,18,20,21,22,23,24,25,26,27,28,29,30,31,32,],[0,-4,-3,-1,-2,-5,-6,-7,-13,-15,-16,-17,-8,-9,-10,-11,-12,]),'AND':([1,2,9,10,11,18,20,21,22,23,24,25,26,27,28,29,30,31,32,],[7,-4,7,7,-4,-1,-2,-5,-6,-7,-13,-15,-16,-17,-8,-9,-10,-11,-12,]),'OR':([1,2,9,10,11,18,20,21,22,23,24,25,26,27,28,29,30,31,32,],[8,-4,8,8,-4,-1,-2,-5,-6,-7,-13,-15,-16,-17,-8,-9,-10,-11,-12,]),'RPAREN':([2,9,10,11,18,20,21,22,23,24,25,26,27,28,29,30,31,32,33,],[-4,-3,21,22,-1,-2,-5,-6,-7,-13,-15,-16,-17,-8,-9,-10,-11,-12,22,]),'EQUALS':([5,6,],[12,-14,]),'NOT_EQUALS':([5,6,],[13,-14,]),'GT':([5,6,],[14,-14,]),'LT':([5,6,],[15,-14,]),'GTE':([5,6,],[16,-14,]),'LTE':([5,6,],[17,-14,]),'NUMBER':([12,13,14,15,16,17,],[26,26,26,26,26,26,]),'DATE':([12,13,14,15,16,17,],[27,27,27,27,27,27,]),}
 
 _lr_action = {}
 for _k, _v in _lr_action_items.items():
@@ -17,7 +17,7 @@ for _k, _v in _lr_action_items.items():
       _lr_action[_x][_k] = _y
 del _lr_action_items
 
-_lr_goto_items = {'expression':([0,3,4,7,8,],[1,9,10,17,18,]),'term':([0,3,4,7,8,],[2,2,2,2,2,]),'field':([0,3,4,7,8,],[5,5,5,5,5,]),'value':([11,12,],[20,25,]),'comparable':([11,12,13,14,15,16,],[22,22,26,27,28,29,]),}
+_lr_goto_items = {'expression':([0,3,4,],[1,9,10,]),'term':([0,3,4,7,8,19,],[2,2,11,18,20,33,]),'field':([0,3,4,7,8,19,],[5,5,5,5,5,5,]),'value':([12,13,],[23,28,]),'comparable':([12,13,14,15,16,17,],[25,25,29,30,31,32,]),}
 
 _lr_goto = {}
 for _k, _v in _lr_goto_items.items():
@@ -27,20 +27,21 @@ for _k, _v in _lr_goto_items.items():
 del _lr_goto_items
 _lr_productions = [
   ("S' -> expression","S'",1,None,None,None),
-  ('expression -> term AND expression','expression',3,'p_term_and_expression','parser.py',13),
-  ('expression -> term OR expression','expression',3,'p_term_or_expression','parser.py',17),
-  ('expression -> term','expression',1,'p_expression_term','parser.py',21),
-  ('term -> field EQUALS value','term',3,'p_term_eq','parser.py',25),
-  ('term -> field NOT_EQUALS value','term',3,'p_term_neq','parser.py',29),
-  ('term -> field GT comparable','term',3,'p_term_gt','parser.py',33),
-  ('term -> field LT comparable','term',3,'p_term_lt','parser.py',37),
-  ('term -> field GTE comparable','term',3,'p_term_gte','parser.py',41),
-  ('term -> field LTE comparable','term',3,'p_term_lte','parser.py',45),
-  ('expression -> NOT expression','expression',2,'p_not_expression','parser.py',49),
-  ('expression -> LPAREN expression RPAREN','expression',3,'p_paren_expression','parser.py',53),
-  ('value -> WORD','value',1,'p_word_value','parser.py',58),
-  ('field -> WORD','field',1,'p_word_field','parser.py',62),
-  ('value -> comparable','value',1,'p_comparable_value','parser.py',66),
-  ('comparable -> NUMBER','comparable',1,'p_number_comparable','parser.py',70),
-  ('comparable -> DATE','comparable',1,'p_date_comparable','parser.py',74),
+  ('expression -> expression AND term','expression',3,'p_term_and_expression','parser.py',9),
+  ('expression -> expression OR term','expression',3,'p_term_or_expression','parser.py',14),
+  ('expression -> NOT expression','expression',2,'p_not_expression','parser.py',19),
+  ('expression -> term','expression',1,'p_expression_term','parser.py',34),
+  ('expression -> LPAREN expression RPAREN','expression',3,'p_paren_expression','parser.py',39),
+  ('term -> LPAREN term RPAREN','term',3,'p_paren_term','parser.py',44),
+  ('term -> field EQUALS value','term',3,'p_term_eq','parser.py',49),
+  ('term -> field NOT_EQUALS value','term',3,'p_term_neq','parser.py',54),
+  ('term -> field GT comparable','term',3,'p_term_gt','parser.py',59),
+  ('term -> field LT comparable','term',3,'p_term_lt','parser.py',64),
+  ('term -> field GTE comparable','term',3,'p_term_gte','parser.py',69),
+  ('term -> field LTE comparable','term',3,'p_term_lte','parser.py',74),
+  ('value -> WORD','value',1,'p_word_value','parser.py',79),
+  ('field -> WORD','field',1,'p_word_field','parser.py',84),
+  ('value -> comparable','value',1,'p_comparable_value','parser.py',89),
+  ('comparable -> NUMBER','comparable',1,'p_number_comparable','parser.py',94),
+  ('comparable -> DATE','comparable',1,'p_date_comparable','parser.py',99),
 ]

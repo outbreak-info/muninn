@@ -1,4 +1,6 @@
 import unittest
+
+from parser.ParsingError import ParsingError
 from parser.parser import parser
 
 
@@ -11,7 +13,7 @@ class TestParser(unittest.TestCase):
         res = parser.parse('host=cat')
         self.assertEqual('host = \'cat\'', res)
 
-        self.assertRaises(ValueError, parser.parse, 'host == cat')
+        self.assertRaises(ParsingError, parser.parse, 'host == cat')
 
     def test_not_equal_term(self):
         res = parser.parse('host != cat')
@@ -25,6 +27,12 @@ class TestParser(unittest.TestCase):
         res = parser.parse('host = cat & accession = SRR28752446')
         self.assertEqual('host = \'cat\' AND accession = \'SRR28752446\'', res)
 
+        res = parser.parse('host = cat & host = dog & host = bat & host = foo')
+        self.assertEqual('host = \'cat\' AND host = \'dog\' AND host = \'bat\' AND host = \'foo\'', res)
+
+        res = parser.parse('(host = cat) & accession = SRR28752446')
+        self.assertEqual('(host = \'cat\') AND accession = \'SRR28752446\'', res)
+
     def test_or_expression(self):
         res = parser.parse('host = cat | accession != SRR28752446')
         self.assertEqual('host = \'cat\' OR accession <> \'SRR28752446\'', res)
@@ -37,6 +45,16 @@ class TestParser(unittest.TestCase):
         res = parser.parse('!(host=cat & accession=SRR28752446)')
         self.assertEqual('NOT (host = \'cat\' AND accession = \'SRR28752446\')', res)
 
+        res = parser.parse('(host=cat & accession=SRR28752446) | host = bird')
+        self.assertEqual('(host = \'cat\' AND accession = \'SRR28752446\') OR host = \'bird\'', res)
+
+        res = parser.parse('(host=cat & accession=SRR28752446) & host = bird')
+        self.assertEqual('(host = \'cat\' AND accession = \'SRR28752446\') AND host = \'bird\'', res)
+
+    def test_paren_term(self):
+        res = parser.parse('(host = cat) & accession = SRR28752446')
+        self.assertEqual('(host = \'cat\') AND accession = \'SRR28752446\'', res)
+
     def test_date_value(self):
         res = parser.parse('collection_date = 1970-01-02')
         self.assertEqual('collection_date = \'1970-01-02\'', res)
@@ -48,9 +66,9 @@ class TestParser(unittest.TestCase):
         res = parser.parse('number = -17')
         self.assertEqual('number = -17', res)
 
-        self.assertRaises(ValueError, parser.parse, 'number = 42.')
+        self.assertRaises(ParsingError, parser.parse, 'number = 42.')
 
-        self.assertRaises(ValueError, parser.parse, 'number = .42')
+        self.assertRaises(ParsingError, parser.parse, 'number = .42')
 
     def test_gt_term(self):
         res = parser.parse('number > 42.17')
@@ -81,13 +99,27 @@ class TestParser(unittest.TestCase):
         self.assertEqual('date <= \'2017-10-31\'', res)
 
     def test_compare_not_comparable(self):
-        self.assertRaises(ValueError, parser.parse, 'host > cat')
-        self.assertRaises(ValueError, parser.parse, 'host < domestic cat')
-        self.assertRaises(ValueError, parser.parse, 'host >= omestic cat')
-        self.assertRaises(ValueError, parser.parse, 'host <= cat')
+        self.assertRaises(ParsingError, parser.parse, 'host > cat')
+        self.assertRaises(ParsingError, parser.parse, 'host < domestic cat')
+        self.assertRaises(ParsingError, parser.parse, 'host >= domestic cat')
+        self.assertRaises(ParsingError, parser.parse, 'host <= cat')
 
     def test_quotes_not_allowed(self):
-        self.assertRaises(ValueError, parser.parse, 'host = \'cat\'')
+        self.assertRaises(ParsingError, parser.parse, 'host = \'cat\'')
+        self.assertRaises(ParsingError, parser.parse, 'host = \"cat\"')
 
     def test_semicolon_not_allowed(self):
-        self.assertRaises(ValueError, parser.parse, 'host = cat;')
+        self.assertRaises(ParsingError, parser.parse, 'host = cat;')
+
+    def test_mismatched_parens(self):
+        self.assertRaises(ParsingError, parser.parse, '(host = cat')
+        self.assertRaises(ParsingError, parser.parse, 'host = cat)')
+
+    def test_paren_field_not_allowed(self):
+        self.assertRaises(ParsingError, parser.parse, '(host) = cat')
+
+    def test_paren_value_not_allowed(self):
+        self.assertRaises(ParsingError, parser.parse, 'host = (cat)')
+
+    def test_paren_bisect_term_not_allowed(self):
+        self.assertRaises(ParsingError, parser.parse, 'host = (cat | host) = dog')
