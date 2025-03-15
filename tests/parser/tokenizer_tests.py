@@ -1,29 +1,48 @@
+import unittest
+
+from parser.ParsingError import ParsingError
 from parser.parser import parser
 from parser.tokenizer import lexer
 
 
-def basic_test():
-    inputs = [
-        'host = cat',
-        'host != domestic cat',
-        'host = cat & accession = SRR28752446',
-        'collection_date = 1970-01-02',
-    ]
+class TestTokenizer(unittest.TestCase):
 
-    for i in inputs:
-        print(f'input: {i}')
-        lexer.input(i)
-        while True:
-            tok = lexer.token()
-            if not tok:
-                break
-            print(tok)
-
-        res = parser.parse(i)
-        print(res)
-
-        print('-' * 10)
+    def test_words_allowed(self):
+        # these should pass without problems
+        # no asserts needed, if there's an error the test fails
+        words = [
+            'A',
+            'z',
+            'FOO',
+            'foo',
+            'foo_bar',
+            'foo-bar',
+            'foo bar',
+            'foo_',
+            'foo7',
 
 
-if __name__ == '__main__':
-    basic_test()
+        ]
+        for w in words:
+            lexer.input(w)
+            while True:
+                if not lexer.token():
+                    break
+
+    def test_words_not_allowed(self):
+
+        not_words = [
+            '-012a',
+            '8foo',
+            '_foo',
+        ]
+
+        def tester(s):
+            lexer.input(s)
+            while True:
+                if not lexer.token():
+                    break
+            print(f'failed on: {s}')
+
+        for w in not_words:
+            self.assertRaises(ParsingError, tester, w)
