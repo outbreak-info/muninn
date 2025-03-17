@@ -10,13 +10,14 @@ from api.models import VariantInfo, PydAminoAcidSubstitution
 
 def get_variants_for_sample(query: str) -> List['VariantInfo']:
 
-    query = (
+    variants_query = (
         select(IntraHostVariant, Allele, AminoAcidSubstitution)
         .join(Allele, IntraHostVariant.allele_id == Allele.id, isouter=True)
         .options(joinedload(IntraHostVariant.r_allele))
         .join(AminoAcidSubstitution, Allele.id == AminoAcidSubstitution.allele_id, isouter=True)
         .options(joinedload(Allele.r_amino_subs))
         .filter(
+            #todo: bind parameters
             IntraHostVariant.sample_id.in_(
                 text(Sample.parse_query(query))
             )
@@ -24,7 +25,7 @@ def get_variants_for_sample(query: str) -> List['VariantInfo']:
     )
 
     with (Session(engine) as session):
-        results = session.execute(query).unique().scalars()
+        results = session.execute(variants_query).unique().scalars()
         out_data = []
         for ihv in results:
             r_amino_subs: List['PydAminoAcidSubstitution'] = [aas.to_pyd_model() for aas in ihv.r_allele.r_amino_subs]
