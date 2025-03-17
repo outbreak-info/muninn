@@ -3,6 +3,7 @@ from typing import List, Any
 from fastapi import FastAPI, HTTPException
 
 import DB.queries.amino_acid_substitutions
+import DB.queries.counts
 import DB.queries.samples
 import DB.queries.variants
 from api.models import PydAminoAcidSubstitution, VariantInfo, SampleInfo
@@ -37,3 +38,9 @@ def get_samples_by_mutation(query: str):
         raise HTTPException(status_code=400, detail='Must provide query')
 
     return DB.queries.samples.get_samples_by_mutation(query)
+
+
+@app.get('/count/{x}/by/{y}', response_model=List[tuple])
+def get_count_x_by_y(x: str, y: str):
+    if x == 'samples':
+        return DB.queries.counts.count_samples_by_column(y)
