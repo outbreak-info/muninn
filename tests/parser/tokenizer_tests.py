@@ -1,7 +1,6 @@
 import unittest
 
 from parser.ParsingError import ParsingError
-from parser.parser import parser
 from parser.tokenizer import lexer
 
 

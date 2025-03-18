@@ -1,3 +1,4 @@
+import re
 from typing import List, Any
 
 from fastapi import FastAPI, HTTPException
@@ -42,5 +43,18 @@ def get_samples_by_mutation(query: str):
 
 @app.get('/count/{x}/by/{y}', response_model=List[tuple])
 def get_count_x_by_y(x: str, y: str):
-    if x == 'samples':
-        return DB.queries.counts.count_samples_by_column(y)
+    if x is None or y is None:
+        raise HTTPException(status_code=400, detail='Provide target table and by-column')
+
+    # todo: weak validation?
+    col_pattern = re.compile(r'\w+')
+    if not col_pattern.fullmatch(y):
+        raise HTTPException(status_code=400, detail=f'This alleged column name fails validation: {y}')
+
+    match x:
+        case 'samples':
+            return DB.queries.counts.count_samples_by_column(y)
+        case 'variants':
+            return DB.queries.counts.count_variants_by_column(y)
+        case 'mutations':
+            return DB.queries.counts.count_mutations_by_column(y)

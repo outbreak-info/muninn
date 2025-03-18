@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, query
 from DB.engine import engine
 from DB.models import Sample, IntraHostVariant, Allele, AminoAcidSubstitution
 from DB.queries.alleles import get_alleles_via_mutation_by_sample_accession
-from DB.queries.counts import count_samples_by_column
+from DB.queries.counts import count_samples_by_column, count_variants_by_column, count_mutations_by_column
 from DB.queries.samples import get_samples_by_mutation
 from DB.queries.variants import get_variants_for_sample
 
@@ -26,4 +26,11 @@ logger.setLevel(logging.INFO)
 # foo = get_variants_for_sample(accession)
 
 
-count_samples_by_column('host')
+r = count_samples_by_column('region_name')
+print(r)
+
+r = count_variants_by_column('alt_nt')
+print(r)
+
+r = count_mutations_by_column('ref_nt')
+print(r)
