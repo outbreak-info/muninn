@@ -69,7 +69,7 @@ Here's how you recreate just the server container without taking down the databa
 
 1. `docker stop flu_db_server`
 2. `docker rm flu_db_server`
-3. `docker-compose -f docker-compose.yml up -d --no-deps --no-recreate --build server` 
+3. `docker-compose -f docker-compose.yml up -d --no-deps --no-recreate --build server`
 
 I've only tested these instructions using podman on my machine, so they may fail you.
 
@@ -103,48 +103,22 @@ Dates must be entered in the format `\d{4}-\d{2}-\d{2}`.
 In text inputs, only letters, numbers, hyphens and underscores are allowed.
 Numbers may contain decimal points.
 
-The only endpoint live allows you to select variants based on sample, so the user-defined part of the query is against
-the samples table. Here's a summary of the fields in that table:
+The following endpoints are currently live:
 
-| Column Name              | Type                     |
-|--------------------------|--------------------------|
-| id                       | bigint                   |                   
-| accession                | text                     |                     
-| consent_level            | text                     |                     
-| bio_project              | text                     |                     
-| bio_sample               | text                     |                     
-| bio_sample_accession     | text                     |                     
-| bio_sample_model         | text                     |                     
-| center_name              | text                     |                     
-| experiment               | text                     |                     
-| host                     | text                     |                     
-| instrument               | text                     |                     
-| platform                 | text                     |                     
-| isolate                  | text                     |                     
-| library_name             | text                     |                     
-| library_layout           | text                     |                     
-| library_selection        | text                     |                     
-| library_source           | text                     |                     
-| organism                 | text                     |                     
-| is_retracted             | boolean                  |                  
-| retraction_detected_date | timestamp with time zone | 
-| isolation_source         | text                     |                     
-| release_date             | timestamp with time zone | 
-| creation_date            | timestamp with time zone | 
-| version                  | text                     |                     
-| sample_name              | text                     |                     
-| sra_study                | text                     |                     
-| serotype                 | text                     |                     
-| assay_type               | text                     |                     
-| avg_spot_length          | double precision         |         
-| bases                    | bigint                   |                   
-| bytes                    | bigint                   |                   
-| datastore_filetype       | text                     |                     
-| datastore_region         | text                     |                     
-| datastore_provider       | text                     |                     
-| geo_location_id          | bigint                   |                   
-| collection_start_date    | date                     |                     
-| collection_end_date      | date                     |     
+- `/variants/by/sample/{query}`
+- `/mutations/by/sample/{query}`
+- `/samples/by/mutation/{query}`
+- `/samples/by/variant/{query}`
+- `/count/{x}/by/{y}`
+    - `{x}` is one of `samples`, `variants`, or `mutations`
+    - `{y}` is the name of a column from `{x}`. In the case of `variants` and `mutations`, columns from `alleles`
+      and `amino_acid_substitutions` are also allowed.
+
+Note: using `id` as a field in any query (e.g.: `id = 1234`) is likely to fail.
+This is because multiple tables, each with their own `id` column are joined before being queried, and SQL will not allow
+a query to use an ambiguous column name.
+As far as I know, the only columns affected by this are ids which we are unlikely to want to use in queries anyway, so 
+fixing this will not be a priority unless a use-case arises.
 
 Have fun!
 
@@ -168,32 +142,3 @@ They don't give much detail for the region and locality stuff, and worse, some o
 Entries like `USA: Plympton, MA` go `<geo_loc_name>:<locality>, <region>`.
 But since these entries seem to always use a state postal code, we should be able to make a functional parsing system
 based on this.
-
-## Misc / Useless Info:
-
-### Installing a python 3.10 for testing
-
-**Never Mind...**
-This led to problems with the pycharm debugger that do not seem worth solving.
-I'll keep the instructions in case I need them again sometime.
-
-Here are the steps I took to allow testing against python 3.10 on my system, which shipped with a newer version.
-
-1. Install pyenv as indicated in their [github](https://github.com/pyenv/pyenv)
-2. Make sure that requirements.txt is up to date, then delete any existing venv for this project.
-3. Install 3.10: `pyenv install 3.10`
-4. Make 3.10 the default within the project directory:
-    1. `cd /.../bird_flu_db`
-    2. `pyenv local 3.10`
-5. Make sure that the correct version of python is in use: `python3 --version` should respond `Python 3.10.16`
-6. Recreate the virtual environment. This is a minefield of options...
-    1. `python3 -m venv venv`
-7. `source venv/bin/activate`
-8. Install dependencies: `pip install -r requirements.txt`
-9. I use Pycharm. Pycharm will need some help to figure out what's going on.
-    1. Open settings, go to `Project: bird_flu_db > Python Interpreter`
-    2. Click `Add Interpreter > add local interpreter`, and switch to `Select existing`.
-    3. It may find the python 3.10 interpreter, but that won't be good enough because that interpreter is installed
-       centrally, while the packages are installed in the venv. Click the little folder to browse your filesystem.
-    4. Select `bird_flu_db/venv/bin/python3.10`
-    5. And hopefully that's it.
