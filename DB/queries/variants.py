@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from DB.engine import engine
 from DB.models import Sample, IntraHostVariant, Allele, AminoAcidSubstitution, GeoLocation
-from api.models import VariantInfo, PydAminoAcidSubstitution
+from api.models import VariantInfo, AminoAcidSubInfo
 from parser.parser import parser
 
 
@@ -31,8 +31,8 @@ def get_variants_for_sample(query: str) -> List['VariantInfo']:
         results = session.execute(variants_query).unique().scalars()
         out_data = []
         for ihv in results:
-            r_amino_subs: List['PydAminoAcidSubstitution'] = [PydAminoAcidSubstitution.from_db_object(aas)
-                                                              for aas in ihv.r_allele.r_amino_subs]
+            r_amino_subs: List['AminoAcidSubInfo'] = [AminoAcidSubInfo.from_db_object(aas)
+                                                      for aas in ihv.r_allele.r_amino_subs]
             variant_info = VariantInfo(
                 id=ihv.id,
                 sample_id=ihv.sample_id,

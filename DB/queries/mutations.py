@@ -5,7 +5,7 @@ from sqlalchemy.orm import joinedload, Session
 
 from DB.engine import engine
 from DB.models import Mutation, Allele, AminoAcidSubstitution, Sample, GeoLocation
-from api.models import MutationInfo, PydAminoAcidSubstitution
+from api.models import MutationInfo, AminoAcidSubInfo
 from parser.parser import parser
 
 
@@ -17,20 +17,22 @@ def get_mutations_by_sample(query: str) -> List['MutationInfo']:
         select(Mutation, Allele, AminoAcidSubstitution)
         .join(Allele, Mutation.allele_id == Allele.id, isouter=True)
         .options(joinedload(Mutation.r_allele))
-        .join(AminoAcidSubstitution, Allele.id == AminoAcidSubstitution.allele_id)
+        .join(AminoAcidSubstitution, Allele.id == AminoAcidSubstitution.allele_id, isouter=True)
         .options(joinedload(Allele.r_amino_subs))
-        .where(Mutation.sample_id.in_(
-            select(Sample.id)
-            .join(GeoLocation, GeoLocation.id == Sample.geo_location_id, isouter=True)
-            .where(text(user_query))
-        ))
+        .where(
+            Mutation.sample_id.in_(
+                select(Sample.id)
+                .join(GeoLocation, GeoLocation.id == Sample.geo_location_id, isouter=True)
+                .where(text(user_query))
+            )
+        )
     )
 
     with Session(engine) as session:
         results = session.execute(mutations_query).unique().scalars()
         out_data = []
         for m in results:
-            r_amino_subs = [PydAminoAcidSubstitution.from_db_object(aas) for aas in m.r_allele.r_amino_subs]
+            r_amino_subs = [AminoAcidSubInfo.from_db_object(aas) for aas in m.r_allele.r_amino_subs]
             mutation_info = MutationInfo(
                 id=m.id,
                 sample_id=m.sample_id,

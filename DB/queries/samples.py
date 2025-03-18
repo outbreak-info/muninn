@@ -1,6 +1,6 @@
 from typing import List
 
-from sqlalchemy import select, and_, text
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session, joinedload
 
 from DB.engine import engine

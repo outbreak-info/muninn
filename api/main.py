@@ -1,16 +1,15 @@
 import re
-from typing import List, Any
+from typing import List
 
 from fastapi import FastAPI, HTTPException
-from sqlalchemy.exc import ProgrammingError
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.exc import ProgrammingError
 
-import DB.queries.amino_acid_substitutions
 import DB.queries.counts
+import DB.queries.mutations
 import DB.queries.samples
 import DB.queries.variants
-import DB.queries.mutations
-from api.models import PydAminoAcidSubstitution, VariantInfo, SampleInfo, MutationInfo
+from api.models import VariantInfo, SampleInfo, MutationInfo
 
 app = FastAPI()
 
@@ -21,14 +20,6 @@ app.add_middleware(
     allow_methods=['*'],
     allow_headers=['*']
 )
-
-
-@app.get("/aa_subs/", response_model=list[PydAminoAcidSubstitution])
-def get_aa_subs(sample_accession: str) -> Any:
-    if sample_accession is None:
-        raise HTTPException(status_code=400, detail='Must provide sample_accession')
-
-    return DB.queries.amino_acid_substitutions.get_aa_subs_via_mutation_by_sample_accession(sample_accession)
 
 
 # Trying out a shift in naming convention

@@ -4,65 +4,14 @@ from typing import Any, List, Optional
 from DB.models import Sample, AminoAcidSubstitution
 from pydantic import BaseModel
 
-
-# todo: Pyd* naming convention here is just a placeholder
-
-class PydSample(BaseModel):
-    id: int
-    accession: str
-    consent_level: str
-    bio_project: str
-    bio_sample: str
-    bio_sample_accession: str
-    bio_sample_model: str
-    center_name: str
-    experiment: str
-    host: str
-    instrument: str
-    platform: str
-    isolate: str
-    library_name: str
-    library_layout: str
-    library_selection: str
-    library_source: str
-    organism: str
-    is_retracted: bool
-    retraction_detected_date: datetime
-    isolation_source: str
-    release_date: datetime
-    creation_date: datetime
-    version: str
-    sample_name: str
-    sra_study: str
-    serotype: str
-    assay_type: str
-    avg_spot_length: float
-    bases: int
-    bytes: int
-    datastore_filetype: str
-    datastore_region: str
-    datastore_provider: str
-    collection_start_date: date
-    collection_end_date: date
-    geo_location_id: str
+"""
+These models define the shapes for data returned by the api.
+They correspond closely, but not exactly, to the ORM models.
+In case it's not clear, the naming convention here is 'ThingInfo'.
+"""
 
 
-class PydGeoLocations(BaseModel):
-    id: int
-    full_text: str
-    continent_name: str
-    geo_country_name: str
-    geo_region_name: str
-    geo_locality_name: str
-
-class PydAllele(BaseModel):
-    id: int
-    region: str
-    position_nt: int
-    alt_nt: str
-
-
-class PydAminoAcidSubstitution(BaseModel):
+class AminoAcidSubInfo(BaseModel):
     id: int
     allele_id: int
     position_aa: int
@@ -71,8 +20,8 @@ class PydAminoAcidSubstitution(BaseModel):
     gff_feature: str
 
     @classmethod
-    def from_db_object(cls, dbo: 'AminoAcidSubstitution') -> 'PydAminoAcidSubstitution':
-        return PydAminoAcidSubstitution(
+    def from_db_object(cls, dbo: 'AminoAcidSubstitution') -> 'AminoAcidSubInfo':
+        return AminoAcidSubInfo(
             id=dbo.id,
             allele_id=dbo.allele_id,
             position_aa=dbo.position_aa,
@@ -80,15 +29,6 @@ class PydAminoAcidSubstitution(BaseModel):
             alt_aa=dbo.alt_aa,
             gff_feature=dbo.gff_feature
         )
-
-
-class PydIntraHostVariant(BaseModel):
-    id: int
-    sample_id: int
-    allele_id: int
-    ref_dp: int
-    alt_dp: int
-    alt_freq: float
 
 
 class VariantInfo(BaseModel):
@@ -105,12 +45,7 @@ class VariantInfo(BaseModel):
     ref_nt: str
     alt_nt: str
 
-    amino_acid_mutations: List['PydAminoAcidSubstitution']
-
-
-class VariantsForSample(BaseModel):
-    sample: PydSample
-    variants: List['VariantInfo']
+    amino_acid_mutations: List['AminoAcidSubInfo']
 
 
 class SampleInfo(BaseModel):
@@ -159,7 +94,7 @@ class SampleInfo(BaseModel):
 
     @classmethod
     def from_db_object(cls, dbo: 'Sample') -> 'SampleInfo':
-       return SampleInfo(
+        return SampleInfo(
             id=dbo.id,
             accession=dbo.accession,
             consent_level=dbo.consent_level,
@@ -214,4 +149,4 @@ class MutationInfo(BaseModel):
     ref_nt: str
     alt_nt: str
 
-    amino_acid_mutations: List['PydAminoAcidSubstitution']
+    amino_acid_mutations: List['AminoAcidSubInfo']
