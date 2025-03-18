@@ -1,4 +1,4 @@
-FROM debian:bullseye
+FROM debian:bookworm
 WORKDIR /usr/flu
 
 EXPOSE 8000
@@ -7,7 +7,7 @@ COPY requirements.txt ./
 
 RUN apt update
 RUN apt install -y python3 python3-pip
-RUN pip3 install -r requirements.txt
+RUN pip3 install --break-system-packages -r requirements.txt
 
 ADD  alembic /usr/flu/alembic
 ADD api /usr/flu/api
