@@ -2,6 +2,7 @@ import re
 from typing import List, Any
 
 from fastapi import FastAPI, HTTPException
+from sqlalchemy.exc import ProgrammingError
 
 import DB.queries.amino_acid_substitutions
 import DB.queries.counts
@@ -51,10 +52,17 @@ def get_count_x_by_y(x: str, y: str):
     if not col_pattern.fullmatch(y):
         raise HTTPException(status_code=400, detail=f'This alleged column name fails validation: {y}')
 
-    match x:
-        case 'samples':
-            return DB.queries.counts.count_samples_by_column(y)
-        case 'variants':
-            return DB.queries.counts.count_variants_by_column(y)
-        case 'mutations':
-            return DB.queries.counts.count_mutations_by_column(y)
+    try:
+        match x:
+            case 'samples':
+                return DB.queries.counts.count_samples_by_column(y)
+            case 'variants':
+                return DB.queries.counts.count_variants_by_column(y)
+            case 'mutations':
+                return DB.queries.counts.count_mutations_by_column(y)
+            case _:
+                raise HTTPException(status_code=400, detail=f'counts are available for: samples, variants, mutations')
+    except ProgrammingError as e:
+        # todo: logging
+        short_message = str(e).split('\n')[0]
+        raise HTTPException(status_code=400, detail=short_message)

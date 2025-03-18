@@ -1,6 +1,7 @@
 import logging
 
 from sqlalchemy import select
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session, query
 
 from DB.engine import engine
