@@ -42,6 +42,14 @@ def get_samples_by_mutation(query: str):
     return DB.queries.samples.get_samples_by_mutation(query)
 
 
+@app.get('/samples/by/variant/{query}', response_model=List[SampleInfo])
+def get_samples_by_variant(query: str):
+    if query is None:
+        raise HTTPException(status_code=400, detail='Must provide query')
+
+    return DB.queries.samples.get_samples_by_variant(query)
+
+
 @app.get('/count/{x}/by/{y}', response_model=List[tuple])
 def get_count_x_by_y(x: str, y: str):
     if x is None or y is None:

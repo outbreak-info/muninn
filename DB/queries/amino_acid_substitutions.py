@@ -23,4 +23,4 @@ def get_aa_subs_via_mutation_by_sample_accession(accession: str) -> List['PydAmi
 
     with (Session(engine) as session):
         aa_subs = session.execute(aa_subs_query).scalars()
-        return [a.to_pyd_model() for a in aa_subs]
+        return [PydAminoAcidSubstitution.from_db_object(a) for a in aa_subs]

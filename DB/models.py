@@ -1,13 +1,11 @@
 from datetime import datetime, date
-from typing import List, Tuple
+from typing import List
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy import UniqueConstraint, CheckConstraint, MetaData
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase, relationship
 
-from api.models import PydAminoAcidSubstitution
 from parser.parser import parser
 
 ############################################################################
@@ -65,6 +63,7 @@ class Base(DeclarativeBase):
     def parse_query(cls, querytext):
         q = parser.parse(querytext)
         return f'SELECT {cls.__tablename__}.id FROM {cls.__tablename__} WHERE ({q})'
+
 
 class Sample(Base):
     __tablename__ = 'samples'
@@ -221,16 +220,6 @@ class AminoAcidSubstitution(Base):
     )
 
     r_allele: Mapped['Allele'] = relationship(back_populates='r_amino_subs')
-
-    def to_pyd_model(self) -> 'PydAminoAcidSubstitution':
-        return PydAminoAcidSubstitution(
-            id=self.id,
-            allele_id=self.allele_id,
-            position_aa=self.position_aa,
-            ref_aa=self.ref_aa,
-            alt_aa=self.alt_aa,
-            gff_feature=self.gff_feature
-        )
 
 
 class Mutation(Base):
