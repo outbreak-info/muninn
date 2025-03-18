@@ -35,3 +35,6 @@ print(r)
 
 r = count_mutations_by_column('ref_nt')
 print(r)
+
+r = get_variants_for_sample('region_name = Texas')
+print(r)

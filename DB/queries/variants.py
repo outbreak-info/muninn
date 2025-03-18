@@ -4,12 +4,13 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session, joinedload
 
 from DB.engine import engine
-from DB.models import Sample, IntraHostVariant, Allele, AminoAcidSubstitution
+from DB.models import Sample, IntraHostVariant, Allele, AminoAcidSubstitution, GeoLocation
 from api.models import VariantInfo, PydAminoAcidSubstitution
+from parser.parser import parser
 
 
 def get_variants_for_sample(query: str) -> List['VariantInfo']:
-
+    user_query = parser.parse(query)
     variants_query = (
         select(IntraHostVariant, Allele, AminoAcidSubstitution)
         .join(Allele, IntraHostVariant.allele_id == Allele.id, isouter=True)
@@ -17,9 +18,11 @@ def get_variants_for_sample(query: str) -> List['VariantInfo']:
         .join(AminoAcidSubstitution, Allele.id == AminoAcidSubstitution.allele_id, isouter=True)
         .options(joinedload(Allele.r_amino_subs))
         .filter(
-            #todo: bind parameters
+            # todo: bind parameters
             IntraHostVariant.sample_id.in_(
-                text(Sample.parse_query(query))
+                select(Sample.id)
+                .join(GeoLocation, GeoLocation.id == Sample.geo_location_id, isouter=True)
+                .where(text(user_query))
             )
         )
     )
@@ -28,7 +31,8 @@ def get_variants_for_sample(query: str) -> List['VariantInfo']:
         results = session.execute(variants_query).unique().scalars()
         out_data = []
         for ihv in results:
-            r_amino_subs: List['PydAminoAcidSubstitution'] = [aas.to_pyd_model() for aas in ihv.r_allele.r_amino_subs]
+            r_amino_subs: List['PydAminoAcidSubstitution'] = [PydAminoAcidSubstitution.from_db_object(aas)
+                                                              for aas in ihv.r_allele.r_amino_subs]
             variant_info = VariantInfo(
                 id=ihv.id,
                 sample_id=ihv.sample_id,
