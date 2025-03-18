@@ -3,6 +3,7 @@ from typing import List, Any
 
 from fastapi import FastAPI, HTTPException
 from sqlalchemy.exc import ProgrammingError
+from fastapi.middleware.cors import CORSMiddleware
 
 import DB.queries.amino_acid_substitutions
 import DB.queries.counts
@@ -12,6 +13,14 @@ import DB.queries.mutations
 from api.models import PydAminoAcidSubstitution, VariantInfo, SampleInfo, MutationInfo
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=['*'],
+    allow_credentials=False,
+    allow_methods=['*'],
+    allow_headers=['*']
+)
 
 
 @app.get("/aa_subs/", response_model=list[PydAminoAcidSubstitution])
