@@ -20,8 +20,8 @@ class TestTokenizer(unittest.TestCase):
             'foo bar',
             'foo_',
             'foo7',
-
-
+            'HA',
+            'HA:cds-XAJ25415.1',
         ]
         for w in words:
             lexer.input(w)
@@ -35,6 +35,7 @@ class TestTokenizer(unittest.TestCase):
             '-012a',
             '8foo',
             '_foo',
+            'foo-',
         ]
 
         def tester(s):
