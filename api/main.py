@@ -8,7 +8,8 @@ import DB.queries.amino_acid_substitutions
 import DB.queries.counts
 import DB.queries.samples
 import DB.queries.variants
-from api.models import PydAminoAcidSubstitution, VariantInfo, SampleInfo
+import DB.queries.mutations
+from api.models import PydAminoAcidSubstitution, VariantInfo, SampleInfo, MutationInfo
 
 app = FastAPI()
 
@@ -30,6 +31,14 @@ def get_variants_by_sample(query: str):
         raise HTTPException(status_code=400, detail='Must provide query')
 
     return DB.queries.variants.get_variants_for_sample(query)
+
+
+@app.get('/mutations/by/sample/{query}', response_model=List[MutationInfo])
+def get_mutations_by_sample(query: str):
+    if query is None:
+        raise HTTPException(status_code=400, detail='Must provide query')
+
+    return DB.queries.mutations.get_mutations_by_sample(query)
 
 
 # here I'm going to loosen things up a bit and apply the user's query to the results of a join

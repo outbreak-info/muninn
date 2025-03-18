@@ -155,6 +155,7 @@ class Sample(Base):
     )
 
     r_variants: Mapped[List['IntraHostVariant']] = relationship(back_populates='r_sample')
+    r_mutations: Mapped[List['Mutation']] = relationship(back_populates='r_sample')
     r_geo_location: Mapped['GeoLocation'] = relationship(back_populates='r_samples')
 
 
@@ -186,6 +187,7 @@ class Allele(Base):
 
     r_amino_subs: Mapped[List['AminoAcidSubstitution']] = relationship(back_populates='r_allele')
     r_variants: Mapped[List['IntraHostVariant']] = relationship(back_populates='r_allele')
+    r_mutations: Mapped[List['Mutation']] = relationship(back_populates='r_allele')
     r_dms_results: Mapped[List['DmsResult']] = relationship(back_populates='r_allele')
 
 
@@ -235,6 +237,9 @@ class Mutation(Base):
             UniqueConstraint('sample_id', 'allele_id', name='uq_mutations_sample_allele_pair')
         ]
     )
+
+    r_sample: Mapped['Sample'] = relationship(back_populates='r_mutations')
+    r_allele: Mapped['Allele'] = relationship(back_populates='r_mutations')
 
 
 class IntraHostVariant(Base):

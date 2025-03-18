@@ -91,10 +91,7 @@ class PydIntraHostVariant(BaseModel):
     alt_freq: float
 
 
-# rm so you've queried for variants based on something, what do you want to know?
 class VariantInfo(BaseModel):
-
-    # todo: is there any reason to give the id?
     id: int
     sample_id: int
     allele_id: int
@@ -204,3 +201,17 @@ class SampleInfo(BaseModel):
             geo_region_name=dbo.r_geo_location.region_name,
             geo_locality_name=dbo.r_geo_location.locality_name
         )
+
+
+class MutationInfo(BaseModel):
+    id: int
+    sample_id: int
+    allele_id: int
+
+    # include allele info
+    region: str
+    position_nt: int
+    ref_nt: str
+    alt_nt: str
+
+    amino_acid_mutations: List['PydAminoAcidSubstitution']
