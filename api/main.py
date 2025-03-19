@@ -31,6 +31,10 @@ def get_samples_query(q: str):
 def get_variants_query(q: str):
     return DB.queries.variants.get_variants(q)
 
+@app.get('/mutations', response_model=List[MutationInfo])
+def get_mutations_query(q: str):
+    return DB.queries.mutations.get_mutations(q)
+
 @app.get('/variants/by/sample', response_model=List[VariantInfo])
 def get_variants_by_sample(q: str):
     return DB.queries.variants.get_variants_for_sample(q)

@@ -166,3 +166,16 @@ class MutationInfo(BaseModel):
     alt_nt: str
 
     amino_acid_mutations: List['AminoAcidSubInfo']
+
+    @classmethod
+    def from_db_object(cls, dbo: 'MutationInfo') -> 'MutationInfo':
+        return MutationInfo(
+                id=dbo.id,
+                sample_id=dbo.sample_id,
+                allele_id=dbo.allele_id,
+                region=dbo.r_allele.region,
+                position_nt=dbo.r_allele.position_nt,
+                ref_nt=dbo.r_allele.ref_nt,
+                alt_nt=dbo.r_allele.alt_nt,
+                amino_acid_mutations=dbo.r_allele.r_amino_subs
+            )
