@@ -22,6 +22,14 @@ app.add_middleware(
 )
 
 
+@app.get('/sample/{sample_id}', response_model=SampleInfo)
+def get_sample_by_id(sample_id: int):
+    sample = DB.queries.samples.get_sample_by_id(sample_id)
+    if sample is None:
+        raise HTTPException(status_code=404)
+    return sample
+
+
 @app.get('/samples', response_model=List[SampleInfo])
 def get_samples_query(q: str):
     return DB.queries.samples.get_samples(q)
@@ -31,9 +39,11 @@ def get_samples_query(q: str):
 def get_variants_query(q: str):
     return DB.queries.variants.get_variants(q)
 
+
 @app.get('/mutations', response_model=List[MutationInfo])
 def get_mutations_query(q: str):
     return DB.queries.mutations.get_mutations(q)
+
 
 @app.get('/variants/by/sample', response_model=List[VariantInfo])
 def get_variants_by_sample(q: str):

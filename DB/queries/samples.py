@@ -9,8 +9,23 @@ from api.models import SampleInfo
 from parser.parser import parser
 
 
+def get_sample_by_id(sample_id: int) -> SampleInfo | None:
+    query = (
+        select(Sample, GeoLocation)
+        .join(GeoLocation, GeoLocation.id == Sample.geo_location_id, isouter=True)
+        .options(contains_eager(Sample.r_geo_location))
+        .where(Sample.id == sample_id)
+    )
+
+    with Session(engine) as session:
+        result = session.execute(query).scalar()
+    if result is None:
+        return None
+    return SampleInfo.from_db_object(result)
+
+
 def get_samples(query: str) -> List['SampleInfo']:
-    #todo: bind parameters
+    # todo: bind parameters
     user_defined_query = parser.parse(query)
 
     samples_query = (
@@ -24,6 +39,7 @@ def get_samples(query: str) -> List['SampleInfo']:
         samples = session.execute(samples_query).scalars()
         out_data = [SampleInfo.from_db_object(s) for s in samples]
     return out_data
+
 
 # select * from samples s
 # left join geo_locations gl on gl.id = s.geo_location_id

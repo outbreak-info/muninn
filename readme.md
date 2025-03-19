@@ -107,6 +107,9 @@ Numbers may contain decimal points.
 
 The following endpoints are currently live:
 
+Get item by id:
+- `/sample/{id}`
+
 These endpoints simply allow you to query a particular collection:
 - `/samples?q=<query>`
 - `/variants?q=<query>`
