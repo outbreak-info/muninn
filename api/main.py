@@ -21,42 +21,38 @@ app.add_middleware(
     allow_headers=['*']
 )
 
+@app.get('/samples', response_model=List[SampleInfo])
+def get_samples_query(q: str):
+
+    return DB.queries.samples.get_samples(q)
 
 # Trying out a shift in naming convention
 # mutations = all data relevant to pop-level mutations
 # variants = all data relevant to intra-host variants
-@app.get('/variants/by/sample/{query}', response_model=List[VariantInfo])
-def get_variants_by_sample(query: str):
-    if query is None:
-        raise HTTPException(status_code=400, detail='Must provide query')
+@app.get('/variants/by/sample', response_model=List[VariantInfo])
+def get_variants_by_sample(q: str):
 
-    return DB.queries.variants.get_variants_for_sample(query)
+    return DB.queries.variants.get_variants_for_sample(q)
 
 
-@app.get('/mutations/by/sample/{query}', response_model=List[MutationInfo])
-def get_mutations_by_sample(query: str):
-    if query is None:
-        raise HTTPException(status_code=400, detail='Must provide query')
+@app.get('/mutations/by/sample', response_model=List[MutationInfo])
+def get_mutations_by_sample(q: str):
 
-    return DB.queries.mutations.get_mutations_by_sample(query)
+    return DB.queries.mutations.get_mutations_by_sample(q)
 
 
 # here I'm going to loosen things up a bit and apply the user's query to the results of a join
 # between aas and alleles, then grab the samples via mutation.
-@app.get('/samples/by/mutation/{query}', response_model=List[SampleInfo])
-def get_samples_by_mutation(query: str):
-    if query is None:
-        raise HTTPException(status_code=400, detail='Must provide query')
+@app.get('/samples/by/mutation', response_model=List[SampleInfo])
+def get_samples_by_mutation(q: str):
 
-    return DB.queries.samples.get_samples_by_mutation(query)
+    return DB.queries.samples.get_samples_by_mutation(q)
 
 
-@app.get('/samples/by/variant/{query}', response_model=List[SampleInfo])
-def get_samples_by_variant(query: str):
-    if query is None:
-        raise HTTPException(status_code=400, detail='Must provide query')
+@app.get('/samples/by/variant', response_model=List[SampleInfo])
+def get_samples_by_variant(q: str):
 
-    return DB.queries.samples.get_samples_by_variant(query)
+    return DB.queries.samples.get_samples_by_variant(q)
 
 
 @app.get('/count/{x}/by/{y}', response_model=List[tuple])

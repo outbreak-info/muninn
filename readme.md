@@ -92,13 +92,15 @@ WHERE ihv.sample_id IN (
 Where `<user defined>` is filled in using the filters supplied by the user.
 That is, you always select all the variants and alleles associated with a set of samples.
 And the set of samples used to select those variants is based on a query that the user supplies.
-For example, `/variants/by/sample/collection_start_date >= 2024-01-01 & host = cat` will result in the following SQL
+For example, `/variants/by/sample/collection_start_date >= 2024-01-01 ^ host = cat` will result in the following SQL
 being used in the query above:
-`SELECT samples.id FROM samples WHERE collection_start_date >= '2024-01-01' & host = 'cat'`.
+`SELECT samples.id FROM samples WHERE collection_start_date >= '2024-01-01' ^ host = 'cat'`.
 
 Here's a quick (and quite possibly outdated) guide to the available syntax:
-You can use equivalence relations: `=, !=, >, <, <=, >=`, boolean operators `&, |, !`, and parentheses to group terms.
+You can use equivalence relations: `=, !=, >, <, <=, >=`. 
 Greater than and less than are only usable with numeric or date values.
+The available boolean operators are: `^`, `|`, and `!`, meaning `and`, `or` and `not`, respectively.
+Parentheses may be used to group terms, e.g.: `(host = cat | host = dog) ^ region_name = Minnesota`.
 Dates must be entered in the format `\d{4}-\d{2}-\d{2}`.
 In text inputs, only letters, numbers, hyphens and underscores are allowed.
 Numbers may contain decimal points.

@@ -9,6 +9,22 @@ from api.models import SampleInfo
 from parser.parser import parser
 
 
+def get_samples(query: str) -> List['SampleInfo']:
+    #todo: bind parameters
+    user_defined_query = parser.parse(query)
+
+    samples_query = (
+        select(Sample, GeoLocation)
+        .join(GeoLocation, GeoLocation.id == Sample.geo_location_id, isouter=True)
+        .options(joinedload(Sample.r_geo_location))
+        .where(text(user_defined_query))
+    )
+
+    with Session(engine) as session:
+        samples = session.execute(samples_query).scalars()
+        out_data = [SampleInfo.from_db_object(s) for s in samples]
+    return out_data
+
 # select * from samples s
 # left join geo_locations gl on gl.id = s.geo_location_id
 # where s.id in (
@@ -21,11 +37,10 @@ from parser.parser import parser
 #         )
 # );
 def get_samples_by_mutation(query: str) -> List['SampleInfo']:
-    # todo: any query that uses 'id' as a field will fail due to ambiguity between alleles.id and aas.id
     user_defined_query = parser.parse(query)
 
     # todo: bind parameters
-    query = (
+    samples_query = (
         select(Sample, GeoLocation)
         .join(GeoLocation, Sample.geo_location_id == GeoLocation.id, isouter=True)
         .options(joinedload(Sample.r_geo_location))
@@ -44,7 +59,7 @@ def get_samples_by_mutation(query: str) -> List['SampleInfo']:
     )
 
     with Session(engine) as session:
-        samples = session.execute(query).unique().scalars()
+        samples = session.execute(samples_query).unique().scalars()
         out_data = []
         for s in samples:
             out_data.append(
@@ -68,7 +83,7 @@ def get_samples_by_variant(query: str) -> List['SampleInfo']:
     # todo: bind parameters, id will fail
     user_query = parser.parse(query)
 
-    query = (
+    samples_query = (
         select(Sample, GeoLocation)
         .join(GeoLocation, Sample.geo_location_id == GeoLocation.id, isouter=True)
         .options(joinedload(Sample.r_geo_location))
@@ -83,6 +98,6 @@ def get_samples_by_variant(query: str) -> List['SampleInfo']:
     )
 
     with Session(engine) as session:
-        samples = session.execute(query).unique().scalars()
+        samples = session.execute(samples_query).unique().scalars()
         out_data = [SampleInfo.from_db_object(s) for s in samples]
     return out_data

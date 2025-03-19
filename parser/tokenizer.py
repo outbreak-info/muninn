@@ -22,7 +22,7 @@ tokens = (
 
 
 t_EQUALS = r'='
-t_AND = r'&'
+t_AND = r'\^'
 t_OR = r'\|'
 t_NOT = r'!'
 t_LPAREN = r'\('
