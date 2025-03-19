@@ -1,11 +1,11 @@
 from typing import List
 
 from sqlalchemy import select, text
-from sqlalchemy.orm import Session, joinedload, contains_eager
+from sqlalchemy.orm import Session, contains_eager
 
 from DB.engine import engine
 from DB.models import Sample, IntraHostVariant, Allele, AminoAcidSubstitution, GeoLocation
-from api.models import VariantInfo, AminoAcidSubInfo
+from api.models import VariantInfo
 from parser.parser import parser
 
 
@@ -34,9 +34,9 @@ def get_variants_for_sample(query: str) -> List['VariantInfo']:
     variants_query = (
         select(IntraHostVariant, Allele, AminoAcidSubstitution)
         .join(Allele, IntraHostVariant.allele_id == Allele.id, isouter=True)
-        .options(joinedload(IntraHostVariant.r_allele))
+        .options(contains_eager(IntraHostVariant.r_allele))
         .join(AminoAcidSubstitution, Allele.id == AminoAcidSubstitution.allele_id, isouter=True)
-        .options(joinedload(Allele.r_amino_subs))
+        .options(contains_eager(Allele.r_amino_subs))
         .filter(
             # todo: bind parameters
             IntraHostVariant.sample_id.in_(

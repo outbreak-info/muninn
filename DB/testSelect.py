@@ -9,7 +9,7 @@ from DB.models import Sample, IntraHostVariant, Allele, AminoAcidSubstitution
 
 from DB.queries.counts import count_samples_by_column, count_variants_by_column, count_mutations_by_column
 from DB.queries.mutations import get_mutations_by_sample
-from DB.queries.samples import get_samples_by_mutation
+from DB.queries.samples import get_samples_by_mutation, get_samples, get_samples_by_variant
 from DB.queries.variants import get_variants_for_sample, get_variants
 
 logging.basicConfig()
@@ -36,13 +36,18 @@ logger.setLevel(logging.INFO)
 #
 # r = count_mutations_by_column('ref_nt')
 # print(r)
-#
+
 # r = get_variants_for_sample('region_name = Texas')
-# print(r)
 #
 # r = get_mutations_by_sample('collection_start_date < 2024-01-01')
+#
+# r = get_samples_by_mutation('position_nt < 100')
+
+
+
+# r = get_variants('position_nt = 100')
 # print(r)
 
+# r = get_samples('host = Cat')
 
-r = get_variants('position_nt = 100')
-print(r)
+r = get_samples_by_variant('position_aa < 100')

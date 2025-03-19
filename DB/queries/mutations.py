@@ -1,7 +1,7 @@
 from typing import List
 
 from sqlalchemy import select, text
-from sqlalchemy.orm import joinedload, Session
+from sqlalchemy.orm import Session, contains_eager
 
 from DB.engine import engine
 from DB.models import Mutation, Allele, AminoAcidSubstitution, Sample, GeoLocation
@@ -16,9 +16,9 @@ def get_mutations_by_sample(query: str) -> List['MutationInfo']:
     mutations_query = (
         select(Mutation, Allele, AminoAcidSubstitution)
         .join(Allele, Mutation.allele_id == Allele.id, isouter=True)
-        .options(joinedload(Mutation.r_allele))
+        .options(contains_eager(Mutation.r_allele))
         .join(AminoAcidSubstitution, Allele.id == AminoAcidSubstitution.allele_id, isouter=True)
-        .options(joinedload(Allele.r_amino_subs))
+        .options(contains_eager(Allele.r_amino_subs))
         .where(
             Mutation.sample_id.in_(
                 select(Sample.id)

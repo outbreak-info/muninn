@@ -1,7 +1,7 @@
 from typing import List
 
 from sqlalchemy import select, text
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, contains_eager
 
 from DB.engine import engine
 from DB.models import Sample, Mutation, GeoLocation, Allele, AminoAcidSubstitution, IntraHostVariant
@@ -16,7 +16,7 @@ def get_samples(query: str) -> List['SampleInfo']:
     samples_query = (
         select(Sample, GeoLocation)
         .join(GeoLocation, GeoLocation.id == Sample.geo_location_id, isouter=True)
-        .options(joinedload(Sample.r_geo_location))
+        .options(contains_eager(Sample.r_geo_location))
         .where(text(user_defined_query))
     )
 
@@ -43,7 +43,7 @@ def get_samples_by_mutation(query: str) -> List['SampleInfo']:
     samples_query = (
         select(Sample, GeoLocation)
         .join(GeoLocation, Sample.geo_location_id == GeoLocation.id, isouter=True)
-        .options(joinedload(Sample.r_geo_location))
+        .options(contains_eager(Sample.r_geo_location))
         .where(
             Sample.id.in_(
                 select(Mutation.sample_id)
@@ -86,7 +86,7 @@ def get_samples_by_variant(query: str) -> List['SampleInfo']:
     samples_query = (
         select(Sample, GeoLocation)
         .join(GeoLocation, Sample.geo_location_id == GeoLocation.id, isouter=True)
-        .options(joinedload(Sample.r_geo_location))
+        .options(contains_eager(Sample.r_geo_location))
         .where(
             Sample.id.in_(
                 select(IntraHostVariant.sample_id)
