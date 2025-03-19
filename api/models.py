@@ -1,6 +1,7 @@
 from datetime import date, datetime
 from typing import Any, List, Optional
 
+from DB.models import IntraHostVariant
 from DB.models import Sample, AminoAcidSubstitution
 from pydantic import BaseModel
 
@@ -47,6 +48,21 @@ class VariantInfo(BaseModel):
 
     amino_acid_mutations: List['AminoAcidSubInfo']
 
+    @classmethod
+    def from_db_object(cls, dbo: 'IntraHostVariant'):
+        return VariantInfo(
+                id=dbo.id,
+                sample_id=dbo.sample_id,
+                allele_id=dbo.allele_id,
+                ref_dp=dbo.ref_dp,
+                alt_dp=dbo.alt_dp,
+                alt_freq=dbo.alt_freq,
+                region=dbo.r_allele.region,
+                position_nt=dbo.r_allele.position_nt,
+                ref_nt=dbo.r_allele.ref_nt,
+                alt_nt=dbo.r_allele.alt_nt,
+                amino_acid_mutations=[AminoAcidSubInfo.from_db_object(aas) for aas in dbo.r_allele.r_amino_subs]
+            )
 
 class SampleInfo(BaseModel):
     id: int
