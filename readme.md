@@ -107,10 +107,18 @@ Numbers may contain decimal points.
 
 The following endpoints are currently live:
 
-- `/variants/by/sample/{query}`
-- `/mutations/by/sample/{query}`
-- `/samples/by/mutation/{query}`
-- `/samples/by/variant/{query}`
+These endpoints simply allow you to query a particular collection:
+- `/samples?q=<query>`
+- `/variants?q=<query>`
+- `/mutations?q=<query>`
+
+These allow you to query one collection based on properties of related entries in other collections:
+- `/variants/by/sample?q=<query>`
+- `/mutations/by/sample?q=<query>`
+- `/samples/by/mutation?q=<query>`
+- `/samples/by/variant?q=<query>`
+
+Simple counts:
 - `/count/{x}/by/{y}`
     - `{x}` is one of `samples`, `variants`, or `mutations`
     - `{y}` is the name of a column from `{x}`. In the case of `variants` and `mutations`, columns from `alleles`
