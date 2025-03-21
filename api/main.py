@@ -1,15 +1,17 @@
 import re
-from typing import List
+from typing import List, Annotated
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import ProgrammingError
 
 import DB.queries.counts
 import DB.queries.mutations
+import DB.queries.prevalence
 import DB.queries.samples
 import DB.queries.variants
-from api.models import VariantInfo, SampleInfo, MutationInfo
+from api.models import VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo
+from utils.constants import CHANGE_PATTERN
 
 app = FastAPI()
 
@@ -89,3 +91,21 @@ def get_count_x_by_y(x: str, y: str):
         # todo: logging
         short_message = str(e).split('\n')[0]
         raise HTTPException(status_code=400, detail=short_message)
+
+
+@app.get('/variants/frequency', response_model=List[VariantFreqInfo])
+def get_variant_frequency(
+    aa: Annotated[
+        str | None, Query(regex=CHANGE_PATTERN)
+    ] = None,
+    nt: Annotated[
+        str | None, Query(regex=CHANGE_PATTERN)
+    ] = None
+):
+
+    if aa is not None and nt is not None:
+        raise HTTPException(status_code=400, detail='Provide either amino or nt change, not both')
+    elif aa is not None:
+        return DB.queries.prevalence.get_samples_variant_freq_by_aa_change(aa)
+    elif nt is not None:
+        return DB.queries.prevalence.get_samples_variant_freq_by_nt_change(nt)

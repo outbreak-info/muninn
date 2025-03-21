@@ -9,8 +9,10 @@ from DB.models import Sample, IntraHostVariant, Allele, AminoAcidSubstitution
 
 from DB.queries.counts import count_samples_by_column, count_variants_by_column, count_mutations_by_column
 from DB.queries.mutations import get_mutations_by_sample
+from DB.queries.prevalence import get_samples_variant_freq
 from DB.queries.samples import get_samples_by_mutation, get_samples, get_samples_by_variant
 from DB.queries.variants import get_variants_for_sample, get_variants
+from api.input_models import SeqChangeName
 
 logging.basicConfig()
 logger = logging.getLogger('sqlalchemy.engine')
@@ -50,4 +52,10 @@ logger.setLevel(logging.INFO)
 
 # r = get_samples('host = Cat')
 
-r = get_samples_by_variant('position_aa < 100')
+# r = get_samples_by_variant('position_aa < 100')
+
+r = get_samples_variant_freq(SeqChangeName('HA:Q238R', SeqChangeName.Type.AMINO_ACID))
+print(r)
+
+r = get_samples_variant_freq(SeqChangeName('HA:G465A', SeqChangeName.Type.NUCLEOTIDE))
+print(r)

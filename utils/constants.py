@@ -5,3 +5,5 @@ class Env:
     FLU_DB_PORT = 'FLU_DB_PORT'
     FLU_DB_HOST = 'FLU_DB_HOST'
     FLU_DB_DB_NAME = 'FLU_DB_DB_NAME'
+
+CHANGE_PATTERN = r'^(\w+):([a-zA-Z])(\d+)([a-zA-Z\-+]+)'

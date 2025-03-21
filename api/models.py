@@ -1,9 +1,9 @@
 from datetime import date, datetime
-from typing import Any, List, Optional
+from typing import List, Optional
 
-from DB.models import IntraHostVariant
-from DB.models import Sample, AminoAcidSubstitution
 from pydantic import BaseModel
+
+from DB.models import IntraHostVariant, Sample, AminoAcidSubstitution
 
 """
 These models define the shapes for data returned by the api.
@@ -51,18 +51,19 @@ class VariantInfo(BaseModel):
     @classmethod
     def from_db_object(cls, dbo: 'IntraHostVariant'):
         return VariantInfo(
-                id=dbo.id,
-                sample_id=dbo.sample_id,
-                allele_id=dbo.allele_id,
-                ref_dp=dbo.ref_dp,
-                alt_dp=dbo.alt_dp,
-                alt_freq=dbo.alt_freq,
-                region=dbo.r_allele.region,
-                position_nt=dbo.r_allele.position_nt,
-                ref_nt=dbo.r_allele.ref_nt,
-                alt_nt=dbo.r_allele.alt_nt,
-                amino_acid_mutations=[AminoAcidSubInfo.from_db_object(aas) for aas in dbo.r_allele.r_amino_subs]
-            )
+            id=dbo.id,
+            sample_id=dbo.sample_id,
+            allele_id=dbo.allele_id,
+            ref_dp=dbo.ref_dp,
+            alt_dp=dbo.alt_dp,
+            alt_freq=dbo.alt_freq,
+            region=dbo.r_allele.region,
+            position_nt=dbo.r_allele.position_nt,
+            ref_nt=dbo.r_allele.ref_nt,
+            alt_nt=dbo.r_allele.alt_nt,
+            amino_acid_mutations=[AminoAcidSubInfo.from_db_object(aas) for aas in dbo.r_allele.r_amino_subs]
+        )
+
 
 class SampleInfo(BaseModel):
     id: int
@@ -170,12 +171,19 @@ class MutationInfo(BaseModel):
     @classmethod
     def from_db_object(cls, dbo: 'MutationInfo') -> 'MutationInfo':
         return MutationInfo(
-                id=dbo.id,
-                sample_id=dbo.sample_id,
-                allele_id=dbo.allele_id,
-                region=dbo.r_allele.region,
-                position_nt=dbo.r_allele.position_nt,
-                ref_nt=dbo.r_allele.ref_nt,
-                alt_nt=dbo.r_allele.alt_nt,
-                amino_acid_mutations=dbo.r_allele.r_amino_subs
-            )
+            id=dbo.id,
+            sample_id=dbo.sample_id,
+            allele_id=dbo.allele_id,
+            region=dbo.r_allele.region,
+            position_nt=dbo.r_allele.position_nt,
+            ref_nt=dbo.r_allele.ref_nt,
+            alt_nt=dbo.r_allele.alt_nt,
+            amino_acid_mutations=dbo.r_allele.r_amino_subs
+        )
+
+
+class VariantFreqInfo(BaseModel):
+    alt_freq: float
+    accession: str
+    allele_id: int
+    amino_sub_id: int | None

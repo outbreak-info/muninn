@@ -105,6 +105,11 @@ Dates must be entered in the format `\d{4}-\d{2}-\d{2}`.
 In text inputs, only letters, numbers, hyphens and underscores are allowed.
 Numbers may contain decimal points.
 
+## Endpoints
+
+Auto-generated documentation for the API can be found at `<host>:8000/docs`.
+Or you can keep reading for human-generated docs that might be out of date.
+
 The following endpoints are currently live:
 
 Get item by id:
@@ -126,6 +131,10 @@ Simple counts:
     - `{x}` is one of `samples`, `variants`, or `mutations`
     - `{y}` is the name of a column from `{x}`. In the case of `variants` and `mutations`, columns from `alleles`
       and `amino_acid_substitutions` are also allowed.
+
+Prevalence:
+- `/variants/freqency?aa=HA:Q238R`
+  - Also allows queries based on nucleotide with parameter `nt=HA:A123C`
 
 Note: using `id` as a field in any query (e.g.: `id = 1234`) is likely to fail.
 This is because multiple tables, each with their own `id` column are joined before being queried, and SQL will not allow
