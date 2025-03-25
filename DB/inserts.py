@@ -1,3 +1,4 @@
+import asyncio
 import csv
 import json
 import sys
@@ -6,17 +7,18 @@ from glob import glob
 from typing import List, Type
 
 from dateutil import parser
-from sqlalchemy import select, and_, Select
+from sqlalchemy import and_, select
 from sqlalchemy.exc import IntegrityError, NoResultFound
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
-from DB.engine import engine
+from DB.engine import engine, get_async_session
 from DB.models import Sample, Allele, IntraHostVariant, Base, Mutation, AminoAcidSubstitution, DmsResult, GeoLocation
 from utils.dates_and_times import parse_collection_start_and_end
 from utils.geodata import INSDC_GEO_LOC_NAMES, ABBREV_TO_US_STATE
 
 
-def parse_and_insert_samples(samples_file: str):
+async def parse_and_insert_samples(samples_file: str):
     with open(samples_file, 'r') as f:
         csvreader = csv.DictReader(f, delimiter=',', quotechar='"')
         for row in csvreader:
@@ -76,7 +78,6 @@ def parse_and_insert_samples(samples_file: str):
             if collection_date != 'missing':
                 collection_start_date, collection_end_date = parse_collection_start_and_end(collection_date)
 
-
             sample = Sample(
                 accession=accession,
                 assay_type=assay_type,
@@ -118,20 +119,20 @@ def parse_and_insert_samples(samples_file: str):
                 retraction_detected_date=retraction_detected_date
             )
 
-            with Session(engine) as session:
+            async with get_async_session() as session:
 
                 if geo_loc_name is not None:
-                    geo_location_id = find_or_insert_geo_location(session, geo_loc_name).id
-                    sample.geo_location_id = geo_location_id
+                    geo_location = await find_or_insert_geo_location(session, geo_loc_name)
+                    sample.geo_location_id = geo_location.id
 
                 session.add(sample)
-                session.commit()
+                await session.commit()
 
 
-def find_or_add_sample(session: Session, accession: str) -> Sample:
-    sample = session.execute(
+async def find_or_add_sample(session: AsyncSession, accession: str) -> Sample:
+    sample = await session.scalar(
         select(Sample).where(Sample.accession == accession)
-    ).scalar()
+    )
     if sample is None:
         raise NotImplementedError("This scenario is no longer recoverable")
     return sample
@@ -151,7 +152,7 @@ def value_or_none(row, key, fn=None):
         return None
 
 
-def parse_and_insert_variants(files: List[str]):
+async def parse_and_insert_variants(files: List[str]):
     errors = []
     for filename in files:
         with (open(filename, 'r') as f):
@@ -203,10 +204,10 @@ def parse_and_insert_variants(files: List[str]):
                 # for now just use gff_feature to tell if aa sub info is present
                 aa_info_present = gff_feature is not None
 
-                with(Session(engine)) as session:
+                async with(get_async_session()) as session:
                     try:
 
-                        allele = session.execute(query_allele).scalar()
+                        allele = await session.scalar(query_allele)
                         if allele is None:
                             allele = Allele(
                                 position_nt=position_nt,
@@ -215,43 +216,31 @@ def parse_and_insert_variants(files: List[str]):
                                 region=region
                             )
                             session.add(allele)
-                            session.commit()
-                            session.refresh(allele)
+                            await session.commit()
+                            await session.refresh(allele)
 
                         if aa_info_present:
-                            aa_sub = session.execute(
-                                select(AminoAcidSubstitution).where(
-                                    and_(
-                                        AminoAcidSubstitution.gff_feature == gff_feature,
-                                        AminoAcidSubstitution.alt_aa == alt_aa,
-                                        AminoAcidSubstitution.ref_aa == ref_aa,
-                                        AminoAcidSubstitution.position_aa == position_aa
-                                    )
-                                )
-                            ).scalar()
-                            if aa_sub is None:
-                                aa_sub = AminoAcidSubstitution(
-                                    gff_feature=gff_feature,
-                                    position_aa=position_aa,
-                                    ref_aa=ref_aa,
-                                    alt_aa=alt_aa,
-                                    ref_codon=ref_codon,
-                                    alt_codon=alt_codon
-                                )
+                            await find_or_insert_aa_sub(
+                                session,
+                                gff_feature,
+                                position_aa,
+                                ref_aa,
+                                alt_aa,
+                                ref_codon,
+                                alt_codon,
+                                allele.id
+                            )
 
-                            aa_sub.allele_id = allele.id
-                            session.add(aa_sub)
+                        sample = await find_or_add_sample(session, row['sra'])
 
-                        sample = find_or_add_sample(session, row['sra'])
-
-                        variant = session.execute(
-                            Select(IntraHostVariant).where(
+                        variant = await session.scalar(
+                            select(IntraHostVariant).where(
                                 and_(
                                     IntraHostVariant.allele_id == allele.id,
                                     IntraHostVariant.sample_id == sample.id
                                 )
                             )
-                        ).scalar()
+                        )
 
                         if variant is None:
                             variant = IntraHostVariant(
@@ -269,14 +258,14 @@ def parse_and_insert_variants(files: List[str]):
                                 pass_qc=pass_qc
                             )
                             session.add(variant)
-                            session.commit()
+                            await session.commit()
 
                     except IntegrityError as e:
                         errors.append(e)
     print(f'Variants done with {len(errors)} errors')
 
 
-def parse_and_insert_mutations(mutations_files):
+async def parse_and_insert_mutations(mutations_files):
     errors = []
 
     for file in mutations_files:
@@ -288,11 +277,11 @@ def parse_and_insert_mutations(mutations_files):
                 ref_nt = row['ref']
                 alt_nt = row['alt']
 
-                with Session(engine) as session:
+                async with get_async_session() as session:
                     try:
-                        sample = find_or_add_sample(session, accession)
+                        sample = await find_or_add_sample(session, accession)
 
-                        allele = session.execute(
+                        allele = await session.scalar(
                             select(Allele).where(
                                 and_(
                                     Allele.region == region,
@@ -300,7 +289,7 @@ def parse_and_insert_mutations(mutations_files):
                                     Allele.alt_nt == alt_nt
                                 )
                             )
-                        ).scalar()
+                        )
                         if allele is None:
                             allele = Allele(
                                 position_nt=position_nt,
@@ -309,8 +298,8 @@ def parse_and_insert_mutations(mutations_files):
                                 alt_nt=alt_nt
                             )
                             session.add(allele)
-                            session.commit()
-                            session.refresh(allele)
+                            await session.commit()
+                            await session.refresh(allele)
 
                         for aa_data in row['aa_mutations']:
                             gff_feature = aa_data['GFF_FEATURE']
@@ -320,35 +309,52 @@ def parse_and_insert_mutations(mutations_files):
                             ref_codon = aa_data['ref_codon']
                             alt_codon = aa_data['alt_codon']
 
-                            aa_sub = session.execute(
-                                select(AminoAcidSubstitution).where(
-                                    and_(
-                                        AminoAcidSubstitution.gff_feature == gff_feature,
-                                        AminoAcidSubstitution.alt_aa == alt_aa,
-                                        AminoAcidSubstitution.position_aa == position_aa
-                                    )
-                                )
-                            ).scalar()
-                            if aa_sub is None:
-                                aa_sub = AminoAcidSubstitution(
-                                    gff_feature=gff_feature,
-                                    position_aa=position_aa,
-                                    ref_aa=ref_aa,
-                                    alt_aa=alt_aa,
-                                    ref_codon=ref_codon,
-                                    alt_codon=alt_codon
-                                )
-                                aa_sub.allele_id = allele.id
+                            await find_or_insert_aa_sub(
+                                session,
+                                gff_feature,
+                                position_aa,
+                                ref_aa,
+                                alt_aa,
+                                ref_codon,
+                                alt_codon,
+                                allele.id
+                            )
 
                         mutation = Mutation(sample_id=sample.id, allele_id=allele.id)
                         session.add(mutation)
-                        session.commit()
+                        await session.commit()
                     except IntegrityError as e:
                         errors.append(e)
     print(f'Mutations done with {len(errors)} errors')
 
 
-def parse_and_insert_dms_results(dms_files):
+async def find_or_insert_aa_sub(session, gff_feature, position_aa, ref_aa, alt_aa, ref_codon, alt_codon, allele_id):
+    aa_sub = await session.scalar(
+        select(AminoAcidSubstitution).where(
+            and_(
+                AminoAcidSubstitution.allele_id == allele_id,
+                AminoAcidSubstitution.gff_feature == gff_feature,
+                AminoAcidSubstitution.alt_aa == alt_aa,
+                AminoAcidSubstitution.ref_aa == ref_aa,
+                AminoAcidSubstitution.position_aa == position_aa
+            )
+        )
+    )
+    if aa_sub is None:
+        aa_sub = AminoAcidSubstitution(
+            gff_feature=gff_feature,
+            position_aa=position_aa,
+            ref_aa=ref_aa,
+            alt_aa=alt_aa,
+            ref_codon=ref_codon,
+            alt_codon=alt_codon,
+            allele_id=allele_id
+        )
+
+    session.add(aa_sub)
+
+
+async def parse_and_insert_dms_results(dms_files):
     errors = []
     for file in dms_files:
         with open(file, 'r') as f:
@@ -370,22 +376,23 @@ def parse_and_insert_dms_results(dms_files):
                 # todo: just testing with HA data for now
                 region_alleles_query = select(Allele.id).where(Allele.region == 'HA')
 
-                with Session(engine) as session:
-                    try:
-                        aa_sub_allele_id = session.execute(
-                            select(AminoAcidSubstitution)
-                            .with_only_columns(AminoAcidSubstitution.allele_id)
-                            .where(
-                                and_(
-                                    AminoAcidSubstitution.ref_aa == ref_aa,
-                                    AminoAcidSubstitution.alt_aa == alt_aa,
-                                    AminoAcidSubstitution.position_aa == position_aa,
-                                    AminoAcidSubstitution.allele_id.in_(region_alleles_query)
-                                )
+                async with get_async_session() as session:
+
+                    aa_sub_allele_id = await session.scalar(
+                        select(AminoAcidSubstitution)
+                        .with_only_columns(AminoAcidSubstitution.allele_id)
+                        .where(
+                            and_(
+                                AminoAcidSubstitution.ref_aa == ref_aa,
+                                AminoAcidSubstitution.alt_aa == alt_aa,
+                                AminoAcidSubstitution.position_aa == position_aa,
+                                AminoAcidSubstitution.allele_id.in_(region_alleles_query)
                             )
-                        ).scalar_one()
-                    except NoResultFound:
+                        )
+                    )
+                    if aa_sub_allele_id is None:
                         continue
+
                     try:
                         dms_result = DmsResult(
                             allele_id=aa_sub_allele_id,
@@ -395,7 +402,7 @@ def parse_and_insert_dms_results(dms_files):
                             SA26_usage_increase=SA26_usage_increase
                         )
                         session.add(dms_result)
-                        session.commit()
+                        await session.commit()
                     except IntegrityError as e:
                         errors.append((e, row))
     print(f'DMS done with {len(errors)} errors')
@@ -438,21 +445,20 @@ def parse_geo_loc(text: str):
     return gln, region, locality
 
 
-def find_or_insert_geo_location(session: Session, geo_loc_name: str):
+async def find_or_insert_geo_location(session: AsyncSession, geo_loc_name: str):
     country, region, locality = parse_geo_loc(geo_loc_name)
 
-    try:
-        geo_loc = session.execute(
-            select(GeoLocation).where(
-                and_(
-                    GeoLocation.country_name == country,
-                    GeoLocation.region_name == region,
-                    GeoLocation.locality_name == locality
-                )
+    geo_loc = await session.scalar(
+        select(GeoLocation).where(
+            and_(
+                GeoLocation.country_name == country,
+                GeoLocation.region_name == region,
+                GeoLocation.locality_name == locality
             )
-        ).scalar_one()
+        )
+    )
 
-    except NoResultFound:
+    if geo_loc is None:
         geo_loc = GeoLocation(
             full_text=geo_loc_name,
             country_name=country,
@@ -460,8 +466,8 @@ def find_or_insert_geo_location(session: Session, geo_loc_name: str):
             locality_name=locality
         )
         session.add(geo_loc)
-        session.commit()
-        session.refresh(geo_loc)
+        await session.commit()
+        await session.refresh(geo_loc)
 
     return geo_loc
 
@@ -471,13 +477,13 @@ def table_has_rows(table: Type['Base']) -> bool:
         return session.query(table).count() > 0
 
 
-def main(basedir):
+async def main(basedir):
     start = datetime.now()
     print(f'start at {start}')
     samples_file = f'{basedir}/SraRunTable_automated.csv'
 
     if not table_has_rows(Sample):
-        parse_and_insert_samples(samples_file)
+        await parse_and_insert_samples(samples_file)
         print('samples done')
     else:
         print('Samples already has data, skipping...')
@@ -488,7 +494,7 @@ def main(basedir):
     variants_files = [f'{basedir}/intrahost_dms/combined_variants.tsv']
 
     if not table_has_rows(IntraHostVariant):
-        parse_and_insert_variants(variants_files)
+        await parse_and_insert_variants(variants_files)
     else:
         print("IntraHostVariants already has data, skipping...")
 
@@ -497,7 +503,7 @@ def main(basedir):
 
     if not table_has_rows(Mutation):
         mutations_files = glob(f'{basedir}/mutdata_complete/*.json')
-        parse_and_insert_mutations(mutations_files)
+        await parse_and_insert_mutations(mutations_files)
     else:
         print('Mutations already has data, skipping...')
 
@@ -507,7 +513,7 @@ def main(basedir):
     # DMS data
     if not table_has_rows(DmsResult):
         dms_files = [f'{basedir}/{f}' for f in ['dms_HA.csv']]
-        parse_and_insert_dms_results(dms_files)
+        await parse_and_insert_dms_results(dms_files)
     else:
         print('DmsResults already has data, skipping...')
     dms_done = datetime.now()
@@ -521,4 +527,4 @@ if __name__ == '__main__':
     basedir_ = '/home/james/Documents/andersen_lab/bird_flu_db/test_data'
     if len(sys.argv) >= 2:
         basedir_ = sys.argv[1]
-    main(basedir_)
+    asyncio.run(main(basedir_))

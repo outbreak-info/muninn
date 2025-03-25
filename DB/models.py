@@ -3,6 +3,7 @@ from typing import List
 
 import sqlalchemy as sa
 from sqlalchemy import UniqueConstraint, CheckConstraint, MetaData
+from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase, relationship
 
@@ -33,7 +34,7 @@ def compile_create_uc(create, compiler, **kw):
     return stmt
 
 
-class Base(DeclarativeBase):
+class Base(DeclarativeBase, AsyncAttrs):
     metadata = MetaData(
         # This will automatically name constraints, but it's still best to name them manually
         # It's possible to get conflicting names from this convention
