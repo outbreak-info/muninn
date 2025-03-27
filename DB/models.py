@@ -17,7 +17,6 @@ from parser.parser import parser
 # Also, don't use unique=True, it will create an unnamed constraint
 ############################################################################
 
-
 # This is magic and I don't understand it at all.
 # From https://stackoverflow.com/a/77475375
 UniqueConstraint.argument_for("postgresql", 'nulls_not_distinct', None)
@@ -83,10 +82,8 @@ class Sample(Base):
     # we've got various spellings of common names, plus some binomials and genus sp.
     host: Mapped[str] = mapped_column(sa.Text, nullable=True)
 
-    # todo: could these be relationships?
     instrument: Mapped[str] = mapped_column(sa.Text, nullable=False)
     platform: Mapped[str] = mapped_column(sa.Text, nullable=False)
-
     isolate: Mapped[str] = mapped_column(sa.Text, nullable=True)
 
     # todo: factor these out?
@@ -97,7 +94,6 @@ class Sample(Base):
     # todo: right now, this is all 'Influenza A virus'
     organism: Mapped[str] = mapped_column(sa.Text, nullable=False)
 
-    # todo: if it is retracted it needs a date? and v/v?
     is_retracted: Mapped[bool] = mapped_column(sa.Boolean, nullable=False)
     # todo: this needs to come with its tz data attached (it's utc)
     retraction_detected_date: Mapped[datetime] = mapped_column(sa.TIMESTAMP(timezone=True), nullable=True)
@@ -223,6 +219,7 @@ class AminoAcidSubstitution(Base):
     )
 
     r_allele: Mapped['Allele'] = relationship(back_populates='r_amino_subs')
+    r_pheno_measurement_results: Mapped[List['PhenotypeMeasurementResult']] = relationship(back_populates='r_amino_sub')
 
 
 class Mutation(Base):
@@ -273,27 +270,6 @@ class IntraHostVariant(Base):
     r_allele: Mapped['Allele'] = relationship(back_populates='r_variants')
 
 
-class DmsResult(Base):
-    __tablename__ = 'dms_results'
-
-    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
-    allele_id: Mapped[int] = mapped_column(sa.ForeignKey('alleles.id'), nullable=False)
-
-    # todo: no data for any of these, so I'm guessing at the types
-    ferret_sera_escape: Mapped[float] = mapped_column(sa.Double, nullable=False)
-    stability: Mapped[float] = mapped_column(sa.Double, nullable=False)
-    entry_293T: Mapped[float] = mapped_column(sa.Double, nullable=False)
-    SA26_usage_increase: Mapped[float] = mapped_column(sa.Double, nullable=False)
-
-    __table_args__ = tuple(
-        [
-            UniqueConstraint('allele_id')
-        ]
-    )
-
-    r_allele: Mapped['Allele'] = relationship(back_populates='r_dms_results')
-
-
 class GeoLocation(Base):
     __tablename__ = 'geo_locations'
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
@@ -321,3 +297,50 @@ class GeoLocation(Base):
     )
 
     r_samples: Mapped[List['Sample']] = relationship(back_populates='r_geo_location')
+
+
+class PhenotypeMetric(Base):
+    __tablename__ = 'phenotype_metrics'
+
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+
+    name: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    assay_type: Mapped[str] = mapped_column(sa.Text, nullable=False)
+
+    __table_args__ = tuple(
+        [
+            UniqueConstraint('name', name='uq_phenotype_metrics_name'),
+            CheckConstraint("name <> ''", name='name_not_empty'),
+            CheckConstraint("assay_type <> ''", name='assay_type_not_empty')
+        ]
+    )
+
+    r_pheno_measurement_results: Mapped[List['PhenotypeMeasurementResult']] = relationship(
+        back_populates='r_pheno_metric'
+    )
+
+
+class PhenotypeMeasurementResult(Base):
+    __tablename__ = 'phenotype_measurement_results'
+
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    phenotype_metric_id: Mapped[int] = mapped_column(sa.ForeignKey('phenotype_metrics.id'), nullable=False)
+    amino_acid_substitution_id: Mapped[int] = mapped_column(
+        sa.ForeignKey('amino_acid_substitutions.id'),
+        nullable=False
+    )
+
+    value: Mapped[float] = mapped_column(sa.Double, nullable=False)
+
+    __table_args__ = tuple(
+        [
+            UniqueConstraint(
+                'phenotype_metric_id',
+                'amino_acid_substitution_id',
+                name='uq_phenotype_measurement_results_metric_and_amino_sub'
+            )
+        ]
+    )
+
+    r_pheno_metric: Mapped['PhenotypeMetric'] = relationship(back_populates='r_pheno_measurement_results')
+    r_amino_sub: Mapped['AminoAcidSubstitution'] = relationship(back_populates='r_pheno_measurement_results')
