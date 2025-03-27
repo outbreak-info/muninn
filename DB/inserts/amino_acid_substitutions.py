@@ -13,11 +13,10 @@ async def find_or_insert_aa_sub(aas: AminoAcidSubstitution) -> int:
                     AminoAcidSubstitution.allele_id == aas.allele_id,
                     AminoAcidSubstitution.gff_feature == aas.gff_feature,
                     AminoAcidSubstitution.position_aa == aas.position_aa,
-                    AminoAcidSubstitution.alt_aa == aas.position_aa
+                    AminoAcidSubstitution.alt_aa == aas.alt_aa
                 )
             )
         )
-
         if id_ is None:
             session.add(aas)
             await session.commit()

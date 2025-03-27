@@ -14,3 +14,19 @@ async def find_sample_id_by_accession(accession: str) -> int:
     if id_ is None:
         raise NotFoundError(f'No sample found for accession: {accession}')
     return id_
+
+
+async def find_or_insert_sample(s: Sample) -> (int, bool):
+    preexisting = True
+    async with get_async_session() as session:
+        id_ = await session.scalar(
+            select(Sample.id)
+            .where(Sample.accession == s.accession)
+        )
+        if id_ is None:
+            preexisting = False
+            session.add(s)
+            await session.commit()
+            await session.refresh(s)
+            id_ = s.id
+        return id_, preexisting
