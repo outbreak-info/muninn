@@ -9,10 +9,12 @@ from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase, relationship
 
 from parser.parser import parser
 
-############################################################################
+#########################################################################################
 # NOTE:
 # Alembic DOES NOT autogenerate check constraints!
-# If you add a check constraint, you must add it to the migration manually!
+# Or, more accurately, it doesn't detect when they've changed. It only creates them when
+# it creates a table.
+# ==> If you add a check constraint, you must add it to the migration manually! <==
 # I've created a little system (or maybe an eldrich horror) that makes this a bit easier:
 #
 #         for model in [<models with changed check constraints>]:
@@ -21,7 +23,7 @@ from parser.parser import parser
 #                 op.create_check_constraint(name, table, sqltext)
 #
 # Also, don't use unique=True, it will create an unnamed constraint
-############################################################################
+#########################################################################################
 
 # This is magic and I don't understand it at all.
 # From https://stackoverflow.com/a/77475375
