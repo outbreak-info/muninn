@@ -309,6 +309,7 @@ class PhenotypeMetric(Base):
 
     __table_args__ = tuple(
         [
+            # todo: could this soften to allow uq name x assay_type?
             UniqueConstraint('name', name='uq_phenotype_metrics_name'),
             CheckConstraint("name <> ''", name='name_not_empty'),
             CheckConstraint("assay_type <> ''", name='assay_type_not_empty')
