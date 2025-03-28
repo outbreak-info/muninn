@@ -13,7 +13,13 @@ from parser.parser import parser
 # NOTE:
 # Alembic DOES NOT autogenerate check constraints!
 # If you add a check constraint, you must add it to the migration manually!
-# I've created a little system (or maybe an eldrich horror) that makes this a bit easier
+# I've created a little system (or maybe an eldrich horror) that makes this a bit easier:
+#
+#         for model in [<models with changed check constraints>]:
+#             for name, table, sqltext in model.get_check_constraints_for_alembic():
+#                 op.execute(f'ALTER TABLE {table} DROP CONSTRAINT IF EXISTS "{name}"')
+#                 op.create_check_constraint(name, table, sqltext)
+#
 # Also, don't use unique=True, it will create an unnamed constraint
 ############################################################################
 
@@ -182,18 +188,15 @@ class Allele(Base):
         ]
     )
 
-    r_amino_subs: Mapped[List['AminoAcidSubstitution']] = relationship(back_populates='r_allele')
+    r_translations: Mapped[List['Translation']] = relationship(back_populates='r_allele')
     r_variants: Mapped[List['IntraHostVariant']] = relationship(back_populates='r_allele')
     r_mutations: Mapped[List['Mutation']] = relationship(back_populates='r_allele')
-    r_dms_results: Mapped[List['DmsResult']] = relationship(back_populates='r_allele')
 
 
 class AminoAcidSubstitution(Base):
     __tablename__ = 'amino_acid_substitutions'
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
-
-    allele_id: Mapped[int] = mapped_column(sa.ForeignKey('alleles.id'), nullable=False)
 
     position_aa: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
     ref_aa: Mapped[str] = mapped_column(sa.Text, nullable=False)
@@ -208,7 +211,6 @@ class AminoAcidSubstitution(Base):
             CheckConstraint("ref_aa <> ''", name='ref_aa_not_empty'),
             CheckConstraint("alt_aa <> ''", name='alt_aa_not_empty'),
             UniqueConstraint(
-                'allele_id',
                 'position_aa',
                 'alt_aa',
                 'gff_feature',
@@ -218,8 +220,29 @@ class AminoAcidSubstitution(Base):
         ]
     )
 
-    r_allele: Mapped['Allele'] = relationship(back_populates='r_amino_subs')
+    r_translations: Mapped[List['Translation']] = relationship(back_populates='r_amino_sub')
     r_pheno_measurement_results: Mapped[List['PhenotypeMeasurementResult']] = relationship(back_populates='r_amino_sub')
+
+
+class Translation(Base):
+    __tablename__ = 'translations'
+
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+
+    allele_id: Mapped[int] = mapped_column(sa.ForeignKey('alleles.id'), nullable=False)
+    amino_acid_substitution_id: Mapped[int] = mapped_column(
+        sa.ForeignKey('amino_acid_substitutions.id'),
+        nullable=False
+    )
+
+    __table_args__ = tuple(
+        [
+            UniqueConstraint('allele_id', 'amino_acid_substitution_id', name='uq_translations_allele_and_amino_sub')
+        ]
+    )
+
+    r_allele: Mapped['Allele'] = relationship(back_populates='r_translations')
+    r_amino_sub: Mapped['AminoAcidSubstitution'] = relationship(back_populates='r_translations')
 
 
 class Mutation(Base):
