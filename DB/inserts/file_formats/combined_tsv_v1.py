@@ -1,6 +1,7 @@
 import csv
 import json
 from csv import DictReader
+from datetime import datetime
 from enum import Enum
 from typing import Dict
 
@@ -69,7 +70,7 @@ class CombinedTsvV1(FileFormat):
                     # allele data
                     region = get_value(row, cls.ColNameMapping.region.value)
                     position_nt = get_value(row, cls.ColNameMapping.position_nt.value, transform=int)
-                    alt_nt = get_value(row, cls.ColNameMapping.value)
+                    alt_nt = get_value(row, cls.ColNameMapping.alt_nt.value)
 
                     try:
                         allele_id = cls._allele_id_cache[(region, position_nt, alt_nt)]
@@ -150,12 +151,13 @@ class CombinedTsvV1(FileFormat):
                     # todo: proper logging!!
                     # log debug stats every n lines
                     if i % 10_000 == 0:
+                        print(f'{datetime.now()} : {i} lines processed')
                         with open('/tmp/samples_not_found.log.json', 'w+') as lf:
                             json.dump(cache_samples_not_found, lf, indent=4)
                         with open('/tmp/duplicate_variants.log.json', 'w+') as lf:
                             json.dump({str(k): v for k, v in debug_duplicate_variants.items()}, lf, indent=4)
 
-                except KeyError as e:
+                except (KeyError , ValueError) as e:
                     # todo: logging
                     print(f'Malformed row in variants: {row}, {str(e)}')
 

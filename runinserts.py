@@ -24,7 +24,7 @@ def main():
     parser.add_argument('filename', help='path to file to be parsed')
     parser.add_argument(
         'format',
-        help=f'Name of the format to be parsed. Available formats are:\n{'\n'.join(formats.keys())}'
+        help=f"Name of the format to be parsed. Available formats are: {','.join(formats.keys())}"
     )
     parser.add_argument(
         '--kludge_mutations',
