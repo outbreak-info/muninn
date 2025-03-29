@@ -23,6 +23,16 @@ class CombinedTsvV1(FileFormat):
     # metric name -> id
     _phenotype_metric_cache = dict()
 
+    # accession -> id
+    _sample_id_cache = dict()
+
+    # (region, position_nt, alt_nt) -> id
+    _allele_id_cache = dict()
+
+    # (gff_feature, position_aa, alt_aa) -> id
+    _aas_id_cache = dict()
+
+
     @classmethod
     async def insert_from_file(cls, filename: str) -> None:
         # format = accession -> effected variant count
@@ -42,25 +52,37 @@ class CombinedTsvV1(FileFormat):
                         cache_samples_not_found[sample_accession] += 1
                         continue
                     try:
-                        sample_id = await find_sample_id_by_accession(sample_accession)
-                    except NotFoundError:
-                        # todo: proper logging
+                        sample_id = cls._sample_id_cache[sample_accession]
+                    except KeyError:
                         try:
-                            cache_samples_not_found[sample_accession] += 1
-                        except KeyError:
-                            cache_samples_not_found[sample_accession] = 1
-                        continue
+                            sample_id = await find_sample_id_by_accession(sample_accession)
+                            cls._sample_id_cache[sample_accession] = sample_id
+                        except NotFoundError:
+                            # todo: proper logging
+                            try:
+                                cache_samples_not_found[sample_accession] += 1
+                            except KeyError:
+                                cache_samples_not_found[sample_accession] = 1
+                            continue
 
 
                     # allele data
-                    allele_id = await find_or_insert_allele(
-                        Allele(
-                            region=row[cls.ColNameMapping.region.value],
-                            position_nt=int(row[cls.ColNameMapping.position_nt.value]),
-                            ref_nt=row[cls.ColNameMapping.ref_nt.value],
-                            alt_nt=row[cls.ColNameMapping.alt_nt.value]
+                    region = get_value(row, cls.ColNameMapping.region.value)
+                    position_nt = get_value(row, cls.ColNameMapping.position_nt.value, transform=int)
+                    alt_nt = get_value(row, cls.ColNameMapping.value)
+
+                    try:
+                        allele_id = cls._allele_id_cache[(region, position_nt, alt_nt)]
+                    except KeyError:
+                        allele_id = await find_or_insert_allele(
+                            Allele(
+                                region=region,
+                                position_nt=position_nt,
+                                ref_nt=row[cls.ColNameMapping.ref_nt.value],
+                                alt_nt=alt_nt
+                            )
                         )
-                    )
+                        cls._allele_id_cache[(region, position_nt, alt_nt)] = allele_id
 
                     # amino acid info
                     # should either all be present or all be absent
@@ -68,20 +90,26 @@ class CombinedTsvV1(FileFormat):
                     # If it's present and other values are missing, the db will complain
                     gff_feature = get_value(row, cls.ColNameMapping.gff_feature.value, allow_none=True)
                     if gff_feature is not None:
-                        aas_id = await find_or_insert_aa_sub(
-                            AminoAcidSubstitution(
-                                position_aa=get_value(
-                                    row,
-                                    cls.ColNameMapping.position_aa.value,
-                                    transform=int_from_decimal_str
-                                ),
-                                ref_aa=(row[cls.ColNameMapping.ref_aa.value]),
-                                alt_aa=(row[cls.ColNameMapping.alt_aa.value]),
-                                ref_codon=(row[cls.ColNameMapping.ref_codon.value]),
-                                alt_codon=(row[cls.ColNameMapping.alt_codon.value]),
-                                gff_feature=gff_feature
-                            )
+                        position_aa = get_value(
+                            row,
+                            cls.ColNameMapping.position_aa.value,
+                            transform=int_from_decimal_str
                         )
+                        alt_aa = (row[cls.ColNameMapping.alt_aa.value])
+
+                        try:
+                            aas_id = cls._aas_id_cache[(gff_feature, position_aa, alt_aa)]
+                        except KeyError:
+                            aas_id = await find_or_insert_aa_sub(
+                                AminoAcidSubstitution(
+                                    position_aa=position_aa,
+                                    ref_aa=(row[cls.ColNameMapping.ref_aa.value]),
+                                    alt_aa=alt_aa,
+                                    ref_codon=(row[cls.ColNameMapping.ref_codon.value]),
+                                    alt_codon=(row[cls.ColNameMapping.alt_codon.value]),
+                                    gff_feature=gff_feature
+                                )
+                            )
 
                         await insert_translation(
                             Translation(
@@ -127,15 +155,14 @@ class CombinedTsvV1(FileFormat):
                         with open('/tmp/duplicate_variants.log.json', 'w+') as lf:
                             json.dump({str(k): v for k, v in debug_duplicate_variants.items()}, lf, indent=4)
 
-
-
-
                 except KeyError as e:
                     # todo: logging
                     print(f'Malformed row in variants: {row}, {str(e)}')
 
             # reset cache
             cls._phenotype_metric_cache = dict()
+            cls._aas_id_cache = dict()
+            cls._sample_id_cache = dict()
 
             # todo: proper logging
             with open('/tmp/samples_not_found.log.json', 'w+') as lf:

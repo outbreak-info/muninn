@@ -4,6 +4,7 @@ import sys
 from datetime import datetime
 from os import path
 
+from DB.old_inserts import main as old_main
 from DB.inserts.file_formats.file_format import FileFormat
 from DB.inserts.file_formats.combined_tsv_v1 import CombinedTsvV1
 from DB.inserts.file_formats.sra_run_table_csv import SraRunTableCsv
@@ -25,7 +26,15 @@ def main():
         'format',
         help=f'Name of the format to be parsed. Available formats are:\n{'\n'.join(formats.keys())}'
     )
+    parser.add_argument(
+        '--kludge_mutations',
+        action='store_true',
+        help='run the kludge script to insert mutations'
+    )
     args = parser.parse_args()
+
+    if args.kludge_mutations:
+        mutations_kludge(args.filename)
 
     if not args.format in formats.keys():
         print('Invalid format name given')
@@ -47,6 +56,11 @@ def main():
     end_time = datetime.now()
     print(f'end at {end_time}, elapsed: {end_time - start_time}')
 
+
+def mutations_kludge(basedir: str):
+    print('Running the mutations kludge')
+    asyncio.run(old_main(basedir))
+    sys.exit(0)
 
 if __name__ == '__main__':
     main()
