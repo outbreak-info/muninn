@@ -5,7 +5,7 @@ from sqlalchemy import select, and_, ColumnElement
 from sqlalchemy.orm import Session
 
 from DB.engine import engine
-from DB.models import IntraHostVariant, Sample, Allele, AminoAcidSubstitution
+from DB.models import IntraHostVariant, Sample, Allele, AminoAcidSubstitution, Translation
 from api.models import VariantFreqInfo
 from utils.constants import CHANGE_PATTERN
 
@@ -38,10 +38,11 @@ def get_samples_variant_freq_by_nt_change(change: str) -> List[VariantFreqInfo]:
 
 def _get_samples_variant_freq(where_clause: ColumnElement[bool]) -> List[VariantFreqInfo]:
     query = (
-        select(IntraHostVariant.alt_freq, Sample.accession, Allele.id, AminoAcidSubstitution.id)
+        select(IntraHostVariant.alt_freq, Sample.accession, Allele.id, Translation.id, AminoAcidSubstitution.id)
         .join(Sample, Sample.id == IntraHostVariant.sample_id, isouter=True)
         .join(Allele, Allele.id == IntraHostVariant.allele_id, isouter=True)
-        .join(AminoAcidSubstitution, AminoAcidSubstitution.allele_id == Allele.id, isouter=True)
+        .join(Translation, Allele.id == Translation.allele_id, isouter=True)
+        .join(AminoAcidSubstitution, Translation.amino_acid_substitution_id == AminoAcidSubstitution.id, isouter=True)
         .where(where_clause)
     )
 
@@ -54,7 +55,8 @@ def _get_samples_variant_freq(where_clause: ColumnElement[bool]) -> List[Variant
                 alt_freq=r[0],
                 accession=r[1],
                 allele_id=r[2],
-                amino_sub_id=r[3]
+                translation_id=r[3],
+                amino_sub_id=r[4]
             )
         )
     return out_data

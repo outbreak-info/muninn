@@ -14,7 +14,6 @@ In case it's not clear, the naming convention here is 'ThingInfo'.
 
 class AminoAcidSubInfo(BaseModel):
     id: int
-    allele_id: int
     position_aa: int
     ref_aa: str
     alt_aa: str
@@ -24,7 +23,6 @@ class AminoAcidSubInfo(BaseModel):
     def from_db_object(cls, dbo: 'AminoAcidSubstitution') -> 'AminoAcidSubInfo':
         return AminoAcidSubInfo(
             id=dbo.id,
-            allele_id=dbo.allele_id,
             position_aa=dbo.position_aa,
             ref_aa=dbo.ref_aa,
             alt_aa=dbo.alt_aa,
@@ -61,7 +59,7 @@ class VariantInfo(BaseModel):
             position_nt=dbo.r_allele.position_nt,
             ref_nt=dbo.r_allele.ref_nt,
             alt_nt=dbo.r_allele.alt_nt,
-            amino_acid_mutations=[AminoAcidSubInfo.from_db_object(aas) for aas in dbo.r_allele.r_amino_subs]
+            amino_acid_mutations=[AminoAcidSubInfo.from_db_object(t.r_amino_sub) for t in dbo.r_allele.r_translations]
         )
 
 
@@ -70,44 +68,44 @@ class SampleInfo(BaseModel):
     accession: str
     consent_level: str
     bio_project: str
-    bio_sample: Optional[str]
-    bio_sample_accession: Optional[str]
+    bio_sample: str | None
+    bio_sample_accession: str | None
     bio_sample_model: str
     center_name: str
     experiment: str
-    host: Optional[str]
+    host: str | None
     instrument: str
     platform: str
-    isolate: Optional[str]
+    isolate: str | None
     library_name: str
     library_layout: str
     library_selection: str
     library_source: str
     organism: str
     is_retracted: bool
-    retraction_detected_date: Optional[datetime]
-    isolation_source: Optional[str]
+    retraction_detected_date: datetime | None
+    isolation_source: str | None
     release_date: datetime
     creation_date: datetime
     version: str
     sample_name: str
     sra_study: str
-    serotype: str
+    serotype: str | None
     assay_type: str
-    avg_spot_length: float
+    avg_spot_length: float | None
     bases: int
     bytes: int
     datastore_filetype: str
     datastore_region: str
     datastore_provider: str
-    collection_start_date: Optional[date]
-    collection_end_date: Optional[date]
-    geo_location_id: Optional[int]
+    collection_start_date: date | None
+    collection_end_date: date | None
+    geo_location_id: int | None
 
     # geo data
-    geo_country_name: Optional[str]
-    geo_region_name: Optional[str]
-    geo_locality_name: Optional[str]
+    geo_country_name: str | None
+    geo_region_name: str | None
+    geo_locality_name: str | None
 
     @classmethod
     def from_db_object(cls, dbo: 'Sample') -> 'SampleInfo':
@@ -178,7 +176,7 @@ class MutationInfo(BaseModel):
             position_nt=dbo.r_allele.position_nt,
             ref_nt=dbo.r_allele.ref_nt,
             alt_nt=dbo.r_allele.alt_nt,
-            amino_acid_mutations=dbo.r_allele.r_amino_subs
+            amino_acid_mutations=[AminoAcidSubInfo.from_db_object(t.r_amino_sub) for t in dbo.r_allele.r_translations]
         )
 
 
@@ -186,4 +184,5 @@ class VariantFreqInfo(BaseModel):
     alt_freq: float
     accession: str
     allele_id: int
+    translation_id: int | None
     amino_sub_id: int | None

@@ -4,7 +4,7 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session, contains_eager
 
 from DB.engine import engine
-from DB.models import Sample, Mutation, GeoLocation, Allele, AminoAcidSubstitution, IntraHostVariant
+from DB.models import Sample, Mutation, GeoLocation, Allele, AminoAcidSubstitution, IntraHostVariant, Translation
 from api.models import SampleInfo
 from parser.parser import parser
 
@@ -41,17 +41,6 @@ def get_samples(query: str) -> List['SampleInfo']:
     return out_data
 
 
-# select * from samples s
-# left join geo_locations gl on gl.id = s.geo_location_id
-# where s.id in (
-#         select m.sample_id from mutations m where m.allele_id in (
-#                 select a.id from (
-#                         alleles a left join amino_acid_substitutions aas on a.id = aas.allele_id
-#                 ) where  (
-#                         region = 'HA' and ref_aa = 'M'
-#                 )
-#         )
-# );
 def get_samples_by_mutation(query: str) -> List['SampleInfo']:
     user_defined_query = parser.parse(query)
 
@@ -66,7 +55,12 @@ def get_samples_by_mutation(query: str) -> List['SampleInfo']:
                 .where(
                     Mutation.allele_id.in_(
                         select(Allele.id)
-                        .join(AminoAcidSubstitution, Allele.id == AminoAcidSubstitution.allele_id, isouter=True)
+                        .join(Translation, Allele.id == Translation.allele_id, isouter=True)
+                        .join(
+                            AminoAcidSubstitution,
+                            Translation.amino_acid_substitution_id == AminoAcidSubstitution.id,
+                            isouter=True
+                        )
                         .where(text(user_defined_query))
                     )
                 )
@@ -84,17 +78,6 @@ def get_samples_by_mutation(query: str) -> List['SampleInfo']:
     return out_data
 
 
-# select * from samples s
-# left join geo_locations gl on gl.id = s.geo_location_id
-# where s.id in (
-#         select ihv.sample_id from (
-#                 intra_host_variants ihv
-#                 left join alleles a on ihv.allele_id = a.id
-#                 left join amino_acid_substitutions aas on a.id = aas.allele_id
-#         ) where (
-#                 region = 'HA' and ref_aa = 'M' and ref_dp = 0
-#         )
-# );
 def get_samples_by_variant(query: str) -> List['SampleInfo']:
     # todo: bind parameters, id will fail
     user_query = parser.parse(query)
@@ -107,7 +90,12 @@ def get_samples_by_variant(query: str) -> List['SampleInfo']:
             Sample.id.in_(
                 select(IntraHostVariant.sample_id)
                 .join(Allele, Allele.id == IntraHostVariant.allele_id, isouter=True)
-                .join(AminoAcidSubstitution, AminoAcidSubstitution.allele_id == Allele.id, isouter=True)
+                .join(Translation, Allele.id == Translation.allele_id, isouter=True)
+                .join(
+                    AminoAcidSubstitution,
+                    Translation.amino_acid_substitution_id == AminoAcidSubstitution.id,
+                    isouter=True
+                )
                 .where(text(user_query))
             )
         )

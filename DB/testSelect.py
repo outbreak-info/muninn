@@ -1,18 +1,11 @@
 import logging
+from pprint import pprint
 
-from sqlalchemy import select
-from sqlalchemy.exc import ProgrammingError
-from sqlalchemy.orm import Session, query
-
-from DB.engine import engine
-from DB.models import Sample, IntraHostVariant, Allele, AminoAcidSubstitution
-
-from DB.queries.counts import count_samples_by_column, count_variants_by_column, count_mutations_by_column
-from DB.queries.mutations import get_mutations_by_sample
-from DB.queries.prevalence import get_samples_variant_freq
-from DB.queries.samples import get_samples_by_mutation, get_samples, get_samples_by_variant
-from DB.queries.variants import get_variants_for_sample, get_variants
-from api.input_models import SeqChangeName
+from DB.queries.counts import count_variants_by_column, count_mutations_by_column
+from DB.queries.mutations import get_mutations_by_sample, get_mutations
+from DB.queries.prevalence import get_samples_variant_freq_by_aa_change, get_samples_variant_freq_by_nt_change
+from DB.queries.samples import get_samples_by_mutation, get_samples_by_variant
+from DB.queries.variants import get_variants, get_variants_for_sample
 
 logging.basicConfig()
 logger = logging.getLogger('sqlalchemy.engine')
@@ -29,33 +22,28 @@ logger.setLevel(logging.INFO)
 #
 # foo = get_variants_for_sample(accession)
 
-
 # r = count_samples_by_column('region_name')
-# print(r)
-#
+
 # r = count_variants_by_column('alt_nt')
-# print(r)
-#
+
 # r = count_mutations_by_column('ref_nt')
-# print(r)
 
 # r = get_variants_for_sample('region_name = Texas')
-#
+
 # r = get_mutations_by_sample('collection_start_date < 2024-01-01')
-#
+
 # r = get_samples_by_mutation('position_nt < 100')
 
-
+# r = get_mutations('position_nt > 100 ^ position_nt < 150')
 
 # r = get_variants('position_nt = 100')
-# print(r)
 
 # r = get_samples('host = Cat')
 
 # r = get_samples_by_variant('position_aa < 100')
 
-r = get_samples_variant_freq(SeqChangeName('HA:Q238R', SeqChangeName.Type.AMINO_ACID))
-print(r)
+# r = get_samples_variant_freq_by_aa_change('HA:Q238R')
 
-r = get_samples_variant_freq(SeqChangeName('HA:G465A', SeqChangeName.Type.NUCLEOTIDE))
-print(r)
+# r = get_samples_variant_freq_by_nt_change('HA:G148-A')
+
+pprint(r)
