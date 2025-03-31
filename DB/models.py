@@ -234,7 +234,8 @@ class Translation(Base):
     allele_id: Mapped[int] = mapped_column(sa.ForeignKey('alleles.id'), nullable=False)
     amino_acid_substitution_id: Mapped[int] = mapped_column(
         sa.ForeignKey('amino_acid_substitutions.id'),
-        nullable=False
+        nullable=False,
+        index=True
     )
 
     __table_args__ = tuple(
@@ -271,7 +272,7 @@ class IntraHostVariant(Base):
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
     sample_id: Mapped[int] = mapped_column(sa.ForeignKey('samples.id'), nullable=False)
-    allele_id: Mapped[int] = mapped_column(sa.ForeignKey('alleles.id'), nullable=False)
+    allele_id: Mapped[int] = mapped_column(sa.ForeignKey('alleles.id'), nullable=False, index=True)
 
     ref_dp: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
     alt_dp: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
