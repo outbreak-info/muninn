@@ -186,13 +186,11 @@ class CombinedTsvV1(FileFormat):
             cls.ColNameMapping.entry_in_293t_cells,
             cls.ColNameMapping.stability,
             cls.ColNameMapping.sa26_usage_increase,
-            cls.ColNameMapping.sequential_site,
-            cls.ColNameMapping.ref_h1_site,
             cls.ColNameMapping.mature_h5_site,
         ]
 
         for colname in dms_colnames:
-            value = get_value(row, colname.name, allow_none=True, transform=float)
+            value = get_value(row, colname.value, allow_none=True, transform=float)
             if value is None:
                 continue
             try:
@@ -245,14 +243,14 @@ class CombinedTsvV1(FileFormat):
         entry_in_293t_cells = 'entry in 293T cells'
         stability = 'stability'
         sa26_usage_increase = 'SA26 usage increase'
-        ref_h1_site = 'reference_H1_site'
         mature_h5_site = 'mature_H5_site'
-        sequential_site = 'site'
 
         # todo: values being ignored below this line
         nt_changes_to_codon = 'nt changes to codon'  # todo: removed?
         wildtype = 'wildtype'  # todo: what is this?
         # todo: these are ignored because they can't be floats
+        sequential_site = 'site'
+        ref_h1_site = 'reference_H1_site'
         # region='region' # todo
         ha1_ha2_h5_site = 'HA1_HA2_H5_site'
 
