@@ -51,10 +51,10 @@ def main():
 
     # run inserts method
     start_time = datetime.now()
-    print(f'start at {start_time}')
+    print(f'{filename} {args.format} start at {start_time}')
     asyncio.run(file_format.insert_from_file(filename))
     end_time = datetime.now()
-    print(f'end at {end_time}, elapsed: {end_time - start_time}')
+    print(f'{filename} {args.format} end at {end_time}, elapsed: {end_time - start_time}')
 
 
 def mutations_kludge(basedir: str):
