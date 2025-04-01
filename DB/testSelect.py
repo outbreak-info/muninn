@@ -2,6 +2,7 @@ import logging
 from pprint import pprint
 
 from DB.queries.counts import count_variants_by_column, count_mutations_by_column
+from DB.queries.score_counts import get_pheno_values_and_variant_counts
 from DB.queries.mutations import get_mutations_by_sample, get_mutations
 from DB.queries.prevalence import get_samples_variant_freq_by_aa_change, get_samples_variant_freq_by_nt_change
 from DB.queries.samples import get_samples_by_mutation, get_samples_by_variant
@@ -45,5 +46,7 @@ logger.setLevel(logging.INFO)
 # r = get_samples_variant_freq_by_aa_change('HA:Q238R')
 
 # r = get_samples_variant_freq_by_nt_change('HA:G148-A')
+
+r = get_pheno_values_and_variant_counts('stability', 'HA')
 
 pprint(r)
