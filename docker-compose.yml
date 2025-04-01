@@ -42,9 +42,5 @@ services:
       FLU_DB_PORT: "5432" # b/c it's going through docker, it doesn't use the exposed port
     command: bash -c "
       sleep 30
-      && alembic upgrade head
-      && python3 -u runinserts.py /usr/flu/test_data/SraRunTable_automated.csv sra_run_table_csv
-      && python3 -u runinserts.py /usr/flu/test_data/combined/combined_variants.tsv combined_tsv_v1
-      && python3 -u runinserts.py --kludge_mutations /usr/flu/test_data foo
       && fastapi run api/main.py
       "

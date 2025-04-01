@@ -20,47 +20,36 @@ Database system to store mutation and variant data for avian influenza.
     - For now, 'flu' will be the postgres superuser and own everything, eventually we'll want to have less privileged
       roles.
 3. Run docker compose to start the database and api containers.
-   This will start up two containers, one for postgres, and one for the webserver. The webserver container will
-   insert test data into the database, which will take about an hour.
     1. `docker-compose -f docker-compose.yml up -d --build`
-    2. Use `docker logs flu_db_server` to check on the progress of the insertion. (See below for more info.)
-4. Once the data is loaded, the webserver will start and you can try out a request.
-   There's only one endpoint even marginally complete at the moment, so play with it:
-    - http://localhost:8000/variants/by/sample/accession=SRR28752446
+    2. This will start up two containers, `flu_db_pg` for postgres, and `flu_db_server` for the webserver.
+    3. The server container will automatically start fastAPI.
+    4. Use `docker logs flu_db_server` to see server logs.
+4. Update the database schema and insert data.
+    1. The server container comes with a script to update the database schema and insert data.
+    2. `docker exec -d flu_db_server muninn_db_setup`
+    3. This will take several hours to finish.
+    4. To access logs for the insertions process, run `docker exec -it flu_db_server bash` and then see the log file
+       `/usr/flu/db_setup.log`
+5. Once data is loaded, the webserver will start and you can try out a request.
+   You can run requests even if data insertion is not complete, but obviously results will depend on what's in the DB.
+   For information on endpoints see below.
 
-The database is kept in a docker container called `flu_db_pg`.
-To run psql (the postgres console) on the container, use the following command:
+## Troubleshooting Tools
+
+To run `psql` (the postgres console) on the container, use the following command:
 
 ```
 docker exec -it flu_db_pg psql -U flu -d flu -h localhost -p $FLU_DB_PORT
 ```
 
-Or, if you have psql installed on the system hosting the container:
+Or, if you have `psql` installed on the system hosting the container:
 
 ```
 psql -U flu -d flu -h localhost -p $FLU_DB_PORT
 ```
 
-**Note:**
-Any time there's a change in the database schema, you'll have to recreate the database.
-You can either drop the container entirely and rerun all the database setup steps, or use psql to truncate all the
-tables, then run the migrations and repopulate the db.
-
-psql allows you to run arbitrary sql statements, as well as some utility commands.
-Here's some psql commands that are useful in general:
-
-| Command                              | Use                                         |
-|--------------------------------------|---------------------------------------------|
-| `\?`                                 | Open help page                              |
-| `\dt+`                               | List all the tables and their sizes on disk |
-| `\d+ <table name>`                   | Describe the columns in a table             |
-| `select count(*) from <table name>;` | Count the entries in a table                |
-| `truncate table <name> cascade;`     | Delete all rows from a table                |
-
-While waiting on the insertions, use `\dt+` to view the sizes of the tables on disk.
-Most of the insertion time is spent loading variants and mutations.
-There are slightly over 200k of each.
-You can check the number of rows in those tables to get a sense of how much work is left.
+`psql` allows you to run arbitrary SQL against the DB. 
+It's very useful for debugging.
 
 ### Recreate Server Container without Changing Database
 
@@ -71,11 +60,10 @@ Here's how you recreate just the server container without taking down the databa
 2. `docker rm flu_db_server`
 3. `docker-compose -f docker-compose.yml up -d --no-deps --no-recreate --build server`
 
-I've only tested these instructions using podman on my machine, so they may fail you.
 
 ## Query Syntax
 
-The endpoints (which currently means just `/variants/by/sample`) use a restricted query syntax to allow the user to
+The endpoints use a restricted query syntax to allow the user to
 control part of the query.
 For example, in the case of `/variants/by/sample/`, here's how that works.
 When you hit this endpoint, the api will always run the following query:
@@ -97,7 +85,7 @@ being used in the query above:
 `SELECT samples.id FROM samples WHERE collection_start_date >= '2024-01-01' ^ host = 'cat'`.
 
 Here's a quick (and quite possibly outdated) guide to the available syntax:
-You can use equivalence relations: `=, !=, >, <, <=, >=`. 
+You can use equivalence relations: `=, !=, >, <, <=, >=`.
 Greater than and less than are only usable with numeric or date values.
 The available boolean operators are: `^`, `|`, and `!`, meaning `and`, `or` and `not`, respectively.
 Parentheses may be used to group terms, e.g.: `(host = cat | host = dog) ^ region_name = Minnesota`.
@@ -113,33 +101,39 @@ Or you can keep reading for human-generated docs that might be out of date.
 The following endpoints are currently live:
 
 Get item by id:
+
 - `/sample/{id}`
 
 These endpoints simply allow you to query a particular collection:
+
 - `/samples?q=<query>`
 - `/variants?q=<query>`
 - `/mutations?q=<query>`
 
 These allow you to query one collection based on properties of related entries in other collections:
+
 - `/variants/by/sample?q=<query>`
 - `/mutations/by/sample?q=<query>`
 - `/samples/by/mutation?q=<query>`
 - `/samples/by/variant?q=<query>`
 
 Simple counts:
+
 - `/count/{x}/by/{y}`
     - `{x}` is one of `samples`, `variants`, or `mutations`
     - `{y}` is the name of a column from `{x}`. In the case of `variants` and `mutations`, columns from `alleles`
       and `amino_acid_substitutions` are also allowed.
 
 Prevalence:
+
 - `/variants/freqency?aa=HA:Q238R`
-  - Also allows queries based on nucleotide with parameter `nt=HA:A123C`
+    - Also allows queries based on nucleotide with parameter `nt=HA:A123C`
+- `/variants/frequency/score?region=HA&metric=stablility`
 
 Note: using `id` as a field in any query (e.g.: `id = 1234`) is likely to fail.
 This is because multiple tables, each with their own `id` column are joined before being queried, and SQL will not allow
 a query to use an ambiguous column name.
-As far as I know, the only columns affected by this are ids which we are unlikely to want to use in queries anyway, so 
+As far as I know, the only columns affected by this are ids which we are unlikely to want to use in queries anyway, so
 fixing this will not be a priority unless a use-case arises.
 
 Have fun!

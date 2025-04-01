@@ -6,7 +6,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import ProgrammingError
 
 import DB.queries.counts
-import DB.queries.score_counts
 import DB.queries.mutations
 import DB.queries.prevalence
 import DB.queries.samples
@@ -112,6 +111,6 @@ def get_variant_frequency(
         return DB.queries.prevalence.get_samples_variant_freq_by_nt_change(nt)
 
 
-@app.get('/score_counts/variants', response_model=List[VariantCountPhenoScoreInfo])
+@app.get('/variants/frequency/score', response_model=List[VariantCountPhenoScoreInfo])
 def get_variant_counts_by_phenotype_score(region: str, metric: str):
-    return DB.queries.dms.get_pheno_values_and_variant_counts(metric, region)
+    return DB.queries.prevalence.get_pheno_values_and_variant_counts(metric, region)
