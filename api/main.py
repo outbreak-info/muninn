@@ -102,7 +102,6 @@ def get_variant_frequency(
         str | None, Query(regex=CHANGE_PATTERN)
     ] = None
 ):
-
     if aa is not None and nt is not None:
         raise HTTPException(status_code=400, detail='Provide either amino or nt change, not both')
     elif aa is not None:
@@ -112,5 +111,10 @@ def get_variant_frequency(
 
 
 @app.get('/variants/frequency/score', response_model=List[VariantCountPhenoScoreInfo])
-def get_variant_counts_by_phenotype_score(region: str, metric: str):
-    return DB.queries.prevalence.get_pheno_values_and_variant_counts(metric, region)
+def get_variant_counts_by_phenotype_score(region: str, metric: str, include_refs: bool = False):
+    return DB.queries.prevalence.get_pheno_values_and_variant_counts(metric, region, include_refs)
+
+
+@app.get('/mutations/frequency/score', response_model=List[VariantCountPhenoScoreInfo])
+def get_mutation_counts_by_phenotype_score(region: str, metric: str, include_refs: bool = False):
+    return DB.queries.prevalence.get_pheno_values_and_mutation_counts(metric, region, include_refs)

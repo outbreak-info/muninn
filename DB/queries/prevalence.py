@@ -1,11 +1,11 @@
 import re
-from typing import List
+from typing import List, Type
 
 from sqlalchemy import select, and_, ColumnElement, text
 from sqlalchemy.orm import Session
 
 from DB.engine import engine
-from DB.models import IntraHostVariant, Sample, Allele, AminoAcidSubstitution, Translation
+from DB.models import IntraHostVariant, Sample, Allele, AminoAcidSubstitution, Translation, Mutation
 from api.models import VariantFreqInfo, VariantCountPhenoScoreInfo
 from utils.constants import CHANGE_PATTERN
 
@@ -77,21 +77,47 @@ def _parse_change_string(change: str) -> (str, str, int, str):
     return region, ref, position, alt
 
 
-def get_pheno_values_and_variant_counts(pheno_metric_name: str, region: str) -> List['VariantCountPhenoScoreInfo']:
+def get_pheno_values_and_mutation_counts(
+    pheno_metric_name: str,
+    region: str,
+    include_refs: bool
+) -> List['VariantCountPhenoScoreInfo']:
+    return _get_pheno_values_and_counts(pheno_metric_name, region, Mutation, include_refs)
+
+
+def get_pheno_values_and_variant_counts(
+    pheno_metric_name: str,
+    region: str,
+    include_refs: bool
+) -> List['VariantCountPhenoScoreInfo']:
+    return _get_pheno_values_and_counts(pheno_metric_name, region, IntraHostVariant, include_refs)
+
+
+def _get_pheno_values_and_counts(
+    pheno_metric_name: str,
+    region: str,
+    intermediate: Type[Mutation] | Type[IntraHostVariant],
+    include_refs: bool
+) -> List['VariantCountPhenoScoreInfo']:
+    tablename = intermediate.__tablename__
+    no_refs_filter = f'and aas.ref_aa <> aas.alt_aa'
+    if include_refs:
+        no_refs_filter = ''
+
     with Session(engine) as session:
         res = session.execute(
             text(
-                '''
+                f'''
                 select aas.ref_aa, aas.position_aa, aas.alt_aa, pmr.value, (select 
-                    count(1) from intra_host_variants ihv_by_allele where ihv_by_allele.allele_id = ihv.allele_id
+                    count(1) from {tablename} TAB_by_allele where TAB_by_allele.allele_id = TAB.allele_id
                 ) as count
-                from (select distinct allele_id from intra_host_variants) ihv
-                left join alleles a on a.id = ihv.allele_id
+                from (select distinct allele_id from {tablename}) TAB
+                left join alleles a on a.id = TAB.allele_id
                 left join translations t on t.allele_id = a.id
                 left join amino_acid_substitutions aas on aas.id = t.amino_acid_substitution_id
                 left join phenotype_measurement_results pmr on pmr.amino_acid_substitution_id = aas.id
                 left join phenotype_metrics pm on pm.id = pmr.phenotype_metric_id
-                where a.region = :region and pm.name = :pm_name
+                where a.region = :region and pm.name = :pm_name {no_refs_filter}
                 order by count desc;
                 '''
             ),

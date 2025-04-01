@@ -1,4 +1,4 @@
-from sqlalchemy import select, and_
+from sqlalchemy import select
 
 from DB.engine import get_async_session
 from DB.models import PhenotypeMetric
