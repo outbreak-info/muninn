@@ -187,6 +187,11 @@ class VariantFreqInfo(BaseModel):
     translation_id: int | None
     amino_sub_id: int | None
 
+class MutationCountInfo(BaseModel):
+    sample_count: int
+    allele_id: int
+    translation_id: int | None
+    amino_sub_id: int | None
 
 class VariantCountPhenoScoreInfo(BaseModel):
     ref_aa: str

@@ -128,6 +128,9 @@ Prevalence:
 
 - `/variants/freqency?aa=HA:Q238R`
     - Also allows queries based on nucleotide with parameter `nt=HA:A123C`
+- `/mutations/frequency?aa=HA:Q238R`
+  - Also allows queries based on nucleotide as above.
+  - Returns count of samples associated with the given amino acid or nucleotide change.
 - `/variants/frequency/score?region=HA&metric=stablility`
 
 Note: using `id` as a field in any query (e.g.: `id = 1234`) is likely to fail.

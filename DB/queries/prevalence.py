@@ -1,12 +1,12 @@
 import re
 from typing import List, Type
 
-from sqlalchemy import select, and_, ColumnElement, text
+from sqlalchemy import select, and_, ColumnElement, text, func
 from sqlalchemy.orm import Session
 
 from DB.engine import engine
 from DB.models import IntraHostVariant, Sample, Allele, AminoAcidSubstitution, Translation, Mutation
-from api.models import VariantFreqInfo, VariantCountPhenoScoreInfo
+from api.models import VariantFreqInfo, VariantCountPhenoScoreInfo, MutationCountInfo
 from utils.constants import CHANGE_PATTERN
 
 
@@ -57,6 +57,59 @@ def _get_samples_variant_freq(where_clause: ColumnElement[bool]) -> List[Variant
                 allele_id=r[2],
                 translation_id=r[3],
                 amino_sub_id=r[4]
+            )
+        )
+    return out_data
+
+
+def get_mutation_sample_count_by_nt(change: str) -> List[MutationCountInfo]:
+    region, ref_nt, position_nt, alt_nt = _parse_change_string(change)
+
+    where_clause = and_(
+        Allele.region == region,
+        Allele.ref_nt == ref_nt,
+        Allele.position_nt == position_nt,
+        Allele.alt_nt == alt_nt
+    )
+
+    return _get_mutation_sample_count(where_clause)
+
+
+def get_mutation_sample_count_by_aa(change: str) -> List[MutationCountInfo]:
+    region, ref_aa, position_aa, alt_aa = _parse_change_string(change)
+
+    where_clause = and_(
+        Allele.region == region,
+        AminoAcidSubstitution.ref_aa == ref_aa,
+        AminoAcidSubstitution.position_aa == position_aa,
+        AminoAcidSubstitution.alt_aa == alt_aa
+    )
+
+    return _get_mutation_sample_count(where_clause)
+
+
+def _get_mutation_sample_count(where_clause: ColumnElement[bool]) -> List[MutationCountInfo]:
+    query = (
+        select(Sample, Mutation, Allele.id, Translation.id, AminoAcidSubstitution.id)
+        .join(Mutation, Sample.id == Mutation.sample_id, isouter=True)
+        .join(Allele, Allele.id == Mutation.allele_id, isouter=True)
+        .join(Translation, Allele.id == Translation.allele_id, isouter=True)
+        .join(AminoAcidSubstitution, Translation.amino_acid_substitution_id == AminoAcidSubstitution.id, isouter=True)
+        .with_only_columns(Allele.id, Translation.id, AminoAcidSubstitution.id, func.count())
+        .group_by(Allele.id, Translation.id, AminoAcidSubstitution.id)
+        .where(where_clause)
+    )
+
+    with Session(engine) as session:
+        res = session.execute(query).all()
+    out_data = []
+    for r in res:
+        out_data.append(
+            MutationCountInfo(
+                allele_id=r[0],
+                translation_id=r[1],
+                amino_sub_id=r[2],
+                sample_count=r[3]
             )
         )
     return out_data
