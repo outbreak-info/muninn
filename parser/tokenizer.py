@@ -1,7 +1,7 @@
 import dateutil.parser
 import  ply.lex as lex
 
-from parser.ParsingError import ParsingError
+from utils.errors import ParsingError
 
 tokens = (
     'EQUALS',
@@ -37,7 +37,7 @@ t_LTE = r'<='
 
 
 def t_DATE(t):
-    r'\d{4}-\d{2}-\d{2}'
+    r'\d{4}-\d{1,2}-\d{1,2}'
     d = dateutil.parser.parse(t.value)
     t.value = d.date().isoformat()
     return t

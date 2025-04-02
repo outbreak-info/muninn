@@ -1,6 +1,6 @@
 import unittest
 
-from parser.ParsingError import ParsingError
+from utils.errors import ParsingError
 from parser.parser import parser
 
 

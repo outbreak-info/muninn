@@ -1,7 +1,7 @@
 from sqlalchemy import select
 
 from DB.engine import get_async_session
-from DB.errors import NotFoundError
+from utils.errors import NotFoundError
 from DB.models import Sample
 
 

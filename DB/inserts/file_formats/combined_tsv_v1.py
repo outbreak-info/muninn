@@ -5,7 +5,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict
 
-from DB.errors import NotFoundError
+from utils.errors import NotFoundError
 from DB.inserts.alleles import find_or_insert_allele
 from DB.inserts.amino_acid_substitutions import find_or_insert_aa_sub
 from DB.inserts.file_formats.file_format import FileFormat

@@ -1,6 +1,6 @@
 import ply.yacc as yacc
 
-from .ParsingError import ParsingError
+from utils.errors import ParsingError
 from .tokenizer import tokens
 
 assert len(tokens) > 0

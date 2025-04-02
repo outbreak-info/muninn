@@ -13,6 +13,7 @@ import DB.queries.variants
 from api.models import VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
     MutationCountInfo
 from utils.constants import CHANGE_PATTERN
+from utils.errors import ParsingError
 
 app = FastAPI()
 
@@ -35,38 +36,53 @@ def get_sample_by_id(sample_id: int):
 
 @app.get('/samples', response_model=List[SampleInfo])
 def get_samples_query(q: str):
-    return DB.queries.samples.get_samples(q)
+    try:
+        return DB.queries.samples.get_samples(q)
+    except ParsingError as e:
+        raise HTTPException(status_code=400, detail=e.message)
 
 
 @app.get('/variants', response_model=List[VariantInfo])
 def get_variants_query(q: str):
-    return DB.queries.variants.get_variants(q)
-
+    try:
+        return DB.queries.variants.get_variants(q)
+    except ParsingError as e:
+        raise HTTPException(status_code=400, detail=e.message)
 
 @app.get('/mutations', response_model=List[MutationInfo])
 def get_mutations_query(q: str):
-    return DB.queries.mutations.get_mutations(q)
-
+    try:
+        return DB.queries.mutations.get_mutations(q)
+    except ParsingError as e:
+        raise HTTPException(status_code=400, detail=e.message)
 
 @app.get('/variants/by/sample', response_model=List[VariantInfo])
 def get_variants_by_sample(q: str):
-    return DB.queries.variants.get_variants_for_sample(q)
-
+    try:
+        return DB.queries.variants.get_variants_for_sample(q)
+    except ParsingError as e:
+        raise HTTPException(status_code=400, detail=e.message)
 
 @app.get('/mutations/by/sample', response_model=List[MutationInfo])
 def get_mutations_by_sample(q: str):
-    return DB.queries.mutations.get_mutations_by_sample(q)
-
+    try:
+        return DB.queries.mutations.get_mutations_by_sample(q)
+    except ParsingError as e:
+        raise HTTPException(status_code=400, detail=e.message)
 
 @app.get('/samples/by/mutation', response_model=List[SampleInfo])
 def get_samples_by_mutation(q: str):
-    return DB.queries.samples.get_samples_by_mutation(q)
-
+    try:
+        return DB.queries.samples.get_samples_by_mutation(q)
+    except ParsingError as e:
+        raise HTTPException(status_code=400, detail=e.message)
 
 @app.get('/samples/by/variant', response_model=List[SampleInfo])
 def get_samples_by_variant(q: str):
-    return DB.queries.samples.get_samples_by_variant(q)
-
+    try:
+        return DB.queries.samples.get_samples_by_variant(q)
+    except ParsingError as e:
+        raise HTTPException(status_code=400, detail=e.message)
 
 @app.get('/count/{x}/by/{y}', response_model=List[tuple])
 def get_count_x_by_y(x: str, y: str):
@@ -86,7 +102,7 @@ def get_count_x_by_y(x: str, y: str):
             case 'mutations':
                 return DB.queries.counts.count_mutations_by_column(y)
             case _:
-                raise HTTPException(status_code=400, detail=f'counts are available for: samples, variants, mutations')
+                raise HTTPException(status_code=400, detail='counts are available for: samples, variants, mutations')
     except ProgrammingError as e:
         # todo: logging
         short_message = str(e).split('\n')[0]

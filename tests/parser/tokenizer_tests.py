@@ -1,6 +1,6 @@
 import unittest
 
-from parser.ParsingError import ParsingError
+from utils.errors import ParsingError
 from parser.tokenizer import lexer
 
 
@@ -46,3 +46,16 @@ class TestTokenizer(unittest.TestCase):
 
         for w in not_words:
             self.assertRaises(ParsingError, tester, w)
+
+    def test_dates_allowed(self):
+        # these should pass without problems
+        # no asserts needed, if there's an error the test fails
+        dates = [
+            '2025-4-2',
+            '2025-04-02'
+        ]
+        for w in dates:
+            lexer.input(w)
+            while True:
+                if not lexer.token():
+                    break
