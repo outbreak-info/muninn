@@ -7,11 +7,12 @@ from sqlalchemy.exc import ProgrammingError
 
 import DB.queries.counts
 import DB.queries.mutations
+import DB.queries.phenotype_metrics
 import DB.queries.prevalence
 import DB.queries.samples
 import DB.queries.variants
 from api.models import VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
-    MutationCountInfo
+    MutationCountInfo, PhenotypeMetricInfo
 from utils.constants import CHANGE_PATTERN
 from utils.errors import ParsingError
 
@@ -49,12 +50,14 @@ def get_variants_query(q: str):
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
+
 @app.get('/mutations', response_model=List[MutationInfo])
 def get_mutations_query(q: str):
     try:
         return DB.queries.mutations.get_mutations(q)
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
+
 
 @app.get('/variants/by/sample', response_model=List[VariantInfo])
 def get_variants_by_sample(q: str):
@@ -63,12 +66,14 @@ def get_variants_by_sample(q: str):
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
+
 @app.get('/mutations/by/sample', response_model=List[MutationInfo])
 def get_mutations_by_sample(q: str):
     try:
         return DB.queries.mutations.get_mutations_by_sample(q)
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
+
 
 @app.get('/samples/by/mutation', response_model=List[SampleInfo])
 def get_samples_by_mutation(q: str):
@@ -77,12 +82,14 @@ def get_samples_by_mutation(q: str):
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
+
 @app.get('/samples/by/variant', response_model=List[SampleInfo])
 def get_samples_by_variant(q: str):
     try:
         return DB.queries.samples.get_samples_by_variant(q)
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
+
 
 @app.get('/count/{x}/by/{y}', response_model=List[tuple])
 def get_count_x_by_y(x: str, y: str):
@@ -151,3 +158,8 @@ def get_variant_counts_by_phenotype_score(region: str, metric: str, include_refs
 @app.get('/mutations/frequency/score', response_model=List[VariantCountPhenoScoreInfo])
 def get_mutation_counts_by_phenotype_score(region: str, metric: str, include_refs: bool = False):
     return DB.queries.prevalence.get_pheno_values_and_mutation_counts(metric, region, include_refs)
+
+
+@app.get('/phenotype_metrics', response_model=List[PhenotypeMetricInfo])
+def get_all_phenotype_metrics():
+    return DB.queries.phenotype_metrics.get_all_pheno_metrics()

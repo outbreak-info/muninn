@@ -3,7 +3,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel
 
-from DB.models import IntraHostVariant, Sample, AminoAcidSubstitution
+from DB.models import IntraHostVariant, Sample, AminoAcidSubstitution, Mutation, PhenotypeMetric
 
 """
 These models define the shapes for data returned by the api.
@@ -167,7 +167,7 @@ class MutationInfo(BaseModel):
     amino_acid_mutations: List['AminoAcidSubInfo']
 
     @classmethod
-    def from_db_object(cls, dbo: 'MutationInfo') -> 'MutationInfo':
+    def from_db_object(cls, dbo: 'Mutation') -> 'MutationInfo':
         return MutationInfo(
             id=dbo.id,
             sample_id=dbo.sample_id,
@@ -177,6 +177,19 @@ class MutationInfo(BaseModel):
             ref_nt=dbo.r_allele.ref_nt,
             alt_nt=dbo.r_allele.alt_nt,
             amino_acid_mutations=[AminoAcidSubInfo.from_db_object(t.r_amino_sub) for t in dbo.r_allele.r_translations]
+        )
+
+class PhenotypeMetricInfo(BaseModel):
+    id: int
+    name: str
+    assay_type: str
+
+    @classmethod
+    def from_db_object(cls, dbo: 'PhenotypeMetric') -> 'PhenotypeMetricInfo':
+        return PhenotypeMetricInfo(
+            id=dbo.id,
+            name=dbo.name,
+            assay_type=dbo.assay_type
         )
 
 
