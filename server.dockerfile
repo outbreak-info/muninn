@@ -13,6 +13,7 @@ RUN echo 'python3 -u runinserts.py /usr/flu/test_data/SraRunTable_automated.csv 
 RUN echo 'python3 -u runinserts.py /usr/flu/test_data/combined/combined_variants.tsv combined_tsv_v1 &> /usr/flu/db_setup.log' >> /bin/muninn_db_setup
 RUN echo 'python3 -u runinserts.py --kludge_mutations /usr/flu/test_data foo &> /usr/flu/db_setup.log' >> /bin/muninn_db_setup
 RUN echo 'python3 -u runinserts.py /usr/flu/test_data/eve_dms_scores.csv eve_dms_csv &> /usr/flu/db_setup.log' >> /bin/muninn_db_setup
+RUN echo 'python3 -u runinserts.py /usr/flu/test_data/HA_mouse_ferret_dms.tsv tmp_ha_mouse_ferret_dms &> /usr/flu/db_setup.log' >> /bin/muninn_db_setup
 RUN chmod u+x /bin/muninn_db_setup
 
 ADD  alembic /usr/flu/alembic

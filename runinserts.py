@@ -5,6 +5,7 @@ from datetime import datetime
 from os import path
 
 from DB.inserts.file_formats.eve_dms_csv import EveDmsCsv
+from DB.inserts.file_formats.tmp_mouse_ferret_dms_tsv import TempHaMouseFerretDmsTsv
 from DB.old_inserts import main as old_main
 from DB.inserts.file_formats.file_format import FileFormat
 from DB.inserts.file_formats.combined_tsv_v1 import CombinedTsvV1
@@ -17,6 +18,7 @@ def main():
         'combined_tsv_v1': CombinedTsvV1,
         'sra_run_table_csv': SraRunTableCsv,
         'eve_dms_csv': EveDmsCsv,
+        'tmp_ha_mouse_ferret_dms': TempHaMouseFerretDmsTsv,
     }
 
     ## Parse and verify args ##
