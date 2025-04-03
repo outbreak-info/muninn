@@ -21,7 +21,7 @@ def get_value(
         if allow_none:
             return None
         else:
-            raise KeyError
+            raise ValueError
 
 
 def bool_from_str(s: str) -> bool:

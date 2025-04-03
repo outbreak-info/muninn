@@ -4,6 +4,7 @@ import sys
 from datetime import datetime
 from os import path
 
+from DB.inserts.file_formats.eve_dms_csv import EveDmsCsv
 from DB.old_inserts import main as old_main
 from DB.inserts.file_formats.file_format import FileFormat
 from DB.inserts.file_formats.combined_tsv_v1 import CombinedTsvV1
@@ -14,7 +15,8 @@ def main():
     # define allowed formats, give names and point to parsers
     formats = {
         'combined_tsv_v1': CombinedTsvV1,
-        'sra_run_table_csv': SraRunTableCsv
+        'sra_run_table_csv': SraRunTableCsv,
+        'eve_dms_csv': EveDmsCsv,
     }
 
     ## Parse and verify args ##
