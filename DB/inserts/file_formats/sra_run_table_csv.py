@@ -21,6 +21,11 @@ class SraRunTableCsv(FileFormat):
 
     @classmethod
     async def insert_from_file(cls, filename: str) -> None:
+        debug_info = {
+            'lines_skipped_preexisting': 0,
+            'malformed_lines': 0
+        }
+
         with open(filename, 'r') as f:
             reader = csv.DictReader(f, delimiter=',')
             cls._verify_header(reader)
@@ -100,10 +105,12 @@ class SraRunTableCsv(FileFormat):
                     _, preexisting = await find_or_insert_sample(sample)
                     if preexisting:
                         # todo: logging
-                        print(f'Preexisting record found for sample with accession: {sample.accession}')
-                except KeyError as e:
+                        debug_info['lines_skipped_preexisting'] += 1
+                except ValueError as e:
                     # todo: logging
-                    print(f'Malformed row in samples: {row}, {e}')
+                    debug_info['malformed_lines'] += 1
+
+        print(debug_info)
 
     class ColNameMapping(Enum):
         accession = 'Run'
