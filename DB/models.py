@@ -371,3 +371,38 @@ class PhenotypeMeasurementResult(Base):
 
     r_pheno_metric: Mapped['PhenotypeMetric'] = relationship(back_populates='r_pheno_measurement_results')
     r_amino_sub: Mapped['AminoAcidSubstitution'] = relationship(back_populates='r_pheno_measurement_results')
+
+
+class LineageSystem(Base):
+    __tablename__ = 'lineage_systems'
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(sa.Text, nullable=False)
+
+    is_demixed: Mapped[bool] = mapped_column(sa.Boolean, nullable=False)
+    is_consensus: Mapped[bool] = mapped_column(sa.Boolean, nullable=False)
+
+    __table_args__ = tuple(
+        [
+            UniqueConstraint('name', name='uq_lineage_systems_name'),
+            CheckConstraint('is_demixed <> is_consensus', name='is_demixed_xor_is_consensus')
+        ]
+    )
+
+class Lineage(Base):
+    __tablename__ = 'lineages'
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(sa.Text, nullable=False)
+
+
+class SampleLineage(Base):
+    __tablename__ = 'samples_lineages'
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+
+    sample_id: Mapped[int] = mapped_column(sa.ForeignKey('samples.id'), nullable=False)
+    lineage_id: Mapped[int] = mapped_column(sa.ForeignKey('lineages.id'), nullable=False)
+
+    __table_args__ = tuple(
+        [
+            UniqueConstraint('sample_id', 'lineage_id', name='uq_lineages_samples_sample_lineage_pair')
+        ]
+    )
