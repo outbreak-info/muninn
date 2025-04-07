@@ -98,6 +98,10 @@ async def parse_and_insert_mutations(mutations_files):
                         await session.commit()
                     except IntegrityError as e:
                         errors.append(e)
+                        continue
+                    except NotImplementedError as e:
+                        errors.append(e)
+                        continue
     print(f'Mutations done with {len(errors)} errors')
 
 
