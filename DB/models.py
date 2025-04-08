@@ -254,7 +254,7 @@ class Mutation(Base):
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
     sample_id: Mapped[int] = mapped_column(sa.ForeignKey('samples.id'), nullable=False)
-    allele_id: Mapped[int] = mapped_column(sa.ForeignKey('alleles.id'), nullable=False)
+    allele_id: Mapped[int] = mapped_column(sa.ForeignKey('alleles.id'), nullable=False, index=True)
 
     __table_args__ = tuple(
         [
