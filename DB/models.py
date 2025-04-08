@@ -162,6 +162,7 @@ class Sample(Base):
     r_variants: Mapped[List['IntraHostVariant']] = relationship(back_populates='r_sample')
     r_mutations: Mapped[List['Mutation']] = relationship(back_populates='r_sample')
     r_geo_location: Mapped['GeoLocation'] = relationship(back_populates='r_samples')
+    r_sample_lineages: Mapped[List['SampleLineage']] = relationship(back_populates='r_sample')
 
 
 class Allele(Base):
@@ -376,22 +377,31 @@ class PhenotypeMeasurementResult(Base):
 class LineageSystem(Base):
     __tablename__ = 'lineage_systems'
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(sa.Text, nullable=False)
-
-    is_demixed: Mapped[bool] = mapped_column(sa.Boolean, nullable=False)
-    is_consensus: Mapped[bool] = mapped_column(sa.Boolean, nullable=False)
+    lineage_system_name: Mapped[str] = mapped_column(sa.Text, nullable=False)
 
     __table_args__ = tuple(
         [
-            UniqueConstraint('name', name='uq_lineage_systems_name'),
-            CheckConstraint('is_demixed <> is_consensus', name='is_demixed_xor_is_consensus')
+            UniqueConstraint('lineage_system_name', name='uq_lineage_systems_name'),
         ]
     )
+
+    r_lineages: Mapped[List['Lineage']] = relationship(back_populates='r_lineage_system')
+
 
 class Lineage(Base):
     __tablename__ = 'lineages'
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    lineage_system_id: Mapped[int] = mapped_column(sa.ForeignKey('lineage_systems.id'), nullable=False)
+    lineage_name: Mapped[str] = mapped_column(sa.Text, nullable=False)
+
+    __table_args__ = tuple(
+        [
+            UniqueConstraint('lineage_system_id', 'lineage_name', name='uq_lineages_name_uq_within_system')
+        ]
+    )
+
+    r_lineage_system: Mapped['LineageSystem'] = relationship(back_populates='r_lineages')
+    r_sample_lineages: Mapped[List['SampleLineage']] = relationship(back_populates='r_lineage')
 
 
 class SampleLineage(Base):
@@ -400,9 +410,15 @@ class SampleLineage(Base):
 
     sample_id: Mapped[int] = mapped_column(sa.ForeignKey('samples.id'), nullable=False)
     lineage_id: Mapped[int] = mapped_column(sa.ForeignKey('lineages.id'), nullable=False)
+    # todo: we're using abundance = null to indicate that it's a consensus call
+    #  But is there any other reason we might end up with null abundances?
+    abundance: Mapped[float] = mapped_column(sa.Float)
 
     __table_args__ = tuple(
         [
             UniqueConstraint('sample_id', 'lineage_id', name='uq_lineages_samples_sample_lineage_pair')
         ]
     )
+
+    r_lineage: Mapped['Lineage'] = relationship(back_populates='r_sample_lineages')
+    r_sample: Mapped['Sample'] = relationship(back_populates='r_sample_lineages')
