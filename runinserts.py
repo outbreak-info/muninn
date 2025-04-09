@@ -6,6 +6,8 @@ from os import path
 
 from DB.inserts.file_formats.eve_dms_csv import EveDmsCsv
 from DB.inserts.file_formats.tmp_mouse_ferret_dms_tsv import TempHaMouseFerretDmsTsv
+from DB.inserts.file_parsers.file_parser import FileParser
+from DB.inserts.file_parsers.genoflu_lineages_parser import GenofluLineagesParser
 from DB.old_inserts import main as old_main
 from DB.inserts.file_formats.file_format import FileFormat
 from DB.inserts.file_formats.combined_tsv_v1 import CombinedTsvV1
@@ -19,6 +21,7 @@ def main():
         'sra_run_table_csv': SraRunTableCsv,
         'eve_dms_csv': EveDmsCsv,
         'tmp_ha_mouse_ferret_dms': TempHaMouseFerretDmsTsv,
+        'genoflu_lineages': GenofluLineagesParser,
     }
 
     ## Parse and verify args ##
@@ -51,12 +54,17 @@ def main():
         sys.exit(1)
 
     filename = args.filename
-    file_format: FileFormat = formats[args.format]
+
+    file_format: FileFormat | FileParser = formats[args.format]
 
     # run inserts method
     start_time = datetime.now()
     print(f'{filename} {args.format} start at {start_time}')
-    asyncio.run(file_format.insert_from_file(filename))
+    if issubclass(file_format, FileParser):
+        parser = file_format(filename)
+        asyncio.run(parser.parse_and_insert())
+    else:
+        asyncio.run(file_format.insert_from_file(filename))
     end_time = datetime.now()
     print(f'{filename} {args.format} end at {end_time}, elapsed: {end_time - start_time}')
 
