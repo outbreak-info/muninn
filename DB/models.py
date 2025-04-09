@@ -67,11 +67,6 @@ class Base(DeclarativeBase, AsyncAttrs):
             checks.append((arg.name, cls.__tablename__, arg.sqltext.text))
         return checks
 
-    @classmethod
-    def parse_query(cls, querytext):
-        q = parser.parse(querytext)
-        return f'SELECT {cls.__tablename__}.id FROM {cls.__tablename__} WHERE ({q})'
-
 
 class Sample(Base):
     __tablename__ = 'samples'
@@ -410,13 +405,14 @@ class SampleLineage(Base):
 
     sample_id: Mapped[int] = mapped_column(sa.ForeignKey('samples.id'), nullable=False)
     lineage_id: Mapped[int] = mapped_column(sa.ForeignKey('lineages.id'), nullable=False)
-    # todo: we're using abundance = null to indicate that it's a consensus call
-    #  But is there any other reason we might end up with null abundances?
-    abundance: Mapped[float] = mapped_column(sa.Float)
+
+    abundance: Mapped[float] = mapped_column(sa.Float, nullable=True)
+    is_consensus_call: Mapped[bool] = mapped_column(sa.Boolean, nullable=False)
 
     __table_args__ = tuple(
         [
-            UniqueConstraint('sample_id', 'lineage_id', name='uq_lineages_samples_sample_lineage_pair')
+            UniqueConstraint('sample_id', 'lineage_id', name='uq_lineages_samples_sample_lineage_pair'),
+            CheckConstraint('(abundance is null) = is_consensus_call', name='has_abundance_xor_is_consensus')
         ]
     )
 
