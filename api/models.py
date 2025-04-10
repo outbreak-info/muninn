@@ -212,3 +212,8 @@ class VariantCountPhenoScoreInfo(BaseModel):
     position_aa: int
     pheno_value: float
     count: int
+
+class LineageCountInfo(BaseModel):
+    count: int
+    lineage_system: str | None
+    lineage: str | None

@@ -2,6 +2,7 @@ import logging
 from pprint import pprint
 
 from DB.queries.counts import count_variants_by_column, count_mutations_by_column
+from DB.queries.lineages import get_sample_counts_by_lineage_via_variant, get_sample_counts_by_lineage_via_mutation
 from DB.queries.mutations import get_mutations_by_sample, get_mutations
 from DB.queries.prevalence import get_samples_variant_freq_by_aa_change, get_samples_variant_freq_by_nt_change, \
     get_mutation_sample_count_by_aa, get_mutation_sample_count_by_nt
@@ -51,6 +52,8 @@ logger.setLevel(logging.INFO)
 
 # r = get_mutation_sample_count_by_aa('PB2:L502L')
 
-r = get_mutation_sample_count_by_nt('NA:G696T')
+# r = get_mutation_sample_count_by_nt('NA:G696T')
 
+# r = get_sample_counts_by_lineage_via_variant('host = CAT | region_name = Minnesota')
+r = get_sample_counts_by_lineage_via_mutation('region_name = Minnesota')
 pprint(r)

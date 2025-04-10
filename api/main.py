@@ -6,13 +6,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import ProgrammingError
 
 import DB.queries.counts
+import DB.queries.lineages
 import DB.queries.mutations
 import DB.queries.phenotype_metrics
 import DB.queries.prevalence
 import DB.queries.samples
 import DB.queries.variants
 from api.models import VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
-    MutationCountInfo, PhenotypeMetricInfo
+    MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo
 from utils.constants import CHANGE_PATTERN
 from utils.errors import ParsingError
 
@@ -33,6 +34,10 @@ def get_sample_by_id(sample_id: int):
     if sample is None:
         raise HTTPException(status_code=404)
     return sample
+
+@app.get('/phenotype_metrics', response_model=List[PhenotypeMetricInfo])
+def get_all_phenotype_metrics():
+    return DB.queries.phenotype_metrics.get_all_pheno_metrics()
 
 
 @app.get('/samples', response_model=List[SampleInfo])
@@ -132,7 +137,7 @@ def get_variant_frequency(
     elif nt is not None:
         return DB.queries.prevalence.get_samples_variant_freq_by_nt_change(nt)
 
-
+# todo: actually a count
 @app.get('/mutations/frequency', response_model=List[MutationCountInfo])
 def get_mutation_sample_count(
     aa: Annotated[
@@ -149,17 +154,29 @@ def get_mutation_sample_count(
     elif nt is not None:
         return DB.queries.prevalence.get_mutation_sample_count_by_nt(nt)
 
-
+# todo: actually a count
+#  /count/samples/pheno_scores/variants
 @app.get('/variants/frequency/score', response_model=List[VariantCountPhenoScoreInfo])
 def get_variant_counts_by_phenotype_score(region: str, metric: str, include_refs: bool = False):
     return DB.queries.prevalence.get_pheno_values_and_variant_counts(metric, region, include_refs)
 
-
+# todo: actually a count
+#  /count/samples/pheno_scores/mutations
 @app.get('/mutations/frequency/score', response_model=List[VariantCountPhenoScoreInfo])
 def get_mutation_counts_by_phenotype_score(region: str, metric: str, include_refs: bool = False):
     return DB.queries.prevalence.get_pheno_values_and_mutation_counts(metric, region, include_refs)
 
 
-@app.get('/phenotype_metrics', response_model=List[PhenotypeMetricInfo])
-def get_all_phenotype_metrics():
-    return DB.queries.phenotype_metrics.get_all_pheno_metrics()
+@app.get('/count/samples/lineages/variants', response_model=List[LineageCountInfo])
+def get_sample_counts_per_lineage_via_variants(q: str):
+    try:
+        return DB.queries.lineages.get_sample_counts_by_lineage_via_variant(q)
+    except ParsingError as e:
+        raise HTTPException(status_code=400, detail=e.message)
+
+@app.get('/count/samples/lineages/mutations', response_model=List[LineageCountInfo])
+def get_sample_counts_per_lineage_via_mutations(q: str):
+    try:
+        return DB.queries.lineages.get_sample_counts_by_lineage_via_mutation(q)
+    except ParsingError as e:
+        raise HTTPException(status_code=400, detail=e.message)
