@@ -95,8 +95,9 @@ Numbers may contain decimal points.
 
 ## Endpoints
 
+**I'm no longer updating this list to include new endpoints.** 
 Auto-generated documentation for the API can be found at `<host>:8000/docs`.
-Or you can keep reading for human-generated docs that might be out of date.
+
 
 The following endpoints are currently live:
 

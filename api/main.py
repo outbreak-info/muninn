@@ -35,6 +35,7 @@ def get_sample_by_id(sample_id: int):
         raise HTTPException(status_code=404)
     return sample
 
+
 @app.get('/phenotype_metrics', response_model=List[PhenotypeMetricInfo])
 def get_all_phenotype_metrics():
     return DB.queries.phenotype_metrics.get_all_pheno_metrics()
@@ -137,6 +138,7 @@ def get_variant_frequency(
     elif nt is not None:
         return DB.queries.prevalence.get_samples_variant_freq_by_nt_change(nt)
 
+
 # todo: actually a count
 @app.get('/mutations/frequency', response_model=List[MutationCountInfo])
 def get_mutation_sample_count(
@@ -154,17 +156,37 @@ def get_mutation_sample_count(
     elif nt is not None:
         return DB.queries.prevalence.get_mutation_sample_count_by_nt(nt)
 
+
 # todo: actually a count
 #  /count/samples/pheno_scores/variants
 @app.get('/variants/frequency/score', response_model=List[VariantCountPhenoScoreInfo])
-def get_variant_counts_by_phenotype_score(region: str, metric: str, include_refs: bool = False):
-    return DB.queries.prevalence.get_pheno_values_and_variant_counts(metric, region, include_refs)
+def get_variant_counts_by_phenotype_score(region: str, metric: str, include_refs: bool = False, q: str | None = None):
+    """
+    :param region: Results will include only variants in the given region
+
+    :param metric: Phenotype metric whose values will be included in results
+
+    :param include_refs: if true, include variants where ref aa = alt aa
+
+    :param q: Query against samples. If provided, only samples matching this query will be included in the count
+    """
+    return DB.queries.prevalence.get_pheno_values_and_variant_counts(metric, region, include_refs, q)
+
 
 # todo: actually a count
 #  /count/samples/pheno_scores/mutations
 @app.get('/mutations/frequency/score', response_model=List[VariantCountPhenoScoreInfo])
-def get_mutation_counts_by_phenotype_score(region: str, metric: str, include_refs: bool = False):
-    return DB.queries.prevalence.get_pheno_values_and_mutation_counts(metric, region, include_refs)
+def get_mutation_counts_by_phenotype_score(region: str, metric: str, include_refs: bool = False, q: str | None = None):
+    """
+    :param region: Results will include only mutations in the given region
+
+    :param metric: Phenotype metric whose values will be included in results
+
+    :param include_refs: if true, include mutations where ref aa = alt aa
+
+    :param q: Query against samples. If provided, only samples matching this query will be included in the count
+    """
+    return DB.queries.prevalence.get_pheno_values_and_mutation_counts(metric, region, include_refs, q)
 
 
 @app.get('/count/samples/lineages/variants', response_model=List[LineageCountInfo])
@@ -173,6 +195,7 @@ def get_sample_counts_per_lineage_via_variants(q: str):
         return DB.queries.lineages.get_sample_counts_by_lineage_via_variant(q)
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
+
 
 @app.get('/count/samples/lineages/mutations', response_model=List[LineageCountInfo])
 def get_sample_counts_per_lineage_via_mutations(q: str):

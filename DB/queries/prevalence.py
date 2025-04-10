@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from DB.engine import engine
 from DB.models import IntraHostVariant, Sample, Allele, AminoAcidSubstitution, Translation, Mutation
 from api.models import VariantFreqInfo, VariantCountPhenoScoreInfo, MutationCountInfo
+from parser.parser import parser
 from utils.constants import CHANGE_PATTERN
 
 
@@ -133,36 +134,50 @@ def _parse_change_string(change: str) -> (str, str, int, str):
 def get_pheno_values_and_mutation_counts(
     pheno_metric_name: str,
     region: str,
-    include_refs: bool
+    include_refs: bool,
+    samples_query: str | None
 ) -> List['VariantCountPhenoScoreInfo']:
-    return _get_pheno_values_and_counts(pheno_metric_name, region, Mutation, include_refs)
+    return _get_pheno_values_and_counts(pheno_metric_name, region, Mutation, include_refs, samples_query)
 
 
 def get_pheno_values_and_variant_counts(
     pheno_metric_name: str,
     region: str,
-    include_refs: bool
+    include_refs: bool,
+    samples_query: str | None
 ) -> List['VariantCountPhenoScoreInfo']:
-    return _get_pheno_values_and_counts(pheno_metric_name, region, IntraHostVariant, include_refs)
+    return _get_pheno_values_and_counts(pheno_metric_name, region, IntraHostVariant, include_refs, samples_query)
 
 
 def _get_pheno_values_and_counts(
     pheno_metric_name: str,
     region: str,
     intermediate: Type[Mutation] | Type[IntraHostVariant],
-    include_refs: bool
+    include_refs: bool,
+    samples_query: str | None = None
 ) -> List['VariantCountPhenoScoreInfo']:
     tablename = intermediate.__tablename__
+
     no_refs_filter = f'and aas.ref_aa <> aas.alt_aa'
     if include_refs:
         no_refs_filter = ''
+
+    samples_query_addin = ''
+    if samples_query is not None:
+        samples_query_addin = f'''and TAB_by_allele.sample_id in (
+            select s.id from samples s 
+            left join geo_locations gl on gl.id = s.geo_location_id
+            where {parser.parse(samples_query)}
+        )
+        '''
 
     with Session(engine) as session:
         res = session.execute(
             text(
                 f'''
                 select aas.ref_aa, aas.position_aa, aas.alt_aa, pmr.value, (select 
-                    count(1) from {tablename} TAB_by_allele where TAB_by_allele.allele_id = TAB.allele_id
+                    count(1) from {tablename} TAB_by_allele 
+                    where TAB_by_allele.allele_id = TAB.allele_id {samples_query_addin}
                 ) as count
                 from (select distinct allele_id from {tablename}) TAB
                 left join alleles a on a.id = TAB.allele_id
@@ -170,7 +185,7 @@ def _get_pheno_values_and_counts(
                 left join amino_acid_substitutions aas on aas.id = t.amino_acid_substitution_id
                 left join phenotype_measurement_results pmr on pmr.amino_acid_substitution_id = aas.id
                 left join phenotype_metrics pm on pm.id = pmr.phenotype_metric_id
-                where a.region = :region and pm.name = :pm_name {no_refs_filter}
+                where  a.region = :region and pm.name = :pm_name {no_refs_filter}
                 order by count desc;
                 '''
             ),
