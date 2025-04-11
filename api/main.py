@@ -163,11 +163,8 @@ def get_mutation_sample_count(
 def get_variant_counts_by_phenotype_score(region: str, metric: str, include_refs: bool = False, q: str | None = None):
     """
     :param region: Results will include only variants in the given region
-
     :param metric: Phenotype metric whose values will be included in results
-
     :param include_refs: if true, include variants where ref aa = alt aa
-
     :param q: Query against samples. If provided, only samples matching this query will be included in the count
     """
     return DB.queries.prevalence.get_pheno_values_and_variant_counts(metric, region, include_refs, q)
@@ -179,27 +176,19 @@ def get_variant_counts_by_phenotype_score(region: str, metric: str, include_refs
 def get_mutation_counts_by_phenotype_score(region: str, metric: str, include_refs: bool = False, q: str | None = None):
     """
     :param region: Results will include only mutations in the given region
-
     :param metric: Phenotype metric whose values will be included in results
-
     :param include_refs: if true, include mutations where ref aa = alt aa
-
     :param q: Query against samples. If provided, only samples matching this query will be included in the count
     """
     return DB.queries.prevalence.get_pheno_values_and_mutation_counts(metric, region, include_refs, q)
 
 
-@app.get('/count/samples/lineages/variants', response_model=List[LineageCountInfo])
-def get_sample_counts_per_lineage_via_variants(q: str):
+@app.get('/count/samples/lineages', response_model=List[LineageCountInfo])
+def get_sample_counts_per_lineage(q: str):
+    """
+    :param q: A query to be run against samples. If provided, only samples matching the query will be counted.
+    """
     try:
-        return DB.queries.lineages.get_sample_counts_by_lineage_via_variant(q)
-    except ParsingError as e:
-        raise HTTPException(status_code=400, detail=e.message)
-
-
-@app.get('/count/samples/lineages/mutations', response_model=List[LineageCountInfo])
-def get_sample_counts_per_lineage_via_mutations(q: str):
-    try:
-        return DB.queries.lineages.get_sample_counts_by_lineage_via_mutation(q)
+        return DB.queries.lineages.get_sample_counts_by_lineage(q)
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
