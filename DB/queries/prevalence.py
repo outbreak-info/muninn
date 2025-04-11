@@ -197,13 +197,15 @@ def _get_pheno_values_and_counts(
 
     out_data = []
     for r in res:
-        out_data.append(
-            VariantCountPhenoScoreInfo(
-                ref_aa=r[0],
-                position_aa=r[1],
-                alt_aa=r[2],
-                pheno_value=r[3],
-                count=r[4]
+        count = r[4]
+        if count > 0:
+            out_data.append(
+                VariantCountPhenoScoreInfo(
+                    ref_aa=r[0],
+                    position_aa=r[1],
+                    alt_aa=r[2],
+                    pheno_value=r[3],
+                    count=count
+                )
             )
-        )
     return out_data
