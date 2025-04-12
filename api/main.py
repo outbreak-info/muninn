@@ -184,7 +184,7 @@ def get_mutation_counts_by_phenotype_score(region: str, metric: str, include_ref
 
 
 @app.get('/count/samples/lineages', response_model=List[LineageCountInfo])
-def get_sample_counts_per_lineage(q: str | None):
+def get_sample_counts_per_lineage(q: str | None = None):
     """
     :param q: A query to be run against samples. If provided, only samples matching the query will be counted.
     """
