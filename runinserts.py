@@ -18,7 +18,6 @@ from DB.inserts.file_formats.sra_run_table_csv import SraRunTableCsv
 def main():
     # define allowed formats, give names and point to parsers
     formats = {
-        'combined_tsv_v1': CombinedTsvV1,
         'variants_tsv': VariantsTsvParser,
         'sra_run_table_csv': SraRunTableCsv,
         'eve_dms_csv': EveDmsCsv,
