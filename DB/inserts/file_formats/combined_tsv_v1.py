@@ -5,7 +5,6 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict
 
-from utils.errors import NotFoundError
 from DB.inserts.alleles import find_or_insert_allele
 from DB.inserts.amino_acid_substitutions import find_or_insert_aa_sub
 from DB.inserts.file_formats.file_format import FileFormat
@@ -17,6 +16,7 @@ from DB.inserts.variants import find_or_insert_variant
 from DB.models import Allele, AminoAcidSubstitution, IntraHostVariant, Translation, PhenotypeMetric, \
     PhenotypeMeasurementResult
 from utils.csv_helpers import get_value, bool_from_str, int_from_decimal_str
+from utils.errors import NotFoundError
 
 
 class CombinedTsvV1(FileFormat):
@@ -32,7 +32,6 @@ class CombinedTsvV1(FileFormat):
 
     # (gff_feature, position_aa, alt_aa) -> id
     _aas_id_cache = dict()
-
 
     @classmethod
     async def insert_from_file(cls, filename: str) -> None:
@@ -65,7 +64,6 @@ class CombinedTsvV1(FileFormat):
                             except KeyError:
                                 cache_samples_not_found[sample_accession] = 1
                             continue
-
 
                     # allele data
                     region = get_value(row, cls.ColNameMapping.region.value)
@@ -122,7 +120,6 @@ class CombinedTsvV1(FileFormat):
                         # deal with dms data:
                         await cls._process_dms_values(row, aas_id)
 
-
                     # variant data
                     variant = IntraHostVariant(
                         sample_id=sample_id,
@@ -157,7 +154,7 @@ class CombinedTsvV1(FileFormat):
                         with open('/tmp/duplicate_variants.log.json', 'w+') as lf:
                             json.dump({str(k): v for k, v in debug_duplicate_variants.items()}, lf, indent=4)
 
-                except (KeyError , ValueError) as e:
+                except (KeyError, ValueError) as e:
                     # todo: logging
                     print(f'Malformed row in variants: {row}, {str(e)}')
 
@@ -172,46 +169,6 @@ class CombinedTsvV1(FileFormat):
             with open('/tmp/duplicate_variants.log.json', 'w+') as lf:
                 json.dump({str(k): v for k, v in debug_duplicate_variants.items()}, lf, indent=4)
 
-    @classmethod
-    async def _process_dms_values(cls, row: Dict, aas_id: int):
-
-        # todo: for now I'm skipping wildtype mismatches
-        # check for wildtype match to our ref_aa, skip entries where the dms ref differs from ours
-        dms_wildtype = get_value(row, cls.ColNameMapping.wildtype.value, allow_none=True)
-        if dms_wildtype != get_value(row, cls.ColNameMapping.ref_aa.value):
-            return
-
-        dms_colnames = [
-            cls.ColNameMapping.species_sera_escape,
-            cls.ColNameMapping.entry_in_293t_cells,
-            cls.ColNameMapping.stability,
-            cls.ColNameMapping.sa26_usage_increase,
-            cls.ColNameMapping.mature_h5_site,
-        ]
-
-        for colname in dms_colnames:
-            value = get_value(row, colname.value, allow_none=True, transform=float)
-            if value is None:
-                continue
-            try:
-                metric_id = cls._phenotype_metric_cache[colname.name]
-            except KeyError:
-                metric_id = await find_or_insert_metric(
-                    PhenotypeMetric(
-                        name=colname.name,
-                        assay_type='DMS'
-                    )
-                )
-                cls._phenotype_metric_cache[colname.name] = metric_id
-
-            await insert_pheno_measurement_result(
-                PhenotypeMeasurementResult(
-                    amino_acid_substitution_id=aas_id,
-                    phenotype_metric_id=metric_id,
-                    value=value
-                )
-            )
-
     class ColNameMapping(Enum):
         region = 'REGION'
         position_nt = 'POS'
@@ -225,7 +182,7 @@ class CombinedTsvV1(FileFormat):
         ref_codon = 'REF_CODON'
         alt_codon = 'ALT_CODON'
 
-        accession = 'sra'
+        accession = 'SRA'
 
         pval = 'PVAL'
         ref_dp = 'REF_DP'
@@ -238,57 +195,33 @@ class CombinedTsvV1(FileFormat):
         alt_freq = 'ALT_FREQ'
         total_dp = 'TOTAL_DP'
 
-        # DMS data
-        species_sera_escape = 'species sera escape'
-        entry_in_293t_cells = 'entry in 293T cells'
-        stability = 'stability'
-        sa26_usage_increase = 'SA26 usage increase'
-        mature_h5_site = 'mature_H5_site'
-
-        # todo: values being ignored below this line
-        nt_changes_to_codon = 'nt changes to codon'  # todo: removed?
-        wildtype = 'wildtype'  # todo: what is this?
-        # todo: these are ignored because they can't be floats
-        sequential_site = 'site'
-        ref_h1_site = 'reference_H1_site'
-        # region='region' # todo
-        ha1_ha2_h5_site = 'HA1_HA2_H5_site'
-
     @classmethod
     def _verify_header(cls, reader: DictReader) -> None:
-        expected_header = [
-            cls.ColNameMapping.region.value,
-            cls.ColNameMapping.position_nt.value,
-            cls.ColNameMapping.ref_nt.value,
-            cls.ColNameMapping.alt_nt.value,
-            cls.ColNameMapping.ref_dp.value,
-            cls.ColNameMapping.ref_rv.value,
-            cls.ColNameMapping.ref_qual.value,
-            cls.ColNameMapping.alt_dp.value,
-            cls.ColNameMapping.alt_rv.value,
-            cls.ColNameMapping.alt_qual.value,
-            cls.ColNameMapping.alt_freq.value,
-            cls.ColNameMapping.total_dp.value,
-            cls.ColNameMapping.pval.value,
-            cls.ColNameMapping.pass_qc.value,
-            cls.ColNameMapping.gff_feature.value,
-            cls.ColNameMapping.ref_codon.value,
-            cls.ColNameMapping.ref_aa.value,
-            cls.ColNameMapping.alt_codon.value,
-            cls.ColNameMapping.alt_aa.value,
-            cls.ColNameMapping.position_aa.value,
-            cls.ColNameMapping.accession.value,
-            cls.ColNameMapping.sequential_site.value,
-            cls.ColNameMapping.wildtype.value,
-            cls.ColNameMapping.species_sera_escape.value,
-            cls.ColNameMapping.entry_in_293t_cells.value,
-            cls.ColNameMapping.stability.value,
-            cls.ColNameMapping.sa26_usage_increase.value,
-            cls.ColNameMapping.ref_h1_site.value,
-            cls.ColNameMapping.mature_h5_site.value,
-            cls.ColNameMapping.ha1_ha2_h5_site.value,
-            'region',  # todo
-            # cls.ColNameMapping.nt_changes_to_codon.value # todo: dropped?
-        ]
-        if reader.fieldnames != expected_header:
-            raise ValueError('did not find expected header')
+
+        required_columns = {cn.value for cn in {
+            cls.ColNameMapping.accession,
+            cls.ColNameMapping.region,
+            cls.ColNameMapping.position_nt,
+            cls.ColNameMapping.ref_nt,
+            cls.ColNameMapping.alt_nt,
+            cls.ColNameMapping.ref_dp,
+            cls.ColNameMapping.ref_rv,
+            cls.ColNameMapping.ref_qual,
+            cls.ColNameMapping.alt_dp,
+            cls.ColNameMapping.alt_rv,
+            cls.ColNameMapping.alt_qual,
+            cls.ColNameMapping.alt_freq,
+            cls.ColNameMapping.total_dp,
+            cls.ColNameMapping.pval,
+            cls.ColNameMapping.pass_qc,
+            cls.ColNameMapping.gff_feature,
+            cls.ColNameMapping.ref_codon,
+            cls.ColNameMapping.ref_aa,
+            cls.ColNameMapping.alt_codon,
+            cls.ColNameMapping.alt_aa,
+            cls.ColNameMapping.position_aa,
+
+        }}
+
+        if not set(reader.fieldnames) <= required_columns:
+            raise ValueError(f'Missing required fields: {required_columns - set(reader.fieldnames)}')
