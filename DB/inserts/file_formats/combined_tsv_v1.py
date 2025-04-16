@@ -116,9 +116,6 @@ class CombinedTsvV1(FileFormat):
                                 amino_acid_substitution_id=aas_id
                             )
                         )
-                        # todo: you can't have dms if you don't have aas data, correct?
-                        # deal with dms data:
-                        await cls._process_dms_values(row, aas_id)
 
                     # variant data
                     variant = IntraHostVariant(
@@ -223,5 +220,5 @@ class CombinedTsvV1(FileFormat):
 
         }}
 
-        if not set(reader.fieldnames) <= required_columns:
+        if not set(reader.fieldnames) >= required_columns:
             raise ValueError(f'Missing required fields: {required_columns - set(reader.fieldnames)}')
