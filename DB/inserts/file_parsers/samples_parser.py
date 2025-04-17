@@ -1,7 +1,6 @@
 import csv
 from csv import DictReader
 from enum import Enum
-from typing import Dict
 
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.geo_locations import find_or_insert_geo_location
@@ -9,8 +8,7 @@ from DB.inserts.samples import find_or_insert_sample
 from DB.models import GeoLocation, Sample
 from utils.csv_helpers import get_value, bool_from_str
 from utils.dates_and_times import parse_collection_start_and_end
-from utils.geodata import INSDC_GEO_LOC_NAMES, ABBREV_TO_US_STATE, INSDC_GEO_LOC_NAMES_LOWER_CASE, \
-    ABBREV_TO_US_STATE_LOWER_CASE, parse_geo_loc
+from utils.geodata import parse_geo_loc
 
 
 class SamplesTsvParser(FileParser):
@@ -23,13 +21,34 @@ class SamplesTsvParser(FileParser):
             'skipped_malformed': 0
         }
 
+        # (country, region, locality) -> id
+        cache_geo_loc_ids = dict()
+
         with open(self.filename, 'r') as f:
             reader = csv.DictReader(f, delimiter=',')
             SamplesTsvParser._verify_header(reader)
             for row in reader:
                 try:
                     # parse geo location
-                    geo_location_id = await SamplesTsvParser._get_geo_loc_id(row)
+                    geo_location_id = None
+                    geo_loc_full_text = get_value(
+                        row,
+                        SamplesTsvParser.ColNameMapping.geo_loc_name.value,
+                        allow_none=True
+                    )
+                    if geo_loc_full_text is not None:
+                        country_name, region_name, locality_name = parse_geo_loc(geo_loc_full_text)
+                        try:
+                            geo_location_id = cache_geo_loc_ids[(country_name, region_name, locality_name)]
+                        except KeyError:
+                            geo_loc = GeoLocation(
+                                full_text=geo_loc_full_text,
+                                country_name=country_name,
+                                region_name=region_name,
+                                locality_name=locality_name
+                            )
+                            geo_location_id = await find_or_insert_geo_location(geo_loc)
+                            cache_geo_loc_ids[(country_name, region_name, locality_name)] = geo_location_id
 
                     # parse collection date
                     collection_start_date = collection_end_date = None
@@ -124,22 +143,6 @@ class SamplesTsvParser(FileParser):
                     debug_info['malformed_lines'] += 1
 
         print(debug_info)
-
-    @classmethod
-    async def _get_geo_loc_id(cls, row: Dict) -> int:
-        geo_location_id = None
-        geo_loc_full_text = get_value(row, cls.ColNameMapping.geo_loc_name.value, allow_none=True)
-        if geo_loc_full_text is not None:
-            country_name, region_name, locality_name = parse_geo_loc(geo_loc_full_text)
-            geo_loc = GeoLocation(
-                full_text=geo_loc_full_text,
-                country_name=country_name,
-                region_name=region_name,
-                locality_name=locality_name
-            )
-            geo_location_id = await find_or_insert_geo_location(geo_loc)
-        return geo_location_id
-
 
     class ColNameMapping(Enum):
         accession = 'Run'
