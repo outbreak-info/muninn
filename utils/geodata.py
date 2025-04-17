@@ -396,4 +396,10 @@ def parse_geo_loc(input_text: str) -> (str, str, str):
             region = ABBREV_TO_US_STATE_LOWER_CASE[region]
         except KeyError:
             pass
+
+    if region == '':
+        region = None
+    if locality == '':
+        locality = None
+
     return gln, region, locality

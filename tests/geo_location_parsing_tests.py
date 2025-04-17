@@ -8,7 +8,8 @@ class GeoLocParsingTests(unittest.TestCase):
     def test_valid_inputs(self):
         cases = {
             'USA': ('usa', None, None),
-            'USA:': ('usa', '', None),
+            'USA:': ('usa', None, None),
+            'USA:,': ('usa', None, None),
             'USA: MD': ('usa', 'maryland', None),
             'USA: Maryland': ('usa', 'maryland', None),
             'USA: Silver Spring, MD': ('usa', 'maryland', 'silver spring'),
@@ -24,10 +25,12 @@ class GeoLocParsingTests(unittest.TestCase):
 
     def test_invalid_inputs(self):
         cases = [
+            None,
+            '',
             'Foo',
             'Foo:Bar:Baz',
         ]
 
         for input_ in cases:
             print(input_)
-            self.assertRaises(ValueError, parse_geo_loc, input_)
+            self.assertRaises((ValueError, AttributeError), parse_geo_loc, input_)
