@@ -54,8 +54,8 @@ class GenofluLineagesParser(FileParser):
 
             for row in reader:
                 try:
-                    sample_accession = get_value(row, GenofluLineagesParser.ColNameMapping.sample_accession.value)
-                    genotype = get_value(row, GenofluLineagesParser.ColNameMapping.genotype.value)
+                    sample_accession = get_value(row, ColNameMapping.sample_accession.value)
+                    genotype = get_value(row, ColNameMapping.genotype.value)
                 except ValueError:
                     debug_info['skipped_malformed'] += 1
                     continue
@@ -108,13 +108,13 @@ class GenofluLineagesParser(FileParser):
     @classmethod
     def _verify_header(cls, reader: DictReader) -> None:
         required_cols = {cn.value for cn in {
-            cls.ColNameMapping.sample_accession,
-            cls.ColNameMapping.genotype
+            ColNameMapping.sample_accession,
+            ColNameMapping.genotype
         }}
 
         if not required_cols <= set(reader.fieldnames):
             raise ValueError('did not find all required fields in header')
 
-    class ColNameMapping(Enum):
-        sample_accession = 'sample'
-        genotype = 'Genotype'
+class ColNameMapping(Enum):
+    sample_accession = 'sample'
+    genotype = 'Genotype'

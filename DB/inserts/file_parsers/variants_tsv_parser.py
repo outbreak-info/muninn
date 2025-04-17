@@ -47,7 +47,7 @@ class VariantsTsvParser(FileParser):
                 try:
                     # a lot of the variants are missing their samples, so let's check for the sample
                     # up front and if the sample is missing we can skip everything else.
-                    sample_accession = row[VariantsTsvParser.ColNameMapping.accession.value]
+                    sample_accession = row[ColNameMapping.accession.value]
                     if sample_accession in cache_samples_not_found:
                         debug_info['skipped_sample_not_found'] += 1
                         continue
@@ -63,9 +63,9 @@ class VariantsTsvParser(FileParser):
                             continue
 
                     # allele data
-                    region = get_value(row, VariantsTsvParser.ColNameMapping.region.value)
-                    position_nt = get_value(row, VariantsTsvParser.ColNameMapping.position_nt.value, transform=int)
-                    alt_nt = get_value(row, VariantsTsvParser.ColNameMapping.alt_nt.value)
+                    region = get_value(row, ColNameMapping.region.value)
+                    position_nt = get_value(row, ColNameMapping.position_nt.value, transform=int)
+                    alt_nt = get_value(row, ColNameMapping.alt_nt.value)
 
                     try:
                         allele_id = allele_id_cache[(region, position_nt, alt_nt)]
@@ -74,7 +74,7 @@ class VariantsTsvParser(FileParser):
                             Allele(
                                 region=region,
                                 position_nt=position_nt,
-                                ref_nt=row[VariantsTsvParser.ColNameMapping.ref_nt.value],
+                                ref_nt=row[ColNameMapping.ref_nt.value],
                                 alt_nt=alt_nt
                             )
                         )
@@ -84,14 +84,14 @@ class VariantsTsvParser(FileParser):
                     # should either all be present or all be absent
                     # we use gff_feature as our canary.
                     # If it's present and other values are missing, the db will complain
-                    gff_feature = get_value(row, VariantsTsvParser.ColNameMapping.gff_feature.value, allow_none=True)
+                    gff_feature = get_value(row, ColNameMapping.gff_feature.value, allow_none=True)
                     if gff_feature is not None:
                         position_aa = get_value(
                             row,
-                            VariantsTsvParser.ColNameMapping.position_aa.value,
+                            ColNameMapping.position_aa.value,
                             transform=int_from_decimal_str
                         )
-                        alt_aa = (row[VariantsTsvParser.ColNameMapping.alt_aa.value])
+                        alt_aa = (row[ColNameMapping.alt_aa.value])
 
                         try:
                             aas_id = aas_id_cache[(gff_feature, position_aa, alt_aa)]
@@ -99,10 +99,10 @@ class VariantsTsvParser(FileParser):
                             aas_id = await find_or_insert_aa_sub(
                                 AminoAcidSubstitution(
                                     position_aa=position_aa,
-                                    ref_aa=(row[VariantsTsvParser.ColNameMapping.ref_aa.value]),
+                                    ref_aa=(row[ColNameMapping.ref_aa.value]),
                                     alt_aa=alt_aa,
-                                    ref_codon=(row[VariantsTsvParser.ColNameMapping.ref_codon.value]),
-                                    alt_codon=(row[VariantsTsvParser.ColNameMapping.alt_codon.value]),
+                                    ref_codon=(row[ColNameMapping.ref_codon.value]),
+                                    alt_codon=(row[ColNameMapping.alt_codon.value]),
                                     gff_feature=gff_feature
                                 )
                             )
@@ -118,18 +118,18 @@ class VariantsTsvParser(FileParser):
                     variant = IntraHostVariant(
                         sample_id=sample_id,
                         allele_id=allele_id,
-                        pval=get_value(row, VariantsTsvParser.ColNameMapping.pval.value, transform=float),
-                        ref_dp=get_value(row, VariantsTsvParser.ColNameMapping.ref_dp.value, transform=int),
-                        alt_dp=get_value(row, VariantsTsvParser.ColNameMapping.alt_dp.value, transform=int),
-                        ref_rv=get_value(row, VariantsTsvParser.ColNameMapping.ref_rv.value, transform=int),
-                        alt_rv=get_value(row, VariantsTsvParser.ColNameMapping.alt_rv.value, transform=int),
-                        ref_qual=get_value(row, VariantsTsvParser.ColNameMapping.ref_qual.value, transform=int),
-                        alt_qual=get_value(row, VariantsTsvParser.ColNameMapping.alt_qual.value, transform=int),
-                        pass_qc=get_value(row, VariantsTsvParser.ColNameMapping.pass_qc.value, transform=bool_from_str),
-                        alt_freq=get_value(row, VariantsTsvParser.ColNameMapping.alt_freq.value, transform=float),
+                        pval=get_value(row, ColNameMapping.pval.value, transform=float),
+                        ref_dp=get_value(row, ColNameMapping.ref_dp.value, transform=int),
+                        alt_dp=get_value(row, ColNameMapping.alt_dp.value, transform=int),
+                        ref_rv=get_value(row, ColNameMapping.ref_rv.value, transform=int),
+                        alt_rv=get_value(row, ColNameMapping.alt_rv.value, transform=int),
+                        ref_qual=get_value(row, ColNameMapping.ref_qual.value, transform=int),
+                        alt_qual=get_value(row, ColNameMapping.alt_qual.value, transform=int),
+                        pass_qc=get_value(row, ColNameMapping.pass_qc.value, transform=bool_from_str),
+                        alt_freq=get_value(row, ColNameMapping.alt_freq.value, transform=float),
                         total_dp=get_value(
                             row,
-                            VariantsTsvParser.ColNameMapping.total_dp.value,
+                            ColNameMapping.total_dp.value,
                             transform=int_from_decimal_str
                         ),
                     )
@@ -154,58 +154,58 @@ class VariantsTsvParser(FileParser):
             debug_info['count_samples_not_found'] = len(cache_samples_not_found)
             print(f'Finished: {debug_info}')
 
-    class ColNameMapping(Enum):
-        region = 'REGION'
-        position_nt = 'POS'
-        ref_nt = 'REF'
-        alt_nt = 'ALT'
-
-        position_aa = 'POS_AA'
-        ref_aa = 'REF_AA'
-        alt_aa = 'ALT_AA'
-        gff_feature = 'GFF_FEATURE'
-        ref_codon = 'REF_CODON'
-        alt_codon = 'ALT_CODON'
-
-        accession = 'SRA'
-
-        pval = 'PVAL'
-        ref_dp = 'REF_DP'
-        ref_rv = 'REF_RV'
-        ref_qual = 'REF_QUAL'
-        alt_dp = 'ALT_DP'
-        alt_rv = 'ALT_RV'
-        alt_qual = 'ALT_QUAL'
-        pass_qc = 'PASS'
-        alt_freq = 'ALT_FREQ'
-        total_dp = 'TOTAL_DP'
-
     @classmethod
     def _verify_header(cls, reader: DictReader) -> None:
         required_columns = {cn.value for cn in {
-            cls.ColNameMapping.accession,
-            cls.ColNameMapping.region,
-            cls.ColNameMapping.position_nt,
-            cls.ColNameMapping.ref_nt,
-            cls.ColNameMapping.alt_nt,
-            cls.ColNameMapping.ref_dp,
-            cls.ColNameMapping.ref_rv,
-            cls.ColNameMapping.ref_qual,
-            cls.ColNameMapping.alt_dp,
-            cls.ColNameMapping.alt_rv,
-            cls.ColNameMapping.alt_qual,
-            cls.ColNameMapping.alt_freq,
-            cls.ColNameMapping.total_dp,
-            cls.ColNameMapping.pval,
-            cls.ColNameMapping.pass_qc,
-            cls.ColNameMapping.gff_feature,
-            cls.ColNameMapping.ref_codon,
-            cls.ColNameMapping.ref_aa,
-            cls.ColNameMapping.alt_codon,
-            cls.ColNameMapping.alt_aa,
-            cls.ColNameMapping.position_aa,
-
+            ColNameMapping.accession,
+            ColNameMapping.region,
+            ColNameMapping.position_nt,
+            ColNameMapping.ref_nt,
+            ColNameMapping.alt_nt,
+            ColNameMapping.ref_dp,
+            ColNameMapping.ref_rv,
+            ColNameMapping.ref_qual,
+            ColNameMapping.alt_dp,
+            ColNameMapping.alt_rv,
+            ColNameMapping.alt_qual,
+            ColNameMapping.alt_freq,
+            ColNameMapping.total_dp,
+            ColNameMapping.pval,
+            ColNameMapping.pass_qc,
+            ColNameMapping.gff_feature,
+            ColNameMapping.ref_codon,
+            ColNameMapping.ref_aa,
+            ColNameMapping.alt_codon,
+            ColNameMapping.alt_aa,
+            ColNameMapping.position_aa,
         }}
 
         if not set(reader.fieldnames) >= required_columns:
             raise ValueError(f'Missing required fields: {required_columns - set(reader.fieldnames)}')
+
+
+class ColNameMapping(Enum):
+    region = 'REGION'
+    position_nt = 'POS'
+    ref_nt = 'REF'
+    alt_nt = 'ALT'
+
+    position_aa = 'POS_AA'
+    ref_aa = 'REF_AA'
+    alt_aa = 'ALT_AA'
+    gff_feature = 'GFF_FEATURE'
+    ref_codon = 'REF_CODON'
+    alt_codon = 'ALT_CODON'
+
+    accession = 'SRA'
+
+    pval = 'PVAL'
+    ref_dp = 'REF_DP'
+    ref_rv = 'REF_RV'
+    ref_qual = 'REF_QUAL'
+    alt_dp = 'ALT_DP'
+    alt_rv = 'ALT_RV'
+    alt_qual = 'ALT_QUAL'
+    pass_qc = 'PASS'
+    alt_freq = 'ALT_FREQ'
+    total_dp = 'TOTAL_DP'
