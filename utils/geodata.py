@@ -73,6 +73,9 @@ US_STATE_TO_ABBREV = {
 
 ABBREV_TO_US_STATE = {v: k for k, v in US_STATE_TO_ABBREV.items()}
 
+US_STATE_TO_ABBREV_LOWER_CASE = {k.lower(): v.lower() for k, v in US_STATE_TO_ABBREV.items()}
+ABBREV_TO_US_STATE_LOWER_CASE = {v: k for k, v in US_STATE_TO_ABBREV_LOWER_CASE.items()}
+
 INSDC_GEO_LOC_NAMES = {
     "Afghanistan",
     "Albania",
@@ -355,3 +358,42 @@ INSDC_GEO_LOC_NAMES = {
     "Zambia",
     "Zimbabwe"
 }
+
+INSDC_GEO_LOC_NAMES_LOWER_CASE = {gln.lower() for gln in INSDC_GEO_LOC_NAMES}
+
+
+
+def parse_geo_loc(input_text: str) -> (str, str, str):
+    """
+        Examples:
+            USA
+            USA: CA
+            USA: Alaska
+            USA: Plympton, MA
+            USA: Minnesota, Kandiyohi County
+            USA: Alaska, Matanuska-Susitna Borough
+        :param input_text: geo_loc_name from the SRA
+        :return: geo_loc_name (ie, country) , region, locality
+        """
+    s_colon = input_text.lower().split(':')
+    # geo_loc_name
+    gln = s_colon[0].strip()
+    region = locality = None
+    if gln not in INSDC_GEO_LOC_NAMES_LOWER_CASE:
+        raise ValueError('geo_loc_name should be from the approved list')
+    if len(s_colon) > 1:
+        s_comma = s_colon[1].split(',')
+        region = s_comma[0].strip()
+        if len(s_comma) > 1:
+            locality = s_comma[1].strip()
+            try:
+                # the second value should be locality, but some entries do 'city, CA'
+                region = ABBREV_TO_US_STATE_LOWER_CASE[locality]
+                locality = s_comma[0].strip()
+            except KeyError:
+                pass
+        try:
+            region = ABBREV_TO_US_STATE_LOWER_CASE[region]
+        except KeyError:
+            pass
+    return gln, region, locality

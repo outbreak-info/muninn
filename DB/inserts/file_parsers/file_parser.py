@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import Set
 
 '''
 Some notes about what can be in this file:
@@ -13,7 +12,7 @@ What is it that all the insertion systems will share?
 class FileParser(ABC):
 
     @abstractmethod
-    def __init__(self, filename):
+    def __init__(self, filename: str):
         raise NotImplementedError
 
     @abstractmethod

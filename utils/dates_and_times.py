@@ -3,7 +3,6 @@ from datetime import date
 
 
 
-# todo: this method desperately needs to be unit tested.
 def parse_collection_start_and_end(datestr: str) -> tuple[date, date]:
     """
     For reference on acceptable input formats see https://www.ncbi.nlm.nih.gov/biosample/docs/attributes/

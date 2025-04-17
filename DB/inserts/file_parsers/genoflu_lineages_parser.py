@@ -24,7 +24,7 @@ from utils.errors import NotFoundError
 class GenofluLineagesParser(FileParser):
     lineage_system_name = 'usda_genoflu'
 
-    def __init__(self, filename):
+    def __init__(self, filename: str):
         self.filename = filename
 
     async def parse_and_insert(self):

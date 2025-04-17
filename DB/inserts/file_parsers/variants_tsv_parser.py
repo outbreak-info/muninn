@@ -15,7 +15,7 @@ from utils.errors import NotFoundError
 
 class VariantsTsvParser(FileParser):
 
-    def __init__(self, filename):
+    def __init__(self, filename: str):
         self.filename = filename
 
     async def parse_and_insert(self):
@@ -131,7 +131,7 @@ class VariantsTsvParser(FileParser):
                             row,
                             VariantsTsvParser.ColNameMapping.total_dp.value,
                             transform=int_from_decimal_str
-                            ),
+                        ),
                     )
 
                     _, preexisting = await find_or_insert_variant(variant)
