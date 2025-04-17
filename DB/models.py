@@ -160,6 +160,47 @@ class Sample(Base):
     r_sample_lineages: Mapped[List['SampleLineage']] = relationship(back_populates='r_sample')
 
 
+    def copy_from(self, other: 'Sample'):
+        if other.accession != self.accession:
+            raise ValueError('Sample accessions do not match, will not copy')
+
+        self.bio_project = other.bio_project
+        self.bio_sample = other.bio_sample
+        self.bio_sample_accession = other.bio_sample_accession
+        self.bio_sample_model = other.bio_sample_model
+        self.center_name = other.center_name
+        self.experiment = other.experiment
+        self.host = other.host
+        self.platform = other.platform
+        self.instrument = other.instrument
+        self.library_layout = other.library_layout
+        self.library_name = other.library_name
+        self.library_selection = other.library_selection
+        self.library_source = other.library_source
+        self.organism = other.organism
+        self.is_retracted = other.is_retracted
+        self.retraction_detected_date = other.retraction_detected_date
+        self.isolation_source = other.isolation_source
+        self.collection_start_date = other.collection_start_date
+        self.collection_end_date = other.collection_end_date
+        self.release_date = other.release_date
+        self.creation_date = other.creation_date
+        self.isolate = other.isolate
+        self.version = other.version
+        self.sample_name = other.sample_name
+        self.sra_study = other.sra_study
+        self.serotype = other.serotype
+        self.geo_location_id = other.geo_location_id
+        self.consent_level = other.consent_level
+        self.assay_type = other.assay_type
+        self.avg_spot_length = other.avg_spot_length
+        self.bases = other.bases
+        self.bytes = other.bytes
+        self.datastore_filetype = other.datastore_filetype
+        self.datastore_region = other.datastore_region
+        self.datastore_provider = other.datastore_provider
+
+
 class Allele(Base):
     __tablename__ = 'alleles'
 

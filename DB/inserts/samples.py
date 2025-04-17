@@ -16,17 +16,28 @@ async def find_sample_id_by_accession(accession: str) -> int:
     return id_
 
 
-async def find_or_insert_sample(s: Sample) -> (int, bool):
+async def find_or_insert_sample(s: Sample, upsert: bool = False) -> (int, bool):
+    """
+    :param s: Sample
+    :param upsert: If true, use the provided sample's data to replace an existing sample with the same accession
+    :return: (int: id of sample, bool: did a sample with this accession already exist?)
+    """
     preexisting = True
     async with get_async_session() as session:
-        id_ = await session.scalar(
-            select(Sample.id)
+        existing: Sample = await session.scalar(
+            select(Sample)
             .where(Sample.accession == s.accession)
         )
-        if id_ is None:
+        if existing is None:
             preexisting = False
             session.add(s)
             await session.commit()
             await session.refresh(s)
-            id_ = s.id
-        return id_, preexisting
+            existing = s
+        elif upsert:
+            existing.copy_from(s)
+            await session.commit()
+
+        return existing.id, preexisting
+
+

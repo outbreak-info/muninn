@@ -2,6 +2,8 @@ import csv
 from csv import DictReader
 from enum import Enum
 
+import dateutil
+
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.geo_locations import find_or_insert_geo_location
 from DB.inserts.samples import find_or_insert_sample
@@ -11,14 +13,15 @@ from utils.dates_and_times import parse_collection_start_and_end
 from utils.geodata import parse_geo_loc
 
 
-class SamplesTsvParser(FileParser):
+class SamplesCsvParser(FileParser):
 
     def __init__(self, filename: str):
         self.filename = filename
 
-    async def parse_and_insert(self, dateutil=None):
+    async def parse_and_insert(self):
         debug_info = {
-            'skipped_malformed': 0
+            'skipped_malformed': 0,
+            'count_preexisting': 0,
         }
 
         # (country, region, locality) -> id
@@ -26,7 +29,7 @@ class SamplesTsvParser(FileParser):
 
         with open(self.filename, 'r') as f:
             reader = csv.DictReader(f, delimiter=',')
-            SamplesTsvParser._verify_header(reader)
+            SamplesCsvParser._verify_header(reader)
             for row in reader:
                 try:
                     # parse geo location
@@ -134,11 +137,10 @@ class SamplesTsvParser(FileParser):
                         ),
                     )
 
-                    _, preexisting = await find_or_insert_sample(sample)
+                    _, preexisting = await find_or_insert_sample(sample, upsert=True)
                     if preexisting:
-                        # todo: logging
-                        debug_info['lines_skipped_preexisting'] += 1
-                except ValueError as e:
+                        debug_info['count_preexisting'] += 1
+                except ValueError:
                     # todo: logging
                     debug_info['malformed_lines'] += 1
 
