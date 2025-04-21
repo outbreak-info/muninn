@@ -6,4 +6,14 @@ class Env:
     FLU_DB_HOST = 'FLU_DB_HOST'
     FLU_DB_DB_NAME = 'FLU_DB_DB_NAME'
 
+
 CHANGE_PATTERN = r'^(\w+):([a-zA-Z])(\d+)([a-zA-Z\-+]+)'
+
+
+class PhenotypeMetricAssayTypes:
+    DMS = 'DMS'
+    EVE = 'EVE'
+
+
+class DefaultGffFeaturesByRegion:
+    HA = 'HA:cds-XAJ25415.1'
