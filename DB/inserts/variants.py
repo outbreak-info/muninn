@@ -4,7 +4,7 @@ from DB.engine import get_async_session
 from DB.models import IntraHostVariant
 
 
-async def find_or_insert_variant(variant: IntraHostVariant) -> (int, bool):
+async def find_or_insert_variant(variant: IntraHostVariant, upsert: bool = True) -> (int, bool):
     """
     :param variant:
     :return: int: id of variant, new or existing
@@ -12,8 +12,8 @@ async def find_or_insert_variant(variant: IntraHostVariant) -> (int, bool):
     """
     preexisting = True
     async with get_async_session() as session:
-        id_ = await session.scalar(
-            select(IntraHostVariant.id)
+        existing = await session.scalar(
+            select(IntraHostVariant)
             .where(
                 and_(
                     IntraHostVariant.allele_id == variant.allele_id,
@@ -21,10 +21,16 @@ async def find_or_insert_variant(variant: IntraHostVariant) -> (int, bool):
                 )
             )
         )
-        if id_ is None:
+        if existing is None:
             preexisting = False
             session.add(variant)
             await session.commit()
             await session.refresh(variant)
             id_ = variant.id
+        else:
+            id_ = existing.id
+            if upsert:
+                existing.copy_from(variant)
+                await session.commit()
+
     return id_, preexisting

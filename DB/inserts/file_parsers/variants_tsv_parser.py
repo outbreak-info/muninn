@@ -23,7 +23,7 @@ class VariantsTsvParser(FileParser):
         debug_info = {
             'skipped_sample_not_found': 0,
             'skipped_malformed': 0,
-            'skipped_duplicate_variants': 0
+            'count_new_variants_added': 0
         }
 
         # accession -> id
@@ -134,10 +134,10 @@ class VariantsTsvParser(FileParser):
                         ),
                     )
 
-                    _, preexisting = await find_or_insert_variant(variant)
+                    _, preexisting = await find_or_insert_variant(variant, upsert=True)
 
-                    if preexisting:
-                        debug_info['skipped_duplicate_variants'] += 1
+                    if not preexisting:
+                        debug_info['count_new_variants_added'] += 1
 
                     # todo: proper logging!!
                     # log debug stats every n lines

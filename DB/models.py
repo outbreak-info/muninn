@@ -159,7 +159,6 @@ class Sample(Base):
     r_geo_location: Mapped['GeoLocation'] = relationship(back_populates='r_samples')
     r_sample_lineages: Mapped[List['SampleLineage']] = relationship(back_populates='r_sample')
 
-
     def copy_from(self, other: 'Sample'):
         if other.accession != self.accession:
             raise ValueError('Sample accessions do not match, will not copy')
@@ -331,6 +330,21 @@ class IntraHostVariant(Base):
 
     r_sample: Mapped['Sample'] = relationship(back_populates='r_variants')
     r_allele: Mapped['Allele'] = relationship(back_populates='r_variants')
+
+    def copy_from(self, other: 'IntraHostVariant'):
+        if not (other.sample_id, other.allele_id) == (self.sample_id, self.allele_id):
+            raise ValueError('sample and allele ids do not match, copying will not proceed.')
+
+        self.ref_dp = other.ref_dp
+        self.alt_dp = other.alt_dp
+        self.alt_freq = other.alt_freq
+        self.ref_rv = other.ref_rv
+        self.alt_rv = other.alt_rv
+        self.ref_qual = other.ref_qual
+        self.alt_qual = other.alt_qual
+        self.total_dp = other.total_dp
+        self.pval = other.pval
+        self.pass_qc = other.pass_qc
 
 
 class GeoLocation(Base):
