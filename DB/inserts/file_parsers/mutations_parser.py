@@ -44,7 +44,6 @@ class MutationsTsvParser(FileParser):
 
                     region = get_value(row, ColNameMapping.region.value)
                     ref_nt = get_value(row, ColNameMapping.ref_nt.value)
-                    ref_nt = get_value(row, ColNameMapping.ref_nt.value)
                     alt_nt = get_value(row, ColNameMapping.alt_nt.value)
                     position_nt = get_value(row, ColNameMapping.position_nt.value, transform=int)
 

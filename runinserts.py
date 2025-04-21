@@ -14,7 +14,6 @@ from DB.inserts.file_parsers.genoflu_lineages_parser import GenofluLineagesParse
 from DB.inserts.file_parsers.mutations_parser import MutationsTsvParser
 from DB.inserts.file_parsers.samples_parser import SamplesCsvParser, SamplesTsvParser
 from DB.inserts.file_parsers.variants_tsv_parser import VariantsTsvParser
-from DB.old_inserts import main as old_main
 
 
 def main():
@@ -40,15 +39,7 @@ def main():
         'format',
         help=f"Name of the format to be parsed. Available formats are: {','.join(formats.keys())}"
     )
-    parser.add_argument(
-        '--kludge_mutations',
-        action='store_true',
-        help='run the kludge script to insert mutations'
-    )
     args = parser.parse_args()
-
-    if args.kludge_mutations:
-        mutations_kludge(args.filename)
 
     if not args.format in formats.keys():
         print('Invalid format name given')
@@ -75,11 +66,6 @@ def main():
     end_time = datetime.now()
     print(f'{filename} {args.format} end at {end_time}, elapsed: {end_time - start_time}')
 
-
-def mutations_kludge(basedir: str):
-    print('Running the mutations kludge')
-    asyncio.run(old_main(basedir))
-    sys.exit(0)
 
 if __name__ == '__main__':
     main()
