@@ -10,6 +10,7 @@ from DB.inserts.file_formats.sra_run_table_csv import SraRunTableCsv
 from DB.inserts.file_formats.tmp_mouse_ferret_dms_tsv import TempHaMouseFerretDmsTsv
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.file_parsers.genoflu_lineages_parser import GenofluLineagesParser
+from DB.inserts.file_parsers.mutations_parser import MutationsTsvParser
 from DB.inserts.file_parsers.samples_parser import SamplesCsvParser
 from DB.inserts.file_parsers.variants_tsv_parser import VariantsTsvParser
 from DB.old_inserts import main as old_main
@@ -24,6 +25,7 @@ def main():
         'eve_dms_csv': EveDmsCsv,
         'tmp_ha_mouse_ferret_dms': TempHaMouseFerretDmsTsv,
         'genoflu_lineages': GenofluLineagesParser,
+        'mutations_tsv': MutationsTsvParser,
     }
 
     ## Parse and verify args ##
