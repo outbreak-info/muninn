@@ -13,10 +13,11 @@ from utils.dates_and_times import parse_collection_start_and_end
 from utils.geodata import parse_geo_loc
 
 
-class SamplesCsvParser(FileParser):
+class SamplesParser(FileParser):
 
-    def __init__(self, filename: str):
+    def __init__(self, filename: str, delimiter: str):
         self.filename = filename
+        self.delimiter = delimiter
 
     async def parse_and_insert(self):
         debug_info = {
@@ -28,8 +29,8 @@ class SamplesCsvParser(FileParser):
         cache_geo_loc_ids = dict()
 
         with open(self.filename, 'r') as f:
-            reader = csv.DictReader(f, delimiter=',')
-            SamplesCsvParser._verify_header(reader)
+            reader = csv.DictReader(f, delimiter=self.delimiter)
+            SamplesParser._verify_header(reader)
             for row in reader:
                 try:
                     # parse geo location
@@ -164,8 +165,6 @@ class SamplesCsvParser(FileParser):
             ColNameMapping.datastore_provider,
             ColNameMapping.datastore_region,
             ColNameMapping.experiment,
-            ColNameMapping.geo_loc_name_country,
-            ColNameMapping.geo_loc_name_country_continent,
             ColNameMapping.geo_loc_name,
             ColNameMapping.host,
             ColNameMapping.instrument,
@@ -201,7 +200,7 @@ class ColNameMapping(Enum):
     bio_sample_model = 'BioSampleModel'
     bytes_ = 'Bytes'
     center_name = 'Center Name'
-    collection_date = 'Collection_Date'
+    collection_date = 'collection'
     consent_level = 'Consent'
     datastore_filetype = 'DATASTORE filetype'
     datastore_provider = 'DATASTORE provider'
@@ -229,3 +228,21 @@ class ColNameMapping(Enum):
     bio_sample_accession = 'BioSample Accession'
     is_retracted = 'is_retracted'
     retraction_detected_date = 'retraction_detection_date_utc'
+
+
+class SamplesTsvParser(SamplesParser):
+
+    def __init__(self, filename: str):
+        super().__init__(filename, '\t')
+
+    async def parse_and_insert(self):
+        await super().parse_and_insert()
+
+
+class SamplesCsvParser(SamplesParser):
+
+    def __init__(self, filename: str):
+        super().__init__(filename, ',')
+
+    async def parse_and_insert(self):
+        await super().parse_and_insert()

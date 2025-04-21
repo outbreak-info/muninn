@@ -112,6 +112,7 @@ class MutationsTsvParser(FileParser):
 
                 except ValueError:
                     debug_info['skipped_malformed'] += 1
+        print(debug_info)
 
     @classmethod
     def _verify_header(cls, reader: DictReader):

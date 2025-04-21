@@ -11,7 +11,7 @@ from DB.inserts.file_formats.tmp_mouse_ferret_dms_tsv import TempHaMouseFerretDm
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.file_parsers.genoflu_lineages_parser import GenofluLineagesParser
 from DB.inserts.file_parsers.mutations_parser import MutationsTsvParser
-from DB.inserts.file_parsers.samples_parser import SamplesCsvParser
+from DB.inserts.file_parsers.samples_parser import SamplesCsvParser, SamplesTsvParser
 from DB.inserts.file_parsers.variants_tsv_parser import VariantsTsvParser
 from DB.old_inserts import main as old_main
 
@@ -20,6 +20,7 @@ def main():
     # define allowed formats, give names and point to parsers
     formats = {
         'samples_csv': SamplesCsvParser,
+        'samples_tsv': SamplesTsvParser,
         'variants_tsv': VariantsTsvParser,
         'sra_run_table_csv': SraRunTableCsv,
         'eve_dms_csv': EveDmsCsv,
