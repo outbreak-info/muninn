@@ -17,3 +17,8 @@ class PhenotypeMetricAssayTypes:
 
 class DefaultGffFeaturesByRegion:
     HA = 'HA:cds-XAJ25415.1'
+
+
+class LineageSystemNames:
+    usda_genoflu = 'usda_genoflu'
+    freyja_demixed = 'freyja_demixed'

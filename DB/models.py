@@ -459,14 +459,19 @@ class SampleLineage(Base):
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
     sample_id: Mapped[int] = mapped_column(sa.ForeignKey('samples.id'), nullable=False)
-    lineage_id: Mapped[int] = mapped_column(sa.ForeignKey('lineages.id'), nullable=False)
+    lineage_id: Mapped[int] = mapped_column(sa.ForeignKey('lineages.id'), nullable=False, index=True)
 
     abundance: Mapped[float] = mapped_column(sa.Float, nullable=True)
     is_consensus_call: Mapped[bool] = mapped_column(sa.Boolean, nullable=False)
 
     __table_args__ = tuple(
         [
-            UniqueConstraint('sample_id', 'lineage_id', name='uq_lineages_samples_sample_lineage_pair'),
+            UniqueConstraint(
+                'sample_id',
+                'lineage_id',
+                'is_consensus_call',
+                name='uq_samples_lineages_sample_id_lineage_id_is_consensus_call'
+                ),
             CheckConstraint('(abundance is null) = is_consensus_call', name='has_abundance_xor_is_consensus')
         ]
     )

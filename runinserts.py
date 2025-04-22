@@ -10,6 +10,7 @@ from DB.inserts.file_formats.sra_run_table_csv import SraRunTableCsv
 from DB.inserts.file_formats.tmp_mouse_ferret_dms_tsv import TempHaMouseFerretDmsTsv
 from DB.inserts.file_parsers.dms_parser import HaRegionDmsTsvParser
 from DB.inserts.file_parsers.file_parser import FileParser
+from DB.inserts.file_parsers.freyja_demixed_parser import FreyjaDemixedParser
 from DB.inserts.file_parsers.genoflu_lineages_parser import GenofluLineagesParser
 from DB.inserts.file_parsers.mutations_parser import MutationsTsvParser
 from DB.inserts.file_parsers.samples_parser import SamplesCsvParser, SamplesTsvParser
@@ -28,6 +29,7 @@ def main():
         'genoflu_lineages': GenofluLineagesParser,
         'mutations_tsv': MutationsTsvParser,
         'ha_dms_tsv': HaRegionDmsTsvParser,
+        'freyja_demixed': FreyjaDemixedParser,
     }
 
     ## Parse and verify args ##
