@@ -14,27 +14,30 @@ Database system to store mutation and variant data for avian influenza.
     export FLU_DB_HOST="localhost"
     export FLU_DB_DB_NAME="flu"
     export FLU_DB_PORT="5432"
+    
+    export FLU_DB_SERVER_DATA_INPUT_DIR="/dev/null"
     ```
     - On kenny, you may need to mess with the port to avoid conflicting with the container I have running.
       Changing the setting in .env will cascade to everywhere else, so just change it there.
     - For now, 'flu' will be the postgres superuser and own everything, eventually we'll want to have less privileged
       roles.
+    - Change the value for `FLU_DB_SERVER_DATA_INPUT_DIR` to allow the server to read input data from a host directory.
 3. Run docker compose to start the database and api containers.
     1. `docker-compose -f docker-compose.yml up -d --build`
     2. This will start up two containers, `flu_db_pg` for postgres, and `flu_db_server` for the webserver.
     3. The server container will automatically start fastAPI.
     4. Use `docker logs flu_db_server` to see server logs.
-4. Update the database schema and insert data.
-    1. The server container comes with a script to update the database schema and insert data.
-    2. `docker exec -d flu_db_server muninn_db_setup`
-    3. This will take several hours to finish.
-    4. To access logs for the insertions process, run `docker exec -it flu_db_server bash` and then see the log file
-       `/usr/flu/db_setup.log`
-5. Once data is loaded, the webserver will start and you can try out a request.
-   You can run requests even if data insertion is not complete, but obviously results will depend on what's in the DB.
-   For information on endpoints see below.
+4. Update the database schema: `docker exec -d flu_db_server muninn_schema_update`
+5. Load or update data:  `docker exec -d flu_db_server muninn_ingest_all`
+    1. Input data must be placed in `FLU_DB_SERVER_DATA_INPUT_DIR` on the host machine.
+       For details read ingestion script: `containers/server/bin/muninn_ingest_all`
+    2. This process will take several hours to finish, but existing records will be updated in-place, and the webserver
+       will remain available.
+    3. For information on logs see Troubleshooting Information > Webserver
 
 ## Troubleshooting Tools
+
+### Database
 
 To run `psql` (the postgres console) on the container, use the following command:
 
@@ -48,18 +51,25 @@ Or, if you have `psql` installed on the system hosting the container:
 psql -U flu -d flu -h localhost -p $FLU_DB_PORT
 ```
 
-`psql` allows you to run arbitrary SQL against the DB. 
+`psql` allows you to run arbitrary SQL against the DB.
 It's very useful for debugging.
 
-### Recreate Server Container without Changing Database
+### Webserver
+
+To see the server (fastAPI) logs, run `docker logs flu_db_server`
+
+The logs for the database setup and data ingestion scripts are kept in files on the container itself, at
+`/flu/db_setup.log` and `/flu/ingest_all.log`.
+
+To get open a terminal session on the server container run `docker exec -it flu_db_server bash`
+
+#### Recreate Server Container without Changing Database
 
 If you recreate the database container, it takes a long time to reload all the data.
 Here's how you recreate just the server container without taking down the database.
 
-1. `docker stop flu_db_server`
-2. `docker rm flu_db_server`
-3. `docker-compose -f docker-compose.yml up -d --no-deps --no-recreate --build server`
-
+1. `docker stop flu_db_server && docker rm flu_db_server`
+2. `docker-compose -f docker-compose.yml up -d --no-deps --no-recreate --build server`
 
 ## Query Syntax
 
@@ -95,9 +105,8 @@ Numbers may contain decimal points.
 
 ## Endpoints
 
-**I'm no longer updating this list to include new endpoints.** 
+**I'm no longer updating this list to include new endpoints.**
 Auto-generated documentation for the API can be found at `<host>:8000/docs`.
-
 
 The following endpoints are currently live:
 
@@ -130,8 +139,8 @@ Prevalence:
 - `/variants/freqency?aa=HA:Q238R`
     - Also allows queries based on nucleotide with parameter `nt=HA:A123C`
 - `/mutations/frequency?aa=HA:Q238R`
-  - Also allows queries based on nucleotide as above.
-  - Returns count of samples associated with the given amino acid or nucleotide change.
+    - Also allows queries based on nucleotide as above.
+    - Returns count of samples associated with the given amino acid or nucleotide change.
 - `/variants/frequency/score?region=HA&metric=stablility`
 
 Note: using `id` as a field in any query (e.g.: `id = 1234`) is likely to fail.

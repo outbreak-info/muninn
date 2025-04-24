@@ -39,17 +39,17 @@ def main():
     parser.add_argument('filename', help='path to file to be parsed')
     parser.add_argument(
         'format',
-        help=f"Name of the format to be parsed. Available formats are: {','.join(formats.keys())}"
+        help=f"Name of the format to be parsed. Available formats are: {', '.join(formats.keys())}"
     )
     args = parser.parse_args()
 
     if not args.format in formats.keys():
-        print('Invalid format name given')
+        print(f'Invalid format name given: {args.format}')
         parser.print_help()
         sys.exit(1)
 
     if not path.isfile(args.filename):
-        print('Input file not found')
+        print(f'Input file not found: {args.filename}')
         parser.print_help()
         sys.exit(1)
 

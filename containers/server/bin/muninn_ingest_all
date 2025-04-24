@@ -1,0 +1,49 @@
+#! /bin/bash
+
+# todo: I should update this to work with the playset
+
+LOG="/flu/ingest_all.log"
+echo "begin at $(date)" >> "$LOG"
+
+DATA_DIR='/flu/data'
+
+# bjorn-general outputs
+BJORN_GENERAL_OUTPUT_ARCHIVE="$DATA_DIR/outputs.all.zip"
+ARCHIVE_DEST_DIR="$DATA_DIR/outputs.all"
+
+SAMPLES_FILE="metadata/metadata.tsv"
+VARIANTS_FILE="intrahost_dms/combined_variants.tsv"
+MUTATIONS_FILE="mutations/mutations.tsv"
+HA_DMS_FILE="dms/dms_HA.tsv"
+
+# these are not part of the output from bjorn-general
+EVE_FILE="eve_dms_data.csv"
+GENOFLU_FILE="genoflu_results.tsv"
+FREYJA_DEMIXED_DIR="demixed"
+
+# unpack zip file
+if [[ -d "$ARCHIVE_DEST_DIR" ]]; then
+  rm -r "$ARCHIVE_DEST_DIR"
+fi
+
+if [[ ! -f "$BJORN_GENERAL_OUTPUT_ARCHIVE" ]]; then
+  echo "bjorn-general outputs archive not found: $BJORN_GENERAL_OUTPUT_ARCHIVE" >> "$LOG"
+  exit 1
+fi
+
+unzip -d "$ARCHIVE_DEST_DIR" "$BJORN_GENERAL_OUTPUT_ARCHIVE"
+
+{
+  # ingest bjorn-general outputs
+  python3 -u runinserts.py "$ARCHIVE_DEST_DIR/$SAMPLES_FILE" samples_tsv
+  python3 -u runinserts.py "$ARCHIVE_DEST_DIR/$VARIANTS_FILE" variants_tsv
+  python3 -u runinserts.py "$ARCHIVE_DEST_DIR/$MUTATIONS_FILE" mutations_tsv
+  python3 -u runinserts.py "$ARCHIVE_DEST_DIR/$HA_DMS_FILE" ha_dms_tsv
+
+  # ingest random other outputs
+  python3 -u runinserts.py "$DATA_DIR/$EVE_FILE" eve_dms_csv
+  python3 -u runinserts.py "$DATA_DIR/$GENOFLU_FILE" genoflu_lineages
+  python3 -u runinserts.py "$DATA_DIR/$FREYJA_DEMIXED_DIR" freyja_demixed
+} &>> "$LOG"
+
+echo "end at $(date)" >> "$LOG"
