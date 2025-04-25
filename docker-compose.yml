@@ -35,7 +35,7 @@ services:
       - type: bind
         source: ${FLU_DB_SERVER_DATA_INPUT_DIR}
         target: /flu/data
-        read_only: true
+        read_only: false
     ports:
       - "8000:8000"
     environment:
