@@ -143,7 +143,7 @@ class SamplesParser(FileParser):
                         debug_info['count_preexisting'] += 1
                 except ValueError:
                     # todo: logging
-                    debug_info['malformed_lines'] += 1
+                    debug_info['skipped_malformed'] += 1
 
         print(debug_info)
 
