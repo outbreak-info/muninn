@@ -200,7 +200,7 @@ class ColNameMapping(Enum):
     bio_sample_model = 'BioSampleModel'
     bytes_ = 'Bytes'
     center_name = 'Center Name'
-    collection_date = 'collection'
+    collection_date = 'Collection_Date'
     consent_level = 'Consent'
     datastore_filetype = 'DATASTORE filetype'
     datastore_provider = 'DATASTORE provider'
