@@ -11,6 +11,9 @@ DATA_DIR='/flu/data'
 BJORN_GENERAL_OUTPUT_ARCHIVE="$DATA_DIR/outputs.all.zip"
 ARCHIVE_DEST_DIR="$DATA_DIR/outputs.all"
 
+# b/c the archive is a compressed directory, we have to go down another layer
+ARCHIVE_DEST_SUBDIR="$ARCHIVE_DEST_DIR/outputs"
+
 SAMPLES_FILE="metadata/metadata.tsv"
 VARIANTS_FILE="intrahost_dms/combined_variants.tsv"
 MUTATIONS_FILE="mutations/mutations.tsv"
@@ -35,10 +38,10 @@ unzip -d "$ARCHIVE_DEST_DIR" "$BJORN_GENERAL_OUTPUT_ARCHIVE"
 
 {
   # ingest bjorn-general outputs
-  python3 -u runinserts.py "$ARCHIVE_DEST_DIR/$SAMPLES_FILE" samples_tsv
-  python3 -u runinserts.py "$ARCHIVE_DEST_DIR/$VARIANTS_FILE" variants_tsv
-  python3 -u runinserts.py "$ARCHIVE_DEST_DIR/$MUTATIONS_FILE" mutations_tsv
-  python3 -u runinserts.py "$ARCHIVE_DEST_DIR/$HA_DMS_FILE" ha_dms_tsv
+  python3 -u runinserts.py "$ARCHIVE_DEST_SUBDIR/$SAMPLES_FILE" samples_tsv
+  python3 -u runinserts.py "$ARCHIVE_DEST_SUBDIR/$VARIANTS_FILE" variants_tsv
+  python3 -u runinserts.py "$ARCHIVE_DEST_SUBDIR/$MUTATIONS_FILE" mutations_tsv
+  python3 -u runinserts.py "$ARCHIVE_DEST_SUBDIR/$HA_DMS_FILE" ha_dms_tsv
 
   # ingest random other outputs
   python3 -u runinserts.py "$DATA_DIR/$EVE_FILE" eve_dms_csv
