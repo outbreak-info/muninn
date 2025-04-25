@@ -14,4 +14,4 @@ ADD utils /flu/utils
 ADD parser /flu/parser
 COPY alembic.ini ./
 COPY runinserts.py ./
-COPY containers/server/bin/* /bin
+COPY containers/server/bin/* /bin/
