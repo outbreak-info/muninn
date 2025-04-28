@@ -1,0 +1,45 @@
+#! /bin/bash
+
+DATA_DIR='/flu/data'
+ARCHIVE_FILENAME='UNSET'
+
+ARCHIVE_FILENAME="$1"
+
+if [[ "$ARCHIVE_FILENAME" = 'UNSET' ]]; then
+  echo "archive name not provided"
+  exit 1
+fi
+
+ARCHIVE_FILENAME="$DATA_DIR/$ARCHIVE_FILENAME"
+
+if [[ ! -f "$ARCHIVE_FILENAME" ]]; then
+  echo "File not found: $ARCHIVE_FILENAME"
+  exit 1
+fi
+
+TMP="$DATA_DIR/playset_tmp"
+mkdir "$TMP"
+
+tar -C "$TMP" -xzvf "$ARCHIVE_FILENAME"
+
+SAMPLES="$TMP/samples.tsv"
+VARIANTS="$TMP/variants.tsv"
+MUTATIONS="$TMP/mutations.tsv"
+DMS_HA="$TMP/dms.tsv"
+EVE="$TMP/eve.csv"
+GENOFLU="$TMP/genoflu.tsv"
+DEMIXED_DIR="$TMP/demixed_out"
+
+# ingest bjorn-general outputs
+python3 -u runinserts.py "$SAMPLES" samples_tsv
+python3 -u runinserts.py "$VARIANTS" variants_tsv
+python3 -u runinserts.py "$MUTATIONS" mutations_tsv
+python3 -u runinserts.py "$DMS_HA" ha_dms_tsv
+
+# ingest random other outputs
+python3 -u runinserts.py "$EVE" eve_dms_csv
+python3 -u runinserts.py "$GENOFLU" genoflu_lineages
+python3 -u runinserts.py "$DEMIXED_DIR" freyja_demixed
+
+rm -r "$TMP"
+
