@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Set
 
 '''
 Some notes about what can be in this file:
@@ -17,4 +18,10 @@ class FileParser(ABC):
 
     @abstractmethod
     async def parse_and_insert(self):
+        raise NotImplementedError
+
+
+    @classmethod
+    @abstractmethod
+    def get_required_column_set(cls) -> Set[str]:
         raise NotImplementedError

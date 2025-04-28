@@ -10,7 +10,7 @@ from DB.inserts.lineage_systems import find_or_insert_lineage_system
 from DB.inserts.lineages import find_or_insert_lineage
 from DB.inserts.samples import find_sample_id_by_accession
 from DB.inserts.samples_lineages import upsert_sample_lineage
-from DB.models import LineageSystem, Lineage, Sample, SampleLineage
+from DB.models import LineageSystem, Lineage, SampleLineage
 from utils.constants import LineageSystemNames
 from utils.errors import NotFoundError
 
@@ -145,3 +145,7 @@ class FreyjaDemixedParser(FileParser):
     def _parse_abundances_line(cls, line: str) -> List[float]:
         wo_prefix = line.removeprefix(ABUNDANCES).strip()
         return [float(a) for a in re.split(r'\s+', wo_prefix)]
+
+    @classmethod
+    def get_required_column_set(cls):
+        return {'not really applicable, requires abundances line and lineages lines'}

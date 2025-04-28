@@ -2,7 +2,7 @@ import csv
 import re
 from csv import DictReader
 from enum import Enum
-
+from typing import Set
 
 from sqlalchemy.exc import IntegrityError
 
@@ -50,7 +50,7 @@ class GenofluLineagesParser(FileParser):
 
         with open(self.filename, 'r') as f:
             reader = csv.DictReader(f, delimiter='\t')
-            GenofluLineagesParser._verify_header(reader)
+            self._verify_header(reader)
 
             for row in reader:
                 try:
@@ -101,19 +101,23 @@ class GenofluLineagesParser(FileParser):
 
                 accessions_seen.add(sample_accession)
 
-        #todo: logging
+        # todo: logging
         print(debug_info)
-
 
     @classmethod
     def _verify_header(cls, reader: DictReader) -> None:
-        required_cols = {cn.value for cn in {
+        required_cols = cls.get_required_column_set()
+        diff = required_cols - set(reader.fieldnames)
+        if not len(diff) == 0:
+            raise ValueError(f'The following required columns were not found: {diff}')
+
+    @classmethod
+    def get_required_column_set(cls) -> Set[str]:
+        return {cn.value for cn in {
             ColNameMapping.sample_accession,
             ColNameMapping.genotype
         }}
 
-        if not required_cols <= set(reader.fieldnames):
-            raise ValueError('did not find all required fields in header')
 
 class ColNameMapping(Enum):
     sample_accession = 'sample'

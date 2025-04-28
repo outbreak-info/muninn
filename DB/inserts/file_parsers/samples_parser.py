@@ -1,6 +1,7 @@
 import csv
 from csv import DictReader
 from enum import Enum
+from typing import Set
 
 import dateutil
 
@@ -30,7 +31,7 @@ class SamplesParser(FileParser):
 
         with open(self.filename, 'r') as f:
             reader = csv.DictReader(f, delimiter=self.delimiter)
-            SamplesParser._verify_header(reader)
+            self._verify_header(reader)
             for row in reader:
                 try:
                     # parse geo location
@@ -149,7 +150,13 @@ class SamplesParser(FileParser):
 
     @classmethod
     def _verify_header(cls, reader: DictReader):
-        required_columns = {cn.value for cn in {
+        required_columns = cls.get_required_column_set()
+        if not set(reader.fieldnames) >= required_columns:
+            raise ValueError(f'Missing required columns: {required_columns - set(reader.fieldnames)}')
+
+    @classmethod
+    def get_required_column_set(cls) -> Set[str]:
+        return {str(cn.value) for cn in {
             ColNameMapping.accession,
             ColNameMapping.assay_type,
             ColNameMapping.avg_spot_length,
@@ -186,8 +193,6 @@ class SamplesParser(FileParser):
             ColNameMapping.is_retracted,
             ColNameMapping.retraction_detected_date,
         }}
-        if not set(reader.fieldnames) >= required_columns:
-            raise ValueError(f'Missing required columns: {required_columns - set(reader.fieldnames)}')
 
 
 class ColNameMapping(Enum):

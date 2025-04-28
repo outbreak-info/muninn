@@ -3,6 +3,7 @@ import asyncio
 import sys
 from datetime import datetime
 from os import path
+from typing import Any
 
 from DB.inserts.file_formats.eve_dms_csv import EveDmsCsv
 from DB.inserts.file_formats.file_format import FileFormat
@@ -36,20 +37,37 @@ def main():
     parser = argparse.ArgumentParser(
         description='Muninn Data Insertion'
     )
-    parser.add_argument('filename', help='path to file to be parsed')
+    parser.add_argument('filename', help='path to file to be parsed', nargs='?')
     parser.add_argument(
         'format',
-        help=f"Name of the format to be parsed. Available formats are: {', '.join(formats.keys())}"
+        help=f"Name of the format to be parsed. Available formats are: {', '.join(formats.keys())}",
+        nargs='?'
     )
+
+    parser.add_argument(
+        '--req_cols',
+        help='Print required column info for each format and exit',
+        action='store_true',
+        required=False
+    )
+
     args = parser.parse_args()
+
+    if args.req_cols:
+        print_req_col_info(formats)
+        return
+    elif args.filename is None or args.format is None:
+        print('Specify either a help option or a filename and format')
+        parser.print_help()
+        return
 
     if not args.format in formats.keys():
         print(f'Invalid format name given: {args.format}')
         parser.print_help()
         sys.exit(1)
 
-    if not path.isfile(args.filename):
-        print(f'Input file not found: {args.filename}')
+    if not path.exists(args.filename):
+        print(f'Input file or dir not found: {args.filename}')
         parser.print_help()
         sys.exit(1)
 
@@ -67,6 +85,14 @@ def main():
         asyncio.run(file_format.insert_from_file(filename))
     end_time = datetime.now()
     print(f'{filename} {args.format} end at {end_time}, elapsed: {end_time - start_time}')
+
+
+def print_req_col_info(formats: dict[str, Any]) -> None:
+    for name, parser in formats.items():
+        if issubclass(parser, FileParser):
+            print(name)
+            for col in parser.get_required_column_set():
+                print(f'\t{col}')
 
 
 if __name__ == '__main__':

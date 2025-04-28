@@ -1,5 +1,6 @@
 from csv import DictReader
 from enum import Enum
+from typing import Set
 
 from DB.inserts.amino_acid_substitutions import find_aa_sub
 from DB.inserts.file_parsers.file_parser import FileParser
@@ -18,27 +19,12 @@ class DmsFileParser(FileParser):
         self.delimiter = delimiter
         self.gff_feature = gff_feature
 
-        # this will allow us to pass a set of data cols as a parameter later if needed
-        # todo: these names and values need to be canonized and controlled.
-        #  The names here will be used as metric names in the DB, and the values are the expected col names in input.
-        #  So messing up the variable names would mess up a lot.
-        #  Any scripts doing these insertions need to be sharing a single name mapping to avoid a mess.
-        self.data_cols = {
-            ColNameMapping.ferret_sera_escape,
-            ColNameMapping.mouse_sera_escape,
-            ColNameMapping.species_sera_escape,
-            ColNameMapping.entry_in_293t_cells,
-            ColNameMapping.stability,
-            ColNameMapping.sa26_usage_increase,
-            ColNameMapping.mature_h5_site
-        }
-
     async def parse_and_insert(self):
         debug_info = {
             'skipped_aas_data_missing': 0,
             'skipped_aas_not_found': 0,
             'value_parsing_errors': 0,
-            'count_existing_updated': 0 # only counts if the value changed
+            'count_existing_updated': 0  # only counts if the value changed
         }
         # format = metric_name -> id
         cache_metric_ids = dict()
@@ -83,7 +69,7 @@ class DmsFileParser(FileParser):
                         cache_amino_subs_not_found.add((position_aa, ref_aa, alt_aa))
                         continue
 
-                for data_col in self.data_cols:
+                for data_col in DmsFileParser._get_data_cols():
                     try:
                         v = get_value(row, data_col.value, transform=float)
                     except ValueError:
@@ -95,12 +81,11 @@ class DmsFileParser(FileParser):
                     except KeyError:
                         metric_id = await find_or_insert_metric(
                             PhenotypeMetric(
-                                name = data_col.name,
+                                name=data_col.name,
                                 assay_type=PhenotypeMetricAssayTypes.DMS
                             )
                         )
                         cache_metric_ids[data_col.name] = metric_id
-
 
                     updated = await insert_pheno_measurement_result(
                         PhenotypeMeasurementResult(
@@ -116,27 +101,48 @@ class DmsFileParser(FileParser):
         debug_info['count_aas_not_found'] = len(cache_amino_subs_not_found)
         print(debug_info)
 
-
-
-
-    def _verify_header(self, reader: DictReader):
-        required_cols = {cn.value for cn in {
-            ColNameMapping.position_aa,
-            ColNameMapping.alt_aa,
-            ColNameMapping.ref_aa,
-        }}
-        for cn in self.data_cols:
-            required_cols.add(cn.value)
-
+    @classmethod
+    def _verify_header(cls, reader: DictReader):
+        required_cols = cls.get_required_column_set()
         diff = required_cols - set(reader.fieldnames)
         if not len(diff) == 0:
             raise ValueError(f'Not all required columns are present, missing: {diff}')
+
+    @classmethod
+    def get_required_column_set(cls) -> Set[str]:
+        cols = {cn.value for cn in {
+            ColNameMapping.position_aa,
+            ColNameMapping.alt_aa,
+            ColNameMapping.ref_aa,
+
+        }}
+        for dc in cls._get_data_cols():
+            cols.add(dc.value)
+        return cols
+
+    @classmethod
+    def _get_data_cols(cls):
+        return {
+            ColNameMapping.ferret_sera_escape,
+            ColNameMapping.mouse_sera_escape,
+            ColNameMapping.species_sera_escape,
+            ColNameMapping.entry_in_293t_cells,
+            ColNameMapping.stability,
+            ColNameMapping.sa26_usage_increase,
+            ColNameMapping.mature_h5_site,
+        }
 
 
 class ColNameMapping(Enum):
     ref_aa = 'ref'
     alt_aa = 'mutant'
     position_aa = 'pos'
+
+    # data column names
+    # todo: these names and values need to be canonized and controlled.
+    #  The names here will be used as metric names in the DB, and the values are the expected col names in input.
+    #  So messing up the variable names would mess up a lot.
+    #  Any scripts doing these insertions need to be sharing a single name mapping to avoid a mess.
     species_sera_escape = 'species sera escape'
     entry_in_293t_cells = 'entry in 293T cells'
     stability = 'stability'
@@ -144,7 +150,6 @@ class ColNameMapping(Enum):
     mature_h5_site = 'mature_H5_site'
     ferret_sera_escape = 'ferret sera escape'
     mouse_sera_escape = 'mouse sera escape'
-
 
 
 class HaRegionDmsTsvParser(DmsFileParser):

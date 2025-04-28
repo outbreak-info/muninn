@@ -1,6 +1,7 @@
 import csv
 from csv import DictReader
 from enum import Enum
+from typing import Set
 
 from DB.inserts.alleles import find_or_insert_allele
 from DB.inserts.amino_acid_substitutions import find_or_insert_aa_sub
@@ -33,7 +34,7 @@ class MutationsTsvParser(FileParser):
         cache_accessions_not_found = set()
         with open(self.filename, 'r') as f:
             reader = csv.DictReader(f, delimiter='\t')
-            MutationsTsvParser._verify_header(reader)
+            self._verify_header(reader)
 
             for row in reader:
                 try:
@@ -115,7 +116,14 @@ class MutationsTsvParser(FileParser):
 
     @classmethod
     def _verify_header(cls, reader: DictReader):
-        required_columns = {cn.value for cn in {
+        required_columns = cls.get_required_column_set()
+        diff = required_columns - set(reader.fieldnames)
+        if not len(diff) == 0:
+            raise ValueError(f'Not all required columns are present, missing: {diff}')
+
+    @classmethod
+    def get_required_column_set(cls) -> Set[str]:
+        return {str(cn.value) for cn in {
             ColNameMapping.accession,
             ColNameMapping.region,
             ColNameMapping.position_nt,
@@ -128,9 +136,6 @@ class MutationsTsvParser(FileParser):
             ColNameMapping.alt_aa,
             ColNameMapping.position_aa,
         }}
-        diff = required_columns - set(reader.fieldnames)
-        if not len(diff) == 0:
-            raise ValueError(f'Not all required columns are present, missing: {diff}')
 
 
 class ColNameMapping(Enum):

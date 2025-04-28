@@ -1,6 +1,7 @@
 import csv
 from csv import DictReader
 from enum import Enum
+from typing import Set
 
 from DB.inserts.alleles import find_or_insert_allele
 from DB.inserts.amino_acid_substitutions import find_or_insert_aa_sub
@@ -156,7 +157,13 @@ class VariantsTsvParser(FileParser):
 
     @classmethod
     def _verify_header(cls, reader: DictReader) -> None:
-        required_columns = {cn.value for cn in {
+        required_columns = cls.get_required_column_set()
+        if not set(reader.fieldnames) >= required_columns:
+            raise ValueError(f'Missing required fields: {required_columns - set(reader.fieldnames)}')
+
+    @classmethod
+    def get_required_column_set(cls) -> Set[str]:
+        return {str(cn.value) for cn in {
             ColNameMapping.accession,
             ColNameMapping.region,
             ColNameMapping.position_nt,
@@ -180,25 +187,19 @@ class VariantsTsvParser(FileParser):
             ColNameMapping.position_aa,
         }}
 
-        if not set(reader.fieldnames) >= required_columns:
-            raise ValueError(f'Missing required fields: {required_columns - set(reader.fieldnames)}')
-
 
 class ColNameMapping(Enum):
     region = 'REGION'
     position_nt = 'POS'
     ref_nt = 'REF'
     alt_nt = 'ALT'
-
     position_aa = 'POS_AA'
     ref_aa = 'REF_AA'
     alt_aa = 'ALT_AA'
     gff_feature = 'GFF_FEATURE'
     ref_codon = 'REF_CODON'
     alt_codon = 'ALT_CODON'
-
     accession = 'SRA'
-
     pval = 'PVAL'
     ref_dp = 'REF_DP'
     ref_rv = 'REF_RV'

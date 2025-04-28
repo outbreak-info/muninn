@@ -1,7 +1,5 @@
 #! /bin/bash
 
-# todo: I should update this to work with the playset
-
 LOG="/flu/ingest_all.log"
 echo "begin at $(date)" >> "$LOG"
 
