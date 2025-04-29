@@ -5,7 +5,7 @@ ARCHIVE_FILENAME='UNSET'
 
 ARCHIVE_FILENAME="$1"
 
-if [[ "$ARCHIVE_FILENAME" = 'UNSET' ]]; then
+if [[ "$#" -eq 0 ]]; then
   echo "archive name not provided"
   exit 1
 fi
