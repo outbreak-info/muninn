@@ -140,7 +140,7 @@ class MutationsTsvParser(FileParser):
 
 class ColNameMapping(Enum):
     accession = 'sra'
-    position_nt = 'position'
+    position_nt = 'pos'
     ref_nt = 'ref'
     alt_nt = 'alt'
     region = 'region'
