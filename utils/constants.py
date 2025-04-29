@@ -12,7 +12,7 @@ CHANGE_PATTERN = r'^(\w+):([a-zA-Z])(\d+)([a-zA-Z\-+]+)'
 
 class PhenotypeMetricAssayTypes:
     DMS = 'DMS'
-    EVE = 'EVE'
+    EVE = 'EVEscape'
 
 
 class DefaultGffFeaturesByRegion:
