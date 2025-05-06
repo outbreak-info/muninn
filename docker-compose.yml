@@ -4,6 +4,7 @@ services:
   postgres:
     container_name: "flu_db_pg"
     image: postgres:16-bullseye
+    restart: always
     ports:
       - "${FLU_DB_PORT}:5432"
     # todo: eventually I'd like to not use the superuser for everything
@@ -25,6 +26,14 @@ services:
       interval: 2s
       timeout: 3s
       retries: 15
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8080:8080
 
   server:
     container_name: "flu_db_server"
@@ -49,3 +58,6 @@ services:
       sleep 30
       && fastapi run api/main.py
       "
+
+volumes:
+  postgres_data:
