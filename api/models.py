@@ -231,3 +231,13 @@ class LineageAbundanceInfo(BaseModel):
     sample_id: int
     accession: str
     abundance: float
+
+class LineageAbundanceSummaryInfo(BaseModel):
+    lineage_name: str
+    lineage_system_name: str
+    sample_count: int
+    abundance_min: float
+    abundance_q1: float
+    abundance_median: float
+    abundance_q3: float
+    abundance_max: float
