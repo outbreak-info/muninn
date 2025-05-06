@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import List, Optional
+from typing import List
 
 from pydantic import BaseModel
 
@@ -217,3 +217,17 @@ class LineageCountInfo(BaseModel):
     count: int
     lineage_system: str | None
     lineage: str | None
+
+
+# todo: do I want to drop the ids?
+class LineageInfo(BaseModel):
+    lineage_id: int
+    lineage_name: str
+    lineage_system_id: int
+    lineage_system_name: str
+
+class LineageAbundanceInfo(BaseModel):
+    lineage_info: 'LineageInfo'
+    sample_id: int
+    accession: str
+    abundance: float

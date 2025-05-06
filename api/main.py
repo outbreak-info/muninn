@@ -13,7 +13,7 @@ import DB.queries.prevalence
 import DB.queries.samples
 import DB.queries.variants
 from api.models import VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
-    MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo
+    MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo
 from utils.constants import CHANGE_PATTERN
 from utils.errors import ParsingError
 
@@ -192,3 +192,15 @@ def get_sample_counts_per_lineage(q: str | None = None):
         return DB.queries.lineages.get_sample_counts_by_lineage(q)
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
+
+@app.get('/lineages/abundances', response_model=List[LineageAbundanceInfo])
+async def get_lineage_abundance_info(q: str | None = None):
+    """
+    :param q: a query to be run against lineages and samples.
+    Note that results without abundance numbers are always excluded.
+    """
+    try:
+        return await DB.queries.lineages.get_abundances(raw_query=q)
+    except ParsingError as e:
+        raise HTTPException(status_code=400, detail=e.message)
+

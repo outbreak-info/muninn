@@ -1,8 +1,9 @@
+import asyncio
 import logging
 from pprint import pprint
 
 from DB.queries.counts import count_variants_by_column, count_mutations_by_column
-from DB.queries.lineages import get_sample_counts_by_lineage
+from DB.queries.lineages import get_sample_counts_by_lineage, get_abundances
 from DB.queries.mutations import get_mutations_by_sample, get_mutations
 from DB.queries.prevalence import get_samples_variant_freq_by_aa_change, get_samples_variant_freq_by_nt_change, \
     get_mutation_sample_count_by_aa, get_mutation_sample_count_by_nt, get_pheno_values_and_variant_counts, \
@@ -50,11 +51,13 @@ logger.setLevel(logging.INFO)
 # r = get_samples_variant_freq_by_nt_change('HA:G148-A')
 
 # r = get_pheno_values_and_variant_counts('stability', 'HA', include_refs=False, samples_query=None)
-r = get_pheno_values_and_mutation_counts('stability', 'HA', False, None)
+# r = get_pheno_values_and_mutation_counts('stability', 'HA', False, None)
 # r = get_mutation_sample_count_by_aa('PB2:L502L')
 
 # r = get_mutation_sample_count_by_nt('NA:G696T')
 
 # r = get_sample_counts_by_lineage('host = CAT')
+
+r = asyncio.run(get_abundances(None))
 
 pprint(r)
