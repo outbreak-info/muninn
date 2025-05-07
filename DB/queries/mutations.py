@@ -1,9 +1,9 @@
 from typing import List
 
 from sqlalchemy import select, text
-from sqlalchemy.orm import Session, contains_eager
+from sqlalchemy.orm import contains_eager
 
-from DB.engine import engine, get_async_session
+from DB.engine import get_async_session
 from DB.models import Mutation, Allele, AminoAcidSubstitution, Sample, GeoLocation, Translation
 from api.models import MutationInfo
 from parser.parser import parser

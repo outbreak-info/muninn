@@ -1,8 +1,7 @@
 from sqlalchemy import text, select
-from sqlalchemy.orm import Session
 from sqlalchemy.sql.functions import func
 
-from DB.engine import engine, get_async_session
+from DB.engine import get_async_session
 from DB.models import Sample, GeoLocation, IntraHostVariant, AminoAcidSubstitution, Allele, Mutation, Translation
 
 
