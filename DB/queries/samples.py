@@ -69,7 +69,7 @@ async def get_samples_by_mutation(query: str) -> List['SampleInfo']:
     async with get_async_session() as session:
         samples = await session.scalars(samples_query)
         out_data = []
-        for s in samples:
+        for s in samples.unique():
             out_data.append(
                 SampleInfo.from_db_object(s)
             )
@@ -100,5 +100,5 @@ async def get_samples_by_variant(query: str) -> List['SampleInfo']:
 
     async with get_async_session() as session:
         samples = await session.scalars(samples_query)
-        out_data = [SampleInfo.from_db_object(s) for s in samples]
+        out_data = [SampleInfo.from_db_object(s) for s in samples.unique()]
     return out_data

@@ -37,8 +37,8 @@ async def get_sample_by_id(sample_id: int):
 
 
 @app.get('/phenotype_metrics', response_model=List[PhenotypeMetricInfo])
-def get_all_phenotype_metrics():
-    return DB.queries.phenotype_metrics.get_all_pheno_metrics()
+async def get_all_phenotype_metrics():
+    return await DB.queries.phenotype_metrics.get_all_pheno_metrics()
 
 
 @app.get('/samples', response_model=List[SampleInfo])
@@ -50,9 +50,9 @@ async def get_samples_query(q: str):
 
 
 @app.get('/variants', response_model=List[VariantInfo])
-def get_variants_query(q: str):
+async def get_variants_query(q: str):
     try:
-        return DB.queries.variants.get_variants(q)
+        return await DB.queries.variants.get_variants(q)
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
@@ -66,9 +66,9 @@ def get_mutations_query(q: str):
 
 
 @app.get('/variants/by/sample', response_model=List[VariantInfo])
-def get_variants_by_sample(q: str):
+async def get_variants_by_sample(q: str):
     try:
-        return DB.queries.variants.get_variants_for_sample(q)
+        return await DB.queries.variants.get_variants_for_sample(q)
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
