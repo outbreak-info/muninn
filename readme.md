@@ -34,6 +34,11 @@ Database system to store mutation and variant data for avian influenza.
     2. This process will take several hours to finish, but existing records will be updated in-place, and the webserver
        will remain available.
     3. For information on logs see Troubleshooting Information > Webserver
+6. Load or update test data: `docker exec -d flu_db_server muninn_ingest_playset ${FLU_DB_SERVER_DATA_INPUT_DIR}/<archive name>`
+    1. Input data must be placed in `FLU_DB_SERVER_DATA_INPUT_DIR` on the host machine.
+       For details read ingestion script: `containers/server/bin/muninn_ingest_playset`
+    2. This process will take a few minutes and data will persist in a docker volume. Please see `docker-compoase.yml` for details.
+    3. For information on logs see Troubleshooting Information > Webserver
 
 ## Troubleshooting Tools
 
