@@ -1,16 +1,12 @@
 #! /bin/bash
 
-DATA_DIR='/flu/data'
-ARCHIVE_FILENAME='UNSET'
-
 ARCHIVE_FILENAME="$1"
+DATA_DIR=$(dirname $ARCHIVE_FILENAME)
 
 if [[ "$#" -eq 0 ]]; then
   echo "archive name not provided"
   exit 1
 fi
-
-ARCHIVE_FILENAME="$DATA_DIR/$ARCHIVE_FILENAME"
 
 if [[ ! -f "$ARCHIVE_FILENAME" ]]; then
   echo "File not found: $ARCHIVE_FILENAME"
