@@ -29,8 +29,8 @@ app.add_middleware(
 
 
 @app.get('/sample/{sample_id}', response_model=SampleInfo)
-def get_sample_by_id(sample_id: int):
-    sample = DB.queries.samples.get_sample_by_id(sample_id)
+async def get_sample_by_id(sample_id: int):
+    sample = await DB.queries.samples.get_sample_by_id(sample_id)
     if sample is None:
         raise HTTPException(status_code=404)
     return sample
@@ -42,9 +42,9 @@ def get_all_phenotype_metrics():
 
 
 @app.get('/samples', response_model=List[SampleInfo])
-def get_samples_query(q: str):
+async def get_samples_query(q: str):
     try:
-        return DB.queries.samples.get_samples(q)
+        return await DB.queries.samples.get_samples(q)
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
@@ -82,17 +82,17 @@ def get_mutations_by_sample(q: str):
 
 
 @app.get('/samples/by/mutation', response_model=List[SampleInfo])
-def get_samples_by_mutation(q: str):
+async def get_samples_by_mutation(q: str):
     try:
-        return DB.queries.samples.get_samples_by_mutation(q)
+        return await DB.queries.samples.get_samples_by_mutation(q)
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
 
 @app.get('/samples/by/variant', response_model=List[SampleInfo])
-def get_samples_by_variant(q: str):
+async def get_samples_by_variant(q: str):
     try:
-        return DB.queries.samples.get_samples_by_variant(q)
+        return await DB.queries.samples.get_samples_by_variant(q)
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 

@@ -1,15 +1,15 @@
 from typing import List
 
 from sqlalchemy import select, text
-from sqlalchemy.orm import Session, contains_eager
+from sqlalchemy.orm import contains_eager
 
-from DB.engine import engine
+from DB.engine import get_async_session
 from DB.models import Sample, Mutation, GeoLocation, Allele, AminoAcidSubstitution, IntraHostVariant, Translation
 from api.models import SampleInfo
 from parser.parser import parser
 
 
-def get_sample_by_id(sample_id: int) -> SampleInfo | None:
+async def get_sample_by_id(sample_id: int) -> SampleInfo | None:
     query = (
         select(Sample, GeoLocation)
         .join(GeoLocation, GeoLocation.id == Sample.geo_location_id, isouter=True)
@@ -17,15 +17,14 @@ def get_sample_by_id(sample_id: int) -> SampleInfo | None:
         .where(Sample.id == sample_id)
     )
 
-    with Session(engine) as session:
-        result = session.execute(query).scalar()
+    async with get_async_session() as session:
+        result = await session.scalar(query)
     if result is None:
         return None
     return SampleInfo.from_db_object(result)
 
 
-def get_samples(query: str) -> List['SampleInfo']:
-    # todo: bind parameters
+async def get_samples(query: str) -> List['SampleInfo']:
     user_defined_query = parser.parse(query)
 
     samples_query = (
@@ -35,16 +34,15 @@ def get_samples(query: str) -> List['SampleInfo']:
         .where(text(user_defined_query))
     )
 
-    with Session(engine) as session:
-        samples = session.execute(samples_query).scalars()
+    async with get_async_session() as session:
+        samples = await session.scalars(samples_query)
         out_data = [SampleInfo.from_db_object(s) for s in samples]
     return out_data
 
 
-def get_samples_by_mutation(query: str) -> List['SampleInfo']:
+async def get_samples_by_mutation(query: str) -> List['SampleInfo']:
     user_defined_query = parser.parse(query)
 
-    # todo: bind parameters
     samples_query = (
         select(Sample, GeoLocation)
         .join(GeoLocation, Sample.geo_location_id == GeoLocation.id, isouter=True)
@@ -68,8 +66,8 @@ def get_samples_by_mutation(query: str) -> List['SampleInfo']:
         )
     )
 
-    with Session(engine) as session:
-        samples = session.execute(samples_query).unique().scalars()
+    async with get_async_session() as session:
+        samples = await session.scalars(samples_query)
         out_data = []
         for s in samples:
             out_data.append(
@@ -78,8 +76,7 @@ def get_samples_by_mutation(query: str) -> List['SampleInfo']:
     return out_data
 
 
-def get_samples_by_variant(query: str) -> List['SampleInfo']:
-    # todo: bind parameters, id will fail
+async def get_samples_by_variant(query: str) -> List['SampleInfo']:
     user_query = parser.parse(query)
 
     samples_query = (
@@ -101,7 +98,7 @@ def get_samples_by_variant(query: str) -> List['SampleInfo']:
         )
     )
 
-    with Session(engine) as session:
-        samples = session.execute(samples_query).unique().scalars()
+    async with get_async_session() as session:
+        samples = await session.scalars(samples_query)
         out_data = [SampleInfo.from_db_object(s) for s in samples]
     return out_data

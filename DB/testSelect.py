@@ -44,7 +44,7 @@ logger.setLevel(logging.INFO) # set debug to log results as well
 
 # r = get_samples('host = Cat')
 
-# r = get_samples_by_variant('position_aa < 100')
+r = asyncio.run(get_samples_by_variant('position_aa < 100'))
 
 # r = asyncio.run(get_samples_variant_freq_by_aa_change('HA:Q238R'))
 
@@ -59,5 +59,5 @@ logger.setLevel(logging.INFO) # set debug to log results as well
 # r = get_sample_counts_by_lineage('host = CAT')
 
 # r = asyncio.run(get_abundances(None))
-r = asyncio.run(get_abundance_summaries("lineage_name=H5Nx-A"))
+# r = asyncio.run(get_abundance_summaries("lineage_name=H5Nx-A"))
 pprint(r)
