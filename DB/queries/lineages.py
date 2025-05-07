@@ -1,15 +1,15 @@
 from typing import List
 
 from sqlalchemy import select, func, distinct, text, and_
-from sqlalchemy.orm import Session, contains_eager
+from sqlalchemy.orm import contains_eager
 
-from DB.engine import engine, get_async_session
+from DB.engine import get_async_session
 from DB.models import LineageSystem, Lineage, Sample, SampleLineage, GeoLocation
 from api.models import LineageCountInfo, LineageAbundanceInfo, LineageInfo, LineageAbundanceSummaryInfo
 from parser.parser import parser
 
 
-def get_sample_counts_by_lineage(samples_raw_query: str | None) -> List[LineageCountInfo]:
+async def get_sample_counts_by_lineage(samples_raw_query: str | None) -> List[LineageCountInfo]:
     lineage_count_query = (
         select(SampleLineage, Lineage, LineageSystem)
         .join(Lineage, Lineage.id == SampleLineage.lineage_id, isouter=True)
@@ -33,8 +33,8 @@ def get_sample_counts_by_lineage(samples_raw_query: str | None) -> List[LineageC
             )
         )
 
-    with Session(engine) as session:
-        res = session.execute(lineage_count_query)
+    async with get_async_session() as session:
+        res = await session.execute(lineage_count_query)
         out_data = []
         for r in res:
             out_data.append(

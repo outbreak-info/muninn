@@ -8,6 +8,6 @@ def timing(f):
         t0 = time()
         result = f(*args, **kwargs)
         t1 = time()
-        print(f'{f.__name__} took {t1 - t0}s')
+        print(f'{f.__name__.ljust(40, ' ')} took {t1 - t0}s')
         return result
     return wrap

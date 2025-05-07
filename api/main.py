@@ -184,12 +184,12 @@ async def get_mutation_counts_by_phenotype_score(region: str, metric: str, inclu
 
 
 @app.get('/count/samples/lineages', response_model=List[LineageCountInfo])
-def get_sample_counts_per_lineage(q: str | None = None):
+async def get_sample_counts_per_lineage(q: str | None = None):
     """
     :param q: A query to be run against samples. If provided, only samples matching the query will be counted.
     """
     try:
-        return DB.queries.lineages.get_sample_counts_by_lineage(q)
+        return await DB.queries.lineages.get_sample_counts_by_lineage(q)
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
