@@ -3,13 +3,13 @@ from typing import List
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session, contains_eager
 
-from DB.engine import engine
+from DB.engine import engine, get_async_session
 from DB.models import Mutation, Allele, AminoAcidSubstitution, Sample, GeoLocation, Translation
 from api.models import MutationInfo
 from parser.parser import parser
 
 
-def get_mutations(query: str) -> List['MutationInfo']:
+async def get_mutations(query: str) -> List['MutationInfo']:
     user_query = parser.parse(query)
 
     mutations_query = (
@@ -25,14 +25,13 @@ def get_mutations(query: str) -> List['MutationInfo']:
         )
     )
 
-    with Session(engine) as session:
-        results = session.execute(mutations_query).unique().scalars()
-        out_data = [MutationInfo.from_db_object(m) for m in results]
+    async with get_async_session() as session:
+        results = await session.scalars(mutations_query)
+        out_data = [MutationInfo.from_db_object(m) for m in results.unique()]
     return out_data
 
 
-def get_mutations_by_sample(query: str) -> List['MutationInfo']:
-    # todo: bind parameters
+async def get_mutations_by_sample(query: str) -> List['MutationInfo']:
     user_query = parser.parse(query)
 
     mutations_query = (
@@ -52,7 +51,7 @@ def get_mutations_by_sample(query: str) -> List['MutationInfo']:
         )
     )
 
-    with Session(engine) as session:
-        results = session.execute(mutations_query).unique().scalars()
-        out_data = [MutationInfo.from_db_object(m) for m in results]
+    async with get_async_session() as session:
+        results = await session.scalars(mutations_query)
+        out_data = [MutationInfo.from_db_object(m) for m in results.unique()]
     return out_data

@@ -58,9 +58,9 @@ async def get_variants_query(q: str):
 
 
 @app.get('/mutations', response_model=List[MutationInfo])
-def get_mutations_query(q: str):
+async def get_mutations_query(q: str):
     try:
-        return DB.queries.mutations.get_mutations(q)
+        return await DB.queries.mutations.get_mutations(q)
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
@@ -74,9 +74,9 @@ async def get_variants_by_sample(q: str):
 
 
 @app.get('/mutations/by/sample', response_model=List[MutationInfo])
-def get_mutations_by_sample(q: str):
+async def get_mutations_by_sample(q: str):
     try:
-        return DB.queries.mutations.get_mutations_by_sample(q)
+        return await DB.queries.mutations.get_mutations_by_sample(q)
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
@@ -98,7 +98,7 @@ async def get_samples_by_variant(q: str):
 
 
 @app.get('/count/{x}/by/{y}', response_model=List[tuple])
-def get_count_x_by_y(x: str, y: str):
+async def get_count_x_by_y(x: str, y: str):
     if x is None or y is None:
         raise HTTPException(status_code=400, detail='Provide target table and by-column')
 
@@ -109,11 +109,11 @@ def get_count_x_by_y(x: str, y: str):
     try:
         match x:
             case 'samples':
-                return DB.queries.counts.count_samples_by_column(y)
+                return await DB.queries.counts.count_samples_by_column(y)
             case 'variants':
-                return DB.queries.counts.count_variants_by_column(y)
+                return await DB.queries.counts.count_variants_by_column(y)
             case 'mutations':
-                return DB.queries.counts.count_mutations_by_column(y)
+                return await DB.queries.counts.count_mutations_by_column(y)
             case _:
                 raise HTTPException(status_code=400, detail='counts are available for: samples, variants, mutations')
     except ProgrammingError as e:
