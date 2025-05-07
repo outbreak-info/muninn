@@ -123,7 +123,7 @@ def get_count_x_by_y(x: str, y: str):
 
 
 @app.get('/variants/frequency', response_model=List[VariantFreqInfo])
-def get_variant_frequency(
+async def get_variant_frequency(
     aa: Annotated[
         str | None, Query(regex=CHANGE_PATTERN)
     ] = None,
@@ -134,14 +134,14 @@ def get_variant_frequency(
     if aa is not None and nt is not None:
         raise HTTPException(status_code=400, detail='Provide either amino or nt change, not both')
     elif aa is not None:
-        return DB.queries.prevalence.get_samples_variant_freq_by_aa_change(aa)
+        return await DB.queries.prevalence.get_samples_variant_freq_by_aa_change(aa)
     elif nt is not None:
-        return DB.queries.prevalence.get_samples_variant_freq_by_nt_change(nt)
+        return await DB.queries.prevalence.get_samples_variant_freq_by_nt_change(nt)
 
 
 # todo: actually a count
 @app.get('/mutations/frequency', response_model=List[MutationCountInfo])
-def get_mutation_sample_count(
+async def get_mutation_sample_count(
     aa: Annotated[
         str | None, Query(regex=CHANGE_PATTERN)
     ] = None,
@@ -152,35 +152,35 @@ def get_mutation_sample_count(
     if aa is not None and nt is not None:
         raise HTTPException(status_code=400, detail='Provide either amino or nt change, not both')
     elif aa is not None:
-        return DB.queries.prevalence.get_mutation_sample_count_by_aa(aa)
+        return await DB.queries.prevalence.get_mutation_sample_count_by_aa(aa)
     elif nt is not None:
-        return DB.queries.prevalence.get_mutation_sample_count_by_nt(nt)
+        return await DB.queries.prevalence.get_mutation_sample_count_by_nt(nt)
 
 
 # todo: actually a count
 #  /count/samples/pheno_scores/variants
 @app.get('/variants/frequency/score', response_model=List[VariantCountPhenoScoreInfo])
-def get_variant_counts_by_phenotype_score(region: str, metric: str, include_refs: bool = False, q: str | None = None):
+async def get_variant_counts_by_phenotype_score(region: str, metric: str, include_refs: bool = False, q: str | None = None):
     """
     :param region: Results will include only variants in the given region
     :param metric: Phenotype metric whose values will be included in results
     :param include_refs: if true, include variants where ref aa = alt aa
     :param q: Query against samples. If provided, only samples matching this query will be included in the count
     """
-    return DB.queries.prevalence.get_pheno_values_and_variant_counts(metric, region, include_refs, q)
+    return await DB.queries.prevalence.get_pheno_values_and_variant_counts(metric, region, include_refs, q)
 
 
 # todo: actually a count
 #  /count/samples/pheno_scores/mutations
 @app.get('/mutations/frequency/score', response_model=List[VariantCountPhenoScoreInfo])
-def get_mutation_counts_by_phenotype_score(region: str, metric: str, include_refs: bool = False, q: str | None = None):
+async def get_mutation_counts_by_phenotype_score(region: str, metric: str, include_refs: bool = False, q: str | None = None):
     """
     :param region: Results will include only mutations in the given region
     :param metric: Phenotype metric whose values will be included in results
     :param include_refs: if true, include mutations where ref aa = alt aa
     :param q: Query against samples. If provided, only samples matching this query will be included in the count
     """
-    return DB.queries.prevalence.get_pheno_values_and_mutation_counts(metric, region, include_refs, q)
+    return await DB.queries.prevalence.get_pheno_values_and_mutation_counts(metric, region, include_refs, q)
 
 
 @app.get('/count/samples/lineages', response_model=List[LineageCountInfo])

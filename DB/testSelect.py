@@ -46,7 +46,7 @@ logger.setLevel(logging.INFO) # set debug to log results as well
 
 # r = get_samples_by_variant('position_aa < 100')
 
-# r = get_samples_variant_freq_by_aa_change('HA:Q238R')
+# r = asyncio.run(get_samples_variant_freq_by_aa_change('HA:Q238R'))
 
 # r = get_samples_variant_freq_by_nt_change('HA:G148-A')
 

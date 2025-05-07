@@ -2,16 +2,15 @@ import re
 from typing import List, Type
 
 from sqlalchemy import select, and_, ColumnElement, text, func
-from sqlalchemy.orm import Session
 
-from DB.engine import engine
+from DB.engine import get_async_session
 from DB.models import IntraHostVariant, Sample, Allele, AminoAcidSubstitution, Translation, Mutation
 from api.models import VariantFreqInfo, VariantCountPhenoScoreInfo, MutationCountInfo
 from parser.parser import parser
 from utils.constants import CHANGE_PATTERN
 
 
-def get_samples_variant_freq_by_aa_change(change: str) -> List[VariantFreqInfo]:
+async def get_samples_variant_freq_by_aa_change(change: str) -> List[VariantFreqInfo]:
     region, ref_aa, position_aa, alt_aa = _parse_change_string(change)
 
     where_clause = and_(
@@ -21,10 +20,10 @@ def get_samples_variant_freq_by_aa_change(change: str) -> List[VariantFreqInfo]:
         AminoAcidSubstitution.alt_aa == alt_aa
     )
 
-    return _get_samples_variant_freq(where_clause)
+    return await _get_samples_variant_freq(where_clause)
 
 
-def get_samples_variant_freq_by_nt_change(change: str) -> List[VariantFreqInfo]:
+async def get_samples_variant_freq_by_nt_change(change: str) -> List[VariantFreqInfo]:
     region, ref_nt, position_nt, alt_nt = _parse_change_string(change)
 
     where_clause = and_(
@@ -34,10 +33,10 @@ def get_samples_variant_freq_by_nt_change(change: str) -> List[VariantFreqInfo]:
         Allele.alt_nt == alt_nt
     )
 
-    return _get_samples_variant_freq(where_clause)
+    return await _get_samples_variant_freq(where_clause)
 
 
-def _get_samples_variant_freq(where_clause: ColumnElement[bool]) -> List[VariantFreqInfo]:
+async def _get_samples_variant_freq(where_clause: ColumnElement[bool]) -> List[VariantFreqInfo]:
     query = (
         select(IntraHostVariant.alt_freq, Sample.accession, Allele.id, Translation.id, AminoAcidSubstitution.id)
         .join(Sample, Sample.id == IntraHostVariant.sample_id, isouter=True)
@@ -47,8 +46,8 @@ def _get_samples_variant_freq(where_clause: ColumnElement[bool]) -> List[Variant
         .where(where_clause)
     )
 
-    with Session(engine) as session:
-        res = session.execute(query).all()
+    async with get_async_session() as session:
+        res = await session.execute(query)
     out_data = []
     for r in res:
         out_data.append(
@@ -63,7 +62,7 @@ def _get_samples_variant_freq(where_clause: ColumnElement[bool]) -> List[Variant
     return out_data
 
 
-def get_mutation_sample_count_by_nt(change: str) -> List[MutationCountInfo]:
+async def get_mutation_sample_count_by_nt(change: str) -> List[MutationCountInfo]:
     region, ref_nt, position_nt, alt_nt = _parse_change_string(change)
 
     where_clause = and_(
@@ -73,10 +72,10 @@ def get_mutation_sample_count_by_nt(change: str) -> List[MutationCountInfo]:
         Allele.alt_nt == alt_nt
     )
 
-    return _get_mutation_sample_count(where_clause)
+    return await _get_mutation_sample_count(where_clause)
 
 
-def get_mutation_sample_count_by_aa(change: str) -> List[MutationCountInfo]:
+async def get_mutation_sample_count_by_aa(change: str) -> List[MutationCountInfo]:
     region, ref_aa, position_aa, alt_aa = _parse_change_string(change)
 
     where_clause = and_(
@@ -86,10 +85,10 @@ def get_mutation_sample_count_by_aa(change: str) -> List[MutationCountInfo]:
         AminoAcidSubstitution.alt_aa == alt_aa
     )
 
-    return _get_mutation_sample_count(where_clause)
+    return await _get_mutation_sample_count(where_clause)
 
 
-def _get_mutation_sample_count(where_clause: ColumnElement[bool]) -> List[MutationCountInfo]:
+async def _get_mutation_sample_count(where_clause: ColumnElement[bool]) -> List[MutationCountInfo]:
     query = (
         select(Sample, Mutation, Allele.id, Translation.id, AminoAcidSubstitution.id)
         .join(Mutation, Sample.id == Mutation.sample_id, isouter=True)
@@ -101,8 +100,8 @@ def _get_mutation_sample_count(where_clause: ColumnElement[bool]) -> List[Mutati
         .where(where_clause)
     )
 
-    with Session(engine) as session:
-        res = session.execute(query).all()
+    async with get_async_session() as session:
+        res = await session.execute(query)
     out_data = []
     for r in res:
         out_data.append(
@@ -131,25 +130,25 @@ def _parse_change_string(change: str) -> (str, str, int, str):
     return region, ref, position, alt
 
 
-def get_pheno_values_and_mutation_counts(
+async def get_pheno_values_and_mutation_counts(
     pheno_metric_name: str,
     region: str,
     include_refs: bool,
     samples_query: str | None
 ) -> List['VariantCountPhenoScoreInfo']:
-    return _get_pheno_values_and_counts(pheno_metric_name, region, Mutation, include_refs, samples_query)
+    return await _get_pheno_values_and_counts(pheno_metric_name, region, Mutation, include_refs, samples_query)
 
 
-def get_pheno_values_and_variant_counts(
+async def get_pheno_values_and_variant_counts(
     pheno_metric_name: str,
     region: str,
     include_refs: bool,
     samples_query: str | None
 ) -> List['VariantCountPhenoScoreInfo']:
-    return _get_pheno_values_and_counts(pheno_metric_name, region, IntraHostVariant, include_refs, samples_query)
+    return await _get_pheno_values_and_counts(pheno_metric_name, region, IntraHostVariant, include_refs, samples_query)
 
 
-def _get_pheno_values_and_counts(
+async def _get_pheno_values_and_counts(
     pheno_metric_name: str,
     region: str,
     intermediate: Type[Mutation] | Type[IntraHostVariant],
@@ -171,8 +170,8 @@ def _get_pheno_values_and_counts(
         )
         '''
 
-    with Session(engine) as session:
-        res = session.execute(
+    async with get_async_session() as session:
+        res = await session.execute(
             text(
                 f'''
                 select aas.ref_aa, aas.position_aa, aas.alt_aa, pmr.value, (select 
@@ -193,7 +192,7 @@ def _get_pheno_values_and_counts(
                 'region': region,
                 'pm_name': pheno_metric_name
             }
-        ).all()
+        )
 
     out_data = []
     for r in res:
