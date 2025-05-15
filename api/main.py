@@ -238,6 +238,8 @@ async def count_variants_by_week(table: str, interval: str, by_col: str, days: i
     match interval:
         case 'week' | 'weeks':
             foo_interval = 'isoweek'
+        case 'month' | 'months':
+            foo_interval = 'month'
         case 'day' | 'days':
             foo_interval = str(days)  # todo: terrible kludge
         case _:

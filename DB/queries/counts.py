@@ -70,7 +70,9 @@ async def count_variants_or_mutations_by_simple_date(
     :param interval:
     :return:
     """
-
+    # todo: All of these need some attention paid to timezone
+    #  If release date is 2025-05-31 23:00:00 PDT, it's already June in UTC. Which month should that count under?
+    #  I think local time should be respected. I'm not sure how these dates are being stored right now.
     if by_col not in {'creation_date', 'release_date'}:
         raise ValueError  # todo
 
@@ -79,6 +81,8 @@ async def count_variants_or_mutations_by_simple_date(
     match interval:
         case 'isoweek':
             return await _count_v_or_m_by_simple_date_iso_week(by_col, tablename)
+        case 'month':
+            return await _count_v_or_m_by_simple_date_month(by_col, tablename)
         case _:
             days = int(interval)
             return await _count_v_or_m_by_simple_date_custom_days(by_col, tablename, days)
@@ -110,10 +114,35 @@ async def _count_v_or_m_by_simple_date_iso_week(
     return out_data
 
 
-async def _count_v_or_m_by_simple_date_custom_days(by_col: str, tablename: str, days: int) -> List[tuple]:
-    # todo: for now I'm going to ignore complications
-    origin = datetime.date.today()
+async def _count_v_or_m_by_simple_date_month(
+    by_col: str,
+    tablename: str
+) -> List[tuple]:
+    async with get_async_session() as session:
+        res = await session.execute(
+            text(
+                f'''
+                   select 
+                   extract(year from {by_col}) as year,  
+                   extract(month from {by_col}) as month, 
+                   count(*)
+                   from samples s
+                   left join {tablename} VM on VM.sample_id = s.id
+                   group by year, month 
+                   '''
+            )
+        )
+    out_data = []
+    for r in res:
+        # todo: need a good way to deal with iso8601 months (2025-05) b/c datetime won't do it.
+        padded_month = str(r[1]).rjust(2, '0')
+        month_stamp = f'{r[0]}-{padded_month}'
+        out_data.append((month_stamp, r[2]))
+    return out_data
 
+
+async def _count_v_or_m_by_simple_date_custom_days(by_col: str, tablename: str, days: int) -> List[tuple]:
+    origin = datetime.date.today()
     async with get_async_session() as session:
         res = await session.execute(
             text(
