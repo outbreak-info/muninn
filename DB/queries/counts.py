@@ -80,9 +80,8 @@ async def count_variants_or_mutations_by_simple_date(
         case 'isoweek':
             return await _count_v_or_m_by_simple_date_iso_week(by_col, tablename)
         case _:
-            pass
-    days = int(interval)
-    return await _count_v_or_m_by_simple_date_custom_days(by_col, tablename, days)
+            days = int(interval)
+            return await _count_v_or_m_by_simple_date_custom_days(by_col, tablename, days)
 
 
 async def _count_v_or_m_by_simple_date_iso_week(
@@ -113,7 +112,6 @@ async def _count_v_or_m_by_simple_date_iso_week(
 
 async def _count_v_or_m_by_simple_date_custom_days(by_col: str, tablename: str, days: int) -> List[tuple]:
     # todo: for now I'm going to ignore complications
-    # todo: fix origin date
     origin = datetime.date.today()
 
     async with get_async_session() as session:
@@ -136,3 +134,4 @@ async def _count_v_or_m_by_simple_date_custom_days(by_col: str, tablename: str, 
             interval = f'{r[0]}/{r[1]}'
             count = r[2]
             out_data.append((interval, count))
+        return out_data

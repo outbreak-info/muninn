@@ -12,7 +12,7 @@ import DB.queries.phenotype_metrics
 import DB.queries.prevalence
 import DB.queries.samples
 import DB.queries.variants
-from DB.models import IntraHostVariant
+from DB.models import IntraHostVariant, Mutation
 from api.models import VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
     MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo
 from utils.constants import CHANGE_PATTERN
@@ -161,7 +161,12 @@ async def get_mutation_sample_count(
 # todo: actually a count
 #  /count/samples/pheno_scores/variants
 @app.get('/variants/frequency/score', response_model=List[VariantCountPhenoScoreInfo])
-async def get_variant_counts_by_phenotype_score(region: str, metric: str, include_refs: bool = False, q: str | None = None):
+async def get_variant_counts_by_phenotype_score(
+    region: str,
+    metric: str,
+    include_refs: bool = False,
+    q: str | None = None
+):
     """
     :param region: Results will include only variants in the given region
     :param metric: Phenotype metric whose values will be included in results
@@ -174,7 +179,12 @@ async def get_variant_counts_by_phenotype_score(region: str, metric: str, includ
 # todo: actually a count
 #  /count/samples/pheno_scores/mutations
 @app.get('/mutations/frequency/score', response_model=List[VariantCountPhenoScoreInfo])
-async def get_mutation_counts_by_phenotype_score(region: str, metric: str, include_refs: bool = False, q: str | None = None):
+async def get_mutation_counts_by_phenotype_score(
+    region: str,
+    metric: str,
+    include_refs: bool = False,
+    q: str | None = None
+):
     """
     :param region: Results will include only mutations in the given region
     :param metric: Phenotype metric whose values will be included in results
@@ -214,7 +224,24 @@ async def get_lineage_abundance_summary_stats(q: str | None = None):
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
-@app.get('/count/variants/week', response_model=List[tuple])
-async def count_variants_by_week(by_col: str):
-    return await DB.queries.counts.count_variants_or_mutations_by_simple_date(by_col, IntraHostVariant, 'isoweek')
+
+@app.get('/count/{table}/{interval}', response_model=List[tuple])
+async def count_variants_by_week(table: str, interval: str, by_col: str, days: int = 5):
+    match table:
+        case 'variants':
+            target_table = IntraHostVariant
+        case 'mutations':
+            target_table = Mutation
+        case _:
+            raise HTTPException
+
+    match interval:
+        case 'week' | 'weeks':
+            foo_interval = 'isoweek'
+        case 'day' | 'days':
+            foo_interval = str(days)  # todo: terrible kludge
+        case _:
+            raise HTTPException
+
+    return await DB.queries.counts.count_variants_or_mutations_by_simple_date(by_col, target_table, foo_interval)
 
