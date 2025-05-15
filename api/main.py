@@ -12,6 +12,7 @@ import DB.queries.phenotype_metrics
 import DB.queries.prevalence
 import DB.queries.samples
 import DB.queries.variants
+from DB.models import IntraHostVariant
 from api.models import VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
     MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo
 from utils.constants import CHANGE_PATTERN
@@ -212,3 +213,8 @@ async def get_lineage_abundance_summary_stats(q: str | None = None):
         return await DB.queries.lineages.get_abundance_summaries(q)
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
+
+@app.get('/count/variants/week', response_model=List[tuple])
+async def count_variants_by_week(by_col: str):
+    return await DB.queries.counts.count_variants_or_mutations_by_simple_date(by_col, IntraHostVariant, 'isoweek')
+
