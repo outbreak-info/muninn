@@ -58,15 +58,15 @@ async def count_mutations_by_column(by_col: str):
         return res
 
 
-async def count_variants_or_mutations_by_simple_date(
+async def count_variants_mutations_or_samples_by_simple_date(
     by_col: str,
-    var_table: Type[IntraHostVariant] | Type[Mutation],
+    count_table: Type[IntraHostVariant] | Type[Mutation] | Type[Sample],
     interval: str
 ) -> List[tuple]:
     """
     This will be for release_date and creation_date
     :param by_col:
-    :param var_table:
+    :param count_table:
     :param interval:
     :return:
     """
@@ -76,36 +76,22 @@ async def count_variants_or_mutations_by_simple_date(
     if by_col not in {'creation_date', 'release_date'}:
         raise ValueError  # todo
 
-    tablename = var_table.__tablename__
+    join_clause = f'inner join {count_table.__tablename__} VM on VM.sample_id = s.id'
+    if count_table is Sample:
+        join_clause = ''
 
     match interval:
         case 'isoweek':
-            return await _count_v_or_m_by_simple_date_iso_week(by_col, tablename)
+            return await _count_v_m_s_by_simple_date_iso_week(by_col, join_clause)
         case 'month':
-            return await _count_v_or_m_by_simple_date_month(by_col, tablename)
+            return await _count_v_m_s_by_simple_date_month(by_col, join_clause)
         case _:
             days = int(interval)
-            return await _count_v_or_m_by_simple_date_custom_days(by_col, tablename, days)
+            return await _count_v_m_s_by_simple_date_custom_days(by_col, join_clause, days)
 
 
-async def _count_v_or_m_by_simple_date_iso_week(
-    by_col: str,
-    tablename: str,
-) -> List[tuple]:
-    async with get_async_session() as session:
-        res = await session.execute(
-            text(
-                f'''
-                select 
-                extract(year from {by_col}) as year,  
-                extract(week from {by_col}) as week, 
-                count(*)
-                from samples s
-                left join {tablename} VM on VM.sample_id = s.id
-                group by year, week 
-                '''
-            )
-        )
+async def _count_v_m_s_by_simple_date_iso_week(by_col: str, join_clause: str) -> List[tuple]:
+    res = await _count_v_m_s_by_simple_date_via_extract(by_col, join_clause, 'week')
     out_data = []
     for r in res:
         # todo: some real datetime stuff for this
@@ -114,24 +100,8 @@ async def _count_v_or_m_by_simple_date_iso_week(
     return out_data
 
 
-async def _count_v_or_m_by_simple_date_month(
-    by_col: str,
-    tablename: str
-) -> List[tuple]:
-    async with get_async_session() as session:
-        res = await session.execute(
-            text(
-                f'''
-                   select 
-                   extract(year from {by_col}) as year,  
-                   extract(month from {by_col}) as month, 
-                   count(*)
-                   from samples s
-                   left join {tablename} VM on VM.sample_id = s.id
-                   group by year, month 
-                   '''
-            )
-        )
+async def _count_v_m_s_by_simple_date_month(by_col: str, join_clause: str) -> List[tuple]:
+    res = await _count_v_m_s_by_simple_date_via_extract(by_col, join_clause, 'month')
     out_data = []
     for r in res:
         # todo: need a good way to deal with iso8601 months (2025-05) b/c datetime won't do it.
@@ -141,19 +111,37 @@ async def _count_v_or_m_by_simple_date_month(
     return out_data
 
 
-async def _count_v_or_m_by_simple_date_custom_days(by_col: str, tablename: str, days: int) -> List[tuple]:
+async def _count_v_m_s_by_simple_date_via_extract(by_col: str, join_clause: str, interval: str) -> List[tuple]:
+    async with get_async_session() as session:
+        res = await session.execute(
+            text(
+                f'''
+                   select 
+                   extract(year from {by_col}) as year,  
+                   extract({interval} from {by_col}) as chunk, 
+                   count(*)
+                   from samples s
+                   {join_clause}
+                   group by year, chunk 
+                   order by year, chunk
+                   '''
+            )
+        )
+    return res
+
+
+async def _count_v_m_s_by_simple_date_custom_days(by_col: str, join_clause: str, days: int) -> List[tuple]:
     origin = datetime.date.today()
     async with get_async_session() as session:
         res = await session.execute(
             text(
                 f'''
                 select bin_start, bin_start + interval '{days} days' as bin_end, count1 from (
-                    select bin_start, count(distinct vm_id) as count1 from (
-                        select date_bin('{days} days', {by_col}, '{origin}') as bin_start, vm.id as vm_id 
-                        from samples s
-                        left join {tablename} vm on vm.sample_id = s.id
-                    )
+                    select date_bin('{days} days', {by_col}, '{origin}') as bin_start, count(*) as count1
+                    from samples s
+                    {join_clause}
                     group by bin_start
+                    order by bin_start
                 )
                 '''
             )
