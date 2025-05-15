@@ -12,7 +12,7 @@ import DB.queries.phenotype_metrics
 import DB.queries.prevalence
 import DB.queries.samples
 import DB.queries.variants
-from DB.models import IntraHostVariant, Mutation
+from DB.models import IntraHostVariant, Mutation, Sample
 from api.models import VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
     MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo
 from utils.constants import CHANGE_PATTERN
@@ -232,6 +232,8 @@ async def count_variants_by_week(table: str, interval: str, by_col: str, days: i
             target_table = IntraHostVariant
         case 'mutations':
             target_table = Mutation
+        case 'samples':
+            target_table = Sample
         case _:
             raise HTTPException
 
@@ -245,5 +247,5 @@ async def count_variants_by_week(table: str, interval: str, by_col: str, days: i
         case _:
             raise HTTPException
 
-    return await DB.queries.counts.count_variants_or_mutations_by_simple_date(by_col, target_table, foo_interval)
+    return await DB.queries.counts.count_variants_mutations_or_samples_by_simple_date(by_col, target_table, foo_interval)
 
