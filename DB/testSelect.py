@@ -44,7 +44,7 @@ logger.setLevel(logging.INFO) # set debug to log results as well
 
 # r = get_samples('host = Cat')
 
-r = asyncio.run(get_samples_by_variant('position_aa < 100'))
+# r = asyncio.run(get_samples_by_variant('position_aa < 100'))
 
 # r = asyncio.run(get_samples_variant_freq_by_aa_change('HA:Q238R'))
 
@@ -54,7 +54,7 @@ r = asyncio.run(get_samples_by_variant('position_aa < 100'))
 # r = get_pheno_values_and_mutation_counts('stability', 'HA', False, None)
 # r = get_mutation_sample_count_by_aa('PB2:L502L')
 
-# r = get_mutation_sample_count_by_nt('NA:G696T')
+r = asyncio.run(get_mutation_sample_count_by_nt('NA:G696T'))
 
 # r = get_sample_counts_by_lineage('host = CAT')
 
