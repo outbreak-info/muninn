@@ -12,7 +12,6 @@ import DB.queries.phenotype_metrics
 import DB.queries.prevalence
 import DB.queries.samples
 import DB.queries.variants
-from DB.models import IntraHostVariant, Mutation, Sample
 from api.models import VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
     MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo
 from utils.constants import CHANGE_PATTERN
@@ -225,27 +224,66 @@ async def get_lineage_abundance_summary_stats(q: str | None = None):
         raise HTTPException(status_code=400, detail=e.message)
 
 
-@app.get('/count/{table}/{interval}', response_model=List[tuple])
-async def count_variants_by_week(table: str, interval: str, by_col: str, days: int = 5):
-    match table:
-        case 'variants':
-            target_table = IntraHostVariant
-        case 'mutations':
-            target_table = Mutation
-        case 'samples':
-            target_table = Sample
-        case _:
-            raise HTTPException
 
-    match interval:
-        case 'week' | 'weeks':
-            foo_interval = 'isoweek'
-        case 'month' | 'months':
-            foo_interval = 'month'
-        case 'day' | 'days':
-            foo_interval = str(days)  # todo: terrible kludge
+@app.get('/v0/samples:count')
+async def get_sample_counts(
+    group_by: str,
+    date_bin: str = 'month',
+    days: int = 5,
+    q: str | None = None,
+):
+    match group_by:
+        case 'creation_date' | 'release_date':
+            return await DB.queries.counts.count_samples_by_simple_date_bin(group_by, date_bin, days, q)
         case _:
-            raise HTTPException
+            return await DB.queries.counts.count_samples_by_column(group_by)
 
-    return await DB.queries.counts.count_variants_mutations_or_samples_by_simple_date(by_col, target_table, foo_interval)
+@app.get('/v0/variants:count')
+async def get_variant_counts(
+    group_by: str,
+    date_bin: str = 'month',
+    days: int = 5,
+    q: str | None = None,
+    change_bin: str = 'aa'
+):
+    """
+
+    :param group_by: Col. to bin counts by
+    :param date_bin: size of date bins when grouping by date column
+    :param days: custom size of bins when grouping by 'day'
+    :param q: Filter and count only matching variants. May filter against samples as well.
+    :param change_bin: When grouping by date, further bin by NT or AA? default AA.
+    :return:
+    """
+    # todo: these are all just sloppy placeholders
+    change_bin = change_bin.lower()
+    assert change_bin in {'nt', 'aa'}
+    assert date_bin in {'week', 'month', 'day'}
+
+    match group_by:
+        case 'creation_date' | 'release_date':
+            return await DB.queries.counts.count_variants_by_simple_date_bin(group_by, date_bin, days, q, change_bin)
+        case _:
+            return await DB.queries.counts.count_variants_by_column(group_by)
+
+
+@app.get('/v0/mutations:count')
+async def get_mutation_counts(
+    group_by: str,
+    date_bin: str = 'month',
+    days: int = 5,
+    q: str | None = None,
+    change_bin: str = 'aa'
+):
+    # todo: these are all just sloppy placeholders
+    change_bin = change_bin.lower()
+    assert change_bin in {'nt', 'aa'}
+    assert date_bin in {'week', 'month', 'day'}
+
+    match group_by:
+        case 'creation_date' | 'release_date':
+            return await DB.queries.counts.count_mutations_by_simple_date_bin(group_by, date_bin, days, q, change_bin)
+        case _:
+            return await DB.queries.counts.count_mutations_by_column(group_by)
+
 

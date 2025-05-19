@@ -1,5 +1,4 @@
 import datetime
-from enum import Enum
 from typing import Type, List
 
 from sqlalchemy import text, select
@@ -7,6 +6,8 @@ from sqlalchemy.sql.functions import func
 
 from DB.engine import get_async_session
 from DB.models import Sample, GeoLocation, IntraHostVariant, AminoAcidSubstitution, Allele, Mutation, Translation
+from parser.parser import parser
+from utils.dates_and_times import format_iso_week, format_iso_month
 
 
 async def count_samples_by_column(by_col: str):
@@ -58,79 +59,56 @@ async def count_mutations_by_column(by_col: str):
         return res
 
 
-async def count_variants_mutations_or_samples_by_simple_date(
+## Counting Samples ##
+async def count_samples_by_simple_date_bin(
     by_col: str,
-    count_table: Type[IntraHostVariant] | Type[Mutation] | Type[Sample],
-    interval: str
-) -> List[tuple]:
-    """
-    This will be for release_date and creation_date
-    :param by_col:
-    :param count_table:
-    :param interval:
-    :return:
-    """
-    # todo: All of these need some attention paid to timezone
-    #  If release date is 2025-05-31 23:00:00 PDT, it's already June in UTC. Which month should that count under?
-    #  I think local time should be respected. I'm not sure how these dates are being stored right now.
-    if by_col not in {'creation_date', 'release_date'}:
-        raise ValueError  # todo
+    date_bin: str,
+    days: int | None,
+    raw_query: str | None
+):
+    where_clause = ''
+    if raw_query is not None:
+        where_clause = f'where {parser.parse(raw_query)}'
 
-    join_clause = f'inner join {count_table.__tablename__} VM on VM.sample_id = s.id'
-    if count_table is Sample:
-        join_clause = ''
-
-    match interval:
-        case 'isoweek':
-            return await _count_v_m_s_by_simple_date_iso_week(by_col, join_clause)
-        case 'month':
-            return await _count_v_m_s_by_simple_date_month(by_col, join_clause)
+    match date_bin:
+        case 'week' | 'month':
+            return await _count_samples_by_simple_date_via_extract(by_col, date_bin, where_clause)
+        case 'day':
+            return await _count_samples_by_simple_date_custom_days(by_col, days, where_clause)
         case _:
-            days = int(interval)
-            return await _count_v_m_s_by_simple_date_custom_days(by_col, join_clause, days)
+            raise ValueError
 
 
-async def _count_v_m_s_by_simple_date_iso_week(by_col: str, join_clause: str) -> List[tuple]:
-    res = await _count_v_m_s_by_simple_date_via_extract(by_col, join_clause, 'week')
-    out_data = []
-    for r in res:
-        # todo: some real datetime stuff for this
-        week_stamp = f'{r[0]}-W{r[1]}'
-        out_data.append((week_stamp, r[2]))
-    return out_data
-
-
-async def _count_v_m_s_by_simple_date_month(by_col: str, join_clause: str) -> List[tuple]:
-    res = await _count_v_m_s_by_simple_date_via_extract(by_col, join_clause, 'month')
-    out_data = []
-    for r in res:
-        # todo: need a good way to deal with iso8601 months (2025-05) b/c datetime won't do it.
-        padded_month = str(r[1]).rjust(2, '0')
-        month_stamp = f'{r[0]}-{padded_month}'
-        out_data.append((month_stamp, r[2]))
-    return out_data
-
-
-async def _count_v_m_s_by_simple_date_via_extract(by_col: str, join_clause: str, interval: str) -> List[tuple]:
+async def _count_samples_by_simple_date_via_extract(by_col: str, date_bin: str, where_clause: str) -> List[tuple]:
     async with get_async_session() as session:
         res = await session.execute(
             text(
                 f'''
                    select 
                    extract(year from {by_col}) as year,  
-                   extract({interval} from {by_col}) as chunk, 
+                   extract({date_bin} from {by_col}) as chunk, 
                    count(*)
                    from samples s
-                   {join_clause}
+                   {where_clause}
                    group by year, chunk 
                    order by year, chunk
                    '''
             )
         )
-    return res
+    date_formatter = None
+    match date_bin:
+        case 'week':
+            date_formatter = format_iso_week
+        case 'month':
+            date_formatter = format_iso_month
+    out_data = []
+    for r in res:
+        date = date_formatter(r[0], r[1])
+        out_data.append((date, r[2]))
+    return out_data
 
 
-async def _count_v_m_s_by_simple_date_custom_days(by_col: str, join_clause: str, days: int) -> List[tuple]:
+async def _count_samples_by_simple_date_custom_days(by_col: str, days: int, where_clause: str) -> List[tuple]:
     origin = datetime.date.today()
     async with get_async_session() as session:
         res = await session.execute(
@@ -139,7 +117,7 @@ async def _count_v_m_s_by_simple_date_custom_days(by_col: str, join_clause: str,
                 select bin_start, bin_start + interval '{days} days' as bin_end, count1 from (
                     select date_bin('{days} days', {by_col}, '{origin}') as bin_start, count(*) as count1
                     from samples s
-                    {join_clause}
+                    {where_clause}
                     group by bin_start
                     order by bin_start
                 )
@@ -152,3 +130,184 @@ async def _count_v_m_s_by_simple_date_custom_days(by_col: str, join_clause: str,
             count = r[2]
             out_data.append((interval, count))
         return out_data
+
+
+## Counting Variants ##
+async def count_variants_by_simple_date_bin(
+    date_col: str,
+    date_bin: str,
+    days: int,
+    raw_query: str | None,
+    change_bin: str
+):
+    return await _count_variants_or_mutations_by_simple_date_bin(
+        date_col,
+        date_bin,
+        days,
+        raw_query,
+        change_bin,
+        IntraHostVariant
+    )
+
+
+async def count_mutations_by_simple_date_bin(
+    date_col: str,
+    date_bin: str,
+    days: int,
+    raw_query: str | None,
+    change_bin: str
+):
+    return await _count_variants_or_mutations_by_simple_date_bin(
+        date_col,
+        date_bin,
+        days,
+        raw_query,
+        change_bin,
+        Mutation
+    )
+
+
+async def _count_variants_or_mutations_by_simple_date_bin(
+    date_col: str,
+    date_bin: str,
+    days: int,
+    raw_query: str | None,
+    change_bin: str,
+    table: Type['IntraHostVariant'] | Type['Mutation']
+):
+    where_clause = ''
+    if raw_query is not None:
+        where_clause = f'where {parser.parse(raw_query)}'
+
+    match date_bin:
+        case 'week' | 'month':
+            return await _count_v_m_by_simple_date_via_extract(
+                table.__tablename__,
+                date_col,
+                date_bin,
+                where_clause,
+                change_bin
+            )
+        case 'day':
+            return await _count_v_m_by_simple_date_custom_days(
+                table.__tablename__,
+                date_col,
+                days,
+                where_clause,
+                change_bin
+            )
+        case _:
+            raise ValueError
+
+
+async def _count_v_m_by_simple_date_via_extract(
+    tablename: str,
+    date_col: str,
+    date_bin: str,
+    where_clause: str,
+    change_bin: str
+):
+    # todo: very smelly
+    change_fields = f'ref_{change_bin}, position_{change_bin}, alt_{change_bin}'
+
+    async with get_async_session() as session:
+        # todo: this query is really slow for large result sets.
+        res = await session.execute(
+            text(
+                f'''
+                select 
+                extract(year from {date_col}) as year,
+                extract({date_bin} from {date_col}) as chunk,
+                count(*),
+                region,
+                {change_fields}
+                from (
+                    select region, {change_fields}, {date_col} 
+                    from samples s
+                    inner join {tablename} VM on VM.sample_id = s.id
+                    inner join alleles a on a.id = VM.allele_id
+                    left join translations t on t.allele_id = a.id
+                    left join amino_acid_substitutions aas on aas.id = t.amino_acid_substitution_id
+                    {where_clause}
+                )
+                group by region, {change_fields}, year, chunk
+                '''
+            )
+        )
+    out_data = dict()
+
+    date_formatter = None
+    match date_bin:
+        case 'week':
+            date_formatter = format_iso_week
+        case 'month':
+            date_formatter = format_iso_month
+
+    for r in res:
+        date = date_formatter(r[0], r[1])
+        count = r[2]
+        region = r[3]
+        ref = r[4]
+        pos = r[5]
+        alt = r[6]
+        change_name = f'{region}:{ref}{pos}{alt}'
+
+        try:
+            out_data[date][change_name] = count
+        except KeyError:
+            out_data[date] = {change_name: count}
+    return out_data
+
+
+async def _count_v_m_by_simple_date_custom_days(
+    tablename: str,
+    date_col: str,
+    days: int,
+    where_clause: str,
+    change_bin: str
+):
+    # todo: very smelly
+    change_fields = f'ref_{change_bin}, position_{change_bin}, alt_{change_bin}'
+    origin = datetime.date.today()
+    async with get_async_session() as session:
+        res = session.execute(
+            text(
+                f'''
+            select 
+            bin_start, 
+            bin_start + interval '{days} days' as bin_end, 
+            count1,
+            region, {change_fields}
+            from (
+                select 
+                date_bin('{days} days', {date_col}, '{origin}') as bin_start, 
+                count(*) as count1,
+                region, {change_fields}
+                from samples s
+                inner join {tablename} VM on VM.sample_id = s.id
+                inner join alleles a on a.id = VM.allele_id
+                left join translations t on t.allele_id = a.id
+                left join amino_acid_substitutions aas on aas.id = t.amino_acid_substitution_id
+                {where_clause}
+                group by bin_start, region, {change_fields}
+                order by bin_start
+            )
+            '''
+            )
+        )
+    out_data = dict()
+
+    for r in res:
+        interval = f'{r[0]}/{r[1]}'
+        count = r[2]
+        region = r[3]
+        ref = r[4]
+        pos = r[5]
+        alt = r[6]
+        change_name = f'{region}:{ref}{pos}{alt}'
+
+        try:
+            out_data[interval][change_name] = count
+        except KeyError:
+            out_data[interval] = {change_name: count}
+    return out_data

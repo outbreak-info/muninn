@@ -2,7 +2,6 @@ import re
 from datetime import date
 
 
-
 def parse_collection_start_and_end(datestr: str) -> tuple[date, date]:
     """
     For reference on acceptable input formats see https://www.ncbi.nlm.nih.gov/biosample/docs/attributes/
@@ -55,3 +54,17 @@ def parse_collection_start_and_end(datestr: str) -> tuple[date, date]:
     d1 = date(year, month, day)
 
     return d0, d1
+
+
+def format_iso_week(year: int, week: int):
+    """
+    Put year and week number into iso format.
+    :param year: I will assume all our years are expressed in 4 digits already.
+    If you are from <1000 or >9999 please contact the administrator.
+    :param week:
+    :return: (2025, 5) -> "2025-W05"
+    """
+    return f'{year}-W{str(week).rjust(2, '0')}'
+
+def format_iso_month(year: int, month: int):
+    return f'{year}-{str(month).rjust(2, '0')}'
