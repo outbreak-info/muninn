@@ -241,3 +241,4 @@ class LineageAbundanceSummaryInfo(BaseModel):
     abundance_median: float
     abundance_q3: float
     abundance_max: float
+
