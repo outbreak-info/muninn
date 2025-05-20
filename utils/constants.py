@@ -1,3 +1,6 @@
+import re
+
+
 class Env:
     FLU_DB_PASSWORD = 'FLU_DB_PASSWORD'
     FLU_DB_SUPERUSER_PASSWORD = 'FLU_DB_SUPERUSER_PASSWORD'
@@ -8,6 +11,7 @@ class Env:
 
 
 CHANGE_PATTERN = r'^(\w+):([a-zA-Z])(\d+)([a-zA-Z\-+]+)'
+WORDLIKE_PATTERN = re.compile(r'\w+')
 
 
 class PhenotypeMetricAssayTypes:

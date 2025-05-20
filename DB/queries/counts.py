@@ -1,5 +1,5 @@
 import datetime
-from typing import Type, List
+from typing import Type, List, Any, Dict
 
 from sqlalchemy import text, select
 from sqlalchemy.sql.functions import func
@@ -8,6 +8,7 @@ from DB.engine import get_async_session
 from DB.models import Sample, GeoLocation, IntraHostVariant, AminoAcidSubstitution, Allele, Mutation, Translation
 from parser.parser import parser
 from utils.dates_and_times import format_iso_week, format_iso_month
+from sqlalchemy import Result
 
 
 async def count_samples_by_column(by_col: str):
@@ -20,7 +21,7 @@ async def count_samples_by_column(by_col: str):
             .group_by(text(by_col))
             .order_by(text('count1 desc'))
         )
-        return res
+        return await _package_count_by_column(res)
 
 
 async def count_variants_by_column(by_col: str):
@@ -38,7 +39,7 @@ async def count_variants_by_column(by_col: str):
             .group_by(text(by_col))
             .order_by(text('count1 desc'))
         )
-        return res
+        return await _package_count_by_column(res)
 
 
 async def count_mutations_by_column(by_col: str):
@@ -56,10 +57,12 @@ async def count_mutations_by_column(by_col: str):
             .group_by(text(by_col))
             .order_by(text('count1 desc'))
         )
-        return res
+        return await _package_count_by_column(res)
+
+async def _package_count_by_column(query_result: Result[tuple[Any, int]] | List[tuple]) -> Dict[str, int]:
+    return {str(r[0]): r[1] for r in query_result}
 
 
-## Counting Samples ##
 async def count_samples_by_simple_date_bin(
     by_col: str,
     date_bin: str,
@@ -70,13 +73,16 @@ async def count_samples_by_simple_date_bin(
     if raw_query is not None:
         where_clause = f'where {parser.parse(raw_query)}'
 
+
+
     match date_bin:
         case 'week' | 'month':
-            return await _count_samples_by_simple_date_via_extract(by_col, date_bin, where_clause)
+            result =  await _count_samples_by_simple_date_via_extract(by_col, date_bin, where_clause)
         case 'day':
-            return await _count_samples_by_simple_date_custom_days(by_col, days, where_clause)
+            result = await _count_samples_by_simple_date_custom_days(by_col, days, where_clause)
         case _:
             raise ValueError
+    return await _package_count_by_column(result)
 
 
 async def _count_samples_by_simple_date_via_extract(by_col: str, date_bin: str, where_clause: str) -> List[tuple]:
@@ -132,7 +138,6 @@ async def _count_samples_by_simple_date_custom_days(by_col: str, days: int, wher
         return out_data
 
 
-## Counting Variants ##
 async def count_variants_by_simple_date_bin(
     date_col: str,
     date_bin: str,
@@ -270,7 +275,7 @@ async def _count_v_m_by_simple_date_custom_days(
     change_fields = f'ref_{change_bin}, position_{change_bin}, alt_{change_bin}'
     origin = datetime.date.today()
     async with get_async_session() as session:
-        res = session.execute(
+        res = await session.execute(
             text(
                 f'''
             select 

@@ -1,5 +1,5 @@
 import re
-from typing import List, Annotated
+from typing import List, Annotated, Dict
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,7 +14,7 @@ import DB.queries.samples
 import DB.queries.variants
 from api.models import VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
     MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo
-from utils.constants import CHANGE_PATTERN
+from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN
 from utils.errors import ParsingError
 
 app = FastAPI()
@@ -97,13 +97,12 @@ async def get_samples_by_variant(q: str):
         raise HTTPException(status_code=400, detail=e.message)
 
 
-@app.get('/count/{x}/by/{y}', response_model=List[tuple])
+@app.get('/count/{x}/by/{y}', response_model=Dict[str, int])
 async def get_count_x_by_y(x: str, y: str):
     if x is None or y is None:
         raise HTTPException(status_code=400, detail='Provide target table and by-column')
 
-    col_pattern = re.compile(r'\w+')
-    if not col_pattern.fullmatch(y):
+    if not WORDLIKE_PATTERN.fullmatch(y):
         raise HTTPException(status_code=400, detail=f'This alleged column name fails validation: {y}')
 
     try:
@@ -224,23 +223,27 @@ async def get_lineage_abundance_summary_stats(q: str | None = None):
         raise HTTPException(status_code=400, detail=e.message)
 
 
-
-@app.get('/v0/samples:count')
+@app.get('/v0/samples:count', response_model=Dict[str, int])
 async def get_sample_counts(
-    group_by: str,
+    group_by: Annotated [str, Query(regex=WORDLIKE_PATTERN.pattern)],
     date_bin: str = 'month',
     days: int = 5,
     q: str | None = None,
 ):
+    col_pattern = re.compile(r'\w+')
+    if not col_pattern.fullmatch(group_by):
+        raise ValueError
+
     match group_by:
         case 'creation_date' | 'release_date':
             return await DB.queries.counts.count_samples_by_simple_date_bin(group_by, date_bin, days, q)
         case _:
             return await DB.queries.counts.count_samples_by_column(group_by)
 
-@app.get('/v0/variants:count')
+
+@app.get('/v0/variants:count', response_model=Dict[str, Dict[str, int]])
 async def get_variant_counts(
-    group_by: str,
+    group_by: Annotated [str, Query(regex=WORDLIKE_PATTERN.pattern)],
     date_bin: str = 'month',
     days: int = 5,
     q: str | None = None,
@@ -260,6 +263,10 @@ async def get_variant_counts(
     assert change_bin in {'nt', 'aa'}
     assert date_bin in {'week', 'month', 'day'}
 
+    col_pattern = re.compile(r'\w+')
+    if not col_pattern.fullmatch(group_by):
+        raise ValueError
+
     match group_by:
         case 'creation_date' | 'release_date':
             return await DB.queries.counts.count_variants_by_simple_date_bin(group_by, date_bin, days, q, change_bin)
@@ -267,14 +274,18 @@ async def get_variant_counts(
             return await DB.queries.counts.count_variants_by_column(group_by)
 
 
-@app.get('/v0/mutations:count')
+@app.get('/v0/mutations:count', response_model=Dict[str, Dict[str, int]])
 async def get_mutation_counts(
-    group_by: str,
+    group_by: Annotated [str, Query(regex=WORDLIKE_PATTERN.pattern)],
     date_bin: str = 'month',
     days: int = 5,
     q: str | None = None,
     change_bin: str = 'aa'
 ):
+    col_pattern = re.compile(r'\w+')
+    if not col_pattern.fullmatch(group_by):
+        raise ValueError
+
     # todo: these are all just sloppy placeholders
     change_bin = change_bin.lower()
     assert change_bin in {'nt', 'aa'}
@@ -285,5 +296,3 @@ async def get_mutation_counts(
             return await DB.queries.counts.count_mutations_by_simple_date_bin(group_by, date_bin, days, q, change_bin)
         case _:
             return await DB.queries.counts.count_mutations_by_column(group_by)
-
-
