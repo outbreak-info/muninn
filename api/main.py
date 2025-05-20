@@ -225,14 +225,11 @@ async def get_lineage_abundance_summary_stats(q: str | None = None):
 
 @app.get('/v0/samples:count', response_model=Dict[str, int])
 async def get_sample_counts(
-    group_by: Annotated [str, Query(regex=WORDLIKE_PATTERN.pattern)],
+    group_by: Annotated[str, Query(regex=WORDLIKE_PATTERN.pattern)],
     date_bin: str = 'month',
     days: int = 5,
     q: str | None = None,
 ):
-    col_pattern = re.compile(r'\w+')
-    if not col_pattern.fullmatch(group_by):
-        raise ValueError
 
     match group_by:
         case 'creation_date' | 'release_date':
@@ -241,9 +238,9 @@ async def get_sample_counts(
             return await DB.queries.counts.count_samples_by_column(group_by)
 
 
-@app.get('/v0/variants:count', response_model=Dict[str, Dict[str, int]])
+@app.get('/v0/variants:count', response_model=Dict[str, Dict[str, int]] | Dict[str, int])
 async def get_variant_counts(
-    group_by: Annotated [str, Query(regex=WORDLIKE_PATTERN.pattern)],
+    group_by: Annotated[str, Query(regex=WORDLIKE_PATTERN.pattern)],
     date_bin: str = 'month',
     days: int = 5,
     q: str | None = None,
@@ -263,10 +260,6 @@ async def get_variant_counts(
     assert change_bin in {'nt', 'aa'}
     assert date_bin in {'week', 'month', 'day'}
 
-    col_pattern = re.compile(r'\w+')
-    if not col_pattern.fullmatch(group_by):
-        raise ValueError
-
     match group_by:
         case 'creation_date' | 'release_date':
             return await DB.queries.counts.count_variants_by_simple_date_bin(group_by, date_bin, days, q, change_bin)
@@ -274,17 +267,14 @@ async def get_variant_counts(
             return await DB.queries.counts.count_variants_by_column(group_by)
 
 
-@app.get('/v0/mutations:count', response_model=Dict[str, Dict[str, int]])
+@app.get('/v0/mutations:count', response_model=Dict[str, Dict[str, int]] | Dict[str, int])
 async def get_mutation_counts(
-    group_by: Annotated [str, Query(regex=WORDLIKE_PATTERN.pattern)],
+    group_by: Annotated[str, Query(regex=WORDLIKE_PATTERN.pattern)],
     date_bin: str = 'month',
     days: int = 5,
     q: str | None = None,
     change_bin: str = 'aa'
 ):
-    col_pattern = re.compile(r'\w+')
-    if not col_pattern.fullmatch(group_by):
-        raise ValueError
 
     # todo: these are all just sloppy placeholders
     change_bin = change_bin.lower()
@@ -296,3 +286,18 @@ async def get_mutation_counts(
             return await DB.queries.counts.count_mutations_by_simple_date_bin(group_by, date_bin, days, q, change_bin)
         case _:
             return await DB.queries.counts.count_mutations_by_column(group_by)
+
+# todo: I'm not crazy about this name.
+#  We're not counting lineages here, we're counting how often they show up
+@app.get('/v0/lineages:count', response_model=Dict[str, Dict[str, Dict[str, int]]] | List[LineageCountInfo])
+async def get_lineage_counts(
+    group_by: Annotated[str, Query(regex=WORDLIKE_PATTERN.pattern)] | None = None,
+    date_bin: str = 'month',
+    days: int = 5,
+    q: str | None = None,
+):
+    match group_by:
+        case 'release_date' | 'creation_date':
+            return await DB.queries.counts.count_lineages_by_simple_date(group_by, date_bin, days, q)
+        case _:
+            return await DB.queries.lineages.get_sample_counts_by_lineage(q)
