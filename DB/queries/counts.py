@@ -59,6 +59,7 @@ async def count_mutations_by_column(by_col: str):
         )
         return await _package_count_by_column(res)
 
+
 async def _package_count_by_column(query_result: Result[tuple[Any, int]] | List[tuple]) -> Dict[str, int]:
     return {str(r[0]): r[1] for r in query_result}
 
@@ -73,15 +74,13 @@ async def count_samples_by_simple_date_bin(
     if raw_query is not None:
         where_clause = f'where {parser.parse(raw_query)}'
 
-
-
     match date_bin:
         case 'week' | 'month':
-            result =  await _count_samples_by_simple_date_via_extract(by_col, date_bin, where_clause)
+            result = await _count_samples_by_simple_date_via_extract(by_col, date_bin, where_clause)
         case 'day':
             result = await _count_samples_by_simple_date_custom_days(by_col, days, where_clause)
         case _:
-            raise ValueError
+            raise ValueError(f'Illegal value for date_bin: {date_bin}')
     return await _package_count_by_column(result)
 
 
@@ -202,7 +201,7 @@ async def _count_variants_or_mutations_by_simple_date_bin(
                 change_bin
             )
         case _:
-            raise ValueError
+            raise ValueError(f'Illegal value for date_bin: {date_bin}')
 
 
 async def _count_v_m_by_simple_date_via_extract(
@@ -315,4 +314,82 @@ async def _count_v_m_by_simple_date_custom_days(
             out_data[interval][change_name] = count
         except KeyError:
             out_data[interval] = {change_name: count}
+    return out_data
+
+
+# todo: return type
+async def count_lineages_by_simple_date(
+    group_by: str,
+    date_bin: str,
+    days: int,
+    raw_query: str | None,
+) -> Dict[str, Dict[str, Dict[str, int]]]:
+    where_clause = ''
+    if raw_query is not None:
+        where_clause = f'where {parser.parse(raw_query)}'
+
+    match date_bin:
+        case 'week' | 'month':
+            return await _count_lineages_by_simple_date_via_extract(group_by, date_bin, where_clause)
+        case 'day':
+            raise NotImplementedError
+        case _:
+            raise ValueError(f'Illegal value for date_bin: {date_bin}')
+
+
+# todo: return type
+async def _count_lineages_by_simple_date_via_extract(
+    group_by: str,
+    date_bin: str,
+    where_clause: str,
+) -> Dict[str, Dict[str, Dict[str, int]]]:
+    async with get_async_session() as session:
+        res = await session.execute(
+            text(
+                f'''
+                select
+                extract(year from date1) as year,
+                extract({date_bin} from date1) as chunk,
+                lineage_name,
+                lineage_system_name,
+                count(*)
+                from (
+                        select
+                        {group_by} as date1,
+                        lineage_name,
+                        lineage_system_name
+                        from samples_lineages sl
+                        inner join lineages l on l.id = sl.lineage_id
+                        inner join lineage_systems ls on ls.id = l.lineage_system_id
+                        inner join samples s on s.id = sl.sample_id
+                        {where_clause}
+                )
+                group by year, chunk, lineage_name, lineage_system_name
+                order by year, chunk
+                '''
+            )
+        )
+
+    out_data = dict()
+
+    date_formatter = None
+    match date_bin:
+        case 'week':
+            date_formatter = format_iso_week
+        case 'month':
+            date_formatter = format_iso_month
+
+    for r in res:
+        date = date_formatter(r[0], r[1])
+        count = r[4]
+        lineage = r[2]
+        system = r[3]
+
+        try:
+            out_data[date][system][lineage] = count
+        except KeyError:
+            if date not in out_data.keys():
+                out_data[date] = {system: {lineage: count}}
+            elif system not in out_data[date].keys():
+                out_data[date][system] = {lineage: count}
     return out_data
