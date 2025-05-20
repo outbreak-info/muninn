@@ -230,7 +230,6 @@ async def get_sample_counts(
     days: int = 5,
     q: str | None = None,
 ):
-
     match group_by:
         case 'creation_date' | 'release_date':
             return await DB.queries.counts.count_samples_by_simple_date_bin(group_by, date_bin, days, q)
@@ -275,7 +274,6 @@ async def get_mutation_counts(
     q: str | None = None,
     change_bin: str = 'aa'
 ):
-
     # todo: these are all just sloppy placeholders
     change_bin = change_bin.lower()
     assert change_bin in {'nt', 'aa'}
@@ -286,6 +284,7 @@ async def get_mutation_counts(
             return await DB.queries.counts.count_mutations_by_simple_date_bin(group_by, date_bin, days, q, change_bin)
         case _:
             return await DB.queries.counts.count_mutations_by_column(group_by)
+
 
 # todo: I'm not crazy about this name.
 #  We're not counting lineages here, we're counting how often they show up
@@ -301,3 +300,30 @@ async def get_lineage_counts(
             return await DB.queries.counts.count_lineages_by_simple_date(group_by, date_bin, days, q)
         case _:
             return await DB.queries.lineages.get_sample_counts_by_lineage(q)
+
+
+@app.get(
+    '/v0/lineages:abundance',
+    response_model=Dict[str, List[LineageAbundanceSummaryInfo]]
+                   | List[LineageAbundanceInfo]
+                   | List[LineageAbundanceSummaryInfo]
+)
+async def get_lineage_abundance(
+    group_by: Annotated[str, Query(regex=WORDLIKE_PATTERN.pattern)] | None = None,
+    date_bin: str = 'month',
+    days: int = 5,
+    q: str | None = None,
+    summary: bool = True,
+):
+    match group_by:
+        case 'release_date' | 'creation_date':
+            if summary:
+                return await DB.queries.lineages.get_abundance_summaries_by_date(group_by, q, date_bin, days)
+            else:
+                raise HTTPException(status_code=501)
+        case _:
+            # todo: all params except q are ignored here, there should be a warning
+            if summary:
+                return await DB.queries.lineages.get_abundance_summaries(q)
+            else:
+                return await DB.queries.lineages.get_abundances(q)

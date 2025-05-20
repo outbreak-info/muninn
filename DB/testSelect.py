@@ -54,10 +54,10 @@ logger.setLevel(logging.INFO) # set debug to log results as well
 # r = get_pheno_values_and_mutation_counts('stability', 'HA', False, None)
 # r = get_mutation_sample_count_by_aa('PB2:L502L')
 
-r = asyncio.run(get_mutation_sample_count_by_nt('NA:G696T'))
+# r = asyncio.run(get_mutation_sample_count_by_nt('NA:G696T'))
 
 # r = get_sample_counts_by_lineage('host = CAT')
 
 # r = asyncio.run(get_abundances(None))
-# r = asyncio.run(get_abundance_summaries("lineage_name=H5Nx-A"))
+r = asyncio.run(get_abundance_summaries("lineage_name=H5Nx-A"))
 pprint(r)
