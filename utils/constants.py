@@ -1,4 +1,7 @@
 import re
+from enum import Enum
+
+from utils.dates_and_times import format_iso_month, format_iso_week
 
 
 class Env:
@@ -26,3 +29,21 @@ class DefaultGffFeaturesByRegion:
 class LineageSystemNames:
     usda_genoflu = 'usda_genoflu'
     freyja_demixed = 'freyja_demixed'
+
+
+class DateBinOpt(Enum):
+    month = 'month'
+    week = 'week'
+    day = 'day'
+
+    def __str__(self):
+        return str(self.value)
+
+    def format_iso_chunk(self, year: int, chunk: int):
+        match self:
+            case DateBinOpt.month:
+                return format_iso_month(year, chunk)
+            case DateBinOpt.week:
+                return format_iso_week(year, chunk)
+            case _:
+                raise NotImplementedError
