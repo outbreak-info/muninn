@@ -64,7 +64,8 @@ def format_iso_week(year: int, week: int):
     :param week:
     :return: (2025, 5) -> "2025-W05"
     """
-    return f'{year}-W{str(week).rjust(2, '0')}'
+    return f'{year}-W{str(week).rjust(2, "0")}'
+
 
 def format_iso_month(year: int, month: int):
-    return f'{year}-{str(month).rjust(2, '0')}'
+    return f'{year}-{str(month).rjust(2, "0")}'

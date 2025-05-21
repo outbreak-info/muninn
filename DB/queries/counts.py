@@ -1,14 +1,13 @@
 import datetime
 from typing import Type, List, Any, Dict
 
-from sqlalchemy import text, select
+from sqlalchemy import text, select, Result
 from sqlalchemy.sql.functions import func
 
 from DB.engine import get_async_session
 from DB.models import Sample, GeoLocation, IntraHostVariant, AminoAcidSubstitution, Allele, Mutation, Translation
 from parser.parser import parser
-from utils.dates_and_times import format_iso_week, format_iso_month
-from sqlalchemy import Result
+from utils.constants import DateBinOpt
 
 
 async def count_samples_by_column(by_col: str):
@@ -66,7 +65,7 @@ async def _package_count_by_column(query_result: Result[tuple[Any, int]] | List[
 
 async def count_samples_by_simple_date_bin(
     by_col: str,
-    date_bin: str,
+    date_bin: DateBinOpt,
     days: int | None,
     raw_query: str | None
 ):
@@ -75,16 +74,20 @@ async def count_samples_by_simple_date_bin(
         where_clause = f'where {parser.parse(raw_query)}'
 
     match date_bin:
-        case 'week' | 'month':
+        case DateBinOpt.week | DateBinOpt.month:
             result = await _count_samples_by_simple_date_via_extract(by_col, date_bin, where_clause)
-        case 'day':
+        case DateBinOpt.day:
             result = await _count_samples_by_simple_date_custom_days(by_col, days, where_clause)
         case _:
             raise ValueError(f'Illegal value for date_bin: {date_bin}')
     return await _package_count_by_column(result)
 
 
-async def _count_samples_by_simple_date_via_extract(by_col: str, date_bin: str, where_clause: str) -> List[tuple]:
+async def _count_samples_by_simple_date_via_extract(
+    by_col: str,
+    date_bin: DateBinOpt,
+    where_clause: str
+) -> List[tuple]:
     async with get_async_session() as session:
         res = await session.execute(
             text(
@@ -100,15 +103,9 @@ async def _count_samples_by_simple_date_via_extract(by_col: str, date_bin: str, 
                    '''
             )
         )
-    date_formatter = None
-    match date_bin:
-        case 'week':
-            date_formatter = format_iso_week
-        case 'month':
-            date_formatter = format_iso_month
     out_data = []
     for r in res:
-        date = date_formatter(r[0], r[1])
+        date = date_bin.format_iso_chunk(r[0], r[1])
         out_data.append((date, r[2]))
     return out_data
 
@@ -139,7 +136,7 @@ async def _count_samples_by_simple_date_custom_days(by_col: str, days: int, wher
 
 async def count_variants_by_simple_date_bin(
     date_col: str,
-    date_bin: str,
+    date_bin: DateBinOpt,
     days: int,
     raw_query: str | None,
     change_bin: str
@@ -156,7 +153,7 @@ async def count_variants_by_simple_date_bin(
 
 async def count_mutations_by_simple_date_bin(
     date_col: str,
-    date_bin: str,
+    date_bin: DateBinOpt,
     days: int,
     raw_query: str | None,
     change_bin: str
@@ -173,7 +170,7 @@ async def count_mutations_by_simple_date_bin(
 
 async def _count_variants_or_mutations_by_simple_date_bin(
     date_col: str,
-    date_bin: str,
+    date_bin: DateBinOpt,
     days: int,
     raw_query: str | None,
     change_bin: str,
@@ -184,7 +181,7 @@ async def _count_variants_or_mutations_by_simple_date_bin(
         where_clause = f'where {parser.parse(raw_query)}'
 
     match date_bin:
-        case 'week' | 'month':
+        case DateBinOpt.week | DateBinOpt.month:
             return await _count_v_m_by_simple_date_via_extract(
                 table.__tablename__,
                 date_col,
@@ -192,7 +189,7 @@ async def _count_variants_or_mutations_by_simple_date_bin(
                 where_clause,
                 change_bin
             )
-        case 'day':
+        case DateBinOpt.day:
             return await _count_v_m_by_simple_date_custom_days(
                 table.__tablename__,
                 date_col,
@@ -207,7 +204,7 @@ async def _count_variants_or_mutations_by_simple_date_bin(
 async def _count_v_m_by_simple_date_via_extract(
     tablename: str,
     date_col: str,
-    date_bin: str,
+    date_bin: DateBinOpt,
     where_clause: str,
     change_bin: str
 ):
@@ -239,16 +236,8 @@ async def _count_v_m_by_simple_date_via_extract(
             )
         )
     out_data = dict()
-
-    date_formatter = None
-    match date_bin:
-        case 'week':
-            date_formatter = format_iso_week
-        case 'month':
-            date_formatter = format_iso_month
-
     for r in res:
-        date = date_formatter(r[0], r[1])
+        date = date_bin.format_iso_chunk(r[0], r[1])
         count = r[2]
         region = r[3]
         ref = r[4]
@@ -317,10 +306,9 @@ async def _count_v_m_by_simple_date_custom_days(
     return out_data
 
 
-# todo: return type
 async def count_lineages_by_simple_date(
     group_by: str,
-    date_bin: str,
+    date_bin: DateBinOpt,
     days: int,
     raw_query: str | None,
 ) -> Dict[str, Dict[str, Dict[str, int]]]:
@@ -329,9 +317,10 @@ async def count_lineages_by_simple_date(
         where_clause = f'where {parser.parse(raw_query)}'
 
     match date_bin:
-        case 'week' | 'month':
+        case DateBinOpt.week | DateBinOpt.month:
             return await _count_lineages_by_simple_date_via_extract(group_by, date_bin, where_clause)
-        case 'day':
+        case DateBinOpt.day:
+            # todo: implement lineages by custom days
             raise NotImplementedError
         case _:
             raise ValueError(f'Illegal value for date_bin: {date_bin}')
@@ -340,7 +329,7 @@ async def count_lineages_by_simple_date(
 # todo: return type
 async def _count_lineages_by_simple_date_via_extract(
     group_by: str,
-    date_bin: str,
+    date_bin: DateBinOpt,
     where_clause: str,
 ) -> Dict[str, Dict[str, Dict[str, int]]]:
     async with get_async_session() as session:
@@ -371,16 +360,8 @@ async def _count_lineages_by_simple_date_via_extract(
         )
 
     out_data = dict()
-
-    date_formatter = None
-    match date_bin:
-        case 'week':
-            date_formatter = format_iso_week
-        case 'month':
-            date_formatter = format_iso_month
-
     for r in res:
-        date = date_formatter(r[0], r[1])
+        date = date_bin.format_iso_chunk(r[0], r[1])
         count = r[4]
         lineage = r[2]
         system = r[3]

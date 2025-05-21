@@ -8,7 +8,7 @@ from DB.engine import get_async_session
 from DB.models import LineageSystem, Lineage, Sample, SampleLineage, GeoLocation
 from api.models import LineageCountInfo, LineageAbundanceInfo, LineageInfo, LineageAbundanceSummaryInfo
 from parser.parser import parser
-from utils.dates_and_times import format_iso_week, format_iso_month
+from utils.constants import DateBinOpt
 
 
 async def get_sample_counts_by_lineage(samples_raw_query: str | None) -> List[LineageCountInfo]:
@@ -151,7 +151,7 @@ async def get_abundance_summaries(raw_query: str | None) -> List[LineageAbundanc
 async def get_abundance_summaries_by_date(
     group_by: str,
     raw_query: str,
-    date_bin: str,
+    date_bin: DateBinOpt,
     days: int,
 ):
     where_clause = 'where sl.is_consensus_call = false'
@@ -159,9 +159,9 @@ async def get_abundance_summaries_by_date(
         where_clause = f'{where_clause} and {parser.parse(raw_query)}'
 
     match date_bin:
-        case 'week' | 'month':
+        case DateBinOpt.week | DateBinOpt.month:
             return await _get_abundance_summaries_by_date_via_extract(group_by, where_clause, date_bin)
-        case 'day':
+        case DateBinOpt.day:
             return await _get_abundance_summaries_by_date_custom_days(group_by, where_clause, days)
         case _:
             raise ValueError(f'Illegal value for date_bin: {date_bin}')
@@ -170,11 +170,12 @@ async def get_abundance_summaries_by_date(
 async def _get_abundance_summaries_by_date_via_extract(
     group_by: str,
     where_clause: str,
-    date_bin: str
+    date_bin: DateBinOpt
 ) -> Dict[str, List[LineageAbundanceSummaryInfo]]:
     async with get_async_session() as session:
-        res = await session.execute(text(
-            f'''
+        res = await session.execute(
+            text(
+                f'''
             select 
             l.lineage_name,
             ls.lineage_system_name,
@@ -194,30 +195,21 @@ async def _get_abundance_summaries_by_date_via_extract(
             {where_clause} 
             group by year, chunk, l.lineage_name, ls.lineage_system_name
             '''
-        ))
+            )
+        )
     out_data = dict()
-
-    date_formatter = None
-    match date_bin:
-        case 'week':
-            date_formatter = format_iso_week
-        case 'month':
-            date_formatter = format_iso_month
-
-
-
     for r in res:
-        date = date_formatter(r[8], r[9])
+        date = date_bin.format_iso_chunk(r[8], r[9])
         info = LineageAbundanceSummaryInfo(
-                    lineage_name=r[0],
-                    lineage_system_name=r[1],
-                    sample_count=r[2],
-                    abundance_min=r[3],
-                    abundance_q1=r[4],
-                    abundance_median=r[5],
-                    abundance_q3=r[6],
-                    abundance_max=r[7]
-                )
+            lineage_name=r[0],
+            lineage_system_name=r[1],
+            sample_count=r[2],
+            abundance_min=r[3],
+            abundance_q1=r[4],
+            abundance_median=r[5],
+            abundance_q3=r[6],
+            abundance_max=r[7]
+        )
         try:
             out_data[date].append(info)
         except KeyError:
@@ -232,8 +224,9 @@ async def _get_abundance_summaries_by_date_custom_days(
 ) -> Dict[str, List[LineageAbundanceSummaryInfo]]:
     origin = datetime.date.today()
     async with get_async_session() as session:
-        res = await session.execute(text(
-            f'''
+        res = await session.execute(
+            text(
+                f'''
             select 
             lineage_name,
             lineage_system_name,
@@ -265,21 +258,21 @@ async def _get_abundance_summaries_by_date_custom_days(
                 group by bin_start, l.lineage_name, ls.lineage_system_name
             )
             '''
-        ))
+            )
+        )
     out_data = dict()
-
     for r in res:
         date = f'{r[8]}/{r[9]}'
         info = LineageAbundanceSummaryInfo(
-                    lineage_name=r[0],
-                    lineage_system_name=r[1],
-                    sample_count=r[2],
-                    abundance_min=r[3],
-                    abundance_q1=r[4],
-                    abundance_median=r[5],
-                    abundance_q3=r[6],
-                    abundance_max=r[7]
-                )
+            lineage_name=r[0],
+            lineage_system_name=r[1],
+            sample_count=r[2],
+            abundance_min=r[3],
+            abundance_q1=r[4],
+            abundance_median=r[5],
+            abundance_q3=r[6],
+            abundance_max=r[7]
+        )
         try:
             out_data[date].append(info)
         except KeyError:

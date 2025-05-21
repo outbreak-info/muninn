@@ -14,7 +14,7 @@ import DB.queries.samples
 import DB.queries.variants
 from api.models import VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
     MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo
-from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN
+from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt
 from utils.errors import ParsingError
 
 app = FastAPI()
@@ -226,7 +226,7 @@ async def get_lineage_abundance_summary_stats(q: str | None = None):
 @app.get('/v0/samples:count', response_model=Dict[str, int])
 async def get_sample_counts(
     group_by: Annotated[str, Query(regex=WORDLIKE_PATTERN.pattern)],
-    date_bin: str = 'month',
+    date_bin: DateBinOpt = DateBinOpt.month,
     days: int = 5,
     q: str | None = None,
 ):
@@ -240,7 +240,7 @@ async def get_sample_counts(
 @app.get('/v0/variants:count', response_model=Dict[str, Dict[str, int]] | Dict[str, int])
 async def get_variant_counts(
     group_by: Annotated[str, Query(regex=WORDLIKE_PATTERN.pattern)],
-    date_bin: str = 'month',
+    date_bin: DateBinOpt = DateBinOpt.month,
     days: int = 5,
     q: str | None = None,
     change_bin: str = 'aa'
@@ -257,7 +257,6 @@ async def get_variant_counts(
     # todo: these are all just sloppy placeholders
     change_bin = change_bin.lower()
     assert change_bin in {'nt', 'aa'}
-    assert date_bin in {'week', 'month', 'day'}
 
     match group_by:
         case 'creation_date' | 'release_date':
@@ -269,7 +268,7 @@ async def get_variant_counts(
 @app.get('/v0/mutations:count', response_model=Dict[str, Dict[str, int]] | Dict[str, int])
 async def get_mutation_counts(
     group_by: Annotated[str, Query(regex=WORDLIKE_PATTERN.pattern)],
-    date_bin: str = 'month',
+    date_bin: DateBinOpt = DateBinOpt.month,
     days: int = 5,
     q: str | None = None,
     change_bin: str = 'aa'
@@ -277,7 +276,6 @@ async def get_mutation_counts(
     # todo: these are all just sloppy placeholders
     change_bin = change_bin.lower()
     assert change_bin in {'nt', 'aa'}
-    assert date_bin in {'week', 'month', 'day'}
 
     match group_by:
         case 'creation_date' | 'release_date':
@@ -291,7 +289,7 @@ async def get_mutation_counts(
 @app.get('/v0/lineages:count', response_model=Dict[str, Dict[str, Dict[str, int]]] | List[LineageCountInfo])
 async def get_lineage_counts(
     group_by: Annotated[str, Query(regex=WORDLIKE_PATTERN.pattern)] | None = None,
-    date_bin: str = 'month',
+    date_bin: DateBinOpt = DateBinOpt.month,
     days: int = 5,
     q: str | None = None,
 ):
@@ -310,7 +308,7 @@ async def get_lineage_counts(
 )
 async def get_lineage_abundance(
     group_by: Annotated[str, Query(regex=WORDLIKE_PATTERN.pattern)] | None = None,
-    date_bin: str = 'month',
+    date_bin: DateBinOpt = DateBinOpt.month,
     days: int = 5,
     q: str | None = None,
     summary: bool = True,
