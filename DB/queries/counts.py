@@ -8,6 +8,7 @@ from DB.engine import get_async_session
 from DB.models import Sample, GeoLocation, IntraHostVariant, AminoAcidSubstitution, Allele, Mutation, Translation
 from parser.parser import parser
 from utils.constants import DateBinOpt
+from utils.dates_and_times import format_iso_interval
 
 
 async def count_samples_by_column(by_col: str):
@@ -83,6 +84,7 @@ async def count_samples_by_simple_date_bin(
     return await _package_count_by_column(result)
 
 
+# todo: need to add geo_locations to this and a bunch of other queries
 async def _count_samples_by_simple_date_via_extract(
     by_col: str,
     date_bin: DateBinOpt,
@@ -132,6 +134,82 @@ async def _count_samples_by_simple_date_custom_days(by_col: str, days: int, wher
             count = r[2]
             out_data.append((interval, count))
         return out_data
+
+
+
+
+async def count_samples_by_collection_date(
+    date_bin: DateBinOpt,
+    days: int,
+    raw_query: str | None,
+    max_span_days: int,
+) -> Dict[str, int]:
+    where_clause = ''
+    if raw_query is not None:
+        where_clause = f'where {parser.parse(raw_query)}'
+
+    match date_bin:
+        case DateBinOpt.week | DateBinOpt.month:
+            extract_clause = f'''
+            extract(year from mid_collection_date) as year,  
+            extract({date_bin} from mid_collection_date) as chunk
+            '''
+
+            group_and_order_clause = f'''
+            group by year, chunk
+            order by year, chunk
+            '''
+
+        case DateBinOpt.day:
+            origin = datetime.date.today()
+            extract_clause = f'''
+            date_bin('{days} days', mid_collection_date, '{origin}') + interval '{days} days' as bin_end,
+            date_bin('{days} days', mid_collection_date, '{origin}') as bin_start
+            '''
+
+            group_and_order_clause = f'''
+            group by bin_start, bin_end
+            order by bin_start
+            '''
+
+        case _:
+            raise NotImplementedError
+
+    async with get_async_session() as session:
+        res = await session.execute(
+            text(
+                f'''
+                select 
+                    {extract_clause},
+                    count(*)
+                from (
+                    select 
+                    (collection_start_date + ((collection_end_date - collection_start_date) / 2))::date AS mid_collection_date
+                    from (
+                        select
+                        *,
+                        collection_end_date - collection_start_date as collection_span
+                        from samples s
+                        left join geo_locations gl on gl.id = s.geo_location_id
+                        {where_clause}
+                    )
+                    where collection_span <= {max_span_days}
+                )
+               {group_and_order_clause}
+                '''
+            )
+        )
+    out_data = dict()
+    for r in res:
+        match date_bin:
+            case DateBinOpt.month | DateBinOpt.week:
+                date = date_bin.format_iso_chunk(r[0], r[1])
+            case DateBinOpt.day:
+                date = format_iso_interval(r[0], r[1])
+            case _:
+                raise NotImplementedError
+        out_data[date] = r[2]
+    return out_data
 
 
 async def count_variants_by_simple_date_bin(
@@ -326,7 +404,6 @@ async def count_lineages_by_simple_date(
             raise ValueError(f'Illegal value for date_bin: {date_bin}')
 
 
-# todo: return type
 async def _count_lineages_by_simple_date_via_extract(
     group_by: str,
     date_bin: DateBinOpt,

@@ -1,7 +1,8 @@
+import datetime
 import re
 from enum import Enum
 
-from utils.dates_and_times import format_iso_month, format_iso_week
+from utils.dates_and_times import format_iso_month, format_iso_week, format_iso_interval
 
 
 class Env:
@@ -47,3 +48,6 @@ class DateBinOpt(Enum):
                 return format_iso_week(year, chunk)
             case _:
                 raise NotImplementedError
+
+
+SIMPLE_DATE_FIELDS = {'release_date', 'creation_date'}

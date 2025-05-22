@@ -14,7 +14,7 @@ import DB.queries.samples
 import DB.queries.variants
 from api.models import VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
     MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo
-from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt
+from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, SIMPLE_DATE_FIELDS
 from utils.errors import ParsingError
 
 app = FastAPI()
@@ -229,12 +229,14 @@ async def get_sample_counts(
     date_bin: DateBinOpt = DateBinOpt.month,
     days: int = 5,
     q: str | None = None,
+    max_span_days: int = 366
 ):
-    match group_by:
-        case 'creation_date' | 'release_date':
-            return await DB.queries.counts.count_samples_by_simple_date_bin(group_by, date_bin, days, q)
-        case _:
-            return await DB.queries.counts.count_samples_by_column(group_by)
+    if group_by in SIMPLE_DATE_FIELDS:
+        return await DB.queries.counts.count_samples_by_simple_date_bin(group_by, date_bin, days, q)
+    elif group_by == 'collection_date':
+        return await DB.queries.counts.count_samples_by_collection_date(date_bin, days, q, max_span_days)
+    else:
+        return await DB.queries.counts.count_samples_by_column(group_by)
 
 
 @app.get('/v0/variants:count', response_model=Dict[str, Dict[str, int]] | Dict[str, int])
@@ -258,11 +260,10 @@ async def get_variant_counts(
     change_bin = change_bin.lower()
     assert change_bin in {'nt', 'aa'}
 
-    match group_by:
-        case 'creation_date' | 'release_date':
-            return await DB.queries.counts.count_variants_by_simple_date_bin(group_by, date_bin, days, q, change_bin)
-        case _:
-            return await DB.queries.counts.count_variants_by_column(group_by)
+    if group_by in SIMPLE_DATE_FIELDS:
+        return await DB.queries.counts.count_variants_by_simple_date_bin(group_by, date_bin, days, q, change_bin)
+    else:
+        return await DB.queries.counts.count_variants_by_column(group_by)
 
 
 @app.get('/v0/mutations:count', response_model=Dict[str, Dict[str, int]] | Dict[str, int])
@@ -277,11 +278,10 @@ async def get_mutation_counts(
     change_bin = change_bin.lower()
     assert change_bin in {'nt', 'aa'}
 
-    match group_by:
-        case 'creation_date' | 'release_date':
-            return await DB.queries.counts.count_mutations_by_simple_date_bin(group_by, date_bin, days, q, change_bin)
-        case _:
-            return await DB.queries.counts.count_mutations_by_column(group_by)
+    if group_by in SIMPLE_DATE_FIELDS:
+        return await DB.queries.counts.count_mutations_by_simple_date_bin(group_by, date_bin, days, q, change_bin)
+    else:
+        return await DB.queries.counts.count_mutations_by_column(group_by)
 
 
 # todo: I'm not crazy about this name.
@@ -293,11 +293,10 @@ async def get_lineage_counts(
     days: int = 5,
     q: str | None = None,
 ):
-    match group_by:
-        case 'release_date' | 'creation_date':
-            return await DB.queries.counts.count_lineages_by_simple_date(group_by, date_bin, days, q)
-        case _:
-            return await DB.queries.lineages.get_sample_counts_by_lineage(q)
+    if group_by in SIMPLE_DATE_FIELDS:
+        return await DB.queries.counts.count_lineages_by_simple_date(group_by, date_bin, days, q)
+    else:
+        return await DB.queries.lineages.get_sample_counts_by_lineage(q)
 
 
 @app.get(
@@ -313,15 +312,14 @@ async def get_lineage_abundance(
     q: str | None = None,
     summary: bool = True,
 ):
-    match group_by:
-        case 'release_date' | 'creation_date':
-            if summary:
-                return await DB.queries.lineages.get_abundance_summaries_by_date(group_by, q, date_bin, days)
-            else:
-                raise HTTPException(status_code=501)
-        case _:
-            # todo: all params except q are ignored here, there should be a warning
-            if summary:
-                return await DB.queries.lineages.get_abundance_summaries(q)
-            else:
-                return await DB.queries.lineages.get_abundances(q)
+    if group_by in SIMPLE_DATE_FIELDS:
+        if summary:
+            return await DB.queries.lineages.get_abundance_summaries_by_date(group_by, q, date_bin, days)
+        else:
+            raise HTTPException(status_code=501)
+    else:
+        # todo: all params except q are ignored here, there should be a warning
+        if summary:
+            return await DB.queries.lineages.get_abundance_summaries(q)
+        else:
+            return await DB.queries.lineages.get_abundances(q)
