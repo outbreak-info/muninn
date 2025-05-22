@@ -4,7 +4,7 @@ from typing import List, Type
 from sqlalchemy import select, and_, ColumnElement, text, func
 
 from DB.engine import get_async_session
-from DB.models import IntraHostVariant, Sample, Allele, AminoAcidSubstitution, Translation, Mutation
+from DB.models import IntraHostVariant, Sample, Allele, AminoAcidSubstitution, Translation, Mutation, GeoLocation
 from api.models import VariantFreqInfo, VariantCountPhenoScoreInfo, MutationCountInfo
 from parser.parser import parser
 from utils.constants import CHANGE_PATTERN
@@ -37,6 +37,7 @@ async def get_samples_variant_freq_by_nt_change(change: str) -> List[VariantFreq
 
 
 async def _get_samples_variant_freq(where_clause: ColumnElement[bool]) -> List[VariantFreqInfo]:
+    # todo: should join geo_locations
     query = (
         select(IntraHostVariant.alt_freq, Sample.accession, Allele.id, Translation.id, AminoAcidSubstitution.id)
         .join(Sample, Sample.id == IntraHostVariant.sample_id, isouter=True)
@@ -61,7 +62,7 @@ async def _get_samples_variant_freq(where_clause: ColumnElement[bool]) -> List[V
         )
     return out_data
 
-
+# todo: I think the queries here need to be double-checked
 async def get_mutation_sample_count_by_nt(change: str) -> List[MutationCountInfo]:
     region, ref_nt, position_nt, alt_nt = _parse_change_string(change)
 
