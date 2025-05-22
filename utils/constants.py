@@ -51,3 +51,10 @@ class DateBinOpt(Enum):
 
 
 SIMPLE_DATE_FIELDS = {'release_date', 'creation_date'}
+
+class NtOrAa(Enum):
+    nt = 'nt'
+    aa = 'aa'
+
+    def __str__(self):
+        return str(self.value)

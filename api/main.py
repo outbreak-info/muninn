@@ -1,4 +1,3 @@
-import re
 from typing import List, Annotated, Dict
 
 from fastapi import FastAPI, HTTPException, Query
@@ -14,7 +13,7 @@ import DB.queries.samples
 import DB.queries.variants
 from api.models import VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
     MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo
-from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, SIMPLE_DATE_FIELDS
+from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, SIMPLE_DATE_FIELDS, NtOrAa
 from utils.errors import ParsingError
 
 app = FastAPI()
@@ -245,7 +244,7 @@ async def get_variant_counts(
     date_bin: DateBinOpt = DateBinOpt.month,
     days: int = 5,
     q: str | None = None,
-    change_bin: str = 'aa'
+    change_bin: NtOrAa = NtOrAa.aa
 ):
     """
 
@@ -256,9 +255,6 @@ async def get_variant_counts(
     :param change_bin: When grouping by date, further bin by NT or AA? default AA.
     :return:
     """
-    # todo: these are all just sloppy placeholders
-    change_bin = change_bin.lower()
-    assert change_bin in {'nt', 'aa'}
 
     if group_by in SIMPLE_DATE_FIELDS:
         return await DB.queries.counts.count_variants_by_simple_date_bin(group_by, date_bin, days, q, change_bin)
@@ -272,12 +268,8 @@ async def get_mutation_counts(
     date_bin: DateBinOpt = DateBinOpt.month,
     days: int = 5,
     q: str | None = None,
-    change_bin: str = 'aa'
+    change_bin: NtOrAa = NtOrAa.aa
 ):
-    # todo: these are all just sloppy placeholders
-    change_bin = change_bin.lower()
-    assert change_bin in {'nt', 'aa'}
-
     if group_by in SIMPLE_DATE_FIELDS:
         return await DB.queries.counts.count_mutations_by_simple_date_bin(group_by, date_bin, days, q, change_bin)
     else:

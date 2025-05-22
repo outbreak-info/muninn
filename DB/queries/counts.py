@@ -7,7 +7,7 @@ from sqlalchemy.sql.functions import func
 from DB.engine import get_async_session
 from DB.models import Sample, GeoLocation, IntraHostVariant, AminoAcidSubstitution, Allele, Mutation, Translation
 from parser.parser import parser
-from utils.constants import DateBinOpt
+from utils.constants import DateBinOpt, NtOrAa
 from utils.dates_and_times import format_iso_interval
 
 
@@ -84,7 +84,6 @@ async def count_samples_by_simple_date_bin(
     return await _package_count_by_column(result)
 
 
-# todo: need to add geo_locations to this and a bunch of other queries
 async def _count_samples_by_simple_date_via_extract(
     by_col: str,
     date_bin: DateBinOpt,
@@ -99,6 +98,7 @@ async def _count_samples_by_simple_date_via_extract(
                    extract({date_bin} from {by_col}) as chunk, 
                    count(*)
                    from samples s
+                   left join geo_locations gl on gl.id = s.geo_location_id
                    {where_clause}
                    group by year, chunk 
                    order by year, chunk
@@ -121,6 +121,7 @@ async def _count_samples_by_simple_date_custom_days(by_col: str, days: int, wher
                 select bin_start, bin_start + interval '{days} days' as bin_end, count1 from (
                     select date_bin('{days} days', {by_col}, '{origin}') as bin_start, count(*) as count1
                     from samples s
+                    left join geo_locations gl on gl.id = s.geo_location_id 
                     {where_clause}
                     group by bin_start
                     order by bin_start
@@ -130,12 +131,10 @@ async def _count_samples_by_simple_date_custom_days(by_col: str, days: int, wher
         )
         out_data = []
         for r in res:
-            interval = f'{r[0]}/{r[1]}'
+            interval = format_iso_interval(r[0], r[1])
             count = r[2]
             out_data.append((interval, count))
         return out_data
-
-
 
 
 async def count_samples_by_collection_date(
@@ -217,7 +216,7 @@ async def count_variants_by_simple_date_bin(
     date_bin: DateBinOpt,
     days: int,
     raw_query: str | None,
-    change_bin: str
+    change_bin: NtOrAa
 ):
     return await _count_variants_or_mutations_by_simple_date_bin(
         date_col,
@@ -234,7 +233,7 @@ async def count_mutations_by_simple_date_bin(
     date_bin: DateBinOpt,
     days: int,
     raw_query: str | None,
-    change_bin: str
+    change_bin: NtOrAa
 ):
     return await _count_variants_or_mutations_by_simple_date_bin(
         date_col,
@@ -251,12 +250,14 @@ async def _count_variants_or_mutations_by_simple_date_bin(
     date_bin: DateBinOpt,
     days: int,
     raw_query: str | None,
-    change_bin: str,
+    change_bin: NtOrAa,
     table: Type['IntraHostVariant'] | Type['Mutation']
 ):
     where_clause = ''
     if raw_query is not None:
         where_clause = f'where {parser.parse(raw_query)}'
+
+    change_fields = f'ref_{change_bin}, position_{change_bin}, alt_{change_bin}'
 
     match date_bin:
         case DateBinOpt.week | DateBinOpt.month:
@@ -265,7 +266,7 @@ async def _count_variants_or_mutations_by_simple_date_bin(
                 date_col,
                 date_bin,
                 where_clause,
-                change_bin
+                change_fields
             )
         case DateBinOpt.day:
             return await _count_v_m_by_simple_date_custom_days(
@@ -273,7 +274,7 @@ async def _count_variants_or_mutations_by_simple_date_bin(
                 date_col,
                 days,
                 where_clause,
-                change_bin
+                change_fields
             )
         case _:
             raise ValueError(f'Illegal value for date_bin: {date_bin}')
@@ -284,11 +285,8 @@ async def _count_v_m_by_simple_date_via_extract(
     date_col: str,
     date_bin: DateBinOpt,
     where_clause: str,
-    change_bin: str
+    change_fields: str
 ):
-    # todo: very smelly
-    change_fields = f'ref_{change_bin}, position_{change_bin}, alt_{change_bin}'
-
     async with get_async_session() as session:
         # todo: this query is really slow for large result sets.
         res = await session.execute(
@@ -335,41 +333,39 @@ async def _count_v_m_by_simple_date_custom_days(
     date_col: str,
     days: int,
     where_clause: str,
-    change_bin: str
+    change_fields: str
 ):
-    # todo: very smelly
-    change_fields = f'ref_{change_bin}, position_{change_bin}, alt_{change_bin}'
     origin = datetime.date.today()
     async with get_async_session() as session:
         res = await session.execute(
             text(
                 f'''
-            select 
-            bin_start, 
-            bin_start + interval '{days} days' as bin_end, 
-            count1,
-            region, {change_fields}
-            from (
                 select 
-                date_bin('{days} days', {date_col}, '{origin}') as bin_start, 
-                count(*) as count1,
+                bin_start, 
+                bin_start + interval '{days} days' as bin_end, 
+                count1,
                 region, {change_fields}
-                from samples s
-                inner join {tablename} VM on VM.sample_id = s.id
-                inner join alleles a on a.id = VM.allele_id
-                left join translations t on t.allele_id = a.id
-                left join amino_acid_substitutions aas on aas.id = t.amino_acid_substitution_id
-                {where_clause}
-                group by bin_start, region, {change_fields}
-                order by bin_start
-            )
-            '''
+                from (
+                    select 
+                    date_bin('{days} days', {date_col}, '{origin}') as bin_start, 
+                    count(*) as count1,
+                    region, {change_fields}
+                    from samples s
+                    inner join {tablename} VM on VM.sample_id = s.id
+                    inner join alleles a on a.id = VM.allele_id
+                    left join translations t on t.allele_id = a.id
+                    left join amino_acid_substitutions aas on aas.id = t.amino_acid_substitution_id
+                    {where_clause}
+                    group by bin_start, region, {change_fields}
+                    order by bin_start
+                )
+                '''
             )
         )
     out_data = dict()
 
     for r in res:
-        interval = f'{r[0]}/{r[1]}'
+        interval = format_iso_interval(r[0], r[1])
         count = r[2]
         region = r[3]
         ref = r[4]
