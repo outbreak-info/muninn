@@ -1,3 +1,4 @@
+import datetime
 import re
 from datetime import date
 
@@ -69,3 +70,6 @@ def format_iso_week(year: int, week: int):
 
 def format_iso_month(year: int, month: int):
     return f'{year}-{str(month).rjust(2, "0")}'
+
+def format_iso_interval(start: datetime.datetime, end: datetime.datetime):
+    return f'{start}/{end}'
