@@ -1,8 +1,7 @@
-import datetime
 import re
 from enum import Enum
 
-from utils.dates_and_times import format_iso_month, format_iso_week, format_iso_interval
+from utils.dates_and_times import format_iso_month, format_iso_week
 
 
 class Env:
@@ -16,6 +15,10 @@ class Env:
 
 CHANGE_PATTERN = r'^(\w+):([a-zA-Z])(\d+)([a-zA-Z\-+]+)'
 WORDLIKE_PATTERN = re.compile(r'\w+')
+SIMPLE_DATE_FIELDS = {'release_date', 'creation_date'}
+COLLECTION_DATE = 'collection_date'
+DEFAULT_MAX_SPAN_DAYS = 366
+DEFAULT_DAYS = 5
 
 
 class PhenotypeMetricAssayTypes:
@@ -49,8 +52,6 @@ class DateBinOpt(Enum):
             case _:
                 raise NotImplementedError
 
-
-SIMPLE_DATE_FIELDS = {'release_date', 'creation_date'}
 
 class NtOrAa(Enum):
     nt = 'nt'
