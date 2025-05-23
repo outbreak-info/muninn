@@ -308,7 +308,7 @@ async def get_lineage_counts(
     q: str | None = None,
 ):
     if group_by in SIMPLE_DATE_FIELDS:
-        return await DB.queries.counts.count_lineages_by_simple_date(group_by, date_bin, days, q)
+        return await DB.queries.counts.count_lineages_by_simple_date(group_by, date_bin, q, days)
     else:
         return await DB.queries.lineages.get_sample_counts_by_lineage(q)
 
