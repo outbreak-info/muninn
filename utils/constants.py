@@ -1,7 +1,9 @@
 import re
+from datetime import datetime
+from decimal import Decimal
 from enum import Enum
 
-from utils.dates_and_times import format_iso_month, format_iso_week
+from utils.dates_and_times import format_iso_month, format_iso_week, format_iso_interval
 
 
 class Env:
@@ -40,17 +42,25 @@ class DateBinOpt(Enum):
     week = 'week'
     day = 'day'
 
+    def __init__(self, value):
+        self.format_fn = None
+        match value:
+            case 'month':
+                self.format_fn = format_iso_month
+            case 'week':
+                self.format_fn = format_iso_week
+            case 'day':
+                self.format_fn = format_iso_interval
+
     def __str__(self):
         return str(self.value)
 
-    def format_iso_chunk(self, year: int, chunk: int):
-        match self:
-            case DateBinOpt.month:
-                return format_iso_month(year, chunk)
-            case DateBinOpt.week:
-                return format_iso_week(year, chunk)
-            case _:
-                raise NotImplementedError
+    def format_iso_chunk(
+        self,
+        a: int | datetime,
+        b: int | datetime
+    ):
+        return self.format_fn(a, b)
 
 
 class NtOrAa(Enum):

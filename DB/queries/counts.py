@@ -200,13 +200,7 @@ async def count_samples_by_collection_date(
         )
     out_data = dict()
     for r in res:
-        match date_bin:
-            case DateBinOpt.month | DateBinOpt.week:
-                date = date_bin.format_iso_chunk(r[0], r[1])
-            case DateBinOpt.day:
-                date = format_iso_interval(r[0], r[1])
-            case _:
-                raise NotImplementedError
+        date = date_bin.format_iso_chunk(r[0], r[1])
         out_data[date] = r[2]
     return out_data
 
@@ -452,13 +446,7 @@ async def count_variants_or_mutations_by_collection_date(
         )
     out_data = dict()
     for r in res:
-        match date_bin:
-            case DateBinOpt.week | DateBinOpt.month:
-                date = date_bin.format_iso_chunk(r[0], r[1])
-            case DateBinOpt.day:
-                date = format_iso_interval(r[0], r[1])
-            case _:
-                raise ValueError
+        date = date_bin.format_iso_chunk(r[0], r[1])
         count = r[2]
         region = r[3]
         ref = r[4]
@@ -476,8 +464,8 @@ async def count_variants_or_mutations_by_collection_date(
 async def count_lineages_by_simple_date(
     group_by: str,
     date_bin: DateBinOpt,
-    days: int,
-    raw_query: str | None,
+    raw_query: str,
+    days: int
 ) -> Dict[str, Dict[str, Dict[str, int]]]:
     where_clause = ''
     if raw_query is not None:
@@ -485,32 +473,41 @@ async def count_lineages_by_simple_date(
 
     match date_bin:
         case DateBinOpt.week | DateBinOpt.month:
-            return await _count_lineages_by_simple_date_via_extract(group_by, date_bin, where_clause)
+            extract_clause = f'''
+                extract(year from {group_by}) as year,
+                extract({date_bin} from {group_by}) as chunk
+                '''
+
+            group_and_order_clause = f'''
+                group by year, chunk, lineage_name, lineage_system_name
+                order by year, chunk
+                '''
         case DateBinOpt.day:
-            # todo: implement lineages by custom days
-            raise NotImplementedError
+            origin = datetime.date.today()
+            extract_clause = f'''
+                date_bin('{days} days', {group_by}, '{origin}') + interval '{days} days' as bin_end,
+                date_bin('{days} days', {group_by}, '{origin}') as bin_start
+                '''
+
+            group_and_order_clause = f'''
+                group by bin_start, bin_end, lineage_name, lineage_system_name
+                order by bin_start
+                '''
         case _:
-            raise ValueError(f'Illegal value for date_bin: {date_bin}')
+            raise ValueError
 
-
-async def _count_lineages_by_simple_date_via_extract(
-    group_by: str,
-    date_bin: DateBinOpt,
-    where_clause: str,
-) -> Dict[str, Dict[str, Dict[str, int]]]:
     async with get_async_session() as session:
         res = await session.execute(
             text(
                 f'''
                 select
-                extract(year from date1) as year,
-                extract({date_bin} from date1) as chunk,
+                {extract_clause},
                 lineage_name,
                 lineage_system_name,
                 count(*)
                 from (
                         select
-                        {group_by} as date1,
+                        {group_by},
                         lineage_name,
                         lineage_system_name
                         from samples_lineages sl
@@ -519,8 +516,7 @@ async def _count_lineages_by_simple_date_via_extract(
                         inner join samples s on s.id = sl.sample_id
                         {where_clause}
                 )
-                group by year, chunk, lineage_name, lineage_system_name
-                order by year, chunk
+                {group_and_order_clause}
                 '''
             )
         )
