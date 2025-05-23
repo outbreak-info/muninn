@@ -297,15 +297,20 @@ async def get_mutation_counts(
 
 # todo: I'm not crazy about this name.
 #  We're not counting lineages here, we're counting how often they show up
+#  Maybe this should be moved to
+#  /v0/samples:count?group_by=lineage,release_date
 @app.get('/v0/lineages:count', response_model=Dict[str, Dict[str, Dict[str, int]]] | List[LineageCountInfo])
 async def get_lineage_counts(
     group_by: Annotated[str, Query(regex=WORDLIKE_PATTERN.pattern)] | None = None,
     date_bin: DateBinOpt = DateBinOpt.month,
     days: int = DEFAULT_DAYS,
     q: str | None = None,
+    max_span_days: int = DEFAULT_MAX_SPAN_DAYS,
 ):
     if group_by in SIMPLE_DATE_FIELDS:
         return await DB.queries.counts.count_lineages_by_simple_date(group_by, date_bin, q, days)
+    elif group_by == COLLECTION_DATE:
+        return await DB.queries.counts.count_lineages_by_collection_date(date_bin, q, days, max_span_days)
     else:
         return await DB.queries.lineages.get_sample_counts_by_lineage(q)
 
