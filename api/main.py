@@ -11,7 +11,6 @@ import DB.queries.phenotype_metrics
 import DB.queries.prevalence
 import DB.queries.samples
 import DB.queries.variants
-from DB.models import IntraHostVariant, Mutation
 from api.models import VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
     MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo
 from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, SIMPLE_DATE_FIELDS, NtOrAa, \
@@ -233,7 +232,7 @@ async def get_sample_counts(
     max_span_days: int = DEFAULT_MAX_SPAN_DAYS
 ):
     if group_by in SIMPLE_DATE_FIELDS:
-        return await DB.queries.counts.count_samples_by_simple_date_bin(group_by, date_bin, days, q)
+        return await DB.queries.counts.count_samples_by_simple_date(group_by, date_bin, days, q)
     elif group_by == COLLECTION_DATE:
         return await DB.queries.counts.count_samples_by_collection_date(date_bin, days, q, max_span_days)
     else:
@@ -260,15 +259,14 @@ async def get_variant_counts(
     """
 
     if group_by in SIMPLE_DATE_FIELDS:
-        return await DB.queries.counts.count_variants_by_simple_date_bin(group_by, date_bin, days, q, change_bin)
+        return await DB.queries.counts.count_variants_by_simple_date(group_by, date_bin, days, q, change_bin)
     elif group_by == COLLECTION_DATE:
-        return await DB.queries.counts.count_variants_or_mutations_by_collection_date(
+        return await DB.queries.counts.count_variants_by_collection_date(
             date_bin,
             change_bin,
             days,
             max_span_days,
-            q,
-            IntraHostVariant
+            q
         )
     else:
         return await DB.queries.counts.count_variants_by_column(group_by)
@@ -284,15 +282,14 @@ async def get_mutation_counts(
     max_span_days: int = DEFAULT_MAX_SPAN_DAYS
 ):
     if group_by in SIMPLE_DATE_FIELDS:
-        return await DB.queries.counts.count_mutations_by_simple_date_bin(group_by, date_bin, days, q, change_bin)
+        return await DB.queries.counts.count_mutations_by_simple_date(group_by, date_bin, days, q, change_bin)
     elif group_by == COLLECTION_DATE:
-        return await DB.queries.counts.count_variants_or_mutations_by_collection_date(
+        return await DB.queries.counts.count_mutations_by_collection_date(
             date_bin,
             change_bin,
             days,
             max_span_days,
-            q,
-            Mutation
+            q
         )
     else:
         return await DB.queries.counts.count_mutations_by_column(group_by)

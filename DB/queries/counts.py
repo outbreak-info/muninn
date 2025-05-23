@@ -64,8 +64,8 @@ async def _package_count_by_column(query_result: Result[tuple[Any, int]] | List[
     return {str(r[0]): r[1] for r in query_result}
 
 
-async def count_samples_by_simple_date_bin(
-    by_col: str,
+async def count_samples_by_simple_date(
+    group_by: str,
     date_bin: DateBinOpt,
     days: int | None,
     raw_query: str | None
@@ -76,65 +76,44 @@ async def count_samples_by_simple_date_bin(
 
     match date_bin:
         case DateBinOpt.week | DateBinOpt.month:
-            result = await _count_samples_by_simple_date_via_extract(by_col, date_bin, where_clause)
+            extract_clause = f'''
+            extract(year from {group_by}) as year,
+            extract({date_bin} from {group_by}) as chunk
+            '''
+            group_by_date_cols = 'year, chunk'
+
         case DateBinOpt.day:
-            result = await _count_samples_by_simple_date_custom_days(by_col, days, where_clause)
+            origin = datetime.date.today()
+            extract_clause = f'''
+            date_bin('{days} days', {group_by}, '{origin}') + interval '{days} days' as bin_end,
+            date_bin('{days} days', {group_by}, '{origin}') as bin_start
+            '''
+            group_by_date_cols = 'bin_start'
+
         case _:
-            raise ValueError(f'Illegal value for date_bin: {date_bin}')
-    return await _package_count_by_column(result)
+            raise ValueError(f'illegal value for date_bin: {repr(date_bin)}')
 
-
-async def _count_samples_by_simple_date_via_extract(
-    by_col: str,
-    date_bin: DateBinOpt,
-    where_clause: str
-) -> List[tuple]:
     async with get_async_session() as session:
         res = await session.execute(
             text(
                 f'''
-                   select 
-                   extract(year from {by_col}) as year,  
-                   extract({date_bin} from {by_col}) as chunk, 
-                   count(*)
-                   from samples s
-                   left join geo_locations gl on gl.id = s.geo_location_id
-                   {where_clause}
-                   group by year, chunk 
-                   order by year, chunk
-                   '''
-            )
-        )
-    out_data = []
-    for r in res:
-        date = date_bin.format_iso_chunk(r[0], r[1])
-        out_data.append((date, r[2]))
-    return out_data
-
-
-async def _count_samples_by_simple_date_custom_days(by_col: str, days: int, where_clause: str) -> List[tuple]:
-    origin = datetime.date.today()
-    async with get_async_session() as session:
-        res = await session.execute(
-            text(
-                f'''
-                select bin_start, bin_start + interval '{days} days' as bin_end, count1 from (
-                    select date_bin('{days} days', {by_col}, '{origin}') as bin_start, count(*) as count1
-                    from samples s
-                    left join geo_locations gl on gl.id = s.geo_location_id 
-                    {where_clause}
-                    group by bin_start
-                    order by bin_start
-                )
+                select 
+                {extract_clause}, 
+                count(*)
+                from samples s
+                left join geo_locations gl on gl.id = s.geo_location_id
+                {where_clause}
+                group by {group_by_date_cols} 
+                order by {group_by_date_cols}
                 '''
             )
         )
-        out_data = []
-        for r in res:
-            interval = format_iso_interval(r[0], r[1])
-            count = r[2]
-            out_data.append((interval, count))
-        return out_data
+
+    out_data = dict()
+    for r in res:
+        date = date_bin.format_iso_chunk(r[0], r[1])
+        out_data[date] = r[2]
+    return out_data
 
 
 async def count_samples_by_collection_date(
@@ -205,15 +184,15 @@ async def count_samples_by_collection_date(
     return out_data
 
 
-async def count_variants_by_simple_date_bin(
-    date_col: str,
+async def count_variants_by_simple_date(
+    group_by: str,
     date_bin: DateBinOpt,
     days: int,
     raw_query: str | None,
     change_bin: NtOrAa
 ):
     return await _count_variants_or_mutations_by_simple_date_bin(
-        date_col,
+        group_by,
         date_bin,
         days,
         raw_query,
@@ -222,15 +201,15 @@ async def count_variants_by_simple_date_bin(
     )
 
 
-async def count_mutations_by_simple_date_bin(
-    date_col: str,
+async def count_mutations_by_simple_date(
+    group_by: str,
     date_bin: DateBinOpt,
     days: int,
     raw_query: str | None,
     change_bin: NtOrAa
 ):
     return await _count_variants_or_mutations_by_simple_date_bin(
-        date_col,
+        group_by,
         date_bin,
         days,
         raw_query,
@@ -240,7 +219,7 @@ async def count_mutations_by_simple_date_bin(
 
 
 async def _count_variants_or_mutations_by_simple_date_bin(
-    date_col: str,
+    group_by: str,
     date_bin: DateBinOpt,
     days: int,
     raw_query: str | None,
@@ -255,56 +234,46 @@ async def _count_variants_or_mutations_by_simple_date_bin(
 
     match date_bin:
         case DateBinOpt.week | DateBinOpt.month:
-            return await _count_v_m_by_simple_date_via_extract(
-                table.__tablename__,
-                date_col,
-                date_bin,
-                where_clause,
-                change_fields
-            )
+            extract_clause = f'''
+                   extract(year from {group_by}) as year,
+                   extract({date_bin} from {group_by}) as chunk
+                   '''
+            group_by_date_cols = 'year, chunk'
+
         case DateBinOpt.day:
-            return await _count_v_m_by_simple_date_custom_days(
-                table.__tablename__,
-                date_col,
-                days,
-                where_clause,
-                change_fields
-            )
+            origin = datetime.date.today()
+            extract_clause = f'''
+                   date_bin('{days} days', {group_by}, '{origin}') + interval '{days} days' as bin_end,
+                   date_bin('{days} days', {group_by}, '{origin}') as bin_start
+                   '''
+            group_by_date_cols = 'bin_start'
+
         case _:
-            raise ValueError(f'Illegal value for date_bin: {date_bin}')
+            raise ValueError(f'illegal value for date_bin: {repr(date_bin)}')
 
-
-async def _count_v_m_by_simple_date_via_extract(
-    tablename: str,
-    date_col: str,
-    date_bin: DateBinOpt,
-    where_clause: str,
-    change_fields: str
-):
     async with get_async_session() as session:
-        # todo: this query is really slow for large result sets.
         res = await session.execute(
             text(
                 f'''
                 select 
-                extract(year from {date_col}) as year,
-                extract({date_bin} from {date_col}) as chunk,
+                {extract_clause},
                 count(*),
                 region,
                 {change_fields}
                 from (
-                    select region, {change_fields}, {date_col} 
+                    select region, {change_fields}, {group_by} 
                     from samples s
-                    inner join {tablename} VM on VM.sample_id = s.id
+                    inner join {table.__tablename__} VM on VM.sample_id = s.id
                     inner join alleles a on a.id = VM.allele_id
                     left join translations t on t.allele_id = a.id
                     left join amino_acid_substitutions aas on aas.id = t.amino_acid_substitution_id
                     {where_clause}
                 )
-                group by region, {change_fields}, year, chunk
+                group by region, {change_fields}, {group_by_date_cols}
                 '''
             )
         )
+
     out_data = dict()
     for r in res:
         date = date_bin.format_iso_chunk(r[0], r[1])
@@ -322,59 +291,39 @@ async def _count_v_m_by_simple_date_via_extract(
     return out_data
 
 
-async def _count_v_m_by_simple_date_custom_days(
-    tablename: str,
-    date_col: str,
+async def count_variants_by_collection_date(
+    date_bin: DateBinOpt,
+    change_bin: NtOrAa,
     days: int,
-    where_clause: str,
-    change_fields: str
+    max_span_days: int,
+    raw_query: str
 ):
-    origin = datetime.date.today()
-    async with get_async_session() as session:
-        res = await session.execute(
-            text(
-                f'''
-                select 
-                bin_start, 
-                bin_start + interval '{days} days' as bin_end, 
-                count1,
-                region, {change_fields}
-                from (
-                    select 
-                    date_bin('{days} days', {date_col}, '{origin}') as bin_start, 
-                    count(*) as count1,
-                    region, {change_fields}
-                    from samples s
-                    inner join {tablename} VM on VM.sample_id = s.id
-                    inner join alleles a on a.id = VM.allele_id
-                    left join translations t on t.allele_id = a.id
-                    left join amino_acid_substitutions aas on aas.id = t.amino_acid_substitution_id
-                    {where_clause}
-                    group by bin_start, region, {change_fields}
-                    order by bin_start
-                )
-                '''
-            )
-        )
-    out_data = dict()
+    return await _count_variants_or_mutations_by_collection_date(
+        date_bin,
+        change_bin,
+        days,
+        max_span_days,
+        raw_query,
+        IntraHostVariant
+    )
 
-    for r in res:
-        interval = format_iso_interval(r[0], r[1])
-        count = r[2]
-        region = r[3]
-        ref = r[4]
-        pos = r[5]
-        alt = r[6]
-        change_name = f'{region}:{ref}{pos}{alt}'
+async def count_mutations_by_collection_date(
+    date_bin: DateBinOpt,
+    change_bin: NtOrAa,
+    days: int,
+    max_span_days: int,
+    raw_query: str
+):
+    return await _count_variants_or_mutations_by_collection_date(
+        date_bin,
+        change_bin,
+        days,
+        max_span_days,
+        raw_query,
+        Mutation
+    )
 
-        try:
-            out_data[interval][change_name] = count
-        except KeyError:
-            out_data[interval] = {change_name: count}
-    return out_data
-
-
-async def count_variants_or_mutations_by_collection_date(
+async def _count_variants_or_mutations_by_collection_date(
     date_bin: DateBinOpt,
     change_bin: NtOrAa,
     days: int,
