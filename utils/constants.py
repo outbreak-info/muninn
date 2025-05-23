@@ -17,7 +17,9 @@ class Env:
 
 CHANGE_PATTERN = r'^(\w+):([a-zA-Z])(\d+)([a-zA-Z\-+]+)'
 WORDLIKE_PATTERN = re.compile(r'\w+')
+# these dates are "simple" b/c they are a single timestamp and not null
 SIMPLE_DATE_FIELDS = {'release_date', 'creation_date'}
+# Unlike the simple dates, collection date is a range, and may be null
 COLLECTION_DATE = 'collection_date'
 DEFAULT_MAX_SPAN_DAYS = 366
 DEFAULT_DAYS = 5

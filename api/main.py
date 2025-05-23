@@ -329,7 +329,7 @@ async def get_lineage_abundance(
 ):
     if group_by in SIMPLE_DATE_FIELDS:
         if summary:
-            return await DB.queries.lineages.get_abundance_summaries_by_date(group_by, q, date_bin, days)
+            return await DB.queries.lineages.get_abundance_summaries_by_simple_date(group_by, q, date_bin, days)
         else:
             raise HTTPException(status_code=501, detail='Not implemented, use summary results')  # Not implemented
     elif group_by == COLLECTION_DATE:
