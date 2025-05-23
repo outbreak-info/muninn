@@ -11,9 +11,11 @@ import DB.queries.phenotype_metrics
 import DB.queries.prevalence
 import DB.queries.samples
 import DB.queries.variants
+from DB.models import IntraHostVariant, Mutation
 from api.models import VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
     MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo
-from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, SIMPLE_DATE_FIELDS, NtOrAa
+from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, SIMPLE_DATE_FIELDS, NtOrAa, \
+    DEFAULT_MAX_SPAN_DAYS, COLLECTION_DATE, DEFAULT_DAYS
 from utils.errors import ParsingError
 
 app = FastAPI()
@@ -226,13 +228,13 @@ async def get_lineage_abundance_summary_stats(q: str | None = None):
 async def get_sample_counts(
     group_by: Annotated[str, Query(regex=WORDLIKE_PATTERN.pattern)],
     date_bin: DateBinOpt = DateBinOpt.month,
-    days: int = 5,
+    days: int = DEFAULT_DAYS,
     q: str | None = None,
-    max_span_days: int = 366
+    max_span_days: int = DEFAULT_MAX_SPAN_DAYS
 ):
     if group_by in SIMPLE_DATE_FIELDS:
         return await DB.queries.counts.count_samples_by_simple_date_bin(group_by, date_bin, days, q)
-    elif group_by == 'collection_date':
+    elif group_by == COLLECTION_DATE:
         return await DB.queries.counts.count_samples_by_collection_date(date_bin, days, q, max_span_days)
     else:
         return await DB.queries.counts.count_samples_by_column(group_by)
@@ -242,12 +244,13 @@ async def get_sample_counts(
 async def get_variant_counts(
     group_by: Annotated[str, Query(regex=WORDLIKE_PATTERN.pattern)],
     date_bin: DateBinOpt = DateBinOpt.month,
-    days: int = 5,
+    days: int = DEFAULT_DAYS,
     q: str | None = None,
-    change_bin: NtOrAa = NtOrAa.aa
+    change_bin: NtOrAa = NtOrAa.aa,
+    max_span_days: int = DEFAULT_MAX_SPAN_DAYS
 ):
     """
-
+    :param max_span_days:
     :param group_by: Col. to bin counts by
     :param date_bin: size of date bins when grouping by date column
     :param days: custom size of bins when grouping by 'day'
@@ -258,6 +261,15 @@ async def get_variant_counts(
 
     if group_by in SIMPLE_DATE_FIELDS:
         return await DB.queries.counts.count_variants_by_simple_date_bin(group_by, date_bin, days, q, change_bin)
+    elif group_by == COLLECTION_DATE:
+        return await DB.queries.counts.count_variants_or_mutations_by_collection_date(
+            date_bin,
+            change_bin,
+            days,
+            max_span_days,
+            q,
+            IntraHostVariant
+        )
     else:
         return await DB.queries.counts.count_variants_by_column(group_by)
 
@@ -266,12 +278,22 @@ async def get_variant_counts(
 async def get_mutation_counts(
     group_by: Annotated[str, Query(regex=WORDLIKE_PATTERN.pattern)],
     date_bin: DateBinOpt = DateBinOpt.month,
-    days: int = 5,
+    days: int = DEFAULT_DAYS,
     q: str | None = None,
-    change_bin: NtOrAa = NtOrAa.aa
+    change_bin: NtOrAa = NtOrAa.aa,
+    max_span_days: int = DEFAULT_MAX_SPAN_DAYS
 ):
     if group_by in SIMPLE_DATE_FIELDS:
         return await DB.queries.counts.count_mutations_by_simple_date_bin(group_by, date_bin, days, q, change_bin)
+    elif group_by == COLLECTION_DATE:
+        return await DB.queries.counts.count_variants_or_mutations_by_collection_date(
+            date_bin,
+            change_bin,
+            days,
+            max_span_days,
+            q,
+            Mutation
+        )
     else:
         return await DB.queries.counts.count_mutations_by_column(group_by)
 
@@ -282,7 +304,7 @@ async def get_mutation_counts(
 async def get_lineage_counts(
     group_by: Annotated[str, Query(regex=WORDLIKE_PATTERN.pattern)] | None = None,
     date_bin: DateBinOpt = DateBinOpt.month,
-    days: int = 5,
+    days: int = DEFAULT_DAYS,
     q: str | None = None,
 ):
     if group_by in SIMPLE_DATE_FIELDS:
@@ -300,7 +322,7 @@ async def get_lineage_counts(
 async def get_lineage_abundance(
     group_by: Annotated[str, Query(regex=WORDLIKE_PATTERN.pattern)] | None = None,
     date_bin: DateBinOpt = DateBinOpt.month,
-    days: int = 5,
+    days: int = DEFAULT_DAYS,
     q: str | None = None,
     summary: bool = True,
 ):

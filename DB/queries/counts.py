@@ -380,6 +380,99 @@ async def _count_v_m_by_simple_date_custom_days(
     return out_data
 
 
+async def count_variants_or_mutations_by_collection_date(
+    date_bin: DateBinOpt,
+    change_bin: NtOrAa,
+    days: int,
+    max_span_days: int,
+    raw_query: str,
+    table: Type[IntraHostVariant] | Type[Mutation]
+):
+    change_fields = f'ref_{change_bin}, position_{change_bin}, alt_{change_bin}'
+
+    user_where_clause = ''
+    if raw_query is not None:
+        user_where_clause = f'and ({parser.parse(raw_query)})'
+
+    match date_bin:
+        case DateBinOpt.week | DateBinOpt.month:
+            extract_clause = f'''
+            extract(year from mid_collection_date) as year,
+            extract({date_bin} from mid_collection_date) as chunk
+            '''
+
+            group_and_order_clause = f'''
+            group by year, chunk, region, {change_fields}
+            order by year, chunk
+            '''
+        case DateBinOpt.day:
+            origin = datetime.date.today()
+            extract_clause = f'''
+            date_bin('{days} days', mid_collection_date, '{origin}') + interval '{days} days' as bin_end,
+            date_bin('{days} days', mid_collection_date, '{origin}') as bin_start
+            '''
+
+            group_and_order_clause = f'''
+            group by bin_start, bin_end, region, {change_fields}
+            order by bin_start
+            '''
+        case _:
+            raise ValueError
+
+    async with get_async_session() as session:
+        res = await session.execute(
+            text(
+                f'''
+                select
+                {extract_clause},
+                count(*),
+                region, {change_fields}
+                from(
+                    select 
+                    *,
+                    (collection_start_date + ((collection_end_date - collection_start_date) / 2))::date AS mid_collection_date
+                    from (
+                        select 
+                        region, {change_fields},
+                        collection_start_date, collection_end_date,
+                        collection_end_date - collection_start_date as collection_span
+                        from samples s
+                        left join geo_locations gl on gl.id = s.geo_location_id
+                        inner join {table.__tablename__} VM on VM.sample_id = s.id
+                        inner join alleles a on a.id = VM.allele_id
+                        left join translations t on t.allele_id = a.id
+                        left join amino_acid_substitutions aas on aas.id = t.amino_acid_substitution_id
+                        where num_nulls(collection_end_date, collection_start_date) = 0 {user_where_clause}
+                    )
+                    where collection_span <= {max_span_days}
+                )
+                {group_and_order_clause}
+                '''
+            )
+        )
+    out_data = dict()
+    for r in res:
+        match date_bin:
+            case DateBinOpt.week | DateBinOpt.month:
+                date = date_bin.format_iso_chunk(r[0], r[1])
+            case DateBinOpt.day:
+                date = format_iso_interval(r[0], r[1])
+            case _:
+                raise ValueError
+        count = r[2]
+        region = r[3]
+        ref = r[4]
+        pos = r[5]
+        alt = r[6]
+        change_name = f'{region}:{ref}{pos}{alt}'
+
+        try:
+            out_data[date][change_name] = count
+        except KeyError:
+            out_data[date] = {change_name: count}
+    return out_data
+
+
 async def count_lineages_by_simple_date(
     group_by: str,
     date_bin: DateBinOpt,
