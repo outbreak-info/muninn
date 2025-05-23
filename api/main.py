@@ -325,14 +325,25 @@ async def get_lineage_abundance(
     days: int = DEFAULT_DAYS,
     q: str | None = None,
     summary: bool = True,
+    max_span_days: int = DEFAULT_MAX_SPAN_DAYS,
 ):
     if group_by in SIMPLE_DATE_FIELDS:
         if summary:
             return await DB.queries.lineages.get_abundance_summaries_by_date(group_by, q, date_bin, days)
         else:
-            raise HTTPException(status_code=501)
+            raise HTTPException(status_code=501, detail='Not implemented, use summary results')  # Not implemented
+    elif group_by == COLLECTION_DATE:
+        if summary:
+            return await DB.queries.lineages.get_abundance_summaries_by_collection_date(
+                date_bin,
+                days,
+                q,
+                max_span_days
+            )
+        else:
+            raise HTTPException(status_code=501, detail='Not implemented, use summary results')  # Not implemented
+
     else:
-        # todo: all params except q are ignored here, there should be a warning
         if summary:
             return await DB.queries.lineages.get_abundance_summaries(q)
         else:

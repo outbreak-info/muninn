@@ -43,14 +43,14 @@ class DateBinOpt(Enum):
     day = 'day'
 
     def __init__(self, value):
-        self.format_fn = None
+        self._format_fn = None
         match value:
             case 'month':
-                self.format_fn = format_iso_month
+                self._format_fn = format_iso_month
             case 'week':
-                self.format_fn = format_iso_week
+                self._format_fn = format_iso_week
             case 'day':
-                self.format_fn = format_iso_interval
+                self._format_fn = format_iso_interval
 
     def __str__(self):
         return str(self.value)
@@ -60,7 +60,7 @@ class DateBinOpt(Enum):
         a: int | datetime,
         b: int | datetime
     ):
-        return self.format_fn(a, b)
+        return self._format_fn(a, b)
 
 
 class NtOrAa(Enum):

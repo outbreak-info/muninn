@@ -227,37 +227,37 @@ async def _get_abundance_summaries_by_date_custom_days(
         res = await session.execute(
             text(
                 f'''
-            select 
-            lineage_name,
-            lineage_system_name,
-            samp_count,
-            min,
-            q1,
-            median,
-            q3,
-            max,
-            bin_start,
-            bin_start + interval '{days} days' as bin_end
-            from (
                 select 
-                l.lineage_name,
-                ls.lineage_system_name,
-                count(*) as samp_count,
-                min(sl.abundance) as min,
-                percentile_cont(0.25) within group (order by sl.abundance) as q1,
-                percentile_cont(0.5) within group (order by sl.abundance) as median,
-                percentile_cont(0.75) within group (order by sl.abundance) as q3,
-                max(sl.abundance) as max,
-                date_bin('{days} days', {group_by}, '{origin}') as bin_start
-                from samples_lineages sl
-                inner join lineages l on l.id = sl.lineage_id 
-                inner join lineage_systems ls on ls.id = l.lineage_system_id 
-                inner join samples s on s.id = sl.sample_id 
-                left join geo_locations gl on gl.id = s.geo_location_id 
-                {where_clause} 
-                group by bin_start, l.lineage_name, ls.lineage_system_name
-            )
-            '''
+                lineage_name,
+                lineage_system_name,
+                samp_count,
+                min,
+                q1,
+                median,
+                q3,
+                max,
+                bin_start,
+                bin_start + interval '{days} days' as bin_end
+                from (
+                    select 
+                    l.lineage_name,
+                    ls.lineage_system_name,
+                    count(*) as samp_count,
+                    min(sl.abundance) as min,
+                    percentile_cont(0.25) within group (order by sl.abundance) as q1,
+                    percentile_cont(0.5) within group (order by sl.abundance) as median,
+                    percentile_cont(0.75) within group (order by sl.abundance) as q3,
+                    max(sl.abundance) as max,
+                    date_bin('{days} days', {group_by}, '{origin}') as bin_start
+                    from samples_lineages sl
+                    inner join lineages l on l.id = sl.lineage_id 
+                    inner join lineage_systems ls on ls.id = l.lineage_system_id 
+                    inner join samples s on s.id = sl.sample_id 
+                    left join geo_locations gl on gl.id = s.geo_location_id 
+                    {where_clause} 
+                    group by bin_start, l.lineage_name, ls.lineage_system_name
+                )
+                '''
             )
         )
     out_data = dict()
@@ -272,6 +272,98 @@ async def _get_abundance_summaries_by_date_custom_days(
             abundance_median=r[5],
             abundance_q3=r[6],
             abundance_max=r[7]
+        )
+        try:
+            out_data[date].append(info)
+        except KeyError:
+            out_data[date] = [info]
+    return out_data
+
+
+async def get_abundance_summaries_by_collection_date(
+    date_bin: DateBinOpt,
+    days: int,
+    raw_query: str | None,
+    max_span_days: int,
+) -> Dict[str, List[LineageAbundanceSummaryInfo]]:
+    user_where_clause = ''
+    if raw_query is not None:
+        user_where_clause = f'and ({parser.parse(raw_query)})'
+
+    extract_clause = ''
+    group_by_date_cols = ''
+
+    match date_bin:
+        case DateBinOpt.week | DateBinOpt.month:
+            extract_clause = f'''
+            extract(year from mid_collection_date) as year,
+            extract({date_bin} from mid_collection_date) as chunk
+            '''
+
+            group_by_date_cols = 'year, chunk'
+
+        case DateBinOpt.day:
+            origin = datetime.date.today()
+            extract_clause = f'''
+            date_bin('{days} days', mid_collection_date, '{origin}') + interval '{days} days' as bin_end,
+            date_bin('{days} days', mid_collection_date, '{origin}') as bin_start
+            '''
+
+            group_by_date_cols = 'bin_start'
+
+    async with get_async_session() as session:
+        res = await session.execute(
+            text(
+                f'''
+                select 
+                {extract_clause},
+                lineage_name,
+                lineage_system_name,
+                count(*) as samp_count,
+                min(abundance) as min,
+                percentile_cont(0.25) within group (order by abundance) as q1,
+                percentile_cont(0.5) within group (order by abundance) as median,
+                percentile_cont(0.75) within group (order by abundance) as q3,
+                max(abundance) as max 
+                from(
+                    select
+                    *,
+                    (collection_start_date + ((collection_end_date - collection_start_date) / 2))::date AS mid_collection_date
+                    from(
+                        select 
+                        l.lineage_name,
+                        ls.lineage_system_name,
+                        sl.abundance,
+                        collection_start_date,
+                        collection_end_date,
+                        collection_end_date - collection_start_date as collection_span
+                        from samples_lineages sl
+                        inner join lineages l on l.id = sl.lineage_id 
+                        inner join lineage_systems ls on ls.id = l.lineage_system_id 
+                        inner join samples s on s.id = sl.sample_id 
+                        left join geo_locations gl on gl.id = s.geo_location_id 
+                        where sl.is_consensus_call = false {user_where_clause}
+                        
+                    )
+                    where collection_span <= {max_span_days}
+                )
+                group by {group_by_date_cols}, lineage_name, lineage_system_name
+                order by {group_by_date_cols}
+                '''
+            )
+        )
+    out_data = dict()
+    for r in res:
+        date = date_bin.format_iso_chunk(r[0], r[1])
+        info = LineageAbundanceSummaryInfo(
+            lineage_name=r[2],
+            lineage_system_name=r[3],
+            sample_count=r[4],
+            abundance_min=r[5],
+            abundance_q1=r[6],
+            abundance_median=r[7],
+            abundance_q3=r[8],
+            abundance_max=r[9]
         )
         try:
             out_data[date].append(info)
