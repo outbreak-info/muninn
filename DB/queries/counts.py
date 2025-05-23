@@ -8,7 +8,6 @@ from DB.engine import get_async_session
 from DB.models import Sample, GeoLocation, IntraHostVariant, AminoAcidSubstitution, Allele, Mutation, Translation
 from parser.parser import parser
 from utils.constants import DateBinOpt, NtOrAa
-from utils.dates_and_times import format_iso_interval
 
 
 async def count_samples_by_column(by_col: str):
@@ -307,6 +306,7 @@ async def count_variants_by_collection_date(
         IntraHostVariant
     )
 
+
 async def count_mutations_by_collection_date(
     date_bin: DateBinOpt,
     change_bin: NtOrAa,
@@ -322,6 +322,7 @@ async def count_mutations_by_collection_date(
         raw_query,
         Mutation
     )
+
 
 async def _count_variants_or_mutations_by_collection_date(
     date_bin: DateBinOpt,
@@ -466,6 +467,88 @@ async def count_lineages_by_simple_date(
                         {where_clause}
                 )
                 {group_and_order_clause}
+                '''
+            )
+        )
+
+    out_data = dict()
+    for r in res:
+        date = date_bin.format_iso_chunk(r[0], r[1])
+        count = r[4]
+        lineage = r[2]
+        system = r[3]
+
+        try:
+            out_data[date][system][lineage] = count
+        except KeyError:
+            if date not in out_data.keys():
+                out_data[date] = {system: {lineage: count}}
+            elif system not in out_data[date].keys():
+                out_data[date][system] = {lineage: count}
+    return out_data
+
+
+async def count_lineages_by_collection_date(
+    date_bin: DateBinOpt,
+    raw_query: str,
+    days: int,
+    max_span_days: int
+) -> Dict[str, Dict[str, Dict[str, int]]]:
+    user_where_clause = ''
+    if raw_query is not None:
+        user_where_clause = f'where {parser.parse(raw_query)}'
+
+    match date_bin:
+        case DateBinOpt.week | DateBinOpt.month:
+            extract_clause = f'''
+            extract(year from mid_collection_date) as year,
+            extract({date_bin} from mid_collection_date) as chunk
+            '''
+
+            date_cols_to_group_by = f'year, chunk'
+
+        case DateBinOpt.day:
+            origin = datetime.date.today()
+            extract_clause = f'''
+            date_bin('{days} days', mid_collection_date, '{origin}') + interval '{days} days' as bin_end,
+            date_bin('{days} days', mid_collection_date, '{origin}') as bin_start
+            '''
+
+            date_cols_to_group_by = 'bin_start'
+
+        case _:
+            raise ValueError
+
+    async with get_async_session() as session:
+        res = await session.execute(
+            text(
+                f'''
+                select
+                {extract_clause},
+                lineage_name,
+                lineage_system_name,
+                count(*)
+                from (
+                    select
+                    *,
+                    (collection_start_date + ((collection_end_date - collection_start_date) / 2))::date AS mid_collection_date
+                    from (
+                        select
+                        lineage_name,
+                        lineage_system_name,
+                        collection_start_date,
+                        collection_end_date,
+                        collection_end_date - collection_start_date as collection_span
+                        from samples_lineages sl
+                        inner join lineages l on l.id = sl.lineage_id
+                        inner join lineage_systems ls on ls.id = l.lineage_system_id
+                        inner join samples s on s.id = sl.sample_id
+                        {user_where_clause}
+                    )
+                    where collection_span <= {max_span_days}
+                )
+                group by {date_cols_to_group_by}, lineage_name, lineage_system_name
+                order by {date_cols_to_group_by}
                 '''
             )
         )
