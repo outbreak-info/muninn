@@ -12,8 +12,7 @@ import DB.queries.prevalence
 import DB.queries.samples
 import DB.queries.variants
 from api.models import VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
-    MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo, \
-    SampleCountByDateSystemLineage
+    MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo
 from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, SIMPLE_DATE_FIELDS, NtOrAa, \
     DEFAULT_MAX_SPAN_DAYS, COLLECTION_DATE, DEFAULT_DAYS, COMMA_SEP_WORDLIKE_PATTERN, LINEAGE
 from utils.errors import ParsingError
@@ -224,7 +223,10 @@ async def get_lineage_abundance_summary_stats(q: str | None = None):
         raise HTTPException(status_code=400, detail=e.message)
 
 
-@app.get('/v0/samples:count', response_model=Dict[str, int] | SampleCountByDateSystemLineage)
+@app.get(
+    '/v0/samples:count',
+    response_model=Dict[str, int] | Dict[str, Dict[str, Dict[str, int]]] | List[LineageCountInfo]
+)
 async def get_sample_counts(
     group_by: Annotated[str, Query(regex=COMMA_SEP_WORDLIKE_PATTERN.pattern)],
     date_bin: DateBinOpt = DateBinOpt.month,
@@ -253,6 +255,8 @@ async def get_sample_counts(
             return await DB.queries.counts.count_samples_by_simple_date(group_by, date_bin, days, q)
         elif group_by == COLLECTION_DATE:
             return await DB.queries.counts.count_samples_by_collection_date(date_bin, days, q, max_span_days)
+        elif group_by == LINEAGE:
+            return await DB.queries.lineages.get_sample_counts_by_lineage(q)
         else:
             return await DB.queries.counts.count_samples_by_column(group_by)
 
