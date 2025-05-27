@@ -12,9 +12,10 @@ import DB.queries.prevalence
 import DB.queries.samples
 import DB.queries.variants
 from api.models import VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
-    MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo
+    MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo, \
+    SampleCountByDateSystemLineage
 from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, SIMPLE_DATE_FIELDS, NtOrAa, \
-    DEFAULT_MAX_SPAN_DAYS, COLLECTION_DATE, DEFAULT_DAYS
+    DEFAULT_MAX_SPAN_DAYS, COLLECTION_DATE, DEFAULT_DAYS, COMMA_SEP_WORDLIKE_PATTERN, LINEAGE
 from utils.errors import ParsingError
 
 app = FastAPI()
@@ -223,20 +224,37 @@ async def get_lineage_abundance_summary_stats(q: str | None = None):
         raise HTTPException(status_code=400, detail=e.message)
 
 
-@app.get('/v0/samples:count', response_model=Dict[str, int])
+@app.get('/v0/samples:count', response_model=Dict[str, int] | SampleCountByDateSystemLineage)
 async def get_sample_counts(
-    group_by: Annotated[str, Query(regex=WORDLIKE_PATTERN.pattern)],
+    group_by: Annotated[str, Query(regex=COMMA_SEP_WORDLIKE_PATTERN.pattern)],
     date_bin: DateBinOpt = DateBinOpt.month,
     days: int = DEFAULT_DAYS,
     q: str | None = None,
     max_span_days: int = DEFAULT_MAX_SPAN_DAYS
 ):
-    if group_by in SIMPLE_DATE_FIELDS:
-        return await DB.queries.counts.count_samples_by_simple_date(group_by, date_bin, days, q)
-    elif group_by == COLLECTION_DATE:
-        return await DB.queries.counts.count_samples_by_collection_date(date_bin, days, q, max_span_days)
+    # allow grouping by lineage and date, this is an experiment
+    group_by_set = set(group_by.split(','))
+    if len(group_by_set) > 1:
+        if len(group_by_set) > 2:
+            raise HTTPException(status_code=400, detail='Max of 2 group_by values allowed')
+        if LINEAGE in group_by_set:
+            date_field = group_by_set.difference({LINEAGE}).pop()
+            if date_field in SIMPLE_DATE_FIELDS:
+                return await DB.queries.counts.count_lineages_by_simple_date(date_field, date_bin, q, days)
+            elif date_field == COLLECTION_DATE:
+                return await DB.queries.counts.count_lineages_by_collection_date(date_bin, q, days, max_span_days)
+
+        raise HTTPException(
+            status_code=501,
+            detail='Grouping by multiple fields is currently only supported for lineage plus a date field'
+        )
     else:
-        return await DB.queries.counts.count_samples_by_column(group_by)
+        if group_by in SIMPLE_DATE_FIELDS:
+            return await DB.queries.counts.count_samples_by_simple_date(group_by, date_bin, days, q)
+        elif group_by == COLLECTION_DATE:
+            return await DB.queries.counts.count_samples_by_collection_date(date_bin, days, q, max_span_days)
+        else:
+            return await DB.queries.counts.count_samples_by_column(group_by)
 
 
 @app.get('/v0/variants:count', response_model=Dict[str, Dict[str, int]] | Dict[str, int])

@@ -1,6 +1,5 @@
 import re
 from datetime import datetime
-from decimal import Decimal
 from enum import Enum
 
 from utils.dates_and_times import format_iso_month, format_iso_week, format_iso_interval
@@ -17,10 +16,12 @@ class Env:
 
 CHANGE_PATTERN = r'^(\w+):([a-zA-Z])(\d+)([a-zA-Z\-+]+)'
 WORDLIKE_PATTERN = re.compile(r'\w+')
+COMMA_SEP_WORDLIKE_PATTERN = re.compile(r'(\w+,)*\w+')
 # these dates are "simple" b/c they are a single timestamp and not null
 SIMPLE_DATE_FIELDS = {'release_date', 'creation_date'}
 # Unlike the simple dates, collection date is a range, and may be null
 COLLECTION_DATE = 'collection_date'
+LINEAGE = 'lineage'
 DEFAULT_MAX_SPAN_DAYS = 366
 DEFAULT_DAYS = 5
 
