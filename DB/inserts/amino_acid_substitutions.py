@@ -1,5 +1,5 @@
 import polars as pl
-from sqlalchemy import and_, select
+from sqlalchemy import and_, select, insert
 
 from DB.engine import get_async_session
 from DB.models import AminoAcidSubstitution
@@ -57,21 +57,14 @@ async def batch_insert_aa_subs(
     ref_codon_name: str = 'ref_codon',
     alt_codon_name: str = 'alt_codon',
 ) -> pl.DataFrame:
-    async with GatheringTaskGroup() as tg:
-        for row in amino_subs.iter_rows(named=True):
-            tg.create_task(
-                find_or_insert_aa_sub(
-                    AminoAcidSubstitution(
-                        gff_feature=row[gff_feature_name],
-                        position_aa=row[position_aa_name],
-                        ref_aa=row[ref_aa_name],
-                        alt_aa=row[alt_aa_name],
-                        ref_codon=row[ref_codon_name],
-                        alt_codon=row[alt_codon_name]
-                    )
-                )
-            )
+
+    async with get_async_session() as session:
+        ids = await session.scalars(
+            insert(AminoAcidSubstitution).returning(AminoAcidSubstitution.id),
+            amino_subs.to_dicts()
+        )
+        await session.commit()
     amino_subs = amino_subs.with_columns(
-        pl.Series('amino_acid_substitution_id', tg.results())
+        pl.Series('amino_acid_substitution_id', ids)
     )
     return amino_subs

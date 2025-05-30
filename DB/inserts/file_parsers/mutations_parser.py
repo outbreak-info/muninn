@@ -31,58 +31,64 @@ class MutationsTsvParser(FileParser):
             reader = pl.read_csv(f, separator='\t')
             self._verify_header(reader)
 
+            reader = reader.with_columns(
+                pl.col(ColNameMapping.region.value).alias(ColNameMapping.region.name),
+                pl.col(ColNameMapping.position_nt.value).alias(ColNameMapping.position_nt.name),
+                pl.col(ColNameMapping.ref_nt.value).alias(ColNameMapping.ref_nt.name),
+                pl.col(ColNameMapping.alt_nt.value).alias(ColNameMapping.alt_nt.name),
+                pl.col(ColNameMapping.gff_feature.value).alias(ColNameMapping.gff_feature.name),
+                pl.col(ColNameMapping.position_aa.value).alias(ColNameMapping.position_aa.name),
+                pl.col(ColNameMapping.ref_aa.value).alias(ColNameMapping.ref_aa.name),
+                pl.col(ColNameMapping.alt_aa.value).alias(ColNameMapping.alt_aa.name),
+                pl.col(ColNameMapping.ref_codon.value).alias(ColNameMapping.ref_codon.name),
+                pl.col(ColNameMapping.alt_codon.value).alias(ColNameMapping.alt_codon.name),
+                pl.col(ColNameMapping.accession.value).alias(ColNameMapping.accession.name)
+            )
+
+            # reader = reader.head(10)
+
             # Insert alleles and amino subs
 
             allele_data = reader.select(
-                pl.col(ColNameMapping.region.value),
-                pl.col(ColNameMapping.position_nt.value),
-                pl.col(ColNameMapping.ref_nt.value),
-                pl.col(ColNameMapping.alt_nt.value),
+                pl.col(ColNameMapping.region.name),
+                pl.col(ColNameMapping.position_nt.name),
+                pl.col(ColNameMapping.ref_nt.name),
+                pl.col(ColNameMapping.alt_nt.name),
             ).unique()
             allele_data = await batch_insert_alleles(
                 allele_data,
-                region_name=ColNameMapping.region.value,
-                position_nt_name=ColNameMapping.position_nt.value,
-                ref_nt_name=ColNameMapping.ref_nt.value,
-                alt_nt_name=ColNameMapping.alt_nt.value
             )
 
             amino_sub_data = reader.select(
-                pl.col(ColNameMapping.gff_feature.value),
-                pl.col(ColNameMapping.position_aa.value),
-                pl.col(ColNameMapping.ref_aa.value),
-                pl.col(ColNameMapping.alt_aa.value),
-                pl.col(ColNameMapping.ref_codon.value),
-                pl.col(ColNameMapping.alt_codon.value),
+                pl.col(ColNameMapping.gff_feature.name),
+                pl.col(ColNameMapping.position_aa.name),
+                pl.col(ColNameMapping.ref_aa.name),
+                pl.col(ColNameMapping.alt_aa.name),
+                pl.col(ColNameMapping.ref_codon.name),
+                pl.col(ColNameMapping.alt_codon.name),
             ).unique(
-                {ColNameMapping.gff_feature.value, ColNameMapping.position_aa.value, ColNameMapping.alt_aa.value}
+                {ColNameMapping.gff_feature.name, ColNameMapping.position_aa.name, ColNameMapping.alt_aa.name}
             ).drop_nulls()
             amino_sub_data = await batch_insert_aa_subs(
-                amino_sub_data,
-                gff_feature_name=ColNameMapping.gff_feature.value,
-                position_aa_name=ColNameMapping.position_aa.value,
-                ref_aa_name=ColNameMapping.ref_aa.value,
-                alt_aa_name=ColNameMapping.alt_aa.value,
-                ref_codon_name=ColNameMapping.ref_codon.value,
-                alt_codon_name=ColNameMapping.alt_codon.value,
+                amino_sub_data
             )
 
             # join the allele ids back into the original df
             reader = reader.join(
                 allele_data,
                 on=[
-                    ColNameMapping.region.value,
-                    ColNameMapping.position_nt.value,
-                    ColNameMapping.alt_nt.value
+                    ColNameMapping.region.name,
+                    ColNameMapping.position_nt.name,
+                    ColNameMapping.alt_nt.name
                 ],
                 how='left'
             )
             reader = reader.join(
                 amino_sub_data,
                 on=[
-                    ColNameMapping.gff_feature.value,
-                    ColNameMapping.position_aa.value,
-                    ColNameMapping.alt_aa.value
+                    ColNameMapping.gff_feature.name,
+                    ColNameMapping.position_aa.name,
+                    ColNameMapping.alt_aa.name
                 ],
                 how='left'
             )
@@ -95,13 +101,13 @@ class MutationsTsvParser(FileParser):
             await batch_insert_translations(translations_data)
 
             sample_data = reader.select(
-                pl.col(ColNameMapping.accession.value)
+                pl.col(ColNameMapping.accession.name)
             ).unique()
-            sample_data = await batch_find_samples(sample_data, accession_name=ColNameMapping.accession.value)
+            sample_data = await batch_find_samples(sample_data, accession_name=ColNameMapping.accession.name)
 
             reader = reader.join(
                 sample_data,
-                on=ColNameMapping.accession.value,
+                on=ColNameMapping.accession.name,
                 how='left'
             )
 

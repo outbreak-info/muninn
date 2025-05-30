@@ -1,10 +1,11 @@
+import logging
+
 import polars as pl
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, text, insert
 
 from DB.engine import get_async_session
 from DB.models import Allele
 from utils.gathering_task_group import GatheringTaskGroup
-
 
 async def find_or_insert_allele(a: Allele) -> int:
     async with get_async_session() as session:
@@ -44,19 +45,15 @@ async def batch_insert_alleles(
     :return: Input df with 'id' col added, giving the database id of each allele
     """
 
-    async with GatheringTaskGroup() as tg:
-        for row in alleles.iter_rows(named=True):
-            tg.create_task(
-                find_or_insert_allele(
-                    Allele(
-                        region=row[region_name],
-                        position_nt=row[position_nt_name],
-                        ref_nt=row[ref_nt_name],
-                        alt_nt=row[alt_nt_name]
-                    )
-                )
-            )
+    async with get_async_session() as session:
+        ids = await session.scalars(
+            insert(Allele).returning(Allele.id),
+            alleles.to_dicts()
+        )
+        await session.commit()
+
     alleles = alleles.with_columns(
-        pl.Series('allele_id', tg.results())
+        pl.Series('allele_id', ids)
     )
+
     return alleles

@@ -1,10 +1,9 @@
+import polars as pl
+from sqlalchemy import insert
 from sqlalchemy.exc import IntegrityError
 
 from DB.engine import get_async_session
 from DB.models import Translation
-import polars as pl
-
-from utils.gathering_task_group import GatheringTaskGroup
 
 
 async def insert_translation(t: Translation):
@@ -18,13 +17,9 @@ async def insert_translation(t: Translation):
 
 
 async def batch_insert_translations(translations: pl.DataFrame) -> None:
-    async with GatheringTaskGroup() as tg:
-        for row in translations.iter_rows(named=True):
-            tg.create_task(
-                insert_translation(
-                    Translation(
-                        allele_id = row['allele_id'],
-                        amino_acid_substitution_id = row['amino_acid_substitution_id']
-                    )
-                )
-            )
+    async with get_async_session() as session:
+        await session.execute(
+            insert(Translation),
+            translations.to_dicts()
+        )
+        await session.commit()
