@@ -351,12 +351,13 @@ class GeoLocation(Base):
     __tablename__ = 'geo_locations'
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
-    full_text: Mapped[str] = mapped_column(sa.Text, nullable=False)
-
-    continent_name: Mapped[str] = mapped_column(sa.Text, nullable=True)
-    country_name: Mapped[str] = mapped_column(sa.Text, nullable=True)
-    region_name: Mapped[str] = mapped_column(sa.Text, nullable=True)
-    locality_name: Mapped[str] = mapped_column(sa.Text, nullable=True)
+    country_name: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    # State / Province / Region
+    admin1_name: Mapped[str] = mapped_column(sa.Text, nullable=True)
+    # County, Parish, Etc.
+    admin2_name: Mapped[str] = mapped_column(sa.Text, nullable=True)
+    # Town, locality, etc.
+    admin3_name: Mapped[str] = mapped_column(sa.Text, nullable=True)
 
     geo_center_lon: Mapped[float] = mapped_column(sa.Double, nullable=True)
     geo_center_lat: Mapped[float] = mapped_column(sa.Double, nullable=True)
@@ -365,10 +366,11 @@ class GeoLocation(Base):
         [
             UniqueConstraint(
                 'country_name',
-                'region_name',
-                'locality_name',
+                'admin1_name',
+                'admin2_name',
+                'admin3_name',
                 postgresql_nulls_not_distinct=True,
-                name='uq_geo_locations_country_name_region_name_locality_name'
+                name='uq_geo_locations_division_names'
             )
         ]
     )
