@@ -11,8 +11,9 @@ async def find_or_insert_geo_location(gl: GeoLocation) -> int:
             .where(
                 and_(
                     GeoLocation.country_name == gl.country_name,
-                    GeoLocation.region_name == gl.region_name,
-                    GeoLocation.locality_name == gl.locality_name
+                    GeoLocation.admin1_name == gl.admin1_name,
+                    GeoLocation.admin2_name == gl.admin2_name,
+                    GeoLocation.admin3_name == gl.admin3_name
                 )
             )
         )

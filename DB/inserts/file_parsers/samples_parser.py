@@ -26,7 +26,7 @@ class SamplesParser(FileParser):
             'count_preexisting': 0,
         }
 
-        # (country, region, locality) -> id
+        # (country, admin1, admin2, admin3) -> id
         cache_geo_loc_ids = dict()
 
         with open(self.filename, 'r') as f:
@@ -42,18 +42,18 @@ class SamplesParser(FileParser):
                         allow_none=True
                     )
                     if geo_loc_full_text is not None:
-                        country_name, region_name, locality_name = parse_geo_loc(geo_loc_full_text)
+                        country_name, admin1, admin2, admin3 = geo_loc_full_text.split('/')
                         try:
-                            geo_location_id = cache_geo_loc_ids[(country_name, region_name, locality_name)]
+                            geo_location_id = cache_geo_loc_ids[(country_name, admin1, admin2, admin3)]
                         except KeyError:
                             geo_loc = GeoLocation(
-                                full_text=geo_loc_full_text,
                                 country_name=country_name,
-                                region_name=region_name,
-                                locality_name=locality_name
+                                admin1_name=admin1,
+                                admin2_name=admin2,
+                                admin3_name=admin3
                             )
                             geo_location_id = await find_or_insert_geo_location(geo_loc)
-                            cache_geo_loc_ids[(country_name, region_name, locality_name)] = geo_location_id
+                            cache_geo_loc_ids[(country_name, admin1, admin2, admin3)] = geo_location_id
 
                     # parse collection date
                     collection_start_date = collection_end_date = None
