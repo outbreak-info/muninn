@@ -31,11 +31,6 @@ def get_url(async_: bool = False):
 
     return url
 
-
-def get_connect_args():
-    return
-
-
 # todo: this way of creating and retrieving the engine is really smelly
 def create_pg_engine():
     return create_engine(get_url(), connect_args={'options': f'-c statement_timeout={STATEMENT_TIMEOUT_MS}'})
@@ -45,6 +40,8 @@ engine = create_pg_engine()
 
 async_engine = create_async_engine(
     get_url(async_=True),
+    pool_size=10,
+    max_overflow=80,
     connect_args={'server_settings': {'statement_timeout': str(STATEMENT_TIMEOUT_MS)}}
 )
 

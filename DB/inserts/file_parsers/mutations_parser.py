@@ -1,16 +1,16 @@
-import csv
-from csv import DictReader
+from enum import Enum
 from enum import Enum
 from typing import Set
 
-from DB.inserts.alleles import find_or_insert_allele
-from DB.inserts.amino_acid_substitutions import find_or_insert_aa_sub
+import polars as pl
+
+from DB.inserts.alleles import batch_insert_alleles
+from DB.inserts.amino_acid_substitutions import batch_insert_aa_subs
 from DB.inserts.file_parsers.file_parser import FileParser
-from DB.inserts.mutations import find_or_insert_mutation
-from DB.inserts.samples import find_sample_id_by_accession
-from DB.inserts.translations import insert_translation
-from DB.models import Allele, AminoAcidSubstitution, Translation, Mutation
-from utils.csv_helpers import get_value
+from DB.inserts.mutations import find_or_insert_mutation, batch_insert_mutations
+from DB.inserts.samples import find_sample_id_by_accession, batch_find_samples
+from DB.inserts.translations import batch_insert_translations
+from DB.models import Mutation
 from utils.errors import NotFoundError
 
 
@@ -25,99 +25,115 @@ class MutationsTsvParser(FileParser):
             'skipped_sample_not_found': 0
         }
 
-        # format = (region, pos, alt) -> id
-        cache_alleles = dict()
-        # format = (gff_feature, pos, alt) -> id
-        cache_aa_subs = dict()
-        # format = accession -> id
         cache_samples = dict()
         cache_accessions_not_found = set()
         with open(self.filename, 'r') as f:
-            reader = csv.DictReader(f, delimiter='\t')
+            reader = pl.read_csv(f, separator='\t')
             self._verify_header(reader)
 
-            for row in reader:
-                try:
-                    accession = get_value(row, ColNameMapping.accession.value)
-                    if accession in cache_accessions_not_found:
-                        debug_info['skipped_sample_not_found'] += 1
-                        continue
+            # Insert alleles and amino subs
 
-                    region = get_value(row, ColNameMapping.region.value)
-                    ref_nt = get_value(row, ColNameMapping.ref_nt.value)
-                    alt_nt = get_value(row, ColNameMapping.alt_nt.value)
-                    position_nt = get_value(row, ColNameMapping.position_nt.value, transform=int)
+            allele_data = reader.select(
+                pl.col(ColNameMapping.region.value),
+                pl.col(ColNameMapping.position_nt.value),
+                pl.col(ColNameMapping.ref_nt.value),
+                pl.col(ColNameMapping.alt_nt.value),
+            ).unique()
+            allele_data = await batch_insert_alleles(
+                allele_data,
+                region_name=ColNameMapping.region.value,
+                position_nt_name=ColNameMapping.position_nt.value,
+                ref_nt_name=ColNameMapping.ref_nt.value,
+                alt_nt_name=ColNameMapping.alt_nt.value
+            )
 
-                    allele = Allele(
-                        region=region,
-                        position_nt=position_nt,
-                        ref_nt=ref_nt,
-                        alt_nt=alt_nt
-                    )
+            amino_sub_data = reader.select(
+                pl.col(ColNameMapping.gff_feature.value),
+                pl.col(ColNameMapping.position_aa.value),
+                pl.col(ColNameMapping.ref_aa.value),
+                pl.col(ColNameMapping.alt_aa.value),
+                pl.col(ColNameMapping.ref_codon.value),
+                pl.col(ColNameMapping.alt_codon.value),
+            ).unique(
+                {ColNameMapping.gff_feature.value, ColNameMapping.position_aa.value, ColNameMapping.alt_aa.value}
+            ).drop_nulls()
+            amino_sub_data = await batch_insert_aa_subs(
+                amino_sub_data,
+                gff_feature_name=ColNameMapping.gff_feature.value,
+                position_aa_name=ColNameMapping.position_aa.value,
+                ref_aa_name=ColNameMapping.ref_aa.value,
+                alt_aa_name=ColNameMapping.alt_aa.value,
+                ref_codon_name=ColNameMapping.ref_codon.value,
+                alt_codon_name=ColNameMapping.alt_codon.value,
+            )
 
-                    try:
-                        allele_id = cache_alleles[(region, position_nt, alt_nt)]
-                    except KeyError:
-                        allele_id = await find_or_insert_allele(allele)
-                        cache_alleles[(region, position_nt, alt_nt)] = allele_id
+            # join the allele ids back into the original df
+            reader = reader.join(
+                allele_data,
+                on=[
+                    ColNameMapping.region.value,
+                    ColNameMapping.position_nt.value,
+                    ColNameMapping.alt_nt.value
+                ],
+                how='left'
+            )
+            reader = reader.join(
+                amino_sub_data,
+                on=[
+                    ColNameMapping.gff_feature.value,
+                    ColNameMapping.position_aa.value,
+                    ColNameMapping.alt_aa.value
+                ],
+                how='left'
+            )
 
-                    try:
-                        sample_id = cache_samples[accession]
-                    except KeyError:
-                        try:
-                            sample_id = await find_sample_id_by_accession(accession)
-                            cache_samples[accession] = sample_id
-                        except NotFoundError:
-                            debug_info['skipped_sample_not_found'] += 1
-                            cache_accessions_not_found.add(accession)
-                            continue
+            translations_data = reader.select(
+                pl.col('allele_id'),
+                pl.col('amino_acid_substitution_id')
+            ).unique().drop_nulls()
 
-                    # get aa values, if they're all present
-                    try:
-                        gff_feature = get_value(row, ColNameMapping.gff_feature.value)
-                        position_aa = get_value(row, ColNameMapping.position_aa.value, transform=int)
-                        ref_aa = get_value(row, ColNameMapping.ref_aa.value)
-                        alt_aa = get_value(row, ColNameMapping.alt_aa.value)
-                        ref_codon = get_value(row, ColNameMapping.ref_codon.value)
-                        alt_codon = get_value(row, ColNameMapping.alt_codon.value)
+            await batch_insert_translations(translations_data)
 
-                        try:
-                            aa_sub_id = cache_aa_subs[(gff_feature, position_aa, alt_aa)]
-                        except KeyError:
-                            aa_sub = AminoAcidSubstitution(
-                                gff_feature=gff_feature,
-                                position_aa=position_aa,
-                                ref_aa=ref_aa,
-                                alt_aa=alt_aa,
-                                ref_codon=ref_codon,
-                                alt_codon=alt_codon,
-                            )
-                            aa_sub_id = await find_or_insert_aa_sub(aa_sub)
-                            cache_aa_subs[(gff_feature, position_aa, alt_aa)] = aa_sub_id
+            sample_data = reader.select(
+                pl.col(ColNameMapping.accession.value)
+            ).unique()
+            sample_data = await batch_find_samples(sample_data, accession_name=ColNameMapping.accession.value)
 
-                        await insert_translation(
-                            Translation(
-                                allele_id=allele_id,
-                                amino_acid_substitution_id=aa_sub_id
-                            )
-                        )
-                    except ValueError:
-                        pass
+            reader = reader.join(
+                sample_data,
+                on=ColNameMapping.accession.value,
+                how='left'
+            )
 
-                    mutation = Mutation(
-                        sample_id=sample_id,
-                        allele_id=allele_id
-                    )
-                    await find_or_insert_mutation(mutation)
+            mutations_data = reader.filter(
+                pl.col('sample_id').is_not_null()
+            ).select(
+                pl.col('sample_id'),
+                pl.col('allele_id')
+            ).unique()
 
-                except ValueError:
-                    debug_info['skipped_malformed'] += 1
+            await batch_insert_mutations(mutations_data)
+
+            # for row in reader.iter_rows(named=True):
+            #     try:
+            #         if row['sample_id'] is None:
+            #             debug_info['skipped_sample_not_found'] += 1
+            #             continue
+            #
+            #         mutation = Mutation(
+            #             sample_id=row['sample_id'],
+            #             allele_id=row['allele_id']
+            #         )
+            #         await find_or_insert_mutation(mutation)
+            #
+            #     except ValueError:
+            #         debug_info['skipped_malformed'] += 1
         print(debug_info)
 
     @classmethod
-    def _verify_header(cls, reader: DictReader):
+    def _verify_header(cls, reader: pl.DataFrame):
         required_columns = cls.get_required_column_set()
-        diff = required_columns - set(reader.fieldnames)
+        diff = required_columns - set(reader.columns)
         if not len(diff) == 0:
             raise ValueError(f'Not all required columns are present, missing: {diff}')
 

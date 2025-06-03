@@ -1,8 +1,10 @@
+import polars as pl
 from sqlalchemy import select
 
 from DB.engine import get_async_session
-from utils.errors import NotFoundError
 from DB.models import Sample
+from utils.errors import NotFoundError
+from utils.gathering_task_group import GatheringTaskGroup
 
 
 async def find_sample_id_by_accession(accession: str) -> int:
@@ -41,3 +43,23 @@ async def find_or_insert_sample(s: Sample, upsert: bool = False) -> (int, bool):
         return existing.id, preexisting
 
 
+# todo: fix this
+async def _find_sample_id_shim(accession: str) -> int:
+    async with get_async_session() as session:
+        id_ = await session.scalar(
+            select(Sample.id)
+            .where(Sample.accession == accession)
+        )
+    return id_
+
+
+async def batch_find_samples(samples: pl.DataFrame, accession_name: str = 'accession') -> pl.DataFrame:
+    async with GatheringTaskGroup() as tg:
+        for row in samples.iter_rows(named=True):
+            tg.create_task(
+                    _find_sample_id_shim(row[accession_name])
+            )
+    samples = samples.with_columns(
+        pl.Series('sample_id', tg.results())
+    )
+    return samples

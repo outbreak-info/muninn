@@ -140,12 +140,12 @@ class VariantsTsvParser(FileParser):
                     if not preexisting:
                         debug_info['count_new_variants_added'] += 1
 
-                    # todo: proper logging!!
-                    # log debug stats every n lines
-                    if i - info_last_printed >= print_info_interval:
-                        info_last_printed += print_info_interval
-                        debug_info['count_samples_not_found'] = len(cache_samples_not_found)
-                        print(f'{i} lines processed: {debug_info}')
+                    # # todo: proper logging!!
+                    # # log debug stats every n lines
+                    # if i - info_last_printed >= print_info_interval:
+                    #     info_last_printed += print_info_interval
+                    #     debug_info['count_samples_not_found'] = len(cache_samples_not_found)
+                    #     print(f'{i} lines processed: {debug_info}')
 
                 except (KeyError, ValueError):
                     debug_info['skipped_malformed'] += 1
