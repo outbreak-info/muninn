@@ -372,3 +372,7 @@ async def get_lineage_abundance(
             return await DB.queries.lineages.get_abundance_summaries(q)
         else:
             return await DB.queries.lineages.get_abundances(q)
+
+@app.get('/lineages/allele_counts')
+async def get_allele_counts(lineage:str):
+    return await DB.queries.lineages.get_allele_abundances(lineage)

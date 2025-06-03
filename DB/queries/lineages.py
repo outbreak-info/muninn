@@ -311,3 +311,27 @@ async def get_abundance_summaries_by_collection_date(
         except KeyError:
             out_data[date] = [info]
     return out_data
+
+async def get_allele_abundances(lineage):
+    async with get_async_session() as session:
+        res = await session.execute(
+            text(
+                f'''
+                SELECT region,ref_nt,position_nt,alt_nt,count(*)
+                FROM lineages
+                LEFT JOIN samples_lineages ON samples_lineages.lineage_id = lineages.id
+                LEFT JOIN samples ON samples_lineages.sample_id = samples.id
+                LEFT JOIN mutations ON mutations.sample_id = samples.id
+                LEFT JOIN alleles ON mutations.allele_id = alleles.id
+                WHERE lineage_name = :input_lineage
+                GROUP BY region,ref_nt,position_nt,alt_nt
+                ORDER BY count DESC
+                '''
+            ), {
+                'input_lineage': lineage
+            }
+        )
+    out = dict()
+    for region,ref_nt,position_nt,alt_nt,count in res:
+        out[f'{region}:{ref_nt}{position_nt}{alt_nt}'] = count
+    return out
