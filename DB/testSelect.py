@@ -26,7 +26,7 @@ logger.setLevel(logging.INFO) # set debug to log results as well
 #
 # foo = get_variants_for_sample(accession)
 
-# r = count_samples_by_column('region_name')
+# r = count_samples_by_column('admin1_name')
 
 # r = count_variants_by_column('alt_nt')
 

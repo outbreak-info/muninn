@@ -104,8 +104,9 @@ class SampleInfo(BaseModel):
 
     # geo data
     geo_country_name: str | None
-    geo_region_name: str | None
-    geo_locality_name: str | None
+    geo_admin1_name: str | None
+    geo_admin2_name: str | None
+    geo_admin3_name: str | None
 
     @classmethod
     def from_db_object(cls, dbo: 'Sample') -> 'SampleInfo':
@@ -148,8 +149,9 @@ class SampleInfo(BaseModel):
             collection_end_date=dbo.collection_end_date,
             geo_location_id=dbo.geo_location_id,
             geo_country_name=dbo.r_geo_location.country_name,
-            geo_region_name=dbo.r_geo_location.region_name,
-            geo_locality_name=dbo.r_geo_location.locality_name
+            geo_admin1_name=dbo.r_geo_location.admin1_name,
+            geo_admin2_name=dbo.r_geo_location.admin2_name,
+            geo_admin3_name=dbo.r_geo_location.admin3_name
         )
 
 

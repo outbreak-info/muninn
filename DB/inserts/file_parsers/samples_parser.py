@@ -11,7 +11,6 @@ from DB.inserts.samples import find_or_insert_sample
 from DB.models import GeoLocation, Sample
 from utils.csv_helpers import get_value, bool_from_str
 from utils.dates_and_times import parse_collection_start_and_end
-from utils.geodata import parse_geo_loc
 
 
 class SamplesParser(FileParser):
@@ -212,7 +211,6 @@ class ColNameMapping(Enum):
     datastore_region = 'DATASTORE region'
     experiment = 'Experiment'
     geo_loc_name_country = 'geo_loc_name_country'
-    geo_loc_name_country_continent = 'geo_loc_name_country_continent'
     geo_loc_name = 'geo_loc_name'
     host = 'Host'
     instrument = 'Instrument'
