@@ -4,13 +4,16 @@ from typing import Set
 
 import polars as pl
 
-from DB.inserts.alleles import batch_insert_alleles
+from DB.inserts.alleles import batch_insert_alleles, bulk_insert_new_alleles_skip_existing
 from DB.inserts.amino_acid_substitutions import batch_insert_aa_subs
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.mutations import find_or_insert_mutation, batch_insert_mutations
 from DB.inserts.samples import find_sample_id_by_accession, batch_find_samples
 from DB.inserts.translations import batch_insert_translations
 from DB.models import Mutation
+from DB.queries.alleles import get_all_alleles_as_pl_df
+from utils.constants import StandardColumnNames
+from utils.csv_helpers import gff_feature_strip_region_name
 from utils.errors import NotFoundError
 
 
@@ -24,19 +27,20 @@ class MutationsTsvParser(FileParser):
             'skipped_malformed': 0,
             'skipped_sample_not_found': 0
         }
-
-        cache_samples = dict()
-        cache_accessions_not_found = set()
         with open(self.filename, 'r') as f:
-            reader = pl.read_csv(f, separator='\t')
-            self._verify_header(reader)
+            mutations_data = pl.read_csv(f, separator='\t')
+            self._verify_header(mutations_data)
 
-            reader = reader.with_columns(
+            mutations_data = mutations_data.with_columns(
                 pl.col(ColNameMapping.region.value).alias(ColNameMapping.region.name),
                 pl.col(ColNameMapping.position_nt.value).alias(ColNameMapping.position_nt.name),
                 pl.col(ColNameMapping.ref_nt.value).alias(ColNameMapping.ref_nt.name),
                 pl.col(ColNameMapping.alt_nt.value).alias(ColNameMapping.alt_nt.name),
-                pl.col(ColNameMapping.gff_feature.value).alias(ColNameMapping.gff_feature.name),
+                (
+                    pl.col(ColNameMapping.gff_feature.value)
+                    .map_elements(gff_feature_strip_region_name, return_dtype=pl.String)
+                    .alias(ColNameMapping.gff_feature.name)
+                ),
                 pl.col(ColNameMapping.position_aa.value).alias(ColNameMapping.position_aa.name),
                 pl.col(ColNameMapping.ref_aa.value).alias(ColNameMapping.ref_aa.name),
                 pl.col(ColNameMapping.alt_aa.value).alias(ColNameMapping.alt_aa.name),
@@ -45,21 +49,28 @@ class MutationsTsvParser(FileParser):
                 pl.col(ColNameMapping.accession.value).alias(ColNameMapping.accession.name)
             )
 
-            # reader = reader.head(10)
 
             # Insert alleles and amino subs
 
-            allele_data = reader.select(
+            allele_data = mutations_data.select(
                 pl.col(ColNameMapping.region.name),
                 pl.col(ColNameMapping.position_nt.name),
                 pl.col(ColNameMapping.ref_nt.name),
                 pl.col(ColNameMapping.alt_nt.name),
             ).unique()
-            allele_data = await batch_insert_alleles(
-                allele_data,
-            )
 
-            amino_sub_data = reader.select(
+
+            await bulk_insert_new_alleles_skip_existing(allele_data)
+
+            # todo: insert new alleles and get ids
+
+
+
+            # allele_data = await batch_insert_alleles(
+            #     allele_data,
+            # )
+
+            amino_sub_data = mutations_data.select(
                 pl.col(ColNameMapping.gff_feature.name),
                 pl.col(ColNameMapping.position_aa.name),
                 pl.col(ColNameMapping.ref_aa.name),
@@ -74,7 +85,7 @@ class MutationsTsvParser(FileParser):
             )
 
             # join the allele ids back into the original df
-            reader = reader.join(
+            mutations_data = mutations_data.join(
                 allele_data,
                 on=[
                     ColNameMapping.region.name,
@@ -83,7 +94,7 @@ class MutationsTsvParser(FileParser):
                 ],
                 how='left'
             )
-            reader = reader.join(
+            mutations_data = mutations_data.join(
                 amino_sub_data,
                 on=[
                     ColNameMapping.gff_feature.name,
@@ -93,29 +104,29 @@ class MutationsTsvParser(FileParser):
                 how='left'
             )
 
-            translations_data = reader.select(
-                pl.col('allele_id'),
-                pl.col('amino_acid_substitution_id')
+            translations_data = mutations_data.select(
+                pl.col(StandardColumnNames.allele_id),
+                pl.col(StandardColumnNames.amino_acid_substitution_id)
             ).unique().drop_nulls()
 
             await batch_insert_translations(translations_data)
 
-            sample_data = reader.select(
+            sample_data = mutations_data.select(
                 pl.col(ColNameMapping.accession.name)
             ).unique()
             sample_data = await batch_find_samples(sample_data, accession_name=ColNameMapping.accession.name)
 
-            reader = reader.join(
+            mutations_data = mutations_data.join(
                 sample_data,
                 on=ColNameMapping.accession.name,
                 how='left'
             )
 
-            mutations_data = reader.filter(
-                pl.col('sample_id').is_not_null()
+            mutations_data = mutations_data.filter(
+                pl.col(StandardColumnNames.sample_id).is_not_null()
             ).select(
-                pl.col('sample_id'),
-                pl.col('allele_id')
+                pl.col(StandardColumnNames.sample_id),
+                pl.col(StandardColumnNames.allele_id)
             ).unique()
 
             await batch_insert_mutations(mutations_data)

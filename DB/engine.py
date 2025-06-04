@@ -1,5 +1,6 @@
 import os
 
+import asyncpg
 from sqlalchemy import create_engine
 from sqlalchemy.engine import URL
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
@@ -8,6 +9,21 @@ from utils.constants import Env
 
 STATEMENT_TIMEOUT_MS = 600_000
 
+
+async def get_asyncpg_connection():
+    db_user = os.environ[Env.FLU_DB_USER]
+    db_password = os.environ[Env.FLU_DB_PASSWORD]
+    db_host = os.environ[Env.FLU_DB_HOST]
+    db_port = int(os.environ[Env.FLU_DB_PORT])
+    db_name = os.environ[Env.FLU_DB_DB_NAME]
+
+    return await asyncpg.connect(
+        host=db_host,
+        user=db_user,
+        port=db_port,
+        password=db_password,
+        database=db_name
+    )
 
 def get_url(async_: bool = False):
     db_user = os.environ[Env.FLU_DB_USER]
