@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 import polars as pl
 from sqlalchemy import select, and_, text, insert
@@ -62,6 +63,24 @@ async def batch_insert_alleles(
     return alleles
 
 
+async def bulk_insert_alleles(alleles: pl.DataFrame) -> Any:
+    columns = [
+        StandardColumnNames.region,
+        StandardColumnNames.position_nt,
+        StandardColumnNames.ref_nt,
+        StandardColumnNames.alt_nt
+    ]
+    conn = await get_asyncpg_connection()
+    res = await conn.copy_records_to_table(
+        Allele.__tablename__,
+        records=alleles.select(
+            [pl.col(cn) for cn in columns]
+        ).iter_rows(),
+        columns=columns
+    )
+    return res
+
+
 async def bulk_insert_new_alleles_skip_existing(alleles: pl.DataFrame) -> pl.DataFrame:
     # 1. get all the alleles from the db and do some filtering
     existing_alleles = await get_all_alleles_as_pl_df()
@@ -105,4 +124,14 @@ async def bulk_insert_new_alleles_skip_existing(alleles: pl.DataFrame) -> pl.Dat
 
     # 3. get IDs back and return a df with ids added
 
+    existing_alleles = await get_all_alleles_as_pl_df()
+    new_alleles = new_alleles.join(
+        existing_alleles,
+        on=[
+            StandardColumnNames.region,
+            StandardColumnNames.position_nt,
+            StandardColumnNames.alt_nt
+        ],
+        how='left'
+    )
     return new_alleles

@@ -1,9 +1,9 @@
 import polars as pl
 from sqlalchemy import select, and_, insert
 
-from DB.engine import get_async_session
+from DB.engine import get_async_session, get_asyncpg_connection
 from DB.models import Mutation
-from utils.gathering_task_group import GatheringTaskGroup
+from utils.constants import StandardColumnNames
 
 
 async def find_or_insert_mutation(m: Mutation) -> int:
@@ -30,3 +30,19 @@ async def batch_insert_mutations(mutations: pl.DataFrame):
             mutations.to_dicts()
         )
         await session.commit()
+
+
+async def bulk_insert_mutations(mutations: pl.DataFrame) -> int:
+    columns = [
+        StandardColumnNames.sample_id,
+        StandardColumnNames.allele_id
+    ]
+    conn = await get_asyncpg_connection()
+    res = await conn.copy_records_to_table(
+        Mutation.__tablename__,
+        records=mutations.select(
+            [pl.col(cn) for cn in columns]
+        ).iter_rows(),
+        columns=columns
+    )
+    return res

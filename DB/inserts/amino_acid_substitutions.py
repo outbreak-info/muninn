@@ -1,8 +1,9 @@
 import polars as pl
 from sqlalchemy import and_, select, insert
 
-from DB.engine import get_async_session
+from DB.engine import get_async_session, get_asyncpg_connection
 from DB.models import AminoAcidSubstitution
+from utils.constants import StandardColumnNames
 from utils.errors import NotFoundError
 from utils.gathering_task_group import GatheringTaskGroup
 
@@ -68,3 +69,23 @@ async def batch_insert_aa_subs(
         pl.Series('amino_acid_substitution_id', ids)
     )
     return amino_subs
+
+
+async def bulk_insert_aa_subs(aa_subs: pl.DataFrame) -> int:
+    columns = [
+            StandardColumnNames.gff_feature,
+            StandardColumnNames.position_aa,
+            StandardColumnNames.ref_aa,
+            StandardColumnNames.alt_aa,
+            StandardColumnNames.ref_codon,
+            StandardColumnNames.alt_codon,
+        ]
+    conn = await get_asyncpg_connection()
+    res = await conn.copy_records_to_table(
+        'amino_acid_substitutions',
+        records=aa_subs.select(
+            [pl.col(cn) for cn in columns]
+        ).iter_rows(),
+        columns=columns
+    )
+    return res

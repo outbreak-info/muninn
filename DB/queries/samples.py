@@ -1,12 +1,14 @@
 from typing import List
 
+import polars as pl
 from sqlalchemy import select, text
 from sqlalchemy.orm import contains_eager
 
-from DB.engine import get_async_session
+from DB.engine import get_async_session, get_uri_for_polars
 from DB.models import Sample, Mutation, GeoLocation, Allele, AminoAcidSubstitution, IntraHostVariant, Translation
 from api.models import SampleInfo
 from parser.parser import parser
+from utils.constants import StandardColumnNames
 
 
 async def get_sample_by_id(sample_id: int) -> SampleInfo | None:
@@ -102,3 +104,10 @@ async def get_samples_by_variant(query: str) -> List['SampleInfo']:
         samples = await session.scalars(samples_query)
         out_data = [SampleInfo.from_db_object(s) for s in samples.unique()]
     return out_data
+
+
+async def get_samples_accession_and_id_as_pl_df() -> pl.DataFrame:
+    return pl.read_database_uri(
+        query=f'select id, accession from samples;',
+        uri=get_uri_for_polars()
+    ).rename({'id': StandardColumnNames.sample_id})

@@ -75,17 +75,42 @@ class NtOrAa(Enum):
 
 
 class StandardColumnNames:
+    # ids
     sample_id = 'sample_id'
     allele_id = 'allele_id'
     amino_acid_substitution_id = 'amino_acid_substitution_id'
-    # accession = 'accession'
+    intra_host_variant_id = 'intra_host_variant_id'
+    mutation_id = 'mutation_id'
+    translation_id = 'translation_id'
+
+    # samples
+    accession = 'accession'
+
+    # alleles
     position_nt = 'position_nt'
     ref_nt = 'ref_nt'
     alt_nt = 'alt_nt'
     region = 'region'
-    # gff_feature = 'gff_feature'
-    # ref_codon = 'ref_codon'
-    # alt_codon = 'alt_codon'
-    # ref_aa = 'ref_aa'
-    # alt_aa = 'alt_aa'
-    # position_aa = 'position_aa'
+
+    # amino subs
+    gff_feature = 'gff_feature'
+    ref_codon = 'ref_codon'
+    alt_codon = 'alt_codon'
+    ref_aa = 'ref_aa'
+    alt_aa = 'alt_aa'
+    position_aa = 'position_aa'
+
+    # variants
+    ref_dp = 'ref_dp'
+    alt_dp = 'alt_dp'
+    alt_freq = 'alt_freq'
+    ref_rv = 'ref_rv'
+    alt_rv = 'alt_rv'
+    ref_qual = 'ref_qual'
+    alt_qual = 'alt_qual'
+    total_dp = 'total_dp'
+    pval = 'pval'
+    pass_qc = 'pass_qc'
+
+class ConstraintNames:
+    uq_intra_host_variants_sample_allele_pair = 'uq_intra_host_variants_sample_allele_pair'
