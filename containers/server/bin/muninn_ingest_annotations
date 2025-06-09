@@ -1,0 +1,10 @@
+#! /bin/bash
+
+LOG="ingest_all.log"
+echo "begin at $(date)" > "$LOG"
+pwd
+{
+  python -u runinserts.py test_data/flumut_annotations_processed.csv annotations_csv
+} &>> "$LOG"
+
+echo "end at $(date)" >> "$LOG"
