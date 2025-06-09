@@ -314,6 +314,20 @@ async def get_abundance_summaries_by_collection_date(
 
 async def get_allele_abundances(lineage):
     async with get_async_session() as session:
+
+        sampleCount = await session.execute(
+            text(
+                f'''
+                SELECT count(*)
+                FROM lineages
+                LEFT JOIN samples_lineages ON samples_lineages.lineage_id = lineages.id
+                WHERE lineage_name = :input_lineage
+                '''
+            ), {
+                'input_lineage': lineage
+            }
+        )
+
         res = await session.execute(
             text(
                 f'''
@@ -331,7 +345,8 @@ async def get_allele_abundances(lineage):
                 'input_lineage': lineage
             }
         )
+    counts = sampleCount.scalar_one()
     out = dict()
     for region,ref_nt,position_nt,alt_nt,count in res:
         out[f'{region}:{ref_nt}{position_nt}{alt_nt}'] = count
-    return out
+    return {'samples':counts,'counts':out}

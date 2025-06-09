@@ -44,3 +44,11 @@ async def find_aa_sub(aas: AminoAcidSubstitution) -> int:
     if id_ is None:
         raise NotFoundError('No amino sub found')
     return id_
+
+async def insert_aa_sub(aas: AminoAcidSubstitution) -> int:
+    async with get_async_session() as session:
+        session.add(aas)
+        await session.commit()
+        await session.refresh(aas)
+        id_ = aas.id
+    return id_
