@@ -16,8 +16,8 @@ async def find_or_insert_effect(pmr: Effect) -> bool:
             )
         )
         if id_ is None:
-            session.add(pm)
+            session.add(pmr)
             await session.commit()
-            await session.refresh(pm)
-            id_ = pm.id
+            await session.refresh(pmr)
+            id_ = pmr.id
     return id_

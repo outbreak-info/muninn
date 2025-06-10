@@ -343,16 +343,16 @@ NP:cds-XAJ25419.1,K,91,R,2017,"Chen L. et al.,",Decreased polymerase activity in
 NP:cds-XAJ25419.1,K,91,R,2019,"Suttie A. et al.,",Decreased polymerase activity in mammalian cells
 NP:cds-XAJ25419.1,M,105,V,2019,"Suttie A. et al.,",Increased virulence in chickens
 NP:cds-XAJ25419.1,M,105,V,2011,"Tada T. et al.,",Increased virulence in chickens
-NP:cds-XAJ25419.1,M,105,V,011b,"Tada T. et al., ",Increased virulence in chickens
+NP:cds-XAJ25419.1,M,105,V,2011,Tada T. et al.,Increased virulence in chickens
 NP:cds-XAJ25419.1,I,109,T,2019,"Suttie A. et al.,",Increased polymerase activity in chickens (but not ducks)
 NP:cds-XAJ25419.1,I,109,T,2019,"Suttie A. et al.,",Increased replication in chickens (but not ducks)
 NP:cds-XAJ25419.1,I,109,T,2019,"Suttie A. et al.,",Increased virulence in chickens
 NP:cds-XAJ25419.1,I,109,T,2011,"Tada T. et al.,",Increased polymerase activity in chickens (but not ducks)
 NP:cds-XAJ25419.1,I,109,T,2011,"Tada T. et al.,",Increased replication in chickens (but not ducks)
 NP:cds-XAJ25419.1,I,109,T,2011,"Tada T. et al.,",Increased virulence in chickens
-NP:cds-XAJ25419.1,I,109,T,011b,"Tada T. et al., ",Increased polymerase activity in chickens (but not ducks)
-NP:cds-XAJ25419.1,I,109,T,011b,"Tada T. et al., ",Increased replication in chickens (but not ducks)
-NP:cds-XAJ25419.1,I,109,T,011b,"Tada T. et al., ",Increased virulence in chickens
+NP:cds-XAJ25419.1,I,109,T,2011,Tada T. et al.,Increased polymerase activity in chickens (but not ducks)
+NP:cds-XAJ25419.1,I,109,T,2011,Tada T. et al.,Increased replication in chickens (but not ducks)
+NP:cds-XAJ25419.1,I,109,T,2011,Tada T. et al.,Increased virulence in chickens
 NP:cds-XAJ25419.1,A,184,K,2019,"Suttie A. et al.,",Enhanced interferon response
 NP:cds-XAJ25419.1,A,184,K,2019,"Suttie A. et al.,",Increased replication in avian cells
 NP:cds-XAJ25419.1,A,184,K,2019,"Suttie A. et al.,",Increased virulence in chickens
@@ -373,7 +373,7 @@ NP:cds-XAJ25419.1,N,319,K,2008,"Gabriel G. et al.,",Increased polymerase activit
 NP:cds-XAJ25419.1,N,319,K,2008,"Gabriel G. et al.,",Increased replication in mammalian cells
 NP:cds-XAJ25419.1,N,319,K,2019,"Suttie A. et al.,",Increased polymerase activity in mammalian cells
 NP:cds-XAJ25419.1,N,319,K,2019,"Suttie A. et al.,",Increased replication in mammalian cells
-NP:cds-XAJ25419.1,E,434,K,015b,"Sang X. et al., ",Increased polymerase activity in mammalian cells
+NP:cds-XAJ25419.1,E,434,K,2015,Sang X. et al.,Increased polymerase activity in mammalian cells
 NP:cds-XAJ25419.1,E,434,K,2019,"Suttie A. et al.,",Increased polymerase activity in mammalian cells
 NP:cds-XAJ25419.1,K,470,R,2017,"Chen L. et al.,",Increased polymerase activity in mammalian cells
 NP:cds-XAJ25419.1,K,470,R,2017,"Chen L. et al.,",Increased replication in mammalian cells
@@ -459,8 +459,8 @@ PB2:cds-XAJ25426.1,I,292,V,2019,"Suttie A. et al.,",Increased virulence in mice
 PB2:cds-XAJ25426.1,I,292,V,2016,"Xiao C. et al.,",Increased polymerase activity in mammalian cells
 PB2:cds-XAJ25426.1,E,358,V,2016,"DesRochers B. et al.,",Decreased virulence in mice
 PB2:cds-XAJ25426.1,E,358,V,2019,"Suttie A. et al.,",Decreased virulence in mice
-PB2:cds-XAJ25426.1,K,389,R,017b,"Hu M. et al., ",Increased polymerase activity in mammalian cells
-PB2:cds-XAJ25426.1,K,389,R,017b,"Hu M. et al., ",Increased replication in mammalian cells
+PB2:cds-XAJ25426.1,K,389,R,2017,Hu M. et al.,Increased polymerase activity in mammalian cells
+PB2:cds-XAJ25426.1,K,389,R,2017,Hu M. et al.,Increased replication in mammalian cells
 PB2:cds-XAJ25426.1,K,389,R,2019,"Suttie A. et al.,",Increased polymerase activity in mammalian cells
 PB2:cds-XAJ25426.1,K,389,R,2019,"Suttie A. et al.,",Increased replication in mammalian cells
 PB2:cds-XAJ25426.1,L,339,T,2013,"Liu Y. et al.,",Decreased polymerase activity in mice
@@ -530,15 +530,15 @@ PB2:cds-XAJ25426.1,Q,591,K,2015,"Taft A. et al.,",Increased virulence in mice
 PB2:cds-XAJ25426.1,Q,591,K,2016,"Wang C. et al.,",Increased polymerase activity in mammalian cells
 PB2:cds-XAJ25426.1,Q,591,K,2016,"Wang C. et al.,",Increased replication in mammalian cells
 PB2:cds-XAJ25426.1,Q,591,K,2016,"Wang C. et al.,",Increased virulence in mice
-PB2:cds-XAJ25426.1,V,598,T,017b,"Hu M. et al., ",Increased polymerase activity in mammalian cells
-PB2:cds-XAJ25426.1,V,598,T,017b,"Hu M. et al., ",Increased replication in mammalian cells
-PB2:cds-XAJ25426.1,V,598,T,017b,"Hu M. et al., ",Increased virulence in mice
+PB2:cds-XAJ25426.1,V,598,T,2017,Hu M. et al.,Increased polymerase activity in mammalian cells
+PB2:cds-XAJ25426.1,V,598,T,2017,Hu M. et al.,Increased replication in mammalian cells
+PB2:cds-XAJ25426.1,V,598,T,2017,Hu M. et al.,Increased virulence in mice
 PB2:cds-XAJ25426.1,V,598,T,2019,"Suttie A. et al.,",Increased polymerase activity in mammalian cells
 PB2:cds-XAJ25426.1,V,598,T,2019,"Suttie A. et al.,",Increased replication in mammalian cells
 PB2:cds-XAJ25426.1,V,598,T,2019,"Suttie A. et al.,",Increased virulence in mice
-PB2:cds-XAJ25426.1,V,598,I,017b,"Hu M. et al., ",Increased polymerase activity in mammalian cells
-PB2:cds-XAJ25426.1,V,598,I,017b,"Hu M. et al., ",Increased replication in mammalian cells
-PB2:cds-XAJ25426.1,V,598,I,017b,"Hu M. et al., ",Increased virulence in mice
+PB2:cds-XAJ25426.1,V,598,I,2017,Hu M. et al.,Increased polymerase activity in mammalian cells
+PB2:cds-XAJ25426.1,V,598,I,2017,Hu M. et al.,Increased replication in mammalian cells
+PB2:cds-XAJ25426.1,V,598,I,2017,Hu M. et al.,Increased virulence in mice
 PB2:cds-XAJ25426.1,V,598,I,2019,"Suttie A. et al.,",Increased polymerase activity in mammalian cells
 PB2:cds-XAJ25426.1,V,598,I,2019,"Suttie A. et al.,",Increased replication in mammalian cells
 PB2:cds-XAJ25426.1,V,598,I,2019,"Suttie A. et al.,",Increased virulence in mice
@@ -934,9 +934,9 @@ PB1:cds-XAJ25424.1,D,622,G,2016,"Feng X. et al.,",Increased virulence in mice
 PB1:cds-XAJ25424.1,D,622,G,2019,"Suttie A. et al.,",Increased polymerase activity in mammalian cells
 PB1:cds-XAJ25424.1,D,622,G,2019,"Suttie A. et al.,",Increased polymerase activity in mice
 PB1:cds-XAJ25424.1,D,622,G,2019,"Suttie A. et al.,",Increased virulence in mice
-PB1:cds-XAJ25424.1,T,677,M,011b,"Li J. et al., ",Decreased replication in mammalian cells
-PB1:cds-XAJ25424.1,T,677,M,011b,"Li J. et al., ",Decreased virulence in mice
-PB1:cds-XAJ25424.1,T,677,M,011b,"Li J. et al., ",Increased polymerase activity in mammalian cells
+PB1:cds-XAJ25424.1,T,677,M,2011,Li J. et al.,Decreased replication in mammalian cells
+PB1:cds-XAJ25424.1,T,677,M,2011,Li J. et al.,Decreased virulence in mice
+PB1:cds-XAJ25424.1,T,677,M,2011,Li J. et al.,Increased polymerase activity in mammalian cells
 PB1:cds-XAJ25424.1,T,677,M,2019,"Suttie A. et al.,",Decreased replication in mammalian cells
 PB1:cds-XAJ25424.1,T,677,M,2019,"Suttie A. et al.,",Decreased virulence in mice
 PB1:cds-XAJ25424.1,T,677,M,2019,"Suttie A. et al.,",Increased polymerase activity in mammalian cells
@@ -1052,8 +1052,8 @@ PA:cds-XAJ25422.1,R,443,K,2019,"Suttie A. et al.,",Increased virulence in mice
 PA:cds-XAJ25422.1,R,443,K,2015,"Zhao D. et al.,",Increased virulence in mice
 PA:cds-XAJ25422.1,K,497,R,2019,"Suttie A. et al.,",Increased polymerase activity in mammalian cells
 PA:cds-XAJ25422.1,K,497,R,2018,"Yamayoshi S. et al.,",Increased polymerase activity in mammalian cells
-PA:cds-XAJ25422.1,T,515,A,015b,"Gao H. et al., ",Decreased polymerase activity in mammalian cells
-PA:cds-XAJ25422.1,T,515,A,015b,"Gao H. et al., ",Decreased virulence in ducks
+PA:cds-XAJ25422.1,T,515,A,2015,Gao H. et al.,Decreased polymerase activity in mammalian cells
+PA:cds-XAJ25422.1,T,515,A,2015,Gao H. et al.,Decreased virulence in ducks
 PA:cds-XAJ25422.1,T,515,A,2019,"Suttie A. et al.,",Decreased polymerase activity in mammalian cells
 PA:cds-XAJ25422.1,T,515,A,2019,"Suttie A. et al.,",Decreased virulence in ducks
 PA:cds-XAJ25422.1,K,615,N,2005,"Gabriel G. et al.,",Increased polymerase activity in mammalian cells
@@ -1261,7 +1261,7 @@ HA:cds-XAJ25415.1,Q,222,L,2017,"Qu Z. et al.,",Increased virus binding to α2-6
 HA:cds-XAJ25415.1,Q,222,L,2017,"Qu Z. et al.,",Transmitted via aerosol among guinea pigs
 HA:cds-XAJ25415.1,Q,222,L,2013,"Ramos I. et al.,",Decreased virus binding to α2-6
 HA:cds-XAJ25415.1,Q,222,L,2013,"Ramos I. et al.,",Increased virus binding to α2-3
-HA:cds-XAJ25415.1,Q,222,L,015b,"Sang X. et al., ",Loss of binding to α2–3
+HA:cds-XAJ25415.1,Q,222,L,2015,Sang X. et al.,Loss of binding to α2–3
 HA:cds-XAJ25415.1,Q,222,L,2017,"Song H. et al.,",Decreased virus binding to α2-3
 HA:cds-XAJ25415.1,Q,222,L,2017,"Song H. et al.,",Increased virus binding to α2-6
 HA:cds-XAJ25415.1,Q,222,L,2017,"Song H. et al.,",Increased virus binding to α2-6
@@ -1303,8 +1303,8 @@ HA:cds-XAJ25415.1,G,224,A,2019,"Suttie A. et al.,",Dual receptor specificity
 HA:cds-XAJ25415.1,G,224,A,2019,"Suttie A. et al.,",Increased virus binding to α2-6
 HA:cds-XAJ25415.1,G,224,S,2010,"Chutinimitkul S. et al.,",Increased virus binding to α2-6
 HA:cds-XAJ25415.1,G,224,S,2017,"Qu Z. et al.,",Decreased virus binding to α2-3
-HA:cds-XAJ25415.1,G,224,S,015b,"Sang X. et al., ",Decreased virus binding to α2-3
-HA:cds-XAJ25415.1,G,224,S,015b,"Sang X. et al., ",No binding to α2–6
+HA:cds-XAJ25415.1,G,224,S,2015,Sang X. et al.,Decreased virus binding to α2-3
+HA:cds-XAJ25415.1,G,224,S,2015,Sang X. et al.,No binding to α2–6
 HA:cds-XAJ25415.1,G,224,S,2017,"Song H. et al.,",Dual receptor specificity
 HA:cds-XAJ25415.1,G,224,S,2017,"Song H. et al.,",Increased virus binding to α2-6
 HA:cds-XAJ25415.1,G,224,S,2006,"Stevens J. et al.,",Increased virus binding to α2-6
@@ -1659,10 +1659,10 @@ HA:cds-XAJ25415.1,G,224,S,2005,"McCown M. et al.,",Increased virus binding to α
 HA:cds-XAJ25415.1,Q,222,L,2005,"McCown M. et al.,",Increased virus binding to α2-6
 HA:cds-XAJ25415.1,G,224,S,2005,"McCown M. et al.,",Reduced tissue tropism in guinea pigs
 HA:cds-XAJ25415.1,Q,222,L,2005,"McCown M. et al.,",Reduced tissue tropism in guinea pigs
-HA:cds-XAJ25415.1,G,224,S,015b,"Sang X. et al., ",Loss of binding to α2–3
-HA:cds-XAJ25415.1,Q,222,L,015b,"Sang X. et al., ",Loss of binding to α2–3
-HA:cds-XAJ25415.1,G,224,S,015b,"Sang X. et al., ",No binding to α2–6
-HA:cds-XAJ25415.1,Q,222,L,015b,"Sang X. et al., ",No binding to α2–6
+HA:cds-XAJ25415.1,G,224,S,2015,Sang X. et al.,Loss of binding to α2–3
+HA:cds-XAJ25415.1,Q,222,L,2015,Sang X. et al.,Loss of binding to α2–3
+HA:cds-XAJ25415.1,G,224,S,2015,Sang X. et al.,No binding to α2–6
+HA:cds-XAJ25415.1,Q,222,L,2015,Sang X. et al.,No binding to α2–6
 HA:cds-XAJ25415.1,G,224,S,2017,"Song H. et al.,",Increased virus binding to α2-6
 HA:cds-XAJ25415.1,Q,222,L,2017,"Song H. et al.,",Increased virus binding to α2-6
 HA:cds-XAJ25415.1,G,224,S,2013,"Srinivasan K. et al.,",Increased virus binding to α2-6
@@ -1785,9 +1785,9 @@ NA:cds-XAJ25418.1,E,119,G,2011,"Pizzorno A. et al.,",Highly reduced inhibition t
 NA:cds-XAJ25418.1,E,119,G,2011,"Pizzorno A. et al.,",Highly reduced inhibition to Zanamivir
 NA:cds-XAJ25418.1,E,119,G,2019,"Suttie A. et al.,",Reduced susceptibility to Peramivir
 NA:cds-XAJ25418.1,E,119,G,2019,"Suttie A. et al.,",Reduced susceptibility to Zanamivir
-NA:cds-XAJ25418.1,E,119,G,015b,"Tamura D. et al., ",From reduced to highly reduced inhibition to Peramivir
-NA:cds-XAJ25418.1,E,119,G,015b,"Tamura D. et al., ",Highly reduced inhibition to Laninamivir
-NA:cds-XAJ25418.1,E,119,G,015b,"Tamura D. et al., ",Highly reduced inhibition to Zanamivir
+NA:cds-XAJ25418.1,E,119,G,2015,Tamura D. et al.,From reduced to highly reduced inhibition to Peramivir
+NA:cds-XAJ25418.1,E,119,G,2015,Tamura D. et al.,Highly reduced inhibition to Laninamivir
+NA:cds-XAJ25418.1,E,119,G,2015,Tamura D. et al.,Highly reduced inhibition to Zanamivir
 NA:cds-XAJ25418.1,Q,136,L,2010,"Hurt A. et al.,",Highly reduced inhibition to Zanamivir
 NA:cds-XAJ25418.1,Q,136,L,2010,"Hurt A. et al.,",Reduced inhibition to Oseltamivir
 NA:cds-XAJ25418.1,Q,136,L,2010,"Hurt A. et al.,",Reduced susceptibility to Oseltamivir
@@ -1816,8 +1816,8 @@ NA:cds-XAJ25418.1,H,275,Y,2013,"Choi W. et al.,",Highly reduced inhibition to Os
 NA:cds-XAJ25418.1,H,275,Y,2013,"Choi W. et al.,",Highly reduced inhibition to Peramivir
 NA:cds-XAJ25418.1,H,275,Y,2013,"Dapat C. et al.,",From reduced to highly reduced inhibition to Peramivir
 NA:cds-XAJ25418.1,H,275,Y,2013,"Dapat C. et al.,",Highly reduced inhibition to Oseltamivir
-NA:cds-XAJ25418.1,H,275,Y,017b,"Gubareva L. et al., ",Reduced susceptibility to Oseltamivir
-NA:cds-XAJ25418.1,H,275,Y,017b,"Gubareva L. et al., ",Reduced susceptibility to Peramivir
+NA:cds-XAJ25418.1,H,275,Y,2017,Gubareva L. et al.,Reduced susceptibility to Oseltamivir
+NA:cds-XAJ25418.1,H,275,Y,2017,Gubareva L. et al.,Reduced susceptibility to Peramivir
 NA:cds-XAJ25418.1,H,275,Y,2009,"Hurt A. et al.,",From reduced to highly reduced inhibition to Oseltamivir
 NA:cds-XAJ25418.1,H,275,Y,2009,"Hurt A. et al.,",From reduced to highly reduced inhibition to Peramivir
 NA:cds-XAJ25418.1,H,275,Y,2009,"Hurt A. et al.,",Reduced susceptibility to Oseltamivir
@@ -1830,23 +1830,23 @@ NA:cds-XAJ25418.1,H,275,Y,2010,"Ilyushina N. et al.,",Reduced susceptibility to 
 NA:cds-XAJ25418.1,H,275,Y,2010,"Ilyushina N. et al.,",Reduced susceptibility to Peramivir
 NA:cds-XAJ25418.1,H,275,Y,2005,"Le Q. et al.,",Reduced susceptibility to Oseltamivir
 NA:cds-XAJ25418.1,H,275,Y,2005,"Le Q. et al.,",Reduced susceptibility to Peramivir
-NA:cds-XAJ25418.1,H,275,Y,005b,"Le Q. et al., ",From reduced to highly reduced inhibition to Oseltamivir
-NA:cds-XAJ25418.1,H,275,Y,005b,"Le Q. et al., ",From reduced to highly reduced inhibition to Peramivir
+NA:cds-XAJ25418.1,H,275,Y,2005,Le Q. et al.,From reduced to highly reduced inhibition to Oseltamivir
+NA:cds-XAJ25418.1,H,275,Y,2005,Le Q. et al.,From reduced to highly reduced inhibition to Peramivir
 NA:cds-XAJ25418.1,H,275,Y,2014,"Leang S. et al.,",From reduced to highly reduced inhibition to Peramivir
 NA:cds-XAJ25418.1,H,275,Y,2014,"Leang S. et al.,",Highly reduced inhibition to Oseltamivir
 NA:cds-XAJ25418.1,H,275,Y,2005,"Mishin V. et al.,",Highly reduced inhibition to Oseltamivir
 NA:cds-XAJ25418.1,H,275,Y,2005,"Mishin V. et al.,",Highly reduced inhibition to Peramivir
-NA:cds-XAJ25418.1,H,275,Y,010b,"Nguyen H. et al., ",From reduced to highly reduced inhibition to Peramivir
-NA:cds-XAJ25418.1,H,275,Y,010b,"Nguyen H. et al., ",Highly reduced inhibition to Oseltamivir
+NA:cds-XAJ25418.1,H,275,Y,2010,Nguyen H. et al.,From reduced to highly reduced inhibition to Peramivir
+NA:cds-XAJ25418.1,H,275,Y,2010,Nguyen H. et al.,Highly reduced inhibition to Oseltamivir
 NA:cds-XAJ25418.1,H,275,Y,2012,"Nguyen H. et al.,",From reduced to highly reduced inhibition to Peramivir
 NA:cds-XAJ25418.1,H,275,Y,2012,"Nguyen H. et al.,",Highly reduced inhibition to Oseltamivir
 NA:cds-XAJ25418.1,H,275,Y,2013,"Nguyen H. et al.,",From reduced to highly reduced inhibition to Oseltamivir
 NA:cds-XAJ25418.1,H,275,Y,2013,"Nguyen H. et al.,",From reduced to highly reduced inhibition to Peramivir
 NA:cds-XAJ25418.1,H,275,Y,2013,"Nguyen H. et al.,",Reduced susceptibility to Oseltamivir
 NA:cds-XAJ25418.1,H,275,Y,2013,"Nguyen H. et al.,",Reduced susceptibility to Peramivir
-NA:cds-XAJ25418.1,H,275,Y,010b,"Okomo-Adhiambo M. et al., ",From reduced to highly reduced inhibition to Peramivir
-NA:cds-XAJ25418.1,H,275,Y,010b,"Okomo-Adhiambo M. et al., ",Highly reduced inhibition to Oseltamivir
-NA:cds-XAJ25418.1,H,275,Y,010b,"Okomo-Adhiambo M. et al., ",Highly reduced inhibition to Peramivir
+NA:cds-XAJ25418.1,H,275,Y,2010,Okomo-Adhiambo M. et al.,From reduced to highly reduced inhibition to Peramivir
+NA:cds-XAJ25418.1,H,275,Y,2010,Okomo-Adhiambo M. et al.,Highly reduced inhibition to Oseltamivir
+NA:cds-XAJ25418.1,H,275,Y,2010,Okomo-Adhiambo M. et al.,Highly reduced inhibition to Peramivir
 NA:cds-XAJ25418.1,H,275,Y,2013,"Okomo-Adhiambo M. et al.,",From reduced to highly reduced inhibition to Peramivir
 NA:cds-XAJ25418.1,H,275,Y,2013,"Okomo-Adhiambo M. et al.,",Highly reduced inhibition to Oseltamivir
 NA:cds-XAJ25418.1,H,275,Y,2008,"Sheu T. et al.,",Highly reduced inhibition to Oseltamivir
@@ -1884,9 +1884,9 @@ NA:cds-XAJ25418.1,N,295,S,2010,"Ilyushina N. et al.,",Reduced susceptibility to 
 NA:cds-XAJ25418.1,N,295,S,2005,"Le Q. et al.,",Reduced susceptibility to Oseltamivir
 NA:cds-XAJ25418.1,N,295,S,2005,"Le Q. et al.,",Reduced susceptibility to Peramivir
 NA:cds-XAJ25418.1,N,295,S,2005,"Le Q. et al.,",Reduced susceptibility to Zanamivir
-NA:cds-XAJ25418.1,N,295,S,005b,"Le Q. et al., ",From normal to highly reduced inhibition to Peramivir
-NA:cds-XAJ25418.1,N,295,S,005b,"Le Q. et al., ",From normal to reduced inhibition to Zanamivir
-NA:cds-XAJ25418.1,N,295,S,005b,"Le Q. et al., ",From reduced to highly reduced inhibition to Oseltamivir
+NA:cds-XAJ25418.1,N,295,S,2005,Le Q. et al.,From normal to highly reduced inhibition to Peramivir
+NA:cds-XAJ25418.1,N,295,S,2005,Le Q. et al.,From normal to reduced inhibition to Zanamivir
+NA:cds-XAJ25418.1,N,295,S,2005,Le Q. et al.,From reduced to highly reduced inhibition to Oseltamivir
 NA:cds-XAJ25418.1,N,295,S,2014,"Meijer A. et al.,",From normal to reduced inhibition to Peramivir
 NA:cds-XAJ25418.1,N,295,S,2014,"Meijer A. et al.,",From reduced to highly reduced inhibition to Oseltamivir
 NA:cds-XAJ25418.1,N,295,S,2011,"Pizzorno A. et al.,",From normal to reduced inhibition to Peramivir
@@ -1987,14 +1987,14 @@ NA:cds-XAJ25418.1,E,119,G,2019,"Suttie A. et al.,",Reduced susceptibility to Per
 NA:cds-XAJ25418.1,H,275,Y,2019,"Suttie A. et al.,",Reduced susceptibility to Peramivir
 NA:cds-XAJ25418.1,E,119,G,2019,"Suttie A. et al.,",Reduced susceptibility to Zanamivir
 NA:cds-XAJ25418.1,H,275,Y,2019,"Suttie A. et al.,",Reduced susceptibility to Zanamivir
-NA:cds-XAJ25418.1,E,119,G,015b,"Tamura D. et al., ",Highly reduced inhibition to Laninamivir
-NA:cds-XAJ25418.1,H,275,Y,015b,"Tamura D. et al., ",Highly reduced inhibition to Laninamivir
-NA:cds-XAJ25418.1,E,119,G,015b,"Tamura D. et al., ",Highly reduced inhibition to Oseltamivir
-NA:cds-XAJ25418.1,H,275,Y,015b,"Tamura D. et al., ",Highly reduced inhibition to Oseltamivir
-NA:cds-XAJ25418.1,E,119,G,015b,"Tamura D. et al., ",Highly reduced inhibition to Peramivir
-NA:cds-XAJ25418.1,H,275,Y,015b,"Tamura D. et al., ",Highly reduced inhibition to Peramivir
-NA:cds-XAJ25418.1,E,119,G,015b,"Tamura D. et al., ",Highly reduced inhibition to Zanamivir
-NA:cds-XAJ25418.1,H,275,Y,015b,"Tamura D. et al., ",Highly reduced inhibition to Zanamivir
+NA:cds-XAJ25418.1,E,119,G,2015,Tamura D. et al.,Highly reduced inhibition to Laninamivir
+NA:cds-XAJ25418.1,H,275,Y,2015,Tamura D. et al.,Highly reduced inhibition to Laninamivir
+NA:cds-XAJ25418.1,E,119,G,2015,Tamura D. et al.,Highly reduced inhibition to Oseltamivir
+NA:cds-XAJ25418.1,H,275,Y,2015,Tamura D. et al.,Highly reduced inhibition to Oseltamivir
+NA:cds-XAJ25418.1,E,119,G,2015,Tamura D. et al.,Highly reduced inhibition to Peramivir
+NA:cds-XAJ25418.1,H,275,Y,2015,Tamura D. et al.,Highly reduced inhibition to Peramivir
+NA:cds-XAJ25418.1,E,119,G,2015,Tamura D. et al.,Highly reduced inhibition to Zanamivir
+NA:cds-XAJ25418.1,H,275,Y,2015,Tamura D. et al.,Highly reduced inhibition to Zanamivir
 NA:cds-XAJ25418.1,I,223,L,2017,"Creanga A. et al.,",Reduced inhibition to Oseltamivir
 NA:cds-XAJ25418.1,S,247,N,2017,"Creanga A. et al.,",Reduced inhibition to Oseltamivir
 NA:cds-XAJ25418.1,I,223,L,2017,"Creanga A. et al.,",Reduced susceptibility to Oseltamivir
@@ -2058,13 +2058,13 @@ HA:cds-XAJ25415.1,G,224,S,2019,"Suttie A. et al.,",Dual α2–3 and α2–6 bind
 HA:cds-XAJ25415.1,K,189,T,2019,"Suttie A. et al.,",Dual α2–3 and α2–6 binding
 HA:cds-XAJ25415.1,G,224,S,2017,"de Vries R. et al.,",Dual α2–3 and α2–6 binding
 HA:cds-XAJ25415.1,K,189,T,2017,"de Vries R. et al.,",Dual α2–3 and α2–6 binding
-HA:cds-XAJ25415.1,Q,223,P,015b,"Sang X. et al., ",Enhanced contact transmission in guinea pigs
-NP:cds-XAJ25419.1,E,434,K,015b,"Sang X. et al., ",Enhanced contact transmission in guinea pigs
+HA:cds-XAJ25415.1,Q,223,P,2015,Sang X. et al.,Enhanced contact transmission in guinea pigs
+NP:cds-XAJ25419.1,E,434,K,2015,Sang X. et al.,Enhanced contact transmission in guinea pigs
 HA:cds-XAJ25415.1,Q,223,P,2019,"Suttie A. et al.,",Enhanced contact transmission in guinea pigs
 NP:cds-XAJ25419.1,E,434,K,2019,"Suttie A. et al.,",Enhanced contact transmission in guinea pigs
-HA:cds-XAJ25415.1,Q,223,P,015b,"Sang X. et al., ",Enhanced contact transmission in guinea pigs
-NP:cds-XAJ25419.1,E,434,K,015b,"Sang X. et al., ",Enhanced contact transmission in guinea pigs
-PB2:cds-XAJ25426.1,D,195,N,015b,"Sang X. et al., ",Enhanced contact transmission in guinea pigs
+HA:cds-XAJ25415.1,Q,223,P,2015,Sang X. et al.,Enhanced contact transmission in guinea pigs
+NP:cds-XAJ25419.1,E,434,K,2015,Sang X. et al.,Enhanced contact transmission in guinea pigs
+PB2:cds-XAJ25426.1,D,195,N,2015,Sang X. et al.,Enhanced contact transmission in guinea pigs
 HA:cds-XAJ25415.1,Q,223,P,2019,"Suttie A. et al.,",Enhanced contact transmission in guinea pigs
 NP:cds-XAJ25419.1,E,434,K,2019,"Suttie A. et al.,",Enhanced contact transmission in guinea pigs
 PB2:cds-XAJ25426.1,D,195,N,2019,"Suttie A. et al.,",Enhanced contact transmission in guinea pigs
@@ -2125,7 +2125,7 @@ NA:cds-XAJ25418.1,S,247,R,2017,"Gubareva L. et al.,",Reduced inhibition to Oselt
 NA:cds-XAJ25418.1,S,247,R,2017,"Gubareva L. et al.,",Reduced inhibition to Zanamiriv
 NA:cds-XAJ25418.1,R,293,K,2015,"Baek Y. et al.,",Reduced inhibition to Oseltamivir
 NA:cds-XAJ25418.1,R,293,K,2013,"Choi W. et al.,",Reduced inhibition to Zanamiriv
-NA:cds-XAJ25418.1,R,293,K,015b,"Tamura D. et al., ",Reduced inhibition to Oseltamivir
+NA:cds-XAJ25418.1,R,293,K,2015,Tamura D. et al.,Reduced inhibition to Oseltamivir
 NA:cds-XAJ25418.1,I,427,T,2020,"Takashita E. et al.,",Reduced inhibition to Laninamivir
 NA:cds-XAJ25418.1,I,427,T,2020,"Takashita E. et al.,",Reduced inhibition to Oseltamivir
 NA:cds-XAJ25418.1,I,427,T,2020,"Takashita E. et al.,",Reduced inhibition to Zanamiriv
@@ -2155,34 +2155,34 @@ NA:cds-XAJ25418.1,E,119,V,2013,"Choi W. et al.,",Highly reduced inhibition to Za
 NA:cds-XAJ25418.1,H,275,Y,2013,"Choi W. et al.,",Highly reduced inhibition to Zanamivir
 NA:cds-XAJ25418.1,E,119,V,2013,"Choi W. et al.,",Reduced inhibition to Oseltamivir
 NA:cds-XAJ25418.1,H,275,Y,2013,"Choi W. et al.,",Reduced inhibition to Oseltamivir
-NA:cds-XAJ25418.1,D,151,E,010b,"Okomo-Adhiambo M. et al., ",Reduced inhibition to Peramivir
-NA:cds-XAJ25418.1,Q,136,K,010b,"Okomo-Adhiambo M. et al., ",Reduced inhibition to Peramivir
-NA:cds-XAJ25418.1,D,151,E,010b,"Okomo-Adhiambo M. et al., ",Reduced inhibition to Zanamiriv
-NA:cds-XAJ25418.1,Q,136,K,010b,"Okomo-Adhiambo M. et al., ",Reduced inhibition to Zanamiriv
-NA:cds-XAJ25418.1,H,275,Y,010b,"Okomo-Adhiambo M. et al., ",Highly reduced inhibition to Oseltamivir
-NA:cds-XAJ25418.1,Q,136,K,010b,"Okomo-Adhiambo M. et al., ",Highly reduced inhibition to Oseltamivir
-NA:cds-XAJ25418.1,H,275,Y,010b,"Okomo-Adhiambo M. et al., ",Highly reduced inhibition to Peramivir
-NA:cds-XAJ25418.1,Q,136,K,010b,"Okomo-Adhiambo M. et al., ",Highly reduced inhibition to Peramivir
-NA:cds-XAJ25418.1,H,275,Y,010b,"Okomo-Adhiambo M. et al., ",Reduced inhibition to Zanamiriv
-NA:cds-XAJ25418.1,Q,136,K,010b,"Okomo-Adhiambo M. et al., ",Reduced inhibition to Zanamiriv
+NA:cds-XAJ25418.1,D,151,E,2010,Okomo-Adhiambo M. et al.,Reduced inhibition to Peramivir
+NA:cds-XAJ25418.1,Q,136,K,2010,Okomo-Adhiambo M. et al.,Reduced inhibition to Peramivir
+NA:cds-XAJ25418.1,D,151,E,2010,Okomo-Adhiambo M. et al.,Reduced inhibition to Zanamiriv
+NA:cds-XAJ25418.1,Q,136,K,2010,Okomo-Adhiambo M. et al.,Reduced inhibition to Zanamiriv
+NA:cds-XAJ25418.1,H,275,Y,2010,Okomo-Adhiambo M. et al.,Highly reduced inhibition to Oseltamivir
+NA:cds-XAJ25418.1,Q,136,K,2010,Okomo-Adhiambo M. et al.,Highly reduced inhibition to Oseltamivir
+NA:cds-XAJ25418.1,H,275,Y,2010,Okomo-Adhiambo M. et al.,Highly reduced inhibition to Peramivir
+NA:cds-XAJ25418.1,Q,136,K,2010,Okomo-Adhiambo M. et al.,Highly reduced inhibition to Peramivir
+NA:cds-XAJ25418.1,H,275,Y,2010,Okomo-Adhiambo M. et al.,Reduced inhibition to Zanamiriv
+NA:cds-XAJ25418.1,Q,136,K,2010,Okomo-Adhiambo M. et al.,Reduced inhibition to Zanamiriv
 NA:cds-XAJ25418.1,G,147,R,2017,"Gubareva L. et al.,",Highly reduced inhibition to Oseltamivir
 NA:cds-XAJ25418.1,H,275,Y,2017,"Gubareva L. et al.,",Highly reduced inhibition to Oseltamivir
 NA:cds-XAJ25418.1,G,147,R,2017,"Gubareva L. et al.,",Highly reduced inhibition to Peramivir
 NA:cds-XAJ25418.1,H,275,Y,2017,"Gubareva L. et al.,",Highly reduced inhibition to Peramivir
-NA:cds-XAJ25418.1,D,151,E,010b,"Okomo-Adhiambo M. et al., ",From reduced to highly reduced inhibition to Peramivir
-NA:cds-XAJ25418.1,H,275,Y,010b,"Okomo-Adhiambo M. et al., ",From reduced to highly reduced inhibition to Peramivir
-NA:cds-XAJ25418.1,D,151,E,010b,"Okomo-Adhiambo M. et al., ",Highly reduced inhibition to Oseltamivir
-NA:cds-XAJ25418.1,H,275,Y,010b,"Okomo-Adhiambo M. et al., ",Highly reduced inhibition to Oseltamivir
-NA:cds-XAJ25418.1,D,151,N,010b,"Okomo-Adhiambo M. et al., ",From reduced to highly reduced inhibition to Peramivir
-NA:cds-XAJ25418.1,H,275,Y,010b,"Okomo-Adhiambo M. et al., ",From reduced to highly reduced inhibition to Peramivir
-NA:cds-XAJ25418.1,D,151,N,010b,"Okomo-Adhiambo M. et al., ",Highly reduced inhibition to Oseltamivir
-NA:cds-XAJ25418.1,H,275,Y,010b,"Okomo-Adhiambo M. et al., ",Highly reduced inhibition to Oseltamivir
-NA:cds-XAJ25418.1,D,151,G,010b,"Okomo-Adhiambo M. et al., ",Highly reduced inhibition to Oseltamivir
-NA:cds-XAJ25418.1,H,275,Y,010b,"Okomo-Adhiambo M. et al., ",Highly reduced inhibition to Oseltamivir
-NA:cds-XAJ25418.1,D,151,G,010b,"Okomo-Adhiambo M. et al., ",Highly reduced inhibition to Peramivir
-NA:cds-XAJ25418.1,H,275,Y,010b,"Okomo-Adhiambo M. et al., ",Highly reduced inhibition to Peramivir
-NA:cds-XAJ25418.1,D,151,G,010b,"Okomo-Adhiambo M. et al., ",Reduced inhibition to Zanamiriv
-NA:cds-XAJ25418.1,H,275,Y,010b,"Okomo-Adhiambo M. et al., ",Reduced inhibition to Zanamiriv
+NA:cds-XAJ25418.1,D,151,E,2010,Okomo-Adhiambo M. et al.,From reduced to highly reduced inhibition to Peramivir
+NA:cds-XAJ25418.1,H,275,Y,2010,Okomo-Adhiambo M. et al.,From reduced to highly reduced inhibition to Peramivir
+NA:cds-XAJ25418.1,D,151,E,2010,Okomo-Adhiambo M. et al.,Highly reduced inhibition to Oseltamivir
+NA:cds-XAJ25418.1,H,275,Y,2010,Okomo-Adhiambo M. et al.,Highly reduced inhibition to Oseltamivir
+NA:cds-XAJ25418.1,D,151,N,2010,Okomo-Adhiambo M. et al.,From reduced to highly reduced inhibition to Peramivir
+NA:cds-XAJ25418.1,H,275,Y,2010,Okomo-Adhiambo M. et al.,From reduced to highly reduced inhibition to Peramivir
+NA:cds-XAJ25418.1,D,151,N,2010,Okomo-Adhiambo M. et al.,Highly reduced inhibition to Oseltamivir
+NA:cds-XAJ25418.1,H,275,Y,2010,Okomo-Adhiambo M. et al.,Highly reduced inhibition to Oseltamivir
+NA:cds-XAJ25418.1,D,151,G,2010,Okomo-Adhiambo M. et al.,Highly reduced inhibition to Oseltamivir
+NA:cds-XAJ25418.1,H,275,Y,2010,Okomo-Adhiambo M. et al.,Highly reduced inhibition to Oseltamivir
+NA:cds-XAJ25418.1,D,151,G,2010,Okomo-Adhiambo M. et al.,Highly reduced inhibition to Peramivir
+NA:cds-XAJ25418.1,H,275,Y,2010,Okomo-Adhiambo M. et al.,Highly reduced inhibition to Peramivir
+NA:cds-XAJ25418.1,D,151,G,2010,Okomo-Adhiambo M. et al.,Reduced inhibition to Zanamiriv
+NA:cds-XAJ25418.1,H,275,Y,2010,Okomo-Adhiambo M. et al.,Reduced inhibition to Zanamiriv
 NA:cds-XAJ25418.1,D,199,N,2013,"Okomo-Adhiambo M. et al.,",Highly reduced inhibition to Oseltamivir
 NA:cds-XAJ25418.1,H,275,Y,2013,"Okomo-Adhiambo M. et al.,",Highly reduced inhibition to Oseltamivir
 NA:cds-XAJ25418.1,D,199,N,2013,"Okomo-Adhiambo M. et al.,",Highly reduced inhibition to Peramivir
@@ -2241,10 +2241,10 @@ NA:cds-XAJ25418.1,I,427,T,2012,"Hurt A. et al.,",From normal to reduced inhibiti
 NA:cds-XAJ25418.1,Q,313,K,2012,"Hurt A. et al.,",From normal to reduced inhibition to Zanamivir
 NA:cds-XAJ25418.1,I,427,T,2012,"Hurt A. et al.,",Reduced inhibition to Oseltamivir
 NA:cds-XAJ25418.1,Q,313,K,2012,"Hurt A. et al.,",Reduced inhibition to Oseltamivir
-NA:cds-XAJ25418.1,I,427,T,010b,"Okomo-Adhiambo M. et al., ",From normal to reduced inhibition to Zanamivir
-NA:cds-XAJ25418.1,Q,313,K,010b,"Okomo-Adhiambo M. et al., ",From normal to reduced inhibition to Zanamivir
-NA:cds-XAJ25418.1,I,427,T,010b,"Okomo-Adhiambo M. et al., ",Reduced inhibition to Oseltamivir
-NA:cds-XAJ25418.1,Q,313,K,010b,"Okomo-Adhiambo M. et al., ",Reduced inhibition to Oseltamivir
+NA:cds-XAJ25418.1,I,427,T,2010,Okomo-Adhiambo M. et al.,From normal to reduced inhibition to Zanamivir
+NA:cds-XAJ25418.1,Q,313,K,2010,Okomo-Adhiambo M. et al.,From normal to reduced inhibition to Zanamivir
+NA:cds-XAJ25418.1,I,427,T,2010,Okomo-Adhiambo M. et al.,Reduced inhibition to Oseltamivir
+NA:cds-XAJ25418.1,Q,313,K,2010,Okomo-Adhiambo M. et al.,Reduced inhibition to Oseltamivir
 NA:cds-XAJ25418.1,H,275,Y,2013,"Choi W. et al.,",Highly reduced inhibition to Oseltamivir
 NA:cds-XAJ25418.1,S,334,N,2013,"Choi W. et al.,",Highly reduced inhibition to Oseltamivir
 NA:cds-XAJ25418.1,H,275,Y,2013,"Choi W. et al.,",Highly reduced inhibition to Oseltamivir
@@ -2259,12 +2259,12 @@ NA:cds-XAJ25418.1,N,295,S,2013,"Choi W. et al.,",Highly reduced inhibition to Os
 NA:cds-XAJ25418.1,H,275,Y,2013,"Choi W. et al.,",Reduced inhibition to Zanamiriv
 NA:cds-XAJ25418.1,I,117,M,2013,"Choi W. et al.,",Reduced inhibition to Zanamiriv
 NA:cds-XAJ25418.1,N,295,S,2013,"Choi W. et al.,",Reduced inhibition to Zanamiriv
-NA:cds-XAJ25418.1,D,151,N,010b,"Okomo-Adhiambo M. et al., ",Highly reduced inhibition to Oseltamivir
-NA:cds-XAJ25418.1,H,275,Y,010b,"Okomo-Adhiambo M. et al., ",Highly reduced inhibition to Oseltamivir
-NA:cds-XAJ25418.1,Q,136,K,010b,"Okomo-Adhiambo M. et al., ",Highly reduced inhibition to Oseltamivir
-NA:cds-XAJ25418.1,D,151,N,010b,"Okomo-Adhiambo M. et al., ",Highly reduced inhibition to Peramivir
-NA:cds-XAJ25418.1,H,275,Y,010b,"Okomo-Adhiambo M. et al., ",Highly reduced inhibition to Peramivir
-NA:cds-XAJ25418.1,Q,136,K,010b,"Okomo-Adhiambo M. et al., ",Highly reduced inhibition to Peramivir
+NA:cds-XAJ25418.1,D,151,N,2010,Okomo-Adhiambo M. et al.,Highly reduced inhibition to Oseltamivir
+NA:cds-XAJ25418.1,H,275,Y,2010,Okomo-Adhiambo M. et al.,Highly reduced inhibition to Oseltamivir
+NA:cds-XAJ25418.1,Q,136,K,2010,Okomo-Adhiambo M. et al.,Highly reduced inhibition to Oseltamivir
+NA:cds-XAJ25418.1,D,151,N,2010,Okomo-Adhiambo M. et al.,Highly reduced inhibition to Peramivir
+NA:cds-XAJ25418.1,H,275,Y,2010,Okomo-Adhiambo M. et al.,Highly reduced inhibition to Peramivir
+NA:cds-XAJ25418.1,Q,136,K,2010,Okomo-Adhiambo M. et al.,Highly reduced inhibition to Peramivir
 NA:cds-XAJ25418.1,H,275,Y,2013,"Choi W. et al.,",Highly reduced inhibition to Oseltamivir
 NA:cds-XAJ25418.1,I,223,V,2013,"Choi W. et al.,",Highly reduced inhibition to Oseltamivir
 NA:cds-XAJ25418.1,N,295,S,2013,"Choi W. et al.,",Highly reduced inhibition to Oseltamivir
@@ -2279,8 +2279,8 @@ PA:cds-XAJ25422.1,E,23,G,2020,"Takashita E. et al.,",PA inhibitor (PAI) baloxavi
 PA:cds-XAJ25422.1,E,23,K,2022,"Govorkova E. et al.,",PA inhibitor (PAI) baloxavir susceptibility
 PA:cds-XAJ25422.1,E,23,K,2022,"Jones J. et al.,",PA inhibitor (PAI) baloxavir susceptibility
 PA:cds-XAJ25422.1,E,23,K,2018,"Omoto S. et al.,",PA inhibitor (PAI) baloxavir susceptibility
-PA:cds-XAJ25422.1,E,23,K,020b,"Takashita E. et al., ",PA inhibitor (PAI) baloxavir susceptibility
-PA:cds-XAJ25422.1,E,23,R,022b,"Jones J. et al., ",PA inhibitor (PAI) baloxavir susceptibility
+PA:cds-XAJ25422.1,E,23,K,2020,Takashita E. et al.,PA inhibitor (PAI) baloxavir susceptibility
+PA:cds-XAJ25422.1,E,23,R,2022,Jones J. et al.,PA inhibitor (PAI) baloxavir susceptibility
 PA:cds-XAJ25422.1,K,34,R,2022,"Govorkova E. et al.,",PA inhibitor (PAI) baloxavir susceptibility
 PA:cds-XAJ25422.1,A,36,V,2018,"Omoto S. et al.,",PA inhibitor (PAI) baloxavir susceptibility
 PA:cds-XAJ25422.1,A,37,T,2021,"Sato M. et al.,",PA inhibitor (PAI) baloxavir susceptibility
@@ -2302,7 +2302,7 @@ PA:cds-XAJ25422.1,I,38,S,2019,"Chesnokov A. et al.,",PA inhibitor (PAI) baloxavi
 PA:cds-XAJ25422.1,I,38,S,2022,"Govorkova E. et al.,",PA inhibitor (PAI) baloxavir susceptibility
 PA:cds-XAJ25422.1,I,38,S,2021,"Hashimoto T. et al.,",PA inhibitor (PAI) baloxavir susceptibility
 PA:cds-XAJ25422.1,I,38,S,2020,"Sato M. et al.,",PA inhibitor (PAI) baloxavir susceptibility
-PA:cds-XAJ25422.1,I,38,S,020b,"Takashita E. et al., ",PA inhibitor (PAI) baloxavir susceptibility
+PA:cds-XAJ25422.1,I,38,S,2020,Takashita E. et al.,PA inhibitor (PAI) baloxavir susceptibility
 PA:cds-XAJ25422.1,I,38,T,2020,"Checkmahomed L. et al.,",PA inhibitor (PAI) baloxavir susceptibility
 PA:cds-XAJ25422.1,I,38,T,2019,"Chesnokov A. et al.,",PA inhibitor (PAI) baloxavir susceptibility
 PA:cds-XAJ25422.1,I,38,T,2022,"Govorkova E. et al.,",PA inhibitor (PAI) baloxavir susceptibility
@@ -2312,7 +2312,7 @@ PA:cds-XAJ25422.1,I,38,T,2019,"Koszalka P. et al.,",PA inhibitor (PAI) baloxavir
 PA:cds-XAJ25422.1,I,38,T,2018,"Noshi T. et al.,",PA inhibitor (PAI) baloxavir susceptibility
 PA:cds-XAJ25422.1,I,38,T,2018,"Omoto S. et al.,",PA inhibitor (PAI) baloxavir susceptibility
 PA:cds-XAJ25422.1,I,38,T,2018,"Takashita E. et al.,",PA inhibitor (PAI) baloxavir susceptibility
-PA:cds-XAJ25422.1,I,38,T,020b,"Takashita E. et al., ",PA inhibitor (PAI) baloxavir susceptibility
+PA:cds-XAJ25422.1,I,38,T,2020,Takashita E. et al.,PA inhibitor (PAI) baloxavir susceptibility
 PA:cds-XAJ25422.1,I,38,V,2022,"Govorkova E. et al.,",PA inhibitor (PAI) baloxavir susceptibility
 PA:cds-XAJ25422.1,I,38,V,2019,"Gubareva L.,",PA inhibitor (PAI) baloxavir susceptibility
 PA:cds-XAJ25422.1,I,38,V,2018,"Omoto S. et al.,",PA inhibitor (PAI) baloxavir susceptibility
@@ -2392,18 +2392,18 @@ NA:cds-XAJ25418.1,I,396,M,2023,"de Vries E. et al.,",Distruption of the second s
 NA:cds-XAJ25418.1,I,396,V,2023,"de Vries E. et al.,",Distruption of the second sialic acid binding site (2SBS)
 PB2:cds-XAJ25426.1,M,631,L,2017,"Zhang X. et al.,",Increased polymerase activity in mice
 PB2:cds-XAJ25426.1,M,631,L,2017,"Zhang X. et al.,",Increased virulence in mice
-NP:cds-XAJ25419.1,F,313,Y,013b,"Mänz B. et al., ",Resistance to human interferon-induced antiviral factor MxA
-NP:cds-XAJ25419.1,L,283,P,013b,"Mänz B. et al., ",Resistance to human interferon-induced antiviral factor MxA
-NP:cds-XAJ25419.1,R,100,I,013b,"Mänz B. et al., ",Resistance to human interferon-induced antiviral factor MxA
-NP:cds-XAJ25419.1,F,313,V,013b,"Mänz B. et al., ",Resistance to human interferon-induced antiviral factor MxA
-NP:cds-XAJ25419.1,L,283,P,013b,"Mänz B. et al., ",Resistance to human interferon-induced antiviral factor MxA
-NP:cds-XAJ25419.1,R,100,I,013b,"Mänz B. et al., ",Resistance to human interferon-induced antiviral factor MxA
-NP:cds-XAJ25419.1,F,313,Y,013b,"Mänz B. et al., ",Resistance to human interferon-induced antiviral factor MxA
-NP:cds-XAJ25419.1,L,283,P,013b,"Mänz B. et al., ",Resistance to human interferon-induced antiviral factor MxA
-NP:cds-XAJ25419.1,R,100,V,013b,"Mänz B. et al., ",Resistance to human interferon-induced antiviral factor MxA
-NP:cds-XAJ25419.1,F,313,V,013b,"Mänz B. et al., ",Resistance to human interferon-induced antiviral factor MxA
-NP:cds-XAJ25419.1,L,283,P,013b,"Mänz B. et al., ",Resistance to human interferon-induced antiviral factor MxA
-NP:cds-XAJ25419.1,R,100,V,013b,"Mänz B. et al., ",Resistance to human interferon-induced antiviral factor MxA
+NP:cds-XAJ25419.1,F,313,Y,2013,Mänz B. et al.,Resistance to human interferon-induced antiviral factor MxA
+NP:cds-XAJ25419.1,L,283,P,2013,Mänz B. et al.,Resistance to human interferon-induced antiviral factor MxA
+NP:cds-XAJ25419.1,R,100,I,2013,Mänz B. et al.,Resistance to human interferon-induced antiviral factor MxA
+NP:cds-XAJ25419.1,F,313,V,2013,Mänz B. et al.,Resistance to human interferon-induced antiviral factor MxA
+NP:cds-XAJ25419.1,L,283,P,2013,Mänz B. et al.,Resistance to human interferon-induced antiviral factor MxA
+NP:cds-XAJ25419.1,R,100,I,2013,Mänz B. et al.,Resistance to human interferon-induced antiviral factor MxA
+NP:cds-XAJ25419.1,F,313,Y,2013,Mänz B. et al.,Resistance to human interferon-induced antiviral factor MxA
+NP:cds-XAJ25419.1,L,283,P,2013,Mänz B. et al.,Resistance to human interferon-induced antiviral factor MxA
+NP:cds-XAJ25419.1,R,100,V,2013,Mänz B. et al.,Resistance to human interferon-induced antiviral factor MxA
+NP:cds-XAJ25419.1,F,313,V,2013,Mänz B. et al.,Resistance to human interferon-induced antiviral factor MxA
+NP:cds-XAJ25419.1,L,283,P,2013,Mänz B. et al.,Resistance to human interferon-induced antiviral factor MxA
+NP:cds-XAJ25419.1,R,100,V,2013,Mänz B. et al.,Resistance to human interferon-induced antiviral factor MxA
 HA:cds-XAJ25415.1,N,189,D,2024,"Jang S. et al.,",Increased virus binding to α2-6
 HA:cds-XAJ25415.1,N,189,D,2024,"Jang S. et al.,",Transmissible among ferrets
 HA:cds-XAJ25415.1,T,134,A,2023,"Zhang J. et al.,",Increased viral replication in mice lungs

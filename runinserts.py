@@ -4,6 +4,7 @@ import sys
 from datetime import datetime
 from os import path
 from typing import Any
+import logging
 
 from DB.inserts.file_parsers.dms_parser import HaRegionDmsTsvParser
 from DB.inserts.file_parsers.annotation_parser import AnnotationParser

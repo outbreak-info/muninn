@@ -24,13 +24,17 @@ with open('flumut_annotations.csv') as fin, open('flumut_reader/flumut_annotatio
         mutation_name = line['mutation_name']
         paper_id = line['paper_id']
         effect_name = line['effect_name']
+        publication_year = paper_id[-4:]
+        author = paper_id[:-5]
+        if paper_id[-1] == 'b':
+            publication_year = paper_id[-5:-1]
+            author = paper_id[:-7]
         split_mutation = mutation_name.split(':')
         ref = split_mutation[0]
         mutation = split_mutation[1]
         if ref not in ref2gff.keys():
-            print(ref)
             continue
-        values = [ref2gff[split_mutation[0]],mutation[0],mutation[1:-1],mutation[-1],paper_id[-4:],paper_id[:-5],effect_name]
+        values = [ref2gff[split_mutation[0]],mutation[0],mutation[1:-1],mutation[-1],publication_year,author,effect_name]
         writer.writerow(dict(zip(rowKeys,values)))
 
 

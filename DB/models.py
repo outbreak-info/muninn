@@ -537,8 +537,8 @@ class Annotation_Paper(Base):
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
-    paper_id: Mapped[int] = mapped_column(sa.ForeignKey('paper.id'), nullable=False)
-    annotation_id: Mapped[int] = mapped_column(sa.ForeignKey('annotation.id'), nullable=False)
+    paper_id: Mapped[int] = mapped_column(sa.ForeignKey('papers.id'), nullable=False)
+    annotation_id: Mapped[int] = mapped_column(sa.ForeignKey('annotations.id'), nullable=False)
 
     __table_args__ = tuple(
         [
@@ -546,5 +546,5 @@ class Annotation_Paper(Base):
         ]
     )
 
-    r_paper: Mapped['Sample'] = relationship(back_populates='r_annotations_papers')
-    r_annotation: Mapped['Allele'] = relationship(back_populates='r_annotations_papers')
+    r_paper: Mapped['Paper'] = relationship(back_populates='r_annotations_papers')
+    r_annotation: Mapped['Annotation'] = relationship(back_populates='r_annotations_papers')

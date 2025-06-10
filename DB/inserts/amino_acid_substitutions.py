@@ -37,7 +37,6 @@ async def find_aa_sub(aas: AminoAcidSubstitution) -> int:
                     AminoAcidSubstitution.gff_feature == aas.gff_feature,
                     AminoAcidSubstitution.position_aa == aas.position_aa,
                     AminoAcidSubstitution.alt_aa == aas.alt_aa,
-                    AminoAcidSubstitution.ref_aa == aas.ref_aa
                 )
             )
         )

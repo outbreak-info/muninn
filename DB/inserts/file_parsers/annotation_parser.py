@@ -56,7 +56,7 @@ class AnnotationsFileParser(FileParser):
                     debug_info['skipped_aas_info_missing'] += 1
                     continue
                 
-                stripped_gff_feature = gff_feature[3:]
+                stripped_gff_feature = gff_feature[4:]
 
                 if (gff_feature, position_aa, ref_aa, alt_aa) in cache_amino_subs_not_found and (stripped_gff_feature, position_aa, ref_aa, alt_aa) in cache_amino_subs_not_found:
                     debug_info['skipped_aas_not_found'] += 1
@@ -96,7 +96,9 @@ class AnnotationsFileParser(FileParser):
                                     gff_feature=gff_feature,
                                     position_aa=position_aa,
                                     alt_aa=alt_aa,
-                                    ref_aa=ref_aa
+                                    ref_aa=ref_aa,
+                                    ref_codon='AAA',
+                                    alt_codon='AAA'
                                     )
                                 )
                                 cache_new_amino_sub_ids[(gff_feature,position_aa,ref_aa,alt_aa)] = aas_id
@@ -145,17 +147,16 @@ class AnnotationsFileParser(FileParser):
                         )
                     )
                     cache_paper_ids[(author,publication_year)] = paper_id
-
-                existing = await insert_annotation_paper(
-                    Paper(
+                existing: Annotation_Paper = await insert_annotation_paper(
+                    Annotation_Paper(
                         annotation_id=annotation_id,
                         paper_id=paper_id
                     )
                 )
 
-                if existing:
+                if existing is not None:
+                    print(existing.annotation_id,existing.paper_id,annotation_id,paper_id)
                     debug_info['annotation_paper_pair_exists'] += 1
-
         print(debug_info)
 
     @classmethod
@@ -193,7 +194,7 @@ class ColNameMapping(Enum):
 
 class AnnotationParser(AnnotationsFileParser):
     def __init__(self, filename: str):
-        super(filename, ',')
+        super().__init__(filename, ',')
 
     async def parse_and_insert(self):
         await super().parse_and_insert()

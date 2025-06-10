@@ -12,7 +12,7 @@ async def insert_annotation_paper(pmr: Annotation_Paper) -> bool:
             .where(
                 and_(
                     Annotation_Paper.annotation_id == pmr.annotation_id,
-                    Annotation_Paper.paper_id == pmr.annotation_id
+                    Annotation_Paper.paper_id == pmr.paper_id
                 )
             )
         )
