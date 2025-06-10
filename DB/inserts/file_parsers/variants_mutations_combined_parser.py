@@ -1,3 +1,4 @@
+import csv
 from typing import List, Set
 
 import polars as pl
@@ -6,6 +7,8 @@ from DB.inserts.alleles import copy_insert_alleles
 from DB.inserts.amino_acid_substitutions import copy_insert_aa_subs
 from DB.inserts.file_parsers import variants_tsv_parser, mutations_parser
 from DB.inserts.file_parsers.file_parser import FileParser
+from DB.inserts.file_parsers.mutations_parser import MutationsTsvParser
+from DB.inserts.file_parsers.variants_tsv_parser import VariantsTsvParser
 from DB.inserts.mutations import copy_insert_mutations
 from DB.inserts.translations import copy_insert_translations
 from DB.inserts.variants import batch_upsert_variants, copy_insert_variants
@@ -25,6 +28,13 @@ class VariantsMutationsCombinedParser(FileParser):
         self.variants_filename = variants_filename
         self.mutations_filename = mutations_filename
         self.delimiter = '\t'
+        try:
+            self._verify_headers()
+        except ValueError:
+            # Swap arguments and try again
+            self.variants_filename = mutations_filename
+            self.mutations_filename = variants_filename
+            self._verify_headers()
 
     async def parse_and_insert(self):
         debug_info = {
@@ -39,7 +49,6 @@ class VariantsMutationsCombinedParser(FileParser):
         #  1. read vars and muts
         variants_input: pl.LazyFrame = await self._scan_variants()
         mutations_input: pl.LazyFrame = await self._scan_mutations()
-        # todo: verify headers
 
         #  2. Get accession -> id mapping from db
         #  3. Filter out vars and muts with accessions missing from db
@@ -54,7 +63,7 @@ class VariantsMutationsCombinedParser(FileParser):
             variants_with_samples,
             mutations_with_samples,
         )
-        print(debug_info)  # rm
+        print(f'alleles added: {debug_info}')
 
         #  7. split out and combine amino acid subs
         #  8. filter out existing AA subs
@@ -63,7 +72,7 @@ class VariantsMutationsCombinedParser(FileParser):
             variants_with_samples,
             mutations_with_samples
         )
-        print(debug_info)  # rm
+        print(f'amino subs added: {debug_info}')
 
         # 10. Get new allele / AAS ids and join back into vars and muts
         variants_finished, mutations_finished = await (
@@ -77,12 +86,14 @@ class VariantsMutationsCombinedParser(FileParser):
             ._insert_new_translations(variants_finished, mutations_finished)
         )
 
+        print(f'translations added: {debug_info}')
+
         # 12. Filter out existing mutations (updates not allowed)
         # 13. insert new mutations via copy
         debug_info['count_mutations_added'] = await (
             VariantsMutationsCombinedParser._insert_new_mutations(mutations_finished)
         )
-        print(debug_info)  # rm
+        print(f'mutations added: {debug_info}')
 
         # 14. Separate new and existing variants
         # 15. Insert new variants via copy
@@ -95,9 +106,7 @@ class VariantsMutationsCombinedParser(FileParser):
             VariantsMutationsCombinedParser._update_existing_variants(variants_finished, existing_variants)
         )
 
-        print(debug_info)
-
-
+        print(f'variants added / updated: {debug_info}')
 
     async def _scan_variants(self):
         def variants_colname_mapping(cns: List[str]) -> List[str]:
@@ -387,7 +396,21 @@ class VariantsMutationsCombinedParser(FileParser):
         # 15. Insert new variants via copy
         return await copy_insert_variants(new_variants.collect())
 
-
     @classmethod
     def get_required_column_set(cls) -> Set[str]:
-        pass
+        return {cn.value for cn in variants_tsv_parser.ColNameMapping}.union(
+            {cn.value for cn in mutations_parser.ColNameMapping}
+        )
+
+    def _verify_headers(self):
+        with open(self.variants_filename, 'r') as f:
+            reader = csv.DictReader(f, delimiter=self.delimiter)
+            required_columns = VariantsTsvParser.get_required_column_set()
+            if not set(reader.fieldnames) >= required_columns:
+                raise ValueError(f'Missing required fields: {required_columns - set(reader.fieldnames)}')
+
+        with open(self.mutations_filename, 'r') as f:
+            reader = csv.DictReader(f, delimiter=self.delimiter)
+            required_columns = MutationsTsvParser.get_required_column_set()
+            if not set(reader.fieldnames) >= required_columns:
+                raise ValueError(f'Missing required fields: {required_columns - set(reader.fieldnames)}')

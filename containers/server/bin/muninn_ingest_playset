@@ -27,15 +27,14 @@ GENOFLU="$TMP/genoflu.tsv"
 DEMIXED_DIR="$TMP/demixed_out"
 
 # ingest bjorn-general outputs
-python3 -u runinserts.py "$SAMPLES" samples_tsv
-python3 -u runinserts.py "$VARIANTS" variants_tsv
-python3 -u runinserts.py "$MUTATIONS" mutations_tsv
-python3 -u runinserts.py "$DMS_HA" ha_dms_tsv
+python3 -u runinserts.py "$SAMPLES" --format samples_tsv
+python3 -u runinserts.py "$VARIANTS" "$MUTATIONS" --format variants_mutations_combined_tsv
+python3 -u runinserts.py "$DMS_HA" --format ha_dms_tsv
 
 # ingest random other outputs
-python3 -u runinserts.py "$EVE" eve_dms_csv
-python3 -u runinserts.py "$GENOFLU" genoflu_lineages
-python3 -u runinserts.py "$DEMIXED_DIR" freyja_demixed
+python3 -u runinserts.py "$EVE"  --format eve_dms_csv
+python3 -u runinserts.py "$GENOFLU"  --format genoflu_lineages
+python3 -u runinserts.py "$DEMIXED_DIR"  --format freyja_demixed
 
 rm -r "$TMP"
 

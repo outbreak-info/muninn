@@ -1,6 +1,6 @@
 #! /bin/bash
 
-LOG="/flu/ingest_all.log"
+LOG="/flu/data/ingest_all_$(date +%Y-%m-%dT%H:%M:%S%Z).log"
 echo "begin at $(date)" >> "$LOG"
 
 DATA_DIR='/flu/data'
@@ -36,15 +36,17 @@ unzip -d "$ARCHIVE_DEST_DIR" "$BJORN_GENERAL_OUTPUT_ARCHIVE"
 
 {
   # ingest bjorn-general outputs
-  python3 -u runinserts.py "$ARCHIVE_DEST_SUBDIR/$SAMPLES_FILE" samples_tsv
-  python3 -u runinserts.py "$ARCHIVE_DEST_SUBDIR/$VARIANTS_FILE" variants_tsv
-  python3 -u runinserts.py "$ARCHIVE_DEST_SUBDIR/$MUTATIONS_FILE" mutations_tsv
-  python3 -u runinserts.py "$ARCHIVE_DEST_SUBDIR/$HA_DMS_FILE" ha_dms_tsv
+  python3 -u runinserts.py "$ARCHIVE_DEST_SUBDIR/$SAMPLES_FILE" --format samples_tsv
+  python3 -u runinserts.py \
+  "$ARCHIVE_DEST_SUBDIR/$VARIANTS_FILE" \
+  "$ARCHIVE_DEST_SUBDIR/$MUTATIONS_FILE" \
+  --format variants_mutations_combined_tsv
+  python3 -u runinserts.py "$ARCHIVE_DEST_SUBDIR/$HA_DMS_FILE" --format ha_dms_tsv
 
   # ingest random other outputs
-  python3 -u runinserts.py "$DATA_DIR/$EVE_FILE" eve_dms_csv
-  python3 -u runinserts.py "$DATA_DIR/$GENOFLU_FILE" genoflu_lineages
-  python3 -u runinserts.py "$DATA_DIR/$FREYJA_DEMIXED_DIR" freyja_demixed
+  python3 -u runinserts.py "$DATA_DIR/$EVE_FILE" --format eve_dms_csv
+  python3 -u runinserts.py "$DATA_DIR/$GENOFLU_FILE" --format genoflu_lineages
+  python3 -u runinserts.py "$DATA_DIR/$FREYJA_DEMIXED_DIR" --format freyja_demixed
 } &>> "$LOG"
 
 echo "end at $(date)" >> "$LOG"
