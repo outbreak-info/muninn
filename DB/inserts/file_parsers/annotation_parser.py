@@ -12,7 +12,7 @@ from DB.models import AminoAcidSubstitution, Paper, Annotation_Paper, Annotation
 from utils.csv_helpers import get_value
 from utils.errors import NotFoundError
 
-NEW_AAS_LIMIT = 10
+NEW_AAS_LIMIT = 0
 
 class AnnotationsFileParser(FileParser):
 
@@ -155,7 +155,6 @@ class AnnotationsFileParser(FileParser):
                 )
 
                 if existing is not None:
-                    print(existing.annotation_id,existing.paper_id,annotation_id,paper_id)
                     debug_info['annotation_paper_pair_exists'] += 1
         print(debug_info)
 
