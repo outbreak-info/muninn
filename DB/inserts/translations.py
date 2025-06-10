@@ -26,7 +26,7 @@ async def batch_insert_translations(translations: pl.DataFrame) -> None:
         await session.commit()
 
 
-async def bulk_insert_translations(translations: pl.DataFrame) -> int:
+async def copy_insert_translations(translations: pl.DataFrame) -> str:
     columns = [
         StandardColumnNames.allele_id,
         StandardColumnNames.amino_acid_substitution_id

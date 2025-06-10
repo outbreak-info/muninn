@@ -71,7 +71,7 @@ async def batch_insert_aa_subs(
     return amino_subs
 
 
-async def bulk_insert_aa_subs(aa_subs: pl.DataFrame) -> int:
+async def copy_insert_aa_subs(aa_subs: pl.DataFrame) -> str:
     columns = [
             StandardColumnNames.gff_feature,
             StandardColumnNames.position_aa,

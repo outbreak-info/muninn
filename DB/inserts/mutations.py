@@ -32,7 +32,7 @@ async def batch_insert_mutations(mutations: pl.DataFrame):
         await session.commit()
 
 
-async def bulk_insert_mutations(mutations: pl.DataFrame) -> int:
+async def copy_insert_mutations(mutations: pl.DataFrame) -> str:
     columns = [
         StandardColumnNames.sample_id,
         StandardColumnNames.allele_id

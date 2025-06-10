@@ -63,7 +63,7 @@ async def batch_insert_alleles(
     return alleles
 
 
-async def bulk_insert_alleles(alleles: pl.DataFrame) -> Any:
+async def copy_insert_alleles(alleles: pl.DataFrame) -> str:
     columns = [
         StandardColumnNames.region,
         StandardColumnNames.position_nt,
