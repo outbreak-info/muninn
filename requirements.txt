@@ -24,6 +24,7 @@ mdurl==0.1.2
 ply==3.11
 polars==1.30.0
 psycopg2-binary==2.9.10
+pyarrow==20.0.0
 pydantic==2.10.6
 pydantic_core==2.27.2
 Pygments==2.19.1
