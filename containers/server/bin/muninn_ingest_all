@@ -22,6 +22,10 @@ EVE_FILE="eve_dms_data.csv"
 GENOFLU_FILE="genoflu_results.tsv"
 FREYJA_DEMIXED_DIR="demixed"
 
+# Debug output files for ref conflicts
+AMINO_SUB_REF_CONFLICTS_FILE="/tmp/amino_sub_ref_conflicts.csv"
+ALLELE_REF_CONFLICTS_FILE="/tmp/allele_ref_conflicts.csv"
+
 # unpack zip file
 if [[ -d "$ARCHIVE_DEST_DIR" ]]; then
   rm -r "$ARCHIVE_DEST_DIR"
@@ -48,5 +52,13 @@ unzip -d "$ARCHIVE_DEST_DIR" "$BJORN_GENERAL_OUTPUT_ARCHIVE"
   python3 -u runinserts.py "$DATA_DIR/$GENOFLU_FILE" --format genoflu_lineages
   python3 -u runinserts.py "$DATA_DIR/$FREYJA_DEMIXED_DIR" --format freyja_demixed
 } &>> "$LOG"
+
+# Copying over some debug files
+if [[ -f "$ALLELE_REF_CONFLICTS_FILE" ]]; then
+  cp "$ALLELE_REF_CONFLICTS_FILE" "$DATA_DIR"
+fi
+if [[ -f "$AMINO_SUB_REF_CONFLICTS_FILE" ]]; then
+  cp "$AMINO_SUB_REF_CONFLICTS_FILE" "$DATA_DIR"
+fi
 
 echo "end at $(date)" >> "$LOG"

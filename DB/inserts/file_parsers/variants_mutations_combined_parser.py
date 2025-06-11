@@ -19,9 +19,11 @@ from DB.queries.mutations import get_all_mutations_as_pl_df
 from DB.queries.samples import get_samples_accession_and_id_as_pl_df
 from DB.queries.translations import get_all_translations_as_pl_df
 from DB.queries.variants import get_all_variants_as_pl_df
-from utils.constants import StandardColumnNames
+from utils.constants import StandardColumnNames, EXCLUDED_SRAS
 from utils.csv_helpers import gff_feature_strip_region_name
 
+AMINO_SUB_REF_CONFLICTS_FILE = '/tmp/amino_sub_ref_conflicts.csv'
+ALLELE_REF_CONFLICTS_FILE = '/tmp/allele_ref_conflicts.csv'
 
 class VariantsMutationsCombinedParser(FileParser):
 
@@ -166,6 +168,8 @@ class VariantsMutationsCombinedParser(FileParser):
                 StandardColumnNames.position_nt,
                 StandardColumnNames.alt_nt
             ]
+        ).filter( # remove problematic/redacted SRAs
+            ~pl.col(StandardColumnNames.accession).is_in(EXCLUDED_SRAS)
         )
 
     @staticmethod
@@ -257,12 +261,11 @@ class VariantsMutationsCombinedParser(FileParser):
         )).collect()
 
         if len(ref_conflicts) > 0:
-            output_file = '/tmp/allele_ref_conflicts.csv'
             print(
                 f'WARNING: in alleles, found {len(ref_conflicts)} positions with conflicting values for ref_nt. '
-                f'Written to {output_file}'
+                f'Written to {ALLELE_REF_CONFLICTS_FILE}'
             )
-            ref_conflicts.write_csv(output_file)
+            ref_conflicts.write_csv(ALLELE_REF_CONFLICTS_FILE)
 
         # ref conflicts have already been filtered out of new_alleles above, so we are good to insert
 
@@ -349,12 +352,11 @@ class VariantsMutationsCombinedParser(FileParser):
         )).collect()
 
         if len(ref_conflicts) > 0:
-            output_file = '/tmp/amino_sub_ref_conflicts.csv'
             print(
                 f'WARNING: in amino acid subs, found {len(ref_conflicts)} positions with conflicting values for ref_aa. '
-                f'Written to {output_file}'
+                f'Written to {AMINO_SUB_REF_CONFLICTS_FILE}'
             )
-            ref_conflicts.write_csv(output_file)
+            ref_conflicts.write_csv(AMINO_SUB_REF_CONFLICTS_FILE)
 
         # ref conflicts have already been filtered out of new_amino_subs above, so we are good to insert
 
