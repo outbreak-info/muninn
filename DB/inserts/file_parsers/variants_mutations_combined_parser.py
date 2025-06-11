@@ -209,11 +209,8 @@ class VariantsMutationsCombinedParser(FileParser):
                 mutations_with_samples.select(allele_cols)
             ]
         ).unique(
-            {
-                StandardColumnNames.region,
-                StandardColumnNames.position_nt,
-                StandardColumnNames.alt_nt
-            }
+            # including ref here to force errors on conflict
+           allele_cols
         )
 
         #  5. filter out existing alleles
@@ -223,9 +220,12 @@ class VariantsMutationsCombinedParser(FileParser):
             on=[
                 StandardColumnNames.region,
                 StandardColumnNames.position_nt,
-                StandardColumnNames.alt_nt
+                StandardColumnNames.alt_nt,
+                StandardColumnNames.ref_nt # included to force errors on conflicting refs
             ],
             how='anti'
+        ).filter(
+            pl.col(StandardColumnNames.alt_nt).str.count_matches(r'\+\d+') == 0
         )
 
         #  6. Insert new alleles via copy
@@ -263,7 +263,8 @@ class VariantsMutationsCombinedParser(FileParser):
             on=[
                 StandardColumnNames.gff_feature,
                 StandardColumnNames.position_aa,
-                StandardColumnNames.alt_aa
+                StandardColumnNames.alt_aa,
+                StandardColumnNames.ref_aa # included to force error on ref conflict
             ],
             how='anti'
         )
