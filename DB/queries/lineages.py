@@ -8,7 +8,7 @@ from DB.engine import get_async_session
 from DB.models import LineageSystem, Lineage, Sample, SampleLineage, GeoLocation
 from api.models import LineageCountInfo, LineageAbundanceInfo, LineageInfo, LineageAbundanceSummaryInfo
 from parser.parser import parser
-from utils.constants import DateBinOpt
+from utils.constants import DateBinOpt, NtOrAa
 
 
 async def get_sample_counts_by_lineage(samples_raw_query: str | None) -> List[LineageCountInfo]:
@@ -312,10 +312,19 @@ async def get_abundance_summaries_by_collection_date(
             out_data[date] = [info]
     return out_data
 
-async def get_allele_abundances(lineage):
+async def get_mutation_incidence(lineage: str, 
+    change_bin: NtOrAa,
+    raw_query: str | None
+    ):
+
+    user_where_clause = ''
+    if raw_query is not None:
+        user_where_clause = f'and ({parser.parse(raw_query)})'
+
+
     async with get_async_session() as session:
 
-        sampleCount = await session.execute(
+        sampleCount = await session.scalar(
             text(
                 f'''
                 SELECT count(*)
@@ -328,25 +337,49 @@ async def get_allele_abundances(lineage):
             }
         )
 
-        res = await session.execute(
-            text(
-                f'''
-                SELECT region,ref_nt,position_nt,alt_nt,count(*)
-                FROM lineages
-                LEFT JOIN samples_lineages ON samples_lineages.lineage_id = lineages.id
-                LEFT JOIN samples ON samples_lineages.sample_id = samples.id
-                LEFT JOIN mutations ON mutations.sample_id = samples.id
-                LEFT JOIN alleles ON mutations.allele_id = alleles.id
-                WHERE lineage_name = :input_lineage
-                GROUP BY region,ref_nt,position_nt,alt_nt
-                ORDER BY count DESC
-                '''
-            ), {
-                'input_lineage': lineage
-            }
-        )
-    counts = sampleCount.scalar_one()
+        if change_bin == NtOrAa.nt:
+            res = await session.execute(
+                text(
+                    f'''
+                    SELECT region,ref_nt,position_nt,alt_nt,count(*)
+                    FROM lineages
+                    LEFT JOIN samples_lineages ON samples_lineages.lineage_id = lineages.id
+                    LEFT JOIN samples ON samples_lineages.sample_id = samples.id
+                    LEFT JOIN mutations ON mutations.sample_id = samples.id
+                    LEFT JOIN alleles ON mutations.allele_id = alleles.id
+                    WHERE lineage_name = :input_lineage {user_where_clause}
+                    GROUP BY region,ref_nt,position_nt,alt_nt
+                    ORDER BY count DESC
+                    '''
+                ), {
+                    'input_lineage': lineage
+                }
+            )
+        else:
+            res = await session.execute(
+                text(
+                    f'''
+                    SELECT region,
+                        ref_aa,
+                        position_aa,
+                        alt_aa,
+                        count(*)
+                    FROM lineages
+                    LEFT JOIN samples_lineages ON samples_lineages.lineage_id = lineages.id
+                    LEFT JOIN mutations ON mutations.sample_id = samples_lineages.sample_id
+                    LEFT JOIN alleles ON mutations.allele_id = alleles.id
+                    LEFT JOIN translations on translations.allele_id = mutations.allele_id
+                    INNER JOIN amino_acid_substitutions ON amino_acid_substitutions.id = amino_acid_substitution_id
+                    WHERE lineage_name = :input_lineage
+                    GROUP BY region,ref_aa,position_aa,alt_aa
+                    ORDER BY count DESC
+                    '''
+                ), {
+                    'input_lineage': lineage
+                }
+            )
+
     out = dict()
     for region,ref_nt,position_nt,alt_nt,count in res:
         out[f'{region}:{ref_nt}{position_nt}{alt_nt}'] = count
-    return {'samples':counts,'counts':out}
+    return {'samples':sampleCount,'counts':out}

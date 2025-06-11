@@ -373,6 +373,6 @@ async def get_lineage_abundance(
         else:
             return await DB.queries.lineages.get_abundances(q)
 
-@app.get('/lineages/allele_counts')
-async def get_allele_counts(lineage:str):
-    return await DB.queries.lineages.get_allele_abundances(lineage)
+@app.get('/lineages/mutation_incidence')
+async def get_mutation_incidence(lineage:str,change_bin:NtOrAa,q: str | None = None):
+    return await DB.queries.lineages.get_mutation_incidence(lineage,change_bin,q)
