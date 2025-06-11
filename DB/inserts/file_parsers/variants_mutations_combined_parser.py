@@ -1,4 +1,5 @@
 import csv
+import os.path
 from typing import List, Set
 
 import polars as pl
@@ -209,24 +210,61 @@ class VariantsMutationsCombinedParser(FileParser):
                 mutations_with_samples.select(allele_cols)
             ]
         ).unique(
-            # including ref here to force errors on conflict
-           allele_cols
+            # including ref here to allow checking for conflicts on ref
+            allele_cols
         )
 
         #  5. filter out existing alleles
         existing_alleles: pl.DataFrame = await get_all_alleles_as_pl_df()
+
         new_alleles = alleles.join(
             existing_alleles.lazy(),
             on=[
                 StandardColumnNames.region,
                 StandardColumnNames.position_nt,
                 StandardColumnNames.alt_nt,
-                StandardColumnNames.ref_nt # included to force errors on conflicting refs
             ],
             how='anti'
-        ).filter(
+        ).filter(  # filter out deletions with no NT data, formatted as +N
             pl.col(StandardColumnNames.alt_nt).str.count_matches(r'\+\d+') == 0
+        ).unique(  # this is required b/c we're including ref in the first unique above.
+            [
+                pl.col(StandardColumnNames.region),
+                pl.col(StandardColumnNames.position_nt),
+                pl.col(StandardColumnNames.alt_nt)
+            ]
         )
+
+        # Check for ref conflicts
+        ref_conflicts = (pl.concat(
+            [
+                existing_alleles.select(allele_cols).lazy(),
+                alleles
+            ]
+        )
+        .unique()
+        .group_by(
+            pl.col(StandardColumnNames.region),
+            pl.col(StandardColumnNames.position_nt),
+            pl.col(StandardColumnNames.alt_nt)
+        )
+        .len()
+        .filter(pl.col('len') > 1)
+        .select(
+            pl.col(StandardColumnNames.region),
+            pl.col(StandardColumnNames.position_nt),
+            pl.col(StandardColumnNames.alt_nt)
+        )).collect()
+
+        if len(ref_conflicts) > 0:
+            output_file = '/tmp/allele_ref_conflicts.csv'
+            print(
+                f'WARNING: in alleles, found {len(ref_conflicts)} positions with conflicting values for ref_nt. '
+                f'Written to {output_file}'
+            )
+            ref_conflicts.write_csv(output_file)
+
+        # ref conflicts have already been filtered out of new_alleles above, so we are good to insert
 
         #  6. Insert new alleles via copy
         return await copy_insert_alleles(new_alleles.collect())
@@ -252,7 +290,8 @@ class VariantsMutationsCombinedParser(FileParser):
             {
                 StandardColumnNames.gff_feature,
                 StandardColumnNames.position_aa,
-                StandardColumnNames.alt_aa
+                StandardColumnNames.alt_aa,
+                StandardColumnNames.ref_aa  # Keep ref here to allow checking for conflicts
             }
         )
 
@@ -264,10 +303,60 @@ class VariantsMutationsCombinedParser(FileParser):
                 StandardColumnNames.gff_feature,
                 StandardColumnNames.position_aa,
                 StandardColumnNames.alt_aa,
-                StandardColumnNames.ref_aa # included to force error on ref conflict
             ],
             how='anti'
+        ).unique(  # this is required b/c we're including ref in the first unique above.
+            [
+                pl.col(StandardColumnNames.gff_feature),
+                pl.col(StandardColumnNames.position_aa),
+                pl.col(StandardColumnNames.alt_aa)
+            ]
         )
+
+        # Check for conflicts on ref_aa
+        ref_conflicts = (pl.concat(
+            [
+                existing_amino_subs.select(
+                    {
+                        StandardColumnNames.gff_feature,
+                        StandardColumnNames.position_aa,
+                        StandardColumnNames.ref_aa,
+                        StandardColumnNames.alt_aa,
+                    }
+                ).lazy(),
+                amino_subs.select(
+                    {
+                        StandardColumnNames.gff_feature,
+                        StandardColumnNames.position_aa,
+                        StandardColumnNames.ref_aa,
+                        StandardColumnNames.alt_aa,
+                    }
+                )
+            ]
+        )
+        .unique()
+        .group_by(
+            pl.col(StandardColumnNames.gff_feature),
+            pl.col(StandardColumnNames.position_aa),
+            pl.col(StandardColumnNames.alt_aa)
+        )
+        .len()
+        .filter(pl.col('len') > 1)
+        .select(
+            pl.col(StandardColumnNames.gff_feature),
+            pl.col(StandardColumnNames.position_aa),
+            pl.col(StandardColumnNames.alt_aa)
+        )).collect()
+
+        if len(ref_conflicts) > 0:
+            output_file = '/tmp/amino_sub_ref_conflicts.csv'
+            print(
+                f'WARNING: in amino acid subs, found {len(ref_conflicts)} positions with conflicting values for ref_aa. '
+                f'Written to {output_file}'
+            )
+            ref_conflicts.write_csv(output_file)
+
+        # ref conflicts have already been filtered out of new_amino_subs above, so we are good to insert
 
         #  9. insert new aa subs via copy
         return await copy_insert_aa_subs(new_amino_subs.collect())
@@ -399,9 +488,10 @@ class VariantsMutationsCombinedParser(FileParser):
 
     @classmethod
     def get_required_column_set(cls) -> Set[str]:
-        return {cn.value for cn in variants_tsv_parser.ColNameMapping}.union(
-            {cn.value for cn in mutations_parser.ColNameMapping}
-        )
+        return {
+            f' variants: {", ".join(VariantsTsvParser.get_required_column_set())}',
+            f'mutations: {", ".join(MutationsTsvParser.get_required_column_set())}'
+        }
 
     def _verify_headers(self):
         with open(self.variants_filename, 'r') as f:

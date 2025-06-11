@@ -34,7 +34,7 @@ def main():
     argparser = argparse.ArgumentParser(
         description='Muninn Data Insertion'
     )
-    argparser.add_argument('filenames', help='path to file to be parsed', nargs='+')
+    argparser.add_argument('filenames', help='path to file to be parsed', nargs='*')
     argparser.add_argument(
         '--format',
         help=f"Name of the format to be parsed. Available formats are: {', '.join(formats.keys())}",
