@@ -43,6 +43,8 @@ async def find_or_insert_variant(variant: IntraHostVariant, upsert: bool = True)
 
 async def copy_insert_variants(variants: pl.DataFrame):
     columns = [
+        StandardColumnNames.sample_id,
+        StandardColumnNames.allele_id,
         StandardColumnNames.ref_dp,
         StandardColumnNames.alt_dp,
         StandardColumnNames.alt_freq,
