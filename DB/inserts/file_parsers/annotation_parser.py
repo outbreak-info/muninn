@@ -28,7 +28,7 @@ class AnnotationsFileParser(FileParser):
             'skipped_paper_info_missing': 0,
             'annotation_paper_pair_exists': 0
         }
-        # format = (title,year) -> id
+        # format = doi -> id
         cache_paper_ids = dict()
         # format = detail -> id
         cache_effect_ids = dict()
@@ -133,20 +133,23 @@ class AnnotationsFileParser(FileParser):
                 try:
                     author = get_value(row, ColNameMapping.author.value)
                     publication_year = get_value(row,ColNameMapping.publication_year.value, transform=int)
+                    doi = get_value(row,ColNameMapping.doi.value)
                 except ValueError:
+                    print(row)
                     debug_info['skipped_paper_info_missing'] += 1
                     continue
                 
                 try:
-                    paper_id = cache_annotation_ids[(author,publication_year)]
+                    paper_id = cache_annotation_ids[doi]
                 except KeyError:
                     paper_id = await find_or_insert_paper(
                         Paper(
+                            doi=doi,
                             author=author,
                             publication_year=publication_year
                         )
                     )
-                    cache_paper_ids[(author,publication_year)] = paper_id
+                    cache_paper_ids[doi] = paper_id
                 existing: Annotation_Paper = await insert_annotation_paper(
                     Annotation_Paper(
                         annotation_id=annotation_id,
@@ -174,7 +177,8 @@ class AnnotationsFileParser(FileParser):
             ColNameMapping.ref_aa,
             ColNameMapping.publication_year,
             ColNameMapping.author,
-            ColNameMapping.detail
+            ColNameMapping.detail,
+            ColNameMapping.doi
             }}
         return cols
 
@@ -187,6 +191,7 @@ class ColNameMapping(Enum):
     publication_year = 'publication_year'
     author = 'author'
     detail = 'detail'
+    doi = 'doi'
 
 
 

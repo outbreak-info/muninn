@@ -1,0 +1,8 @@
+#! /bin/bash
+
+LOG="./papers_reader/test_debug.log"
+echo "begin at $(date)" > "$LOG"
+
+python papers_reader/pubmed.py >> "$LOG"
+
+echo "end at $(date)" >> "$LOG"

@@ -11,8 +11,7 @@ async def find_or_insert_paper(pmr: Paper) -> bool:
             select(Paper.id)
             .where(
                 and_(
-                    Paper.author == pmr.author,
-                    Paper.publication_year == pmr.publication_year
+                    Paper.doi == pmr.doi
                 )                
             )
         )

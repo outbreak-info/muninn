@@ -487,12 +487,13 @@ class Paper(Base):
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
+    doi: Mapped[str] = mapped_column(sa.Text, nullable=False)
     author: Mapped[str] = mapped_column(sa.Text, nullable=False)
     publication_year: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
 
     __table_args__ = tuple(
         [
-            UniqueConstraint('author', 'publication_year', name='uq_title_and_year')
+            UniqueConstraint('doi', name='uq_title_and_year')
         ]
     )
 

@@ -17,12 +17,13 @@ ref2gff = {
 
 with open('flumut_annotations.csv') as fin, open('flumut_reader/flumut_annotations_processed.csv', 'w') as fout:
     csvreader = DictReader(fin)
-    rowKeys = ['gff_feature','ref_aa','position_aa','alt_aa','publication_year','author','detail']
+    rowKeys = ['gff_feature','ref_aa','position_aa','alt_aa','publication_year','author','detail','doi']
     writer = DictWriter(fout, fieldnames=rowKeys)
     writer.writeheader()
     for line in csvreader:
         mutation_name = line['mutation_name']
-        paper_id = line['paper_id']
+        paper_id = line['id']
+        doi = line['doi']
         effect_name = line['effect_name']
         publication_year = paper_id[-4:]
         author = paper_id[:-5]
@@ -34,7 +35,7 @@ with open('flumut_annotations.csv') as fin, open('flumut_reader/flumut_annotatio
         mutation = split_mutation[1]
         if ref not in ref2gff.keys():
             continue
-        values = [ref2gff[split_mutation[0]],mutation[0],mutation[1:-1],mutation[-1],publication_year,author,effect_name]
+        values = [ref2gff[split_mutation[0]],mutation[0],mutation[1:-1],mutation[-1],publication_year,author,effect_name,doi]
         writer.writerow(dict(zip(rowKeys,values)))
 
 
