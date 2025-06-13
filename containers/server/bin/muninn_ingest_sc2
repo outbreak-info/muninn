@@ -2,7 +2,7 @@
 
 SECONDS=0
 DATE=$(date +%Y-%m-%dT%H_%M_%S_%Z)
-LOG="/flu/data/ingest_sc2_$DATE.log"
+LOG="test_data/ingest_sc2_$DATE.log"
 echo "begin at $(date)" >> "$LOG"
 
 
@@ -14,14 +14,13 @@ if [[ "$#" -eq 0 ]]; then
 fi
 
 # bjorn-general outputs
-DATA_DIR='/flu/data'
+DATA_DIR='test_data'
 BJORN_GENERAL_OUTPUT_ARCHIVE="$DATA_DIR/$ARCHIVE_FILENAME"
 
 # bjorn-general outputs
-ARCHIVE_DEST_DIR="$DATA_DIR/"
-
-# b/c the archive is a compressed directory, we have to go down another layer
-ARCHIVE_DEST_SUBDIR="$ARCHIVE_DEST_DIR/outputs_sc2"
+ARCHIVE_DEST_DIR="$DATA_DIR/outputs_sc2"
+# kludge
+ARCHIVE_DEST_SUBDIR="$ARCHIVE_DEST_DIR"
 
 SAMPLES_FILE="metadata_sc2.tsv"
 VARIANTS_FILE="variants_sc2.tsv"
@@ -31,17 +30,18 @@ MUTATIONS_FILE="mutations_sc2.tsv"
 AMINO_SUB_REF_CONFLICTS_FILE="/tmp/amino_sub_ref_conflicts.csv"
 ALLELE_REF_CONFLICTS_FILE="/tmp/allele_ref_conflicts.csv"
 
-# unpack zip file
-if [[ -d "$ARCHIVE_DEST_DIR" ]]; then
-  rm -r "$ARCHIVE_DEST_DIR"
-fi
-
+# unpack archive
 if [[ ! -f "$BJORN_GENERAL_OUTPUT_ARCHIVE" ]]; then
   echo "bjorn-general outputs archive not found: $BJORN_GENERAL_OUTPUT_ARCHIVE" >> "$LOG"
   exit 1
 fi
 
-unzip -d "$ARCHIVE_DEST_DIR" "$BJORN_GENERAL_OUTPUT_ARCHIVE"
+
+if [[ -d "$ARCHIVE_DEST_DIR" ]]; then
+  rm -r "$ARCHIVE_DEST_DIR"
+fi
+tar -xzvf "$BJORN_GENERAL_OUTPUT_ARCHIVE" -C "$DATA_DIR"
+
 
 {
   # ingest bjorn-general outputs
