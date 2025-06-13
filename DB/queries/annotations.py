@@ -24,19 +24,21 @@ async def get_annotations_by_substitution(
                 f'''
                 select detail,
                     p.*
-                from alleles 
-                left join translations on translations.allele_id = alleles.id
-                inner join annotations a on a.amino_acid_substitution_id = translations.amino_acid_substitution_id
-                left join effects on effect_id = effects.id
-                left join amino_acid_substitutions on a.amino_acid_substitution_id = amino_acid_substitutions.id
+                from alleles al
+                left join translations t on t.allele_id = al.id
+                inner join substitutions_annotations sa on sa.amino_acid_substitution_id = t.amino_acid_substitution_id
+                left join annotations a on a.id = sa.annotation_id
+                left join effects e on e.id = a.effect_id
                 left join annotations_papers ap on ap.annotation_id = a.id
                 left join papers p on p.id = ap.paper_id
+                left join amino_acid_substitutions aas on aas.id = sa.amino_acid_substitution_id
                 where region = '{region}' and ref_aa = '{ref_aa}' and position_aa = '{position_aa}' and alt_aa = '{alt_aa}' {user_where_clause}
                 group by detail,p.id
                 ;
                 '''
             )
         )
+        print(res)
         effects = {}
         for r in res:
             if not effects.get(r[0]):

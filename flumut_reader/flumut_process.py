@@ -1,3 +1,4 @@
+from typing import Dict
 from csv import DictReader, DictWriter
 
 ref2gff = {
@@ -14,10 +15,11 @@ ref2gff = {
     'PB1-F2':'PB1-F2:cds-XAJ25425.1',
     'PB2':'PB2:cds-XAJ25426.1'
 }
-
+# format: (annotation_id,effect)
+cache_annotations: Dict[int,str] = {}
 with open('flumut_annotations.csv') as fin, open('flumut_reader/flumut_annotations_processed.csv', 'w') as fout:
     csvreader = DictReader(fin)
-    rowKeys = ['gff_feature','ref_aa','position_aa','alt_aa','publication_year','author','detail','doi']
+    rowKeys = ['gff_feature','ref_aa','position_aa','alt_aa','publication_year','author','detail','doi','annotation_id']
     writer = DictWriter(fout, fieldnames=rowKeys)
     writer.writeheader()
     for line in csvreader:
@@ -25,6 +27,13 @@ with open('flumut_annotations.csv') as fin, open('flumut_reader/flumut_annotatio
         paper_id = line['id']
         doi = line['doi']
         effect_name = line['effect_name']
+        annotation_id = int(line.get('marker_id'))
+        if not cache_annotations.get(annotation_id):
+            cache_annotations[annotation_id] = effect_name
+        while cache_annotations.get(annotation_id) != effect_name:
+            annotation_id = annotation_id + 500
+            if not cache_annotations.get(annotation_id):
+                cache_annotations[annotation_id] = effect_name
         publication_year = paper_id[-4:]
         author = paper_id[:-5]
         if paper_id[-1] == 'b':
@@ -38,7 +47,7 @@ with open('flumut_annotations.csv') as fin, open('flumut_reader/flumut_annotatio
             position_aa = str(int(mutation[1:-1]) + 16)
         if ref not in ref2gff.keys():
             continue
-        values = [ref2gff[split_mutation[0]],mutation[0],position_aa,mutation[-1],publication_year,author,effect_name,doi]
+        values = [ref2gff[split_mutation[0]],mutation[0],position_aa,mutation[-1],publication_year,author,effect_name,doi,annotation_id]
         writer.writerow(dict(zip(rowKeys,values)))
 
 

@@ -14,11 +14,15 @@ CREATE TABLE effects (
 );
 CREATE TABLE annotations (
     id BIGSERIAL PRIMARY KEY,
-    amino_acid_substitution_id BIGINT NOT NULL REFERENCES amino_acid_substitutions(id),
     effect_id BIGINT NOT NULL REFERENCES effects(id)
 );
 CREATE TABLE annotations_papers (
     id BIGSERIAL,
     annotation_id BIGINT NOT NULL REFERENCES annotations(id),
     paper_id BIGINT NOT NULL REFERENCES papers(id)
+);
+CREATE TABLE substitutions_annotations (
+    id BIGSERIAL,
+    annotation_id BIGINT NOT NULL REFERENCES annotations(id),
+    amino_acid_substitution_id BIGINT NOT NULL REFERENCES amino_acid_substitutions(id)
 );

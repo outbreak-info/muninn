@@ -1,14 +1,16 @@
 from csv import DictReader
 from enum import Enum
 from typing import Set
+from collections import Counter
 
 from DB.inserts.amino_acid_substitutions import find_aa_sub, insert_aa_sub
 from DB.inserts.effect_insert import find_or_insert_effect
-from DB.inserts.annotation_insert import find_or_insert_annotation
+from DB.inserts.annotation_insert import insert_annotation
 from DB.inserts.paper_insert import find_or_insert_paper
 from DB.inserts.annotation_paper_insert import insert_annotation_paper
+from DB.inserts.substitution_annotation_insert import insert_substitution_annotation
 from DB.inserts.file_parsers.file_parser import FileParser
-from DB.models import AminoAcidSubstitution, Paper, Annotation_Paper, Annotation, Effect
+from DB.models import AminoAcidSubstitution, Paper, Annotation_Paper, Annotation, Effect, Substitution_Annotation
 from utils.csv_helpers import get_value
 from utils.errors import NotFoundError
 
@@ -21,18 +23,12 @@ class AnnotationsFileParser(FileParser):
         self.delimiter = delimiter
 
     async def parse_and_insert(self):
-        debug_info = {
-            'skipped_aas_data_missing': 0,
-            'skipped_aas_not_found': 0,
-            'skipped_effect_info_missing': 0,
-            'skipped_paper_info_missing': 0,
-            'annotation_paper_pair_exists': 0
-        }
+        debug_info = Counter()
         # format = doi -> id
         cache_paper_ids = dict()
         # format = detail -> id
         cache_effect_ids = dict()
-        # format = (aas_id, effect_id) -> id
+        # format = annotation_id -> id
         cache_annotation_ids = dict()
         # format = (gff_feature, position_aa, ref_aa, alt_aa) -> id
         cache_amino_sub_ids = dict()
@@ -46,6 +42,14 @@ class AnnotationsFileParser(FileParser):
             self._verify_header(reader)
 
             for row in reader:
+
+                debug_info['row_read'] += 1
+
+                try:
+                    data_annotation_id = get_value(row,ColNameMapping.annotation_id.value, transform=int)
+                except ValueError:
+                    debug_info['skipped_annotation_id_missing'] += 1
+                    continue
 
                 try:
                     position_aa = get_value(row, ColNameMapping.position_aa.value, transform=int)
@@ -120,15 +124,14 @@ class AnnotationsFileParser(FileParser):
                     cache_effect_ids[detail] = effect_id
 
                 try:
-                    annotation_id = cache_annotation_ids[(aas_id,effect_id)]
+                    annotation_id = cache_annotation_ids[data_annotation_id]
                 except KeyError:
-                    annotation_id = await find_or_insert_annotation(
+                    annotation_id = await insert_annotation(
                         Annotation(
-                            amino_acid_substitution_id=aas_id,
                             effect_id=effect_id 
                         )
                     )
-                    cache_annotation_ids[(aas_id,effect_id)] = annotation_id
+                    cache_annotation_ids[data_annotation_id] = annotation_id
 
                 try:
                     author = get_value(row, ColNameMapping.author.value)
@@ -150,6 +153,7 @@ class AnnotationsFileParser(FileParser):
                         )
                     )
                     cache_paper_ids[doi] = paper_id
+                
                 existing: Annotation_Paper = await insert_annotation_paper(
                     Annotation_Paper(
                         annotation_id=annotation_id,
@@ -159,6 +163,17 @@ class AnnotationsFileParser(FileParser):
 
                 if existing is not None:
                     debug_info['annotation_paper_pair_exists'] += 1
+
+                existing: Substitution_Annotation = await insert_substitution_annotation(
+                    Substitution_Annotation(
+                        annotation_id=annotation_id,
+                        amino_acid_substitution_id = aas_id
+                    )
+                )
+                if existing is not None:
+                    debug_info['substitution_annotation_pair_exists'] += 1
+
+                debug_info['entry_processed'] += 1
         print(debug_info)
 
     @classmethod
@@ -178,7 +193,8 @@ class AnnotationsFileParser(FileParser):
             ColNameMapping.publication_year,
             ColNameMapping.author,
             ColNameMapping.detail,
-            ColNameMapping.doi
+            ColNameMapping.doi,
+            ColNameMapping.annotation_id
             }}
         return cols
 
@@ -192,6 +208,7 @@ class ColNameMapping(Enum):
     author = 'author'
     detail = 'detail'
     doi = 'doi'
+    annotation_id = 'annotation_id'
 
 
 

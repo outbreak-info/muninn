@@ -258,7 +258,7 @@ class AminoAcidSubstitution(Base):
         ]
     )
 
-    r_annotations: Mapped[List['Annotation']] = relationship(back_populates='r_amino_sub')
+    r_substitutions_annotations: Mapped[List['Substitution_Annotation']] = relationship(back_populates='r_amino_sub')
     r_translations: Mapped[List['Translation']] = relationship(back_populates='r_amino_sub')
     r_pheno_measurement_results: Mapped[List['PhenotypeMeasurementResult']] = relationship(back_populates='r_amino_sub')
 
@@ -520,16 +520,9 @@ class Annotation(Base):
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
-    amino_acid_substitution_id: Mapped[int] = mapped_column(sa.ForeignKey('amino_acid_substitutions.id'), nullable=False)
     effect_id: Mapped[int] = mapped_column(sa.ForeignKey('effects.id'),nullable=False)
 
-    __table_args__ = tuple(
-        [
-            UniqueConstraint('amino_acid_substitution_id', 'effect_id', name='uq_substitution_and_effect')
-        ]
-    )
-
-    r_amino_sub: Mapped['AminoAcidSubstitution'] = relationship(back_populates='r_annotations')
+    r_substitutions_annotations: Mapped[List['Substitution_Annotation']] = relationship(back_populates='r_annotation')
     r_annotations_papers: Mapped[List['Annotation_Paper']] = relationship(back_populates='r_annotation')
     r_effect: Mapped['Effect'] = relationship(back_populates='r_annotations')
 
@@ -549,3 +542,20 @@ class Annotation_Paper(Base):
 
     r_paper: Mapped['Paper'] = relationship(back_populates='r_annotations_papers')
     r_annotation: Mapped['Annotation'] = relationship(back_populates='r_annotations_papers')
+
+class Substitution_Annotation(Base):
+    __tablename__ = 'substitutions_annotations'
+
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+
+    amino_acid_substitution_id: Mapped[int] = mapped_column(sa.ForeignKey('amino_acid_substitutions.id'), nullable=False)
+    annotation_id: Mapped[int] = mapped_column(sa.ForeignKey('annotations.id'),nullable=False)
+
+    __table_args__ = tuple(
+        [
+            UniqueConstraint('amino_acid_substitution_id', 'annotation_id', name='uq_substitution_annotation_pair')
+        ]
+    )
+
+    r_amino_sub: Mapped['AminoAcidSubstitution'] = relationship(back_populates='r_substitutions_annotations')
+    r_annotation: Mapped['Annotation'] = relationship(back_populates='r_substitutions_annotations')

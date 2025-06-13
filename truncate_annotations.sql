@@ -1,3 +1,4 @@
+TRUNCATE TABLE substitutions_annotations CASCADE;
 TRUNCATE TABLE annotations_papers CASCADE;
 TRUNCATE TABLE annotations CASCADE;
 TRUNCATE TABLE papers CASCADE;
