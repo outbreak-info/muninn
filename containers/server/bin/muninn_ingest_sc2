@@ -37,8 +37,9 @@ if [[ ! -f "$BJORN_GENERAL_OUTPUT_ARCHIVE" ]]; then
 fi
 
 
-if [[ -d "$ARCHIVE_DEST_DIR" ]]; then
-  rm -r "$ARCHIVE_DEST_DIR"
+if [[ -e "$ARCHIVE_DEST_DIR" ]]; then
+  echo "dest dir $ARCHIVE_DEST_DIR already exists, remove it to continue"
+  exit 1
 fi
 tar -xzvf "$BJORN_GENERAL_OUTPUT_ARCHIVE" -C "$DATA_DIR"
 
