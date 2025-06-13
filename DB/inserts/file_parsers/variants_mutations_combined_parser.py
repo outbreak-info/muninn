@@ -25,6 +25,7 @@ from utils.csv_helpers import gff_feature_strip_region_name
 AMINO_SUB_REF_CONFLICTS_FILE = '/tmp/amino_sub_ref_conflicts.csv'
 ALLELE_REF_CONFLICTS_FILE = '/tmp/allele_ref_conflicts.csv'
 
+
 class VariantsMutationsCombinedParser(FileParser):
 
     def __init__(self, variants_filename: str, mutations_filename: str):
@@ -168,8 +169,11 @@ class VariantsMutationsCombinedParser(FileParser):
                 StandardColumnNames.position_nt,
                 StandardColumnNames.alt_nt
             ]
-        ).filter( # remove problematic/redacted SRAs
-            ~pl.col(StandardColumnNames.accession).is_in(EXCLUDED_SRAS)
+        ).filter(  # remove problematic/redacted SRAs
+            ~pl.col(StandardColumnNames.accession).is_in(EXCLUDED_SRAS) &
+            # filter out deletions with no NT data, formatted as +N
+            pl.col(StandardColumnNames.alt_nt).str.count_matches(r'\+\d+') == 0
+
         )
 
     @staticmethod
@@ -229,8 +233,6 @@ class VariantsMutationsCombinedParser(FileParser):
                 StandardColumnNames.alt_nt,
             ],
             how='anti'
-        ).filter(  # filter out deletions with no NT data, formatted as +N
-            pl.col(StandardColumnNames.alt_nt).str.count_matches(r'\+\d+') == 0
         ).unique(  # this is required b/c we're including ref in the first unique above.
             [
                 pl.col(StandardColumnNames.region),
