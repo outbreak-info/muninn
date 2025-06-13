@@ -1,8 +1,8 @@
-from typing import Iterable, Tuple, List
+from typing import List
 import requests
 from itertools import islice
-from papers_reader.crossRef import get_doi_from_crossref
-
+from crossRef import get_doi_from_crossref
+from collections import Counter
 
 
 def chunks(iterable, size):
@@ -24,7 +24,7 @@ ids = data.get("esearchresult",{}).get("idlist",[])
 
 summary_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
 
-for batch in chunks(ids,100):
+for batch in chunks(ids,200):
     id_string = ",".join(batch)
     params = {
     "db": "pubmed",
@@ -35,12 +35,7 @@ for batch in chunks(ids,100):
 response = requests.get(summary_url, params=params)
 data: dict = response.json().get("result",{})
 
-debug_log = {
-    'doi_found': 0,
-    'doi_not_found': 0,
-    'aid_not_found': 0,
-    'doi_recovered': 0
-}
+idtypes = Counter()
 
 dataIter = iter(data.items())
 next(dataIter)
@@ -52,16 +47,14 @@ for id, content in dataIter:
     title = content.get('title')
     doi = None
     for id in articleId:
-        if id.get('idtype') == 'doi':
-            doi = id['value']
-            debug_log['doi_found'] += 1
-            break
-    if not doi:
-        recovered_doi = get_doi_from_crossref(title)
-        if recovered_doi:
-            debug_log['doi_recovered'] += 1
-        else:
-            print(title)
-            debug_log['doi_not_found'] += 1
+        idtypes[id.get('idtype')] += 1
+    if True:
+        continue
+    recovered_doi = get_doi_from_crossref(title)
+    if recovered_doi:
+        debug_log['doi_recovered'] += 1
+    else:
+        print(title)
+        debug_log['doi_not_found'] += 1
 
-print(debug_log)
+print(idtypes)

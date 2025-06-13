@@ -6,7 +6,7 @@ def get_doi_from_crossref(title):
     params = {"query": title, "rows": 1}
     
     response = requests.get(url, params=params)
-    sleep(1)
+    sleep(0.2)
     if response.status_code == 200:
         items = response.json().get("message", {}).get("items", [])
         if items:

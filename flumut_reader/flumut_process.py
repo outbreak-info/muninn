@@ -33,9 +33,12 @@ with open('flumut_annotations.csv') as fin, open('flumut_reader/flumut_annotatio
         split_mutation = mutation_name.split(':')
         ref = split_mutation[0]
         mutation = split_mutation[1]
+        position_aa = mutation[1:-1]
+        if 'HA' in split_mutation[0]:
+            position_aa = str(int(mutation[1:-1]) + 16)
         if ref not in ref2gff.keys():
             continue
-        values = [ref2gff[split_mutation[0]],mutation[0],mutation[1:-1],mutation[-1],publication_year,author,effect_name,doi]
+        values = [ref2gff[split_mutation[0]],mutation[0],position_aa,mutation[-1],publication_year,author,effect_name,doi]
         writer.writerow(dict(zip(rowKeys,values)))
 
 

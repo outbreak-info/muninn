@@ -11,6 +11,8 @@ import DB.queries.phenotype_metrics
 import DB.queries.prevalence
 import DB.queries.samples
 import DB.queries.variants
+import DB.queries.annotations
+
 from api.models import VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
     MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo
 from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, SIMPLE_DATE_FIELDS, NtOrAa, \
@@ -372,3 +374,16 @@ async def get_lineage_abundance(
             return await DB.queries.lineages.get_abundance_summaries(q)
         else:
             return await DB.queries.lineages.get_abundances(q)
+
+@app.get(
+    '/annotations/by_aas'
+)
+async def get_annotations_by_substitution(
+    region:str,
+    substitution:str,
+    q: str | None = None
+):
+    if q:
+        return await DB.queries.annotations.get_annotations_by_substitution(region,substitution,q)
+    else:
+        return await DB.queries.annotations.get_annotations_by_substitution(region,substitution)

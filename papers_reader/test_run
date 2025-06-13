@@ -1,8 +1,13 @@
 #! /bin/bash
 
-LOG="./papers_reader/test_debug.log"
-echo "begin at $(date)" > "$LOG"
+LOG="/home/jaden-cordova/muninn/papers_reader/test_debug.log"
+echo "begin at $(date)" >> "$LOG"
 
-python papers_reader/pubmed.py >> "$LOG"
+JSON="/home/jaden-cordova/muninn/.jaden/json_results/empc_H5N1.json"
+
+# python papers_reader/epmc_write.py -fout $JSON >> "$LOG"
+for i in {0..1}; do
+    python papers_reader/epmc_process.py -fin $JSON -n $i >> "$LOG"
+done
 
 echo "end at $(date)" >> "$LOG"
