@@ -1,7 +1,7 @@
 import polars as pl
 from sqlalchemy import select
 
-from DB.engine import get_async_session
+from DB.engine import get_async_session, get_asyncpg_connection
 from DB.models import Sample
 from utils.errors import NotFoundError
 from utils.gathering_task_group import GatheringTaskGroup
@@ -63,3 +63,16 @@ async def batch_find_samples(samples: pl.DataFrame, accession_name: str = 'acces
         pl.Series('sample_id', tg.results())
     )
     return samples
+
+
+async def copy_insert_samples(samples: pl.DataFrame) -> str:
+    columns = list(samples.columns)
+    conn = await get_asyncpg_connection()
+    res = await conn.copy_records_to_table(
+        Sample.__tablename__,
+        records=samples.select(
+            [pl.col(cn) for cn in columns]
+        ).iter_rows(),
+        columns=columns
+    )
+    return res

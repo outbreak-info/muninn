@@ -21,6 +21,7 @@ COMMA_SEP_WORDLIKE_PATTERN = re.compile(r'(\w+,)*\w+')
 SIMPLE_DATE_FIELDS = {'release_date', 'creation_date'}
 # Unlike the simple dates, collection date is a range, and may be null
 COLLECTION_DATE = 'collection_date'
+GEO_LOCATION = 'geo_location'
 LINEAGE = 'lineage'
 DEFAULT_MAX_SPAN_DAYS = 366
 DEFAULT_DAYS = 5
@@ -85,6 +86,41 @@ class StandardColumnNames:
 
     # samples
     accession = 'accession'
+    bio_project = 'bio_project'
+    bio_sample = 'bio_sample'
+    bio_sample_accession = 'bio_sample_accession'
+    bio_sample_model = 'bio_sample_model'
+    center_name = 'center_name'
+    experiment = 'experiment'
+    host = 'host'
+    instrument = 'instrument'
+    platform = 'platform'
+    isolate = 'isolate'
+    library_name = 'library_name'
+    library_layout = 'library_layout'
+    library_selection = 'library_selection'
+    library_source = 'library_source'
+    organism = 'organism'
+    is_retracted = 'is_retracted'
+    retraction_detected_date = 'retraction_detected_date'
+    isolation_source = 'isolation_source'
+    collection_start_date = 'collection_start_date'
+    collection_end_date = 'collection_end_date'
+    release_date = 'release_date'
+    creation_date = 'creation_date'
+    version = 'version'
+    sample_name = 'sample_name'
+    sra_study = 'sra_study'
+    serotype = 'serotype'
+    geo_location_id = 'geo_location_id'
+    consent_level = 'consent_level'
+    assay_type = 'assay_type'
+    avg_spot_length = 'avg_spot_length'
+    bases = 'bases'
+    bytes = 'bytes'
+    datastore_filetype = 'datastore_filetype'
+    datastore_region = 'datastore_region'
+    datastore_provider = 'datastore_provider'
 
     # alleles
     position_nt = 'position_nt'
@@ -111,6 +147,12 @@ class StandardColumnNames:
     total_dp = 'total_dp'
     pval = 'pval'
     pass_qc = 'pass_qc'
+
+    # geo locations
+    country_name = 'country_name'
+    admin1_name = 'admin1_name'
+    admin2_name = 'admin2_name'
+    admin3_name = 'admin3_name'
 
 
 class ConstraintNames:

@@ -12,6 +12,7 @@ from DB.inserts.file_parsers.freyja_demixed_parser import FreyjaDemixedParser
 from DB.inserts.file_parsers.genoflu_lineages_parser import GenofluLineagesParser
 from DB.inserts.file_parsers.mutations_parser import MutationsTsvParser
 from DB.inserts.file_parsers.samples_parser import SamplesCsvParser, SamplesTsvParser
+from DB.inserts.file_parsers.sarscov2_parsers.sc2_samples_parser import SC2SamplesParser
 from DB.inserts.file_parsers.variants_mutations_combined_parser import VariantsMutationsCombinedParser
 from DB.inserts.file_parsers.variants_tsv_parser import VariantsTsvParser
 
@@ -27,7 +28,8 @@ def main():
         'mutations_tsv': MutationsTsvParser,
         'ha_dms_tsv': HaRegionDmsTsvParser,
         'freyja_demixed': FreyjaDemixedParser,
-        'variants_mutations_combined_tsv': VariantsMutationsCombinedParser
+        'variants_mutations_combined_tsv': VariantsMutationsCombinedParser,
+        'sc2_samples': SC2SamplesParser
     }
 
     ## Parse and verify args ##
