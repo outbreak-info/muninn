@@ -1,6 +1,6 @@
 #! /bin/bash
-
-LOG="/flu/data/ingest_all_$(date +%Y-%m-%dT%H:%M:%S%Z).log"
+SECONDS=0
+LOG="/flu/data/ingest_all_$(date +%Y-%m-%dT%H_%M_%S%Z).log"
 echo "begin at $(date)" >> "$LOG"
 
 DATA_DIR='/flu/data'
@@ -62,3 +62,5 @@ if [[ -f "$AMINO_SUB_REF_CONFLICTS_FILE" ]]; then
 fi
 
 echo "end at $(date)" >> "$LOG"
+ELAPSED="Elapsed: $((SECONDS / 3600))hrs $(((SECONDS / 60) % 60))min $((SECONDS % 60))sec"
+echo "$ELAPSED" >> "$LOG"
