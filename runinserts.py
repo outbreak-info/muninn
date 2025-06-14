@@ -4,8 +4,10 @@ import sys
 from datetime import datetime
 from os import path
 from typing import Any
+import logging
 
 from DB.inserts.file_parsers.dms_parser import HaRegionDmsTsvParser
+from DB.inserts.file_parsers.annotation_parser import AnnotationParser
 from DB.inserts.file_parsers.eve_parser import EveCsvParser
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.file_parsers.freyja_demixed_parser import FreyjaDemixedParser
@@ -26,6 +28,7 @@ def main():
         'mutations_tsv': MutationsTsvParser,
         'ha_dms_tsv': HaRegionDmsTsvParser,
         'freyja_demixed': FreyjaDemixedParser,
+        'annotations_csv': AnnotationParser
     }
 
     ## Parse and verify args ##
