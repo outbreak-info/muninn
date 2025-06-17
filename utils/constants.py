@@ -74,6 +74,20 @@ class NtOrAa(Enum):
         return str(self.value)
 
 
+class TableNames:
+    samples = 'samples'
+    alleles = 'alleles'
+    amino_acid_substitutions = 'amino_acid_substitutions'
+    mutations = 'mutations'
+    intra_host_variants = 'intra_host_variants'
+    geo_locations = 'geo_locations'
+    phenotype_metrics = 'phenotype_metrics'
+    phenotype_measurement_results = 'phenotype_measurement_results'
+    lineage_systems = 'lineage_systems'
+    lineages = 'lineages'
+    samples_lineages = 'samples_lineages'
+
+
 class StandardColumnNames:
     # ids
     sample_id = 'sample_id'
@@ -82,6 +96,9 @@ class StandardColumnNames:
     intra_host_variant_id = 'intra_host_variant_id'
     mutation_id = 'mutation_id'
     translation_id = 'translation_id'
+    phenotype_metric_id = 'phenotype_metric_id'
+    lineage_system_id = 'lineage_system_id'
+    lineage_id = 'lineage_id'
 
     # samples
     accession = 'accession'
@@ -112,9 +129,20 @@ class StandardColumnNames:
     pval = 'pval'
     pass_qc = 'pass_qc'
 
+    # phenotype metrics
+    name = 'name'
+    assay_type = 'assay_type'
+
+    # Lineages
+    lineage_system_name = 'lineage_system_name'
+    lineage_name = 'lineage_name'
+    is_consensus_call = 'is_consensus_call'
+    abundance = 'abundance'
+
 
 class ConstraintNames:
     uq_intra_host_variants_sample_allele_pair = 'uq_intra_host_variants_sample_allele_pair'
+
 
 # Problematic redacted SRAs
 EXCLUDED_SRAS = {

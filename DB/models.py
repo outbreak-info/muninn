@@ -8,6 +8,7 @@ from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase, relationship
 
 from parser.parser import parser
+from utils.constants import ConstraintNames, TableNames, StandardColumnNames
 
 #########################################################################################
 # NOTE:
@@ -69,7 +70,7 @@ class Base(DeclarativeBase, AsyncAttrs):
 
 
 class Sample(Base):
-    __tablename__ = 'samples'
+    __tablename__ = TableNames.samples
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
     # todo: change name to be specific about which accession this is
@@ -123,7 +124,7 @@ class Sample(Base):
 
     # from geo_loc_name
     # todo: we are currently ignoring the continent and country fields
-    geo_location_id: Mapped[int] = mapped_column(sa.ForeignKey('geo_locations.id'), nullable=True)
+    geo_location_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.geo_locations}.id'), nullable=True)
 
     consent_level: Mapped[str] = mapped_column(sa.Text, nullable=False)
     assay_type: Mapped[str] = mapped_column(sa.Text, nullable=False)
@@ -144,7 +145,7 @@ class Sample(Base):
                 name='retraction_values_existence_in_harmony'
             ),
             CheckConstraint(
-                'num_nulls(collection_start_date, collection_end_date) in (0, 2)',
+                f'num_nulls(collection_start_date, collection_end_date) in (0, 2)',
                 name='collection_start_and_end_both_absent_or_both_present'
             ),
             CheckConstraint(
@@ -201,7 +202,7 @@ class Sample(Base):
 
 
 class Allele(Base):
-    __tablename__ = 'alleles'
+    __tablename__ = TableNames.alleles
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
@@ -215,14 +216,14 @@ class Allele(Base):
     __table_args__ = tuple(
         [
             UniqueConstraint(
-                'region',
-                'position_nt',
-                'alt_nt',
+                StandardColumnNames.region,
+                StandardColumnNames.position_nt,
+                StandardColumnNames.alt_nt,
                 postgresql_nulls_not_distinct=True,
                 name='uq_alleles_nt_values'
             ),
-            CheckConstraint("alt_nt <> ''", name='alt_nt_not_empty'),
-            CheckConstraint("ref_nt <> ''", name='ref_nt_not_empty')
+            CheckConstraint(f"{StandardColumnNames.alt_nt} <> ''", name='alt_nt_not_empty'),
+            CheckConstraint(f"{StandardColumnNames.ref_nt} <> ''", name='ref_nt_not_empty')
         ]
     )
 
@@ -232,7 +233,7 @@ class Allele(Base):
 
 
 class AminoAcidSubstitution(Base):
-    __tablename__ = 'amino_acid_substitutions'
+    __tablename__ = TableNames.amino_acid_substitutions
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
@@ -245,13 +246,13 @@ class AminoAcidSubstitution(Base):
 
     __table_args__ = tuple(
         [
-            CheckConstraint("gff_feature <> ''", name='gff_feature_not_empty'),
-            CheckConstraint("ref_aa <> ''", name='ref_aa_not_empty'),
-            CheckConstraint("alt_aa <> ''", name='alt_aa_not_empty'),
+            CheckConstraint(f"{StandardColumnNames.gff_feature} <> ''", name='gff_feature_not_empty'),
+            CheckConstraint(f"{StandardColumnNames.ref_aa} <> ''", name='ref_aa_not_empty'),
+            CheckConstraint(f"{StandardColumnNames.alt_aa} <> ''", name='alt_aa_not_empty'),
             UniqueConstraint(
-                'position_aa',
-                'alt_aa',
-                'gff_feature',
+                StandardColumnNames.position_aa,
+                StandardColumnNames.alt_aa,
+                StandardColumnNames.gff_feature,
                 postgresql_nulls_not_distinct=True,
                 name='uq_amino_acid_substitutions_aa_values'
             )
@@ -267,16 +268,20 @@ class Translation(Base):
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
-    allele_id: Mapped[int] = mapped_column(sa.ForeignKey('alleles.id'), nullable=False)
+    allele_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.alleles}.id'), nullable=False)
     amino_acid_substitution_id: Mapped[int] = mapped_column(
-        sa.ForeignKey('amino_acid_substitutions.id'),
+        sa.ForeignKey(f'{TableNames.amino_acid_substitutions}.id'),
         nullable=False,
         index=True
     )
 
     __table_args__ = tuple(
         [
-            UniqueConstraint('allele_id', 'amino_acid_substitution_id', name='uq_translations_allele_and_amino_sub')
+            UniqueConstraint(
+                StandardColumnNames.allele_id,
+                StandardColumnNames.amino_acid_substitution_id,
+                name='uq_translations_allele_and_amino_sub'
+            )
         ]
     )
 
@@ -285,16 +290,20 @@ class Translation(Base):
 
 
 class Mutation(Base):
-    __tablename__ = 'mutations'
+    __tablename__ = TableNames.mutations
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
-    sample_id: Mapped[int] = mapped_column(sa.ForeignKey('samples.id'), nullable=False)
-    allele_id: Mapped[int] = mapped_column(sa.ForeignKey('alleles.id'), nullable=False, index=True)
+    sample_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.samples}.id'), nullable=False)
+    allele_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.alleles}.id'), nullable=False, index=True)
 
     __table_args__ = tuple(
         [
-            UniqueConstraint('sample_id', 'allele_id', name='uq_mutations_sample_allele_pair')
+            UniqueConstraint(
+                StandardColumnNames.sample_id,
+                StandardColumnNames.allele_id,
+                name=ConstraintNames.uq_intra_host_variants_sample_allele_pair
+            )
         ]
     )
 
@@ -303,12 +312,12 @@ class Mutation(Base):
 
 
 class IntraHostVariant(Base):
-    __tablename__ = 'intra_host_variants'
+    __tablename__ = TableNames.intra_host_variants
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
-    sample_id: Mapped[int] = mapped_column(sa.ForeignKey('samples.id'), nullable=False)
-    allele_id: Mapped[int] = mapped_column(sa.ForeignKey('alleles.id'), nullable=False, index=True)
+    sample_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.samples}.id'), nullable=False)
+    allele_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.alleles}.id'), nullable=False, index=True)
 
     ref_dp: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
     alt_dp: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
@@ -319,12 +328,15 @@ class IntraHostVariant(Base):
     alt_qual: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
     total_dp: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
     pval: Mapped[float] = mapped_column(sa.Double, nullable=False)
-    # todo: check name, pass is a keyword in python
     pass_qc: Mapped[bool] = mapped_column(sa.Boolean, nullable=False)
 
     __table_args__ = tuple(
         [
-            UniqueConstraint('sample_id', 'allele_id', name='uq_intra_host_variants_sample_allele_pair')
+            UniqueConstraint(
+                StandardColumnNames.sample_id,
+                StandardColumnNames.allele_id,
+                name=ConstraintNames.uq_intra_host_variants_sample_allele_pair
+            )
         ]
     )
 
@@ -348,7 +360,7 @@ class IntraHostVariant(Base):
 
 
 class GeoLocation(Base):
-    __tablename__ = 'geo_locations'
+    __tablename__ = TableNames.geo_locations
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
     country_name: Mapped[str] = mapped_column(sa.Text, nullable=False)
@@ -379,7 +391,7 @@ class GeoLocation(Base):
 
 
 class PhenotypeMetric(Base):
-    __tablename__ = 'phenotype_metrics'
+    __tablename__ = TableNames.phenotype_metrics
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
@@ -389,9 +401,9 @@ class PhenotypeMetric(Base):
     __table_args__ = tuple(
         [
             # todo: could this soften to allow uq name x assay_type?
-            UniqueConstraint('name', name='uq_phenotype_metrics_name'),
-            CheckConstraint("name <> ''", name='name_not_empty'),
-            CheckConstraint("assay_type <> ''", name='assay_type_not_empty')
+            UniqueConstraint(StandardColumnNames.name, name='uq_phenotype_metrics_name'),
+            CheckConstraint(f"{StandardColumnNames.name} <> ''", name='name_not_empty'),
+            CheckConstraint(f"{StandardColumnNames.assay_type} <> ''", name='assay_type_not_empty')
         ]
     )
 
@@ -401,12 +413,15 @@ class PhenotypeMetric(Base):
 
 
 class PhenotypeMeasurementResult(Base):
-    __tablename__ = 'phenotype_measurement_results'
+    __tablename__ = TableNames.phenotype_measurement_results
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
-    phenotype_metric_id: Mapped[int] = mapped_column(sa.ForeignKey('phenotype_metrics.id'), nullable=False)
+    phenotype_metric_id: Mapped[int] = mapped_column(
+        sa.ForeignKey(f'{TableNames.phenotype_metrics}.id'),
+        nullable=False
+    )
     amino_acid_substitution_id: Mapped[int] = mapped_column(
-        sa.ForeignKey('amino_acid_substitutions.id'),
+        sa.ForeignKey(f'{TableNames.amino_acid_substitutions}.id'),
         nullable=False
     )
 
@@ -415,8 +430,8 @@ class PhenotypeMeasurementResult(Base):
     __table_args__ = tuple(
         [
             UniqueConstraint(
-                'phenotype_metric_id',
-                'amino_acid_substitution_id',
+                StandardColumnNames.phenotype_metric_id,
+                StandardColumnNames.amino_acid_substitution_id,
                 name='uq_phenotype_measurement_results_metric_and_amino_sub'
             )
         ]
@@ -427,13 +442,13 @@ class PhenotypeMeasurementResult(Base):
 
 
 class LineageSystem(Base):
-    __tablename__ = 'lineage_systems'
+    __tablename__ = TableNames.lineage_systems
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
     lineage_system_name: Mapped[str] = mapped_column(sa.Text, nullable=False)
 
     __table_args__ = tuple(
         [
-            UniqueConstraint('lineage_system_name', name='uq_lineage_systems_name'),
+            UniqueConstraint(StandardColumnNames.lineage_system_name, name='uq_lineage_systems_name'),
         ]
     )
 
@@ -441,14 +456,18 @@ class LineageSystem(Base):
 
 
 class Lineage(Base):
-    __tablename__ = 'lineages'
+    __tablename__ = TableNames.lineages
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
-    lineage_system_id: Mapped[int] = mapped_column(sa.ForeignKey('lineage_systems.id'), nullable=False)
+    lineage_system_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.lineage_systems}.id'), nullable=False)
     lineage_name: Mapped[str] = mapped_column(sa.Text, nullable=False)
 
     __table_args__ = tuple(
         [
-            UniqueConstraint('lineage_system_id', 'lineage_name', name='uq_lineages_name_uq_within_system')
+            UniqueConstraint(
+                StandardColumnNames.lineage_system_id,
+                StandardColumnNames.lineage_name,
+                name='uq_lineages_name_uq_within_system'
+            )
         ]
     )
 
@@ -457,11 +476,11 @@ class Lineage(Base):
 
 
 class SampleLineage(Base):
-    __tablename__ = 'samples_lineages'
+    __tablename__ = TableNames.samples_lineages
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
-    sample_id: Mapped[int] = mapped_column(sa.ForeignKey('samples.id'), nullable=False)
-    lineage_id: Mapped[int] = mapped_column(sa.ForeignKey('lineages.id'), nullable=False, index=True)
+    sample_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.samples}.id'), nullable=False)
+    lineage_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.lineages}.id'), nullable=False, index=True)
 
     abundance: Mapped[float] = mapped_column(sa.Float, nullable=True)
     is_consensus_call: Mapped[bool] = mapped_column(sa.Boolean, nullable=False)
@@ -469,12 +488,15 @@ class SampleLineage(Base):
     __table_args__ = tuple(
         [
             UniqueConstraint(
-                'sample_id',
-                'lineage_id',
-                'is_consensus_call',
+                StandardColumnNames.sample_id,
+                StandardColumnNames.lineage_id,
+                StandardColumnNames.is_consensus_call,
                 name='uq_samples_lineages_sample_id_lineage_id_is_consensus_call'
-                ),
-            CheckConstraint('(abundance is null) = is_consensus_call', name='has_abundance_xor_is_consensus')
+            ),
+            CheckConstraint(
+                f'({StandardColumnNames.abundance} is null) = {StandardColumnNames.is_consensus_call}',
+                name='has_abundance_xor_is_consensus'
+            )
         ]
     )
 
