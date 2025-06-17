@@ -302,7 +302,7 @@ class Mutation(Base):
             UniqueConstraint(
                 StandardColumnNames.sample_id,
                 StandardColumnNames.allele_id,
-                name=ConstraintNames.uq_intra_host_variants_sample_allele_pair
+                name='uq_mutations_sample_allele_pair'
             )
         ]
     )
