@@ -377,10 +377,10 @@ class GeoLocation(Base):
     __table_args__ = tuple(
         [
             UniqueConstraint(
-                'country_name',
-                'admin1_name',
-                'admin2_name',
-                'admin3_name',
+                StandardColumnNames.country_name,
+                StandardColumnNames.admin1_name,
+                StandardColumnNames.admin2_name,
+                StandardColumnNames.admin3_name,
                 postgresql_nulls_not_distinct=True,
                 name='uq_geo_locations_division_names'
             )
