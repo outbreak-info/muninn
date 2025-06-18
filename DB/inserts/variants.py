@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import insert
 
 from DB.engine import get_async_session, get_asyncpg_connection
 from DB.models import IntraHostVariant
-from utils.constants import StandardColumnNames, ConstraintNames
+from utils.constants import StandardColumnNames, ConstraintNames, ASYNCPG_MAX_QUERY_ARGS
 
 
 async def find_or_insert_variant(variant: IntraHostVariant, upsert: bool = True) -> (int, bool):
@@ -68,8 +68,6 @@ async def copy_insert_variants(variants: pl.DataFrame):
 
 
 async def batch_upsert_variants(variants: pl.DataFrame):
-    max_query_args = 32767
-
     update_columns = [
         StandardColumnNames.ref_dp,
         StandardColumnNames.alt_dp,
@@ -87,7 +85,7 @@ async def batch_upsert_variants(variants: pl.DataFrame):
         StandardColumnNames.allele_id
     ]
 
-    batch_size = floor(max_query_args / len(all_columns))
+    batch_size = floor(ASYNCPG_MAX_QUERY_ARGS / len(all_columns))
     slice_start = 0
     while slice_start < len(variants):
         variants_slice = variants.slice(slice_start, batch_size)

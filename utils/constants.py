@@ -25,7 +25,7 @@ GEO_LOCATION = 'geo_location'
 LINEAGE = 'lineage'
 DEFAULT_MAX_SPAN_DAYS = 366
 DEFAULT_DAYS = 5
-
+ASYNCPG_MAX_QUERY_ARGS = 32767
 
 class PhenotypeMetricAssayTypes:
     DMS = 'DMS'
@@ -184,7 +184,7 @@ class StandardColumnNames:
 
 class ConstraintNames:
     uq_intra_host_variants_sample_allele_pair = 'uq_intra_host_variants_sample_allele_pair'
-
+    uq_samples_accession = 'uq_samples_accession'
 
 # Problematic redacted SRAs
 EXCLUDED_SRAS = {

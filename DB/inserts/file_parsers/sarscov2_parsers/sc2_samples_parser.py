@@ -1,12 +1,15 @@
 import csv
-from enum import Enum
+import time
 from typing import Set, Any, Dict
 
-from DB.inserts.file_parsers.file_parser import FileParser
-from DB.inserts.samples import copy_insert_samples
-from utils.constants import StandardColumnNames, COLLECTION_DATE, GEO_LOCATION
 import polars as pl
 
+from DB.inserts.file_parsers.file_parser import FileParser
+from DB.inserts.geo_locations import find_or_insert_geo_location
+from DB.inserts.samples import copy_insert_samples
+from DB.models import GeoLocation
+from DB.queries.samples import get_samples_accession_and_id_as_pl_df
+from utils.constants import StandardColumnNames, COLLECTION_DATE, GEO_LOCATION
 from utils.dates_and_times import parse_collection_start_and_end
 
 
@@ -33,14 +36,68 @@ class SC2SamplesParser(FileParser):
                 pl.col(StandardColumnNames.bio_project).fill_null('NA')
             )
         )
-        # todo: unique?
+        # todo: unique? No, leave it out for now to force errors on conflict.
 
-        # todo: Geo Locations
+        # Add in not-null columns with placeholder values
+        samples_padded = (
+            samples_input
+            .join(SC2SamplesParser._get_placeholder_value_map(), how='cross')
+        )
 
+        geo_locations = await SC2SamplesParser._insert_geo_locations(samples_input)
+        existing_samples = await get_samples_accession_and_id_as_pl_df()
+
+        samples_final = (
+            samples_padded
+            .join(geo_locations.lazy(), on=pl.col(GEO_LOCATION), how='left')
+            .drop(pl.col(GEO_LOCATION))
+            .with_columns(
+                pl.col(COLLECTION_DATE).map_elements(
+                    parse_collection_start_and_end,
+                    return_dtype=pl.List(pl.Date)
+                )
+            )
+            .with_columns(
+                pl.col(COLLECTION_DATE).list.to_struct(
+                    fields=[StandardColumnNames.collection_start_date, StandardColumnNames.collection_end_date]
+                )
+            )
+            .unnest(COLLECTION_DATE)
+        )
+
+        new_samples = samples_final.join(
+            existing_samples.lazy(),
+            on=pl.col(StandardColumnNames.accession),
+            how='anti'
+        )
+        copy_status = await copy_insert_samples(new_samples.collect())
+        print(f'new samples: {copy_status}')
+
+
+        updated_samples = samples_final.join(
+            existing_samples.lazy(),
+            on=pl.col(StandardColumnNames.accession),
+             how='inner'
+        )
+
+
+
+
+
+
+    @staticmethod
+    async def _insert_geo_locations(samples_input: pl.LazyFrame) -> pl.DataFrame:
+        """
+        Insert geo_locations from samples, return original geo_location strings and db ids
+        :param samples_input:
+        :return: geo_location <str>, id <int> to be joined with samples
+        """
+        start = time.perf_counter()
         geo_locations = (
             samples_input
             .select(pl.col(GEO_LOCATION))
             .unique()
+            .drop_nulls()
             .with_columns(
                 pl.col(GEO_LOCATION).str.split('/').list.to_struct(
                     n_field_strategy="max_width",
@@ -53,31 +110,30 @@ class SC2SamplesParser(FileParser):
                 )
                 .alias('tmp_geo_struct')
             )
-            .with_columns_seq(
-
-            )
+            .unnest('tmp_geo_struct')
+            .collect()
         )
 
-        # Add in not-null columns with placeholder values
-        samples_padded = samples_input.join(SC2SamplesParser._get_placeholder_value_map(), how='cross')
-
-        samples_to_insert = (
-            samples_padded
-            .drop(pl.col(GEO_LOCATION))
-            .with_columns(pl.col(COLLECTION_DATE).map_elements(
-                parse_collection_start_and_end,
-                return_dtype=pl.List(pl.Date)
-            ))
-            .with_columns(
-                pl.col(COLLECTION_DATE).list.to_struct(
-                    fields=[StandardColumnNames.collection_start_date, StandardColumnNames.collection_end_date]
+        ids = []
+        for row in geo_locations.iter_rows(named=True):
+            ids.append(
+                await find_or_insert_geo_location(
+                    GeoLocation(
+                        country_name=row[StandardColumnNames.country_name],
+                        admin1_name=row[StandardColumnNames.admin1_name],
+                        admin2_name=row[StandardColumnNames.admin2_name],
+                        admin3_name=row[StandardColumnNames.admin3_name]
+                    )
                 )
             )
-            .unnest(COLLECTION_DATE)
-        )
 
-        copy_status = await copy_insert_samples(samples_to_insert.collect())
-        print(f'samples: {copy_status}')
+        geo_locations = (
+            geo_locations
+            .select(pl.col(GEO_LOCATION))
+            .with_columns(pl.Series(ids).alias(StandardColumnNames.geo_location_id))
+        )
+        print(f'geo locations took {round(time.perf_counter() - start, 2)}s')
+        return geo_locations
 
     @staticmethod
     def _get_placeholder_value_map() -> pl.LazyFrame:

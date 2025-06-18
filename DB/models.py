@@ -139,17 +139,18 @@ class Sample(Base):
 
     __table_args__ = tuple(
         [
+            UniqueConstraint(StandardColumnNames.accession, name=ConstraintNames.uq_samples_accession),
             CheckConstraint(
-                '(not is_retracted and retraction_detected_date is null) or '
-                '(is_retracted and retraction_detected_date is not null)',
+                f'(not {StandardColumnNames.is_retracted} and {StandardColumnNames.retraction_detected_date} is null) or '
+                f'({StandardColumnNames.is_retracted} and {StandardColumnNames.retraction_detected_date} is not null)',
                 name='retraction_values_existence_in_harmony'
             ),
             CheckConstraint(
-                f'num_nulls(collection_start_date, collection_end_date) in (0, 2)',
+                f'num_nulls({StandardColumnNames.collection_start_date}, {StandardColumnNames.collection_end_date}) in (0, 2)',
                 name='collection_start_and_end_both_absent_or_both_present'
             ),
             CheckConstraint(
-                'collection_start_date <= collection_end_date',
+                f'{StandardColumnNames.collection_start_date} <= {StandardColumnNames.collection_end_date}',
                 name='collection_start_not_after_collection_end'
             )
         ]

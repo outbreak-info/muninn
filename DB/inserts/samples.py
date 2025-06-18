@@ -1,8 +1,11 @@
+from math import floor
+
 import polars as pl
-from sqlalchemy import select
+from sqlalchemy import select, insert
 
 from DB.engine import get_async_session, get_asyncpg_connection
 from DB.models import Sample
+from utils.constants import ASYNCPG_MAX_QUERY_ARGS, StandardColumnNames, ConstraintNames
 from utils.errors import NotFoundError
 from utils.gathering_task_group import GatheringTaskGroup
 
@@ -76,3 +79,45 @@ async def copy_insert_samples(samples: pl.DataFrame) -> str:
         columns=columns
     )
     return res
+
+async def batch_upsert_samples(samples: pl.DataFrame):
+    update_columns = [
+        StandardColumnNames.ref_dp,
+        StandardColumnNames.alt_dp,
+        StandardColumnNames.alt_freq,
+        StandardColumnNames.ref_rv,
+        StandardColumnNames.alt_rv,
+        StandardColumnNames.ref_qual,
+        StandardColumnNames.alt_qual,
+        StandardColumnNames.total_dp,
+        StandardColumnNames.pval,
+        StandardColumnNames.pass_qc,
+    ]
+    all_columns = update_columns + [
+        StandardColumnNames.sample_id,
+        StandardColumnNames.allele_id
+    ]
+
+    batch_size = floor(ASYNCPG_MAX_QUERY_ARGS / len(all_columns))
+    slice_start = 0
+    while slice_start < len(variants):
+        variants_slice = variants.slice(slice_start, batch_size)
+        slice_start += batch_size
+
+        base_insert = (
+            insert(Sample)
+            .values(
+                variants_slice
+                .select([pl.col(cn) for cn in all_columns])
+                .to_dicts()
+            )
+        )
+
+        async with get_async_session() as session:
+            await session.execute(
+                base_insert.on_conflict_do_update(
+                    constraint=ConstraintNames.,
+                    set_={k: getattr(base_insert.excluded, k) for k in update_columns}
+                )
+            )
+            await session.commit()
