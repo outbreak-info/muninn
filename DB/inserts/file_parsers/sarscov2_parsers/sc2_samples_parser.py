@@ -6,7 +6,7 @@ import polars as pl
 
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.geo_locations import find_or_insert_geo_location
-from DB.inserts.samples import copy_insert_samples
+from DB.inserts.samples import copy_insert_samples, batch_upsert_samples
 from DB.models import GeoLocation
 from DB.queries.samples import get_samples_accession_and_id_as_pl_df
 from utils.constants import StandardColumnNames, COLLECTION_DATE, GEO_LOCATION
@@ -47,7 +47,7 @@ class SC2SamplesParser(FileParser):
         geo_locations = await SC2SamplesParser._insert_geo_locations(samples_input)
         existing_samples = await get_samples_accession_and_id_as_pl_df()
 
-        samples_final = (
+        samples_finished = (
             samples_padded
             .join(geo_locations.lazy(), on=pl.col(GEO_LOCATION), how='left')
             .drop(pl.col(GEO_LOCATION))
@@ -65,25 +65,8 @@ class SC2SamplesParser(FileParser):
             .unnest(COLLECTION_DATE)
         )
 
-        new_samples = samples_final.join(
-            existing_samples.lazy(),
-            on=pl.col(StandardColumnNames.accession),
-            how='anti'
-        )
-        copy_status = await copy_insert_samples(new_samples.collect())
-        print(f'new samples: {copy_status}')
-
-
-        updated_samples = samples_final.join(
-            existing_samples.lazy(),
-            on=pl.col(StandardColumnNames.accession),
-             how='inner'
-        )
-
-
-
-
-
+        await SC2SamplesParser._insert_new_samples(samples_finished, existing_samples)
+        await SC2SamplesParser._update_existing_samples(samples_finished, existing_samples)
 
     @staticmethod
     async def _insert_geo_locations(samples_input: pl.LazyFrame) -> pl.DataFrame:
@@ -136,6 +119,25 @@ class SC2SamplesParser(FileParser):
         return geo_locations
 
     @staticmethod
+    async def _insert_new_samples(samples_finished: pl.LazyFrame, existing_samples: pl.DataFrame):
+        new_samples = samples_finished.join(
+            existing_samples.lazy(),
+            on=pl.col(StandardColumnNames.accession),
+            how='anti'
+        )
+        copy_status = await copy_insert_samples(new_samples.collect())
+        print(f'new samples: {copy_status}')
+
+    @staticmethod
+    async def _update_existing_samples(samples_finished: pl.LazyFrame, existing_samples: pl.DataFrame):
+        updated_samples = samples_finished.join(
+            existing_samples.lazy(),
+            on=pl.col(StandardColumnNames.accession),
+            how='inner'
+        )
+        await batch_upsert_samples(updated_samples.collect())
+
+    @staticmethod
     def _get_placeholder_value_map() -> pl.LazyFrame:
         placeholders: Dict[str, Any] = {cn: 'NA' for cn in fields_not_present_not_null}
         placeholders[StandardColumnNames.bytes] = -1
@@ -151,7 +153,7 @@ class SC2SamplesParser(FileParser):
 
     @classmethod
     def get_required_column_set(cls) -> Set[str]:
-        pass
+        return set(column_name_map.keys())
 
 
 """

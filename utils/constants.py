@@ -173,7 +173,6 @@ class StandardColumnNames:
 
     # phenotype metrics
     name = 'name'
-    assay_type = 'assay_type'
 
     # Lineages
     lineage_system_name = 'lineage_system_name'
