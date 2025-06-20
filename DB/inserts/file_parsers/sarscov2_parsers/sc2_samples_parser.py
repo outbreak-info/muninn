@@ -1,5 +1,6 @@
 import csv
 import time
+from time import perf_counter
 from typing import Set, Any, Dict
 
 import polars as pl
@@ -20,6 +21,7 @@ class SC2SamplesParser(FileParser):
         self._verify_header()
 
     async def parse_and_insert(self):
+        start = perf_counter()
         # Scan file, rename columns, drop unused cols, drop rows with null collection date
         samples_input = (
             pl.scan_csv(self.filename, separator=self.delimiter)
@@ -32,11 +34,11 @@ class SC2SamplesParser(FileParser):
                     StandardColumnNames.creation_date: pl.Datetime
                 }
             )
-            .with_columns(
+            .with_columns(  # This column has some missing values that must be filled
                 pl.col(StandardColumnNames.bio_project).fill_null('NA')
             )
         )
-        # todo: unique? No, leave it out for now to force errors on conflict.
+        # unique by accession? No, leave it out for now to force errors on conflict.
 
         # Add in not-null columns with placeholder values
         samples_padded = (
@@ -47,7 +49,7 @@ class SC2SamplesParser(FileParser):
         geo_locations = await SC2SamplesParser._insert_geo_locations(samples_input)
         existing_samples = await get_samples_accession_and_id_as_pl_df()
 
-        samples_finished = (
+        samples_finished: pl.DataFrame = (
             samples_padded
             .join(geo_locations.lazy(), on=pl.col(GEO_LOCATION), how='left')
             .drop(pl.col(GEO_LOCATION))
@@ -63,8 +65,10 @@ class SC2SamplesParser(FileParser):
                 )
             )
             .unnest(COLLECTION_DATE)
+            .collect(engine='streaming')
         )
-
+        setup_elapsed = perf_counter() - start
+        print(f'samples: starting db ops. setup took {round(setup_elapsed, 2)}s')
         await SC2SamplesParser._insert_new_samples(samples_finished, existing_samples)
         await SC2SamplesParser._update_existing_samples(samples_finished, existing_samples)
 
@@ -75,6 +79,7 @@ class SC2SamplesParser(FileParser):
         :param samples_input:
         :return: geo_location <str>, id <int> to be joined with samples
         """
+        # this is still done the slow way, it doesn't take long enough to be worth updating yet
         start = time.perf_counter()
         geo_locations = (
             samples_input
@@ -119,23 +124,23 @@ class SC2SamplesParser(FileParser):
         return geo_locations
 
     @staticmethod
-    async def _insert_new_samples(samples_finished: pl.LazyFrame, existing_samples: pl.DataFrame):
+    async def _insert_new_samples(samples_finished: pl.DataFrame, existing_samples: pl.DataFrame):
         new_samples = samples_finished.join(
-            existing_samples.lazy(),
+            existing_samples,
             on=pl.col(StandardColumnNames.accession),
             how='anti'
         )
-        copy_status = await copy_insert_samples(new_samples.collect())
+        copy_status = await copy_insert_samples(new_samples)
         print(f'new samples: {copy_status}')
 
     @staticmethod
-    async def _update_existing_samples(samples_finished: pl.LazyFrame, existing_samples: pl.DataFrame):
+    async def _update_existing_samples(samples_finished: pl.DataFrame, existing_samples: pl.DataFrame):
         updated_samples = samples_finished.join(
-            existing_samples.lazy(),
+            existing_samples,
             on=pl.col(StandardColumnNames.accession),
             how='inner'
         )
-        await batch_upsert_samples(updated_samples.collect())
+        await batch_upsert_samples(updated_samples)
 
     @staticmethod
     def _get_placeholder_value_map() -> pl.LazyFrame:
@@ -193,7 +198,7 @@ column_name_map = {
     StandardColumnNames.isolation_source: 'Isolate_Source',
     COLLECTION_DATE: 'Collection_Date',
     StandardColumnNames.release_date: 'ReleaseDate',
-    StandardColumnNames.creation_date: 'UpdateDate',  # todo
+    StandardColumnNames.creation_date: 'UpdateDate',  # todo: check on this mapping
     GEO_LOCATION: 'Geographic_Location',
     StandardColumnNames.bases: 'Length'
 }

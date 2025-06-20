@@ -1,5 +1,4 @@
 import csv
-import os.path
 from typing import List, Set
 
 import polars as pl
@@ -46,7 +45,7 @@ class VariantsMutationsCombinedParser(FileParser):
             'count_amino_subs_added': 'unset',
             'count_translations_added': 'unset',
             'count_mutations_added': 'unset',
-            'count_existing_variants': 'unset',
+            'count_preexisting_variants': 'unset',
             'count_variants_added': 'unset'
         }
 
@@ -79,6 +78,8 @@ class VariantsMutationsCombinedParser(FileParser):
         print(f'amino subs added: {debug_info}')
 
         # 10. Get new allele / AAS ids and join back into vars and muts
+        variants_finished: pl.DataFrame
+        mutations_finished: pl.DataFrame
         variants_finished, mutations_finished = await (
             VariantsMutationsCombinedParser
             ._join_alleles_and_amino_subs_into_vars_and_muts(variants_with_samples, mutations_with_samples)
@@ -369,7 +370,7 @@ class VariantsMutationsCombinedParser(FileParser):
     async def _join_alleles_and_amino_subs_into_vars_and_muts(
         variants_with_samples: pl.LazyFrame,
         mutations_with_samples: pl.LazyFrame
-    ) -> (pl.LazyFrame, pl.LazyFrame):
+    ) -> (pl.DataFrame, pl.DataFrame):
         # 10. Get new allele / AAS ids and join back into vars and muts
         existing_alleles = await get_all_alleles_as_pl_df()
         existing_amino_subs = await get_all_amino_acid_subs_as_pl_df()
@@ -390,7 +391,7 @@ class VariantsMutationsCombinedParser(FileParser):
                 StandardColumnNames.alt_aa
             ],
             how='left'
-        )
+        ).collect(engine='streaming')
 
         mutations_finished = mutations_with_samples.join(
             existing_alleles.lazy(),
@@ -408,13 +409,14 @@ class VariantsMutationsCombinedParser(FileParser):
                 StandardColumnNames.alt_aa
             ],
             how='left'
-        )
+        ).collect(engine='streaming')
+
         return variants_finished, mutations_finished
 
     @staticmethod
     async def _insert_new_translations(
-        variants_finished: pl.LazyFrame,
-        mutations_finished: pl.LazyFrame
+        variants_finished: pl.DataFrame,
+        mutations_finished: pl.DataFrame
     ) -> str:
         # 11. Split out and insert new translations from vars and muts
         translations_cols = {
@@ -432,21 +434,21 @@ class VariantsMutationsCombinedParser(FileParser):
         # 11a. Filter to new translations and insert
         existing_translations = await get_all_translations_as_pl_df()
         new_translations = translations.join(
-            existing_translations.lazy(),
+            existing_translations,
             on=[
                 StandardColumnNames.allele_id,
                 StandardColumnNames.amino_acid_substitution_id
             ],
             how='anti'
         )
-        return await copy_insert_translations(new_translations.collect())
+        return await copy_insert_translations(new_translations)
 
     @staticmethod
-    async def _insert_new_mutations(mutations_finished: pl.LazyFrame) -> str:
+    async def _insert_new_mutations(mutations_finished: pl.DataFrame) -> str:
         # 12. Filter out existing mutations (updates not allowed)
         existing_mutations = await get_all_mutations_as_pl_df()
         new_mutations = mutations_finished.join(
-            existing_mutations.lazy(),
+            existing_mutations,
             on=[
                 StandardColumnNames.sample_id,
                 StandardColumnNames.allele_id
@@ -455,19 +457,19 @@ class VariantsMutationsCombinedParser(FileParser):
         )
 
         # 13. insert new mutations via copy
-        return await copy_insert_mutations(new_mutations.collect())
+        return await copy_insert_mutations(new_mutations)
 
     @staticmethod
-    async def _update_existing_variants(variants_finished: pl.LazyFrame, existing_variants: pl.DataFrame) -> int:
+    async def _update_existing_variants(variants_finished: pl.DataFrame, existing_variants: pl.DataFrame) -> int:
         # 14. Separate new and existing variants
         updated_variants: pl.DataFrame = variants_finished.join(
-            existing_variants.lazy(),
+            existing_variants,
             on=[
                 StandardColumnNames.sample_id,
                 StandardColumnNames.allele_id
             ],
             how='inner'
-        ).collect()
+        )
 
         count_preexisting_variants = len(updated_variants)
 
@@ -476,10 +478,10 @@ class VariantsMutationsCombinedParser(FileParser):
         return count_preexisting_variants
 
     @staticmethod
-    async def _insert_new_variants(variants_finished: pl.LazyFrame, existing_variants: pl.DataFrame) -> str:
+    async def _insert_new_variants(variants_finished: pl.DataFrame, existing_variants: pl.DataFrame) -> str:
         # 14. Separate new and existing variants
         new_variants = variants_finished.join(
-            existing_variants.lazy(),
+            existing_variants,
             on=[
                 StandardColumnNames.sample_id,
                 StandardColumnNames.allele_id
@@ -488,7 +490,7 @@ class VariantsMutationsCombinedParser(FileParser):
         )
 
         # 15. Insert new variants via copy
-        return await copy_insert_variants(new_variants.collect())
+        return await copy_insert_variants(new_variants)
 
     @classmethod
     def get_required_column_set(cls) -> Set[str]:
