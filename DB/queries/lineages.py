@@ -9,6 +9,7 @@ from DB.models import LineageSystem, Lineage, Sample, SampleLineage, GeoLocation
 from api.models import LineageCountInfo, LineageAbundanceInfo, LineageInfo, LineageAbundanceSummaryInfo
 from parser.parser import parser
 from utils.constants import DateBinOpt, NtOrAa
+from collections import defaultdict
 
 
 async def get_sample_counts_by_lineage(samples_raw_query: str | None) -> List[LineageCountInfo]:
@@ -379,7 +380,7 @@ async def get_mutation_incidence(lineage: str,
                 }
             )
 
-    out = dict()
-    for region,ref_nt,position_nt,alt_nt,count in res:
-        out[f'{region}:{ref_nt}{position_nt}{alt_nt}'] = count
+    out = defaultdict(list)
+    for region, ref, pos, alt, count in res:
+        out[region].append({"ref": ref, "alt": alt, "pos": pos, "count": count})
     return {'samples':sampleCount,'counts':out}
