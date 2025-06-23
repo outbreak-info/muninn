@@ -315,6 +315,7 @@ async def get_abundance_summaries_by_collection_date(
 
 async def get_mutation_incidence(lineage: str, 
     change_bin: NtOrAa,
+    include_synonymous: bool,
     raw_query: str | None
     ):
 
@@ -322,6 +323,9 @@ async def get_mutation_incidence(lineage: str,
     if raw_query is not None:
         user_where_clause = f'and ({parser.parse(raw_query)})'
 
+    not_synonymous = 'and not ref_aa=alt_aa'
+    if include_synonymous:
+        not_synonymous = ''
 
     async with get_async_session() as session:
 
@@ -342,13 +346,15 @@ async def get_mutation_incidence(lineage: str,
             res = await session.execute(
                 text(
                     f'''
-                    SELECT region,ref_nt,position_nt,alt_nt,count(*)
+                    SELECT region,ref_nt,position_nt,alt_nt,count(DISTINCT mutations.sample_id)
                     FROM lineages
                     LEFT JOIN samples_lineages ON samples_lineages.lineage_id = lineages.id
                     LEFT JOIN samples ON samples_lineages.sample_id = samples.id
                     LEFT JOIN mutations ON mutations.sample_id = samples.id
                     LEFT JOIN alleles ON mutations.allele_id = alleles.id
-                    WHERE lineage_name = :input_lineage {user_where_clause}
+                    LEFT JOIN translations on translations.allele_id = mutations.allele_id
+                    INNER JOIN amino_acid_substitutions ON amino_acid_substitutions.id = amino_acid_substitution_id
+                    WHERE lineage_name = :input_lineage {not_synonymous} {user_where_clause}
                     GROUP BY region,ref_nt,position_nt,alt_nt
                     ORDER BY count DESC
                     '''
@@ -360,20 +366,20 @@ async def get_mutation_incidence(lineage: str,
             res = await session.execute(
                 text(
                     f'''
-                    SELECT region,
-                        ref_aa,
-                        position_aa,
-                        alt_aa,
-                        count(*)
-                    FROM lineages
-                    LEFT JOIN samples_lineages ON samples_lineages.lineage_id = lineages.id
-                    LEFT JOIN mutations ON mutations.sample_id = samples_lineages.sample_id
-                    LEFT JOIN alleles ON mutations.allele_id = alleles.id
-                    LEFT JOIN translations on translations.allele_id = mutations.allele_id
-                    INNER JOIN amino_acid_substitutions ON amino_acid_substitutions.id = amino_acid_substitution_id
-                    WHERE lineage_name = :input_lineage
-                    GROUP BY region,ref_aa,position_aa,alt_aa
-                    ORDER BY count DESC
+SELECT region,
+    ref_aa,
+    position_aa,
+    alt_aa,
+    count(DISTINCT mutations.sample_id)
+FROM lineages
+LEFT JOIN samples_lineages ON samples_lineages.lineage_id = lineages.id
+LEFT JOIN mutations ON mutations.sample_id = samples_lineages.sample_id
+LEFT JOIN alleles ON mutations.allele_id = alleles.id
+LEFT JOIN translations on translations.allele_id = mutations.allele_id
+INNER JOIN amino_acid_substitutions ON amino_acid_substitutions.id = amino_acid_substitution_id
+WHERE lineage_name = :input_lineage {not_synonymous} {user_where_clause}
+GROUP BY region,ref_aa,position_aa,alt_aa
+ORDER BY count DESC
                     '''
                 ), {
                     'input_lineage': lineage
