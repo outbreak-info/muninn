@@ -1,5 +1,4 @@
 import polars as pl
-from sqlalchemy import insert
 from sqlalchemy.exc import IntegrityError
 
 from DB.engine import get_async_session, get_asyncpg_connection
@@ -15,15 +14,6 @@ async def insert_translation(t: Translation):
             await session.commit()
         except IntegrityError:
             pass
-
-
-async def batch_insert_translations(translations: pl.DataFrame) -> None:
-    async with get_async_session() as session:
-        await session.execute(
-            insert(Translation),
-            translations.to_dicts()
-        )
-        await session.commit()
 
 
 async def copy_insert_translations(translations: pl.DataFrame) -> str:

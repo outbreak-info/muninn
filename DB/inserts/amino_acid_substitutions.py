@@ -1,11 +1,10 @@
 import polars as pl
-from sqlalchemy import and_, select, insert
+from sqlalchemy import and_, select
 
 from DB.engine import get_async_session, get_asyncpg_connection
 from DB.models import AminoAcidSubstitution
 from utils.constants import StandardColumnNames
 from utils.errors import NotFoundError
-from utils.gathering_task_group import GatheringTaskGroup
 
 
 async def find_or_insert_aa_sub(aas: AminoAcidSubstitution) -> int:
@@ -49,37 +48,15 @@ async def find_aa_sub(aas: AminoAcidSubstitution) -> int:
     return id_
 
 
-async def batch_insert_aa_subs(
-    amino_subs: pl.DataFrame,
-    position_aa_name: str = 'position_aa',
-    ref_aa_name: str = 'ref_aa',
-    alt_aa_name: str = 'alt_aa',
-    gff_feature_name: str = 'gff_feature',
-    ref_codon_name: str = 'ref_codon',
-    alt_codon_name: str = 'alt_codon',
-) -> pl.DataFrame:
-
-    async with get_async_session() as session:
-        ids = await session.scalars(
-            insert(AminoAcidSubstitution).returning(AminoAcidSubstitution.id),
-            amino_subs.to_dicts()
-        )
-        await session.commit()
-    amino_subs = amino_subs.with_columns(
-        pl.Series('amino_acid_substitution_id', ids)
-    )
-    return amino_subs
-
-
 async def copy_insert_aa_subs(aa_subs: pl.DataFrame) -> str:
     columns = [
-            StandardColumnNames.gff_feature,
-            StandardColumnNames.position_aa,
-            StandardColumnNames.ref_aa,
-            StandardColumnNames.alt_aa,
-            StandardColumnNames.ref_codon,
-            StandardColumnNames.alt_codon,
-        ]
+        StandardColumnNames.gff_feature,
+        StandardColumnNames.position_aa,
+        StandardColumnNames.ref_aa,
+        StandardColumnNames.alt_aa,
+        StandardColumnNames.ref_codon,
+        StandardColumnNames.alt_codon,
+    ]
     conn = await get_asyncpg_connection()
     res = await conn.copy_records_to_table(
         'amino_acid_substitutions',

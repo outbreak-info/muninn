@@ -5,10 +5,7 @@ import polars as pl
 
 from DB.inserts.alleles import copy_insert_alleles
 from DB.inserts.amino_acid_substitutions import copy_insert_aa_subs
-from DB.inserts.file_parsers import variants_tsv_parser, mutations_parser
 from DB.inserts.file_parsers.file_parser import FileParser
-from DB.inserts.file_parsers.mutations_parser import MutationsTsvParser
-from DB.inserts.file_parsers.variants_tsv_parser import VariantsTsvParser
 from DB.inserts.mutations import copy_insert_mutations
 from DB.inserts.translations import copy_insert_translations
 from DB.inserts.variants import batch_upsert_variants, copy_insert_variants
@@ -118,8 +115,8 @@ class VariantsMutationsCombinedParser(FileParser):
             mapped_names = []
             for cn in cns:
                 try:
-                    mapped_names.append(variants_tsv_parser.ColNameMapping(cn).name)
-                except ValueError:
+                    mapped_names.append(VariantsMutationsCombinedParser.variants_column_mapping[cn])
+                except KeyError:
                     mapped_names.append(cn)
             return mapped_names
 
@@ -135,8 +132,8 @@ class VariantsMutationsCombinedParser(FileParser):
             mapped_names = []
             for cn in cns:
                 try:
-                    mapped_names.append(mutations_parser.ColNameMapping(cn).name)
-                except ValueError:
+                    mapped_names.append(VariantsMutationsCombinedParser.mutations_column_mapping[cn])
+                except KeyError:
                     mapped_names.append(cn)
             return mapped_names
 
@@ -495,19 +492,57 @@ class VariantsMutationsCombinedParser(FileParser):
     @classmethod
     def get_required_column_set(cls) -> Set[str]:
         return {
-            f' variants: {", ".join(VariantsTsvParser.get_required_column_set())}',
-            f'mutations: {", ".join(MutationsTsvParser.get_required_column_set())}'
+            f' variants: {", ".join(VariantsMutationsCombinedParser.variants_column_mapping.values())}',
+            f'mutations: {", ".join(VariantsMutationsCombinedParser.mutations_column_mapping.values())}'
         }
 
     def _verify_headers(self):
         with open(self.variants_filename, 'r') as f:
             reader = csv.DictReader(f, delimiter=self.delimiter)
-            required_columns = VariantsTsvParser.get_required_column_set()
+            required_columns = set(VariantsMutationsCombinedParser.variants_column_mapping.values())
             if not set(reader.fieldnames) >= required_columns:
                 raise ValueError(f'Missing required fields: {required_columns - set(reader.fieldnames)}')
 
         with open(self.mutations_filename, 'r') as f:
             reader = csv.DictReader(f, delimiter=self.delimiter)
-            required_columns = MutationsTsvParser.get_required_column_set()
+            required_columns = set(VariantsMutationsCombinedParser.mutations_column_mapping.values())
             if not set(reader.fieldnames) >= required_columns:
                 raise ValueError(f'Missing required fields: {required_columns - set(reader.fieldnames)}')
+
+    variants_column_mapping = {
+        StandardColumnNames.region: 'REGION',
+        StandardColumnNames.position_nt: 'POS',
+        StandardColumnNames.ref_nt: 'REF',
+        StandardColumnNames.alt_nt: 'ALT',
+        StandardColumnNames.position_aa: 'POS_AA',
+        StandardColumnNames.ref_aa: 'REF_AA',
+        StandardColumnNames.alt_aa: 'ALT_AA',
+        StandardColumnNames.gff_feature: 'GFF_FEATURE',
+        StandardColumnNames.ref_codon: 'REF_CODON',
+        StandardColumnNames.alt_codon: 'ALT_CODON',
+        StandardColumnNames.accession: 'SRA',
+        StandardColumnNames.pval: 'PVAL',
+        StandardColumnNames.ref_dp: 'REF_DP',
+        StandardColumnNames.ref_rv: 'REF_RV',
+        StandardColumnNames.ref_qual: 'REF_QUAL',
+        StandardColumnNames.alt_dp: 'ALT_DP',
+        StandardColumnNames.alt_rv: 'ALT_RV',
+        StandardColumnNames.alt_qual: 'ALT_QUAL',
+        StandardColumnNames.pass_qc: 'PASS',
+        StandardColumnNames.alt_freq: 'ALT_FREQ',
+        StandardColumnNames.total_dp: 'TOTAL_DP',
+    }
+
+    mutations_column_mapping = {
+        StandardColumnNames.accession: 'sra',
+        StandardColumnNames.position_nt: 'pos',
+        StandardColumnNames.ref_nt: 'ref',
+        StandardColumnNames.alt_nt: 'alt',
+        StandardColumnNames.region: 'region',
+        StandardColumnNames.gff_feature: 'GFF_FEATURE',
+        StandardColumnNames.ref_codon: 'ref_codon',
+        StandardColumnNames.alt_codon: 'alt_codon',
+        StandardColumnNames.ref_aa: 'ref_aa',
+        StandardColumnNames.alt_aa: 'alt_aa',
+        StandardColumnNames.position_aa: 'pos_aa',
+    }
