@@ -113,9 +113,10 @@ class VariantsMutationsCombinedParser(FileParser):
     async def _scan_variants(self):
         def variants_colname_mapping(cns: List[str]) -> List[str]:
             mapped_names = []
+            inverted_colname_map = {v: k for k, v in VariantsMutationsCombinedParser.variants_column_mapping.items()}
             for cn in cns:
                 try:
-                    mapped_names.append(VariantsMutationsCombinedParser.variants_column_mapping[cn])
+                    mapped_names.append(inverted_colname_map[cn])
                 except KeyError:
                     mapped_names.append(cn)
             return mapped_names
@@ -130,9 +131,10 @@ class VariantsMutationsCombinedParser(FileParser):
     async def _scan_mutations(self):
         def mutations_colname_mapping(cns: List[str]) -> List[str]:
             mapped_names = []
+            inverted_colname_map = {v: k for k, v in VariantsMutationsCombinedParser.mutations_column_mapping.items()}
             for cn in cns:
                 try:
-                    mapped_names.append(VariantsMutationsCombinedParser.mutations_column_mapping[cn])
+                    mapped_names.append(inverted_colname_map[cn])
                 except KeyError:
                     mapped_names.append(cn)
             return mapped_names
