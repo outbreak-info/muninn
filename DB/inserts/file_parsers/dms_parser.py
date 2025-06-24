@@ -1,5 +1,5 @@
 from csv import DictReader
-from typing import Set
+from typing import Set, Dict
 
 from DB.inserts.amino_acid_substitutions import find_aa_sub
 from DB.inserts.file_parsers.file_parser import FileParser
@@ -35,9 +35,9 @@ class DmsFileParser(FileParser):
         with open(self.filename, 'r') as f:
             reader = DictReader(f, delimiter=self.delimiter)
             self._verify_header(reader)
+            present_data_cols = DmsFileParser._get_present_data_columns(reader)
 
             for row in reader:
-
                 try:
                     position_aa = get_value(
                         row,
@@ -73,7 +73,7 @@ class DmsFileParser(FileParser):
                         cache_amino_subs_not_found.add((position_aa, ref_aa, alt_aa))
                         continue
 
-                for canonical_name, input_name in data_column_name_map.items():
+                for canonical_name, input_name in present_data_cols.items():
                     try:
                         v = get_value(row, input_name, transform=float)
                     except ValueError:
@@ -105,6 +105,19 @@ class DmsFileParser(FileParser):
         debug_info['count_aas_not_found'] = len(cache_amino_subs_not_found)
         print(debug_info)
 
+
+    @staticmethod
+    def _get_present_data_columns(reader: DictReader) -> Dict[str, str]:
+        actual_cols = set(reader.fieldnames)
+
+        data_cols_present = {k: v for k, v in data_column_name_map.items() if v in actual_cols}
+        if len(data_cols_present) == 0:
+            raise ValueError(
+                f'No DMS data columns found, so no values can be extracted from this file. '
+                f'Available data columns: {set(data_column_name_map.values())}'
+            )
+        return data_cols_present
+
     @classmethod
     def _verify_header(cls, reader: DictReader):
         required_cols = cls.get_required_column_set()
@@ -112,13 +125,6 @@ class DmsFileParser(FileParser):
         diff = required_cols - actual_cols
         if not len(diff) == 0:
             raise ValueError(f'Not all required columns are present, missing: {diff}')
-        data_col_names = set(data_column_name_map.values())
-        data_cols_present = actual_cols.intersection(data_col_names)
-        if len(data_cols_present) == 0:
-            raise ValueError(
-                f'No DMS data columns found, so no values can be extracted from this file. '
-                f'Available data columns: {data_col_names}'
-            )
 
     @classmethod
     def get_required_column_set(cls) -> Set[str]:
