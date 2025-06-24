@@ -5,7 +5,7 @@ from datetime import datetime
 from os import path
 from typing import Any
 
-from DB.inserts.file_parsers.dms_parser import HaRegionDmsTsvParser
+from DB.inserts.file_parsers.dms_parser import HaRegionDmsTsvParser, HaRegionDmsCsvParser
 from DB.inserts.file_parsers.eve_parser import EveCsvParser
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.file_parsers.freyja_demixed_parser import FreyjaDemixedParser
@@ -27,6 +27,7 @@ def main():
         'genoflu_lineages': GenofluLineagesParser,
         'mutations_tsv': MutationsTsvParser,
         'ha_dms_tsv': HaRegionDmsTsvParser,
+        'ha_dms_csv': HaRegionDmsCsvParser,
         'freyja_demixed': FreyjaDemixedParser,
         'variants_mutations_combined_tsv': VariantsMutationsCombinedParser,
         'sc2_samples': SC2SamplesParser

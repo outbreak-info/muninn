@@ -174,12 +174,21 @@ class StandardColumnNames:
     # phenotype metrics
     name = 'name'
 
+
     # Lineages
     lineage_system_name = 'lineage_system_name'
     lineage_name = 'lineage_name'
     is_consensus_call = 'is_consensus_call'
     abundance = 'abundance'
 
+class StandardPhenoMetricNames:
+    species_sera_escape = 'species_sera_escape'
+    entry_in_293t_cells = 'entry_in_293t_cells'
+    stability = 'stability'
+    sa26_usage_increase = 'sa26_usage_increase'
+    mature_h5_site = 'mature_h5_site'
+    ferret_sera_escape = 'ferret_sera_escape'
+    mouse_sera_escape = 'mouse_sera_escape'
 
 class ConstraintNames:
     uq_intra_host_variants_sample_allele_pair = 'uq_intra_host_variants_sample_allele_pair'
