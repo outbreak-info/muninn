@@ -10,17 +10,13 @@ services:
     # todo: eventually I'd like to not use the superuser for everything
     # The superuser should be postgres, and flu just own the flu db
     environment:
-      POSTGRES_USER: flu
+      POSTGRES_USER: ${FLU_DB_USER}
       POSTGRES_PASSWORD: ${FLU_DB_PASSWORD}
       POSTGRES_DB: flu
     command:
       - "postgres"
       - "-c"
-      - "max_connections=100"
-      - "-c"
-      - "shared_buffers=2GB"
-      - "-c"
-      - "work_mem=8MB"
+      - "config_file=/docker-entrypoint-initdb.d/${PG_CONFIG_NAME}.postgresql.conf"
     healthcheck:
       test: pg_isready -U flu -d flu
       interval: 2s
@@ -28,6 +24,10 @@ services:
       retries: 15
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - type: bind
+        source: ./containers/database/initdb.d
+        target: /docker-entrypoint-initdb.d
+        read_only: true
 
   server:
     container_name: "flu_db_server"
@@ -38,7 +38,7 @@ services:
       - type: bind
         source: ${FLU_DB_SERVER_DATA_INPUT_DIR}
         target: /flu/data
-        read_only: false
+        read_only: true
     ports:
       - "8000:8000"
     environment:

@@ -1,4 +1,4 @@
-# Bird Flu Database
+# Muninn --- Viral Mutation Database
 
 Database system to store mutation and variant data for avian influenza.
 
@@ -15,7 +15,11 @@ Database system to store mutation and variant data for avian influenza.
     export FLU_DB_DB_NAME="flu"
     export FLU_DB_PORT="5432"
     
+   # this will be mounted to the server container as /flu/data
     export FLU_DB_SERVER_DATA_INPUT_DIR="/dev/null"
+   
+   # this controls which config file is applied to postgres
+    export PG_CONFIG_NAME="local"
     ```
     - On kenny, you may need to mess with the port to avoid conflicting with the container I have running.
       Changing the setting in .env will cascade to everywhere else, so just change it there.
@@ -31,7 +35,7 @@ Database system to store mutation and variant data for avian influenza.
 5. Load or update data:  `docker exec -d flu_db_server muninn_ingest_all`
     1. Input data must be placed in `FLU_DB_SERVER_DATA_INPUT_DIR` on the host machine.
        For details read ingestion script: `containers/server/bin/muninn_ingest_all`
-    2. This process will take several hours to finish, but existing records will be updated in-place, and the webserver
+    2. This process will take 15-45 minutes to finish, but existing records will be updated in-place, and the webserver
        will remain available.
     3. For information on logs see Troubleshooting Information > Webserver
 6. Load or update test data: `docker exec -d flu_db_server muninn_ingest_playset ${FLU_DB_SERVER_DATA_INPUT_DIR}/<archive name>`
@@ -41,6 +45,15 @@ Database system to store mutation and variant data for avian influenza.
     3. For information on logs see Troubleshooting Information > Webserver
 
 ## Troubleshooting Tools
+
+To recreate both docker containers run the following:
+```
+docker compose down
+docker compose -f docker-compose.yml up -d --build
+``` 
+This will remove and rebuild both containers, but will not wipe out the contents of the database, which are maintained in a volume.
+
+To wipe out the contents of the database as well, replace the first command with `docker compose down -v`.
 
 ### Database
 
@@ -61,20 +74,12 @@ It's very useful for debugging.
 
 ### Webserver
 
-To see the server (fastAPI) logs, run `docker logs flu_db_server`
+To see the server (fastAPI) logs, run `docker logs flu_db_server`.
 
-The logs for the database setup and data ingestion scripts are kept in files on the container itself, at
-`/flu/db_setup.log` and `/flu/ingest_all.log`.
+The logs for the database setup are kept at `/flu/db_setup.log`.
+Logs from data ingestion scripts are date stamped like `ingest_all<date stamp>.log` and are stored in the mounted directory indicated by `FLU_DB_SERVER_DATA_INPUT_DIR`.
 
-To get open a terminal session on the server container run `docker exec -it flu_db_server bash`
-
-#### Recreate Server Container without Changing Database
-
-If you recreate the database container, it takes a long time to reload all the data.
-Here's how you recreate just the server container without taking down the database.
-
-1. `docker stop flu_db_server && docker rm flu_db_server`
-2. `docker-compose -f docker-compose.yml up -d --no-deps --no-recreate --build server`
+To get open a tty on the server container run `docker exec -it flu_db_server bash`
 
 ## Query Syntax
 
@@ -155,24 +160,3 @@ As far as I know, the only columns affected by this are ids which we are unlikel
 fixing this will not be a priority unless a use-case arises.
 
 Have fun!
-
-## Notes
-
-### Geo Locations
-
-I want to know about the format in which `geo_loc_name` and its ilk are sent to me.
-[This link](https://www.ncbi.nlm.nih.gov/sra/docs/sra-cloud-based-metadata-table/) gives a brief overview of the
-metadata fields available for samples in the SRA, but it doesn't give any details about the formatting of those pesky
-location strings.
-[Here](https://www.ncbi.nlm.nih.gov/biosample/docs/attributes/) we get some more details about the formatting
-(Ctrl-F for "geo_loc_name").
-And that entry will point us to
-[this page from the INSDC](https://www.insdc.org/submitting-standards/geo_loc_name-qualifier-vocabulary/),
-which specifies the format for these country strings and gives the list of allowed country names.
-
-According to the INSDC page, the format is `<geo_loc_name>[:<region>][, <locality>]`, where `<geo_loc_name>` is the name
-of either a country or an ocean, from the approved list given on the page.
-They don't give much detail for the region and locality stuff, and worse, some of our examples don't follow this format.
-Entries like `USA: Plympton, MA` go `<geo_loc_name>:<locality>, <region>`.
-But since these entries seem to always use a state postal code, we should be able to make a functional parsing system
-based on this.
