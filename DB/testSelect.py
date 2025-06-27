@@ -2,6 +2,7 @@ import asyncio
 import logging
 from pprint import pprint
 
+from DB.queries.alleles import get_all_alleles_as_pl_df
 from DB.queries.counts import count_variants_by_column, count_mutations_by_column
 from DB.queries.lineages import get_sample_counts_by_lineage, get_abundances, get_abundance_summaries
 from DB.queries.mutations import get_mutations_by_sample, get_mutations
@@ -59,5 +60,6 @@ logger.setLevel(logging.INFO) # set debug to log results as well
 # r = get_sample_counts_by_lineage('host = CAT')
 
 # r = asyncio.run(get_abundances(None))
-r = asyncio.run(get_abundance_summaries("lineage_name=H5Nx-A"))
+# r = asyncio.run(get_abundance_summaries("lineage_name=H5Nx-A"))
+r = asyncio.run(get_all_alleles_as_pl_df())
 pprint(r)

@@ -5,6 +5,7 @@ asyncpg==0.30.0
 certifi==2024.12.14
 charset-normalizer==3.4.1
 click==8.1.8
+connectorx==0.4.3
 dnspython==2.7.0
 email_validator==2.2.0
 fastapi==0.115.8
@@ -21,7 +22,9 @@ markdown-it-py==3.0.0
 MarkupSafe==3.0.2
 mdurl==0.1.2
 ply==3.11
+polars==1.30.0
 psycopg2-binary==2.9.10
+pyarrow==20.0.0
 pydantic==2.10.6
 pydantic_core==2.27.2
 Pygments==2.19.1

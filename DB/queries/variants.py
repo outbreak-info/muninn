@@ -1,12 +1,14 @@
 from typing import List
 
+import polars as pl
 from sqlalchemy import select, text
 from sqlalchemy.orm import contains_eager
 
-from DB.engine import get_async_session
+from DB.engine import get_async_session, get_uri_for_polars
 from DB.models import Sample, IntraHostVariant, Allele, AminoAcidSubstitution, GeoLocation, Translation
 from api.models import VariantInfo
 from parser.parser import parser
+from utils.constants import StandardColumnNames
 
 
 async def get_variants(query: str) -> List['VariantInfo']:
@@ -52,3 +54,12 @@ async def get_variants_for_sample(query: str) -> List['VariantInfo']:
         results = await session.scalars(variants_query)
         out_data = [VariantInfo.from_db_object(v) for v in results.unique()]
     return out_data
+
+
+async def get_all_variants_as_pl_df() -> pl.DataFrame:
+    return pl.read_database_uri(
+        query=f'select * from {IntraHostVariant.__tablename__};',
+        uri=get_uri_for_polars()
+    ).rename(
+        {'id': StandardColumnNames.intra_host_variant_id}
+    )
