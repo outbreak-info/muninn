@@ -16,7 +16,7 @@ from DB.queries.samples import get_samples_accession_and_id_as_pl_df
 from DB.queries.translations import get_all_translations_as_pl_df
 from DB.queries.variants import get_all_variants_as_pl_df
 from utils.constants import StandardColumnNames, EXCLUDED_SRAS
-from utils.csv_helpers import gff_feature_strip_region_name
+from utils.csv_helpers import clean_up_gff_feature
 
 AMINO_SUB_REF_CONFLICTS_FILE = '/tmp/amino_sub_ref_conflicts.csv'
 ALLELE_REF_CONFLICTS_FILE = '/tmp/allele_ref_conflicts.csv'
@@ -157,7 +157,7 @@ class VariantsMutationsCombinedParser(FileParser):
             pl.col(StandardColumnNames.alt_codon).str.to_uppercase().alias(StandardColumnNames.alt_codon),
             (
                 pl.col(StandardColumnNames.gff_feature)
-                .map_elements(gff_feature_strip_region_name, return_dtype=pl.String)
+                .map_elements(clean_up_gff_feature, return_dtype=pl.String)
                 .alias(StandardColumnNames.gff_feature)
 
             ),

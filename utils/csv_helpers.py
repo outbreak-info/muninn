@@ -35,8 +35,9 @@ def int_from_decimal_str(s: str) -> int:
     return int(v)
 
 
-def gff_feature_strip_region_name(gff_feature: str) -> str:
+def clean_up_gff_feature(gff_feature: str) -> str:
     out = gff_feature
     if ':' in gff_feature:
         out = gff_feature.split(':')[1]
+    out = out.replace('cds-', '')
     return out
