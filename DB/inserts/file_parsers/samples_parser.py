@@ -9,6 +9,7 @@ from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.geo_locations import find_or_insert_geo_location
 from DB.inserts.samples import find_or_insert_sample
 from DB.models import GeoLocation, Sample
+from utils.constants import EXCLUDED_SRAS
 from utils.csv_helpers import get_value, bool_from_str
 from utils.dates_and_times import parse_collection_start_and_end
 
@@ -33,6 +34,9 @@ class SamplesParser(FileParser):
             self._verify_header(reader)
             for row in reader:
                 try:
+                    accession = get_value(row, ColNameMapping.accession.value)
+                    if accession in EXCLUDED_SRAS:
+                        continue
                     # parse geo location
                     geo_location_id = None
                     geo_loc_full_text = get_value(
@@ -76,7 +80,7 @@ class SamplesParser(FileParser):
 
                     sample = Sample(
                         geo_location_id=geo_location_id,
-                        accession=get_value(row, ColNameMapping.accession.value),
+                        accession=accession,
                         assay_type=get_value(row, ColNameMapping.assay_type.value),
                         avg_spot_length=get_value(
                             row,

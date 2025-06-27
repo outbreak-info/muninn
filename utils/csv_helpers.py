@@ -33,3 +33,10 @@ def int_from_decimal_str(s: str) -> int:
     if not int(v) == v:
         raise ValueError
     return int(v)
+
+
+def gff_feature_strip_region_name(gff_feature: str) -> str:
+    out = gff_feature
+    if ':' in gff_feature:
+        out = gff_feature.split(':')[1]
+    return out
