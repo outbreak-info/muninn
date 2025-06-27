@@ -10,9 +10,11 @@ services:
     # todo: eventually I'd like to not use the superuser for everything
     # The superuser should be postgres, and flu just own the flu db
     environment:
-      POSTGRES_USER: ${FLU_DB_USER}
-      POSTGRES_PASSWORD: ${FLU_DB_PASSWORD}
-      POSTGRES_DB: flu
+      POSTGRES_USER: ${FLU_DB_SUPERUSER}
+      POSTGRES_PASSWORD: ${FLU_DB_SUPERUSER_PASSWORD}
+      POSTGRES_DB: ${FLU_DB_DB_NAME}
+      FLU_DB_READONLY_PASSWORD: ${FLU_DB_READONLY_PASSWORD}
+      FLU_DB_READONLY_USER: ${FLU_DB_READONLY_USER}
     command:
       - "postgres"
       - "-c"
@@ -44,7 +46,7 @@ services:
     environment:
       FLU_DB_PASSWORD: "${FLU_DB_PASSWORD}"
       FLU_DB_SUPERUSER_PASSWORD: "${FLU_DB_SUPERUSER_PASSWORD}"
-      FLU_DB_USER: "${FLU_DB_USER}"
+      FLU_DB_SUPERUSER: "${FLU_DB_SUPERUSER}"
       FLU_DB_HOST: "postgres"
       FLU_DB_DB_NAME: "${FLU_DB_DB_NAME}"
       FLU_DB_PORT: "5432" # b/c it's going through docker, it doesn't use the exposed port

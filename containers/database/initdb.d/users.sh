@@ -1,0 +1,9 @@
+#!/bin/bash
+
+export PGPASSWORD="$POSTGRES_PASSWORD"
+
+psql -d flu -U flu \
+-c "CREATE USER $FLU_DB_READONLY_USER WITH PASSWORD '$FLU_DB_READONLY_PASSWORD';" \
+-c "GRANT pg_read_all_data TO $FLU_DB_READONLY_USER;"
+
+unset PGPASSWORD

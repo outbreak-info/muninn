@@ -10,8 +10,8 @@ STATEMENT_TIMEOUT_MS = 600_000
 
 
 def get_url(async_: bool = False):
-    db_user = os.environ[Env.FLU_DB_USER]
-    db_password = os.environ[Env.FLU_DB_PASSWORD]
+    db_user = os.environ[Env.FLU_DB_SUPERUSER]
+    db_password = os.environ[Env.FLU_DB_SUPERUSER_PASSWORD]
     db_host = os.environ[Env.FLU_DB_HOST]
     db_port = int(os.environ[Env.FLU_DB_PORT])
     db_name = os.environ[Env.FLU_DB_DB_NAME]
