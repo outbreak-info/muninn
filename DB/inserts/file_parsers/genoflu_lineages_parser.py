@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.lineage_systems import find_or_insert_lineage_system
 from DB.inserts.lineages import find_or_insert_lineage
-from DB.inserts.samples import find_sample_id_by_accession
+from DB.queries.samples import get_sample_id_by_accession
 from DB.inserts.samples_lineages import insert_sample_lineage
 from DB.models import LineageSystem, Lineage, SampleLineage
 from utils.csv_helpers import get_value
@@ -69,7 +69,7 @@ class GenofluLineagesParser(FileParser):
                     debug_info['skipped_duplicate_for_sample'] += 1
                     continue
                 try:
-                    sample_id = await find_sample_id_by_accession(sample_accession)
+                    sample_id = await get_sample_id_by_accession(sample_accession)
                 except NotFoundError:
                     debug_info['skipped_sample_not_found'] += 1
                     continue

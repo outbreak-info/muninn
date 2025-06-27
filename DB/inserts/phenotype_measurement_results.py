@@ -1,12 +1,12 @@
 from sqlalchemy import select, and_
 
-from DB.engine import get_async_session
+from DB.engine import get_async_write_session
 from DB.models import PhenotypeMeasurementResult
 
 
 async def insert_pheno_measurement_result(pmr: PhenotypeMeasurementResult, upsert: bool = False) -> bool:
     updated_existing = False
-    async with get_async_session() as session:
+    async with get_async_write_session() as session:
         existing: PhenotypeMeasurementResult = await session.scalar(
             select(PhenotypeMeasurementResult)
             .where(

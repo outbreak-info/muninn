@@ -1,13 +1,13 @@
 import polars as pl
 from sqlalchemy.exc import IntegrityError
 
-from DB.engine import get_async_session, get_asyncpg_connection
+from DB.engine import get_async_write_session, get_asyncpg_connection
 from DB.models import Translation
 from utils.constants import StandardColumnNames
 
 
 async def insert_translation(t: Translation):
-    async with get_async_session() as session:
+    async with get_async_write_session() as session:
         # todo: is there a cleaner way to get this behavior?
         try:
             session.add(t)

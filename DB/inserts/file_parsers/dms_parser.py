@@ -1,11 +1,11 @@
 from csv import DictReader
 from typing import Set, Dict
 
-from DB.inserts.amino_acid_substitutions import find_aa_sub
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.phenotype_measurement_results import insert_pheno_measurement_result
 from DB.inserts.phenotype_metrics import find_or_insert_metric
 from DB.models import AminoAcidSubstitution, PhenotypeMetric, PhenotypeMeasurementResult
+from DB.queries.amino_acid_substitutions import find_aa_sub
 from utils.constants import PhenotypeMetricAssayTypes, DefaultGffFeaturesByRegion, StandardColumnNames, \
     StandardPhenoMetricNames
 from utils.csv_helpers import get_value, clean_up_gff_feature
@@ -104,7 +104,6 @@ class DmsFileParser(FileParser):
 
         debug_info['count_aas_not_found'] = len(cache_amino_subs_not_found)
         print(debug_info)
-
 
     @staticmethod
     def _get_present_data_columns(reader: DictReader) -> Dict[str, str]:

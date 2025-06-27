@@ -4,7 +4,7 @@ import polars as pl
 from sqlalchemy import select, and_
 from sqlalchemy.dialects.postgresql import insert
 
-from DB.engine import get_async_session, get_asyncpg_connection
+from DB.engine import get_async_write_session, get_asyncpg_connection
 from DB.models import IntraHostVariant
 from utils.constants import StandardColumnNames, ConstraintNames, ASYNCPG_MAX_QUERY_ARGS
 
@@ -12,11 +12,12 @@ from utils.constants import StandardColumnNames, ConstraintNames, ASYNCPG_MAX_QU
 async def find_or_insert_variant(variant: IntraHostVariant, upsert: bool = True) -> (int, bool):
     """
     :param variant:
+    :param upsert: if true, existing record will be updated, if false, an existing record will not be altered.
     :return: int: id of variant, new or existing
     bool: true if this variant already existed
     """
     preexisting = True
-    async with get_async_session() as session:
+    async with get_async_write_session() as session:
         existing = await session.scalar(
             select(IntraHostVariant)
             .where(
@@ -100,7 +101,7 @@ async def batch_upsert_variants(variants: pl.DataFrame):
             )
         )
 
-        async with get_async_session() as session:
+        async with get_async_write_session() as session:
             await session.execute(
                 base_insert.on_conflict_do_update(
                     constraint=ConstraintNames.uq_intra_host_variants_sample_allele_pair,

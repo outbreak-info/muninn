@@ -2,7 +2,7 @@ from csv import DictReader
 from enum import Enum
 from typing import Set
 
-from DB.inserts.amino_acid_substitutions import find_aa_sub
+from DB.queries.amino_acid_substitutions import find_aa_sub
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.phenotype_measurement_results import insert_pheno_measurement_result
 from DB.inserts.phenotype_metrics import find_or_insert_metric

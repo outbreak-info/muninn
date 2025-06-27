@@ -1,10 +1,10 @@
-from DB.engine import get_async_session
+from DB.engine import get_async_write_session
 from DB.models import SampleLineage
 from sqlalchemy import select, and_
 
 
 async def insert_sample_lineage(sl: SampleLineage) -> int:
-    async with get_async_session() as session:
+    async with get_async_write_session() as session:
         session.add(sl)
         await session.commit()
         await session.refresh(sl)
@@ -17,7 +17,7 @@ async def upsert_sample_lineage(sl: SampleLineage) -> bool:
     :return: bool: whether an existing record was updated
     """
     modified = False
-    async with get_async_session() as session:
+    async with get_async_write_session() as session:
         existing = await session.scalar(
             select(SampleLineage)
             .where(and_(

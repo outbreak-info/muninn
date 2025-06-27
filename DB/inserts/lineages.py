@@ -1,11 +1,11 @@
 from sqlalchemy import select, and_
 
-from DB.engine import get_async_session
+from DB.engine import get_async_write_session
 from DB.models import Lineage
 
 
 async def find_or_insert_lineage(lin: Lineage) -> int:
-    async with get_async_session() as session:
+    async with get_async_write_session() as session:
         id_ = await session.scalar(
             select(Lineage.id)
             .where(

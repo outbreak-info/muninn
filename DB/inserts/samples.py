@@ -4,21 +4,9 @@ import polars as pl
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
-from DB.engine import get_async_session, get_asyncpg_connection
+from DB.engine import get_async_write_session, get_asyncpg_connection
 from DB.models import Sample
 from utils.constants import ASYNCPG_MAX_QUERY_ARGS, StandardColumnNames, ConstraintNames
-from utils.errors import NotFoundError
-
-
-async def find_sample_id_by_accession(accession: str) -> int:
-    async with get_async_session() as session:
-        id_ = await session.scalar(
-            select(Sample.id)
-            .where(Sample.accession == accession)
-        )
-    if id_ is None:
-        raise NotFoundError(f'No sample found for accession: {accession}')
-    return id_
 
 
 async def find_or_insert_sample(s: Sample, upsert: bool = False) -> (int, bool):
@@ -28,7 +16,7 @@ async def find_or_insert_sample(s: Sample, upsert: bool = False) -> (int, bool):
     :return: (int: id of sample, bool: did a sample with this accession already exist?)
     """
     preexisting = True
-    async with get_async_session() as session:
+    async with get_async_write_session() as session:
         existing: Sample = await session.scalar(
             select(Sample)
             .where(Sample.accession == s.accession)
@@ -121,7 +109,7 @@ async def batch_upsert_samples(samples: pl.DataFrame):
             )
         )
 
-        async with get_async_session() as session:
+        async with get_async_write_session() as session:
             await session.execute(
                 base_insert.on_conflict_do_update(
                     constraint=ConstraintNames.uq_samples_accession,

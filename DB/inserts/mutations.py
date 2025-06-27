@@ -1,13 +1,13 @@
 import polars as pl
 from sqlalchemy import select, and_
 
-from DB.engine import get_async_session, get_asyncpg_connection
+from DB.engine import get_async_write_session, get_asyncpg_connection
 from DB.models import Mutation
 from utils.constants import StandardColumnNames
 
 
 async def find_or_insert_mutation(m: Mutation) -> int:
-    async with get_async_session() as session:
+    async with get_async_write_session() as session:
         id_ = await session.scalar(
             select(Mutation.id)
             .where(

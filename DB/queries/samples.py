@@ -4,11 +4,12 @@ import polars as pl
 from sqlalchemy import select, text
 from sqlalchemy.orm import contains_eager
 
-from DB.engine import get_async_session, get_uri_for_polars
+from DB.engine import get_uri_for_polars, get_async_session
 from DB.models import Sample, Mutation, GeoLocation, Allele, AminoAcidSubstitution, IntraHostVariant, Translation
 from api.models import SampleInfo
 from parser.parser import parser
 from utils.constants import StandardColumnNames
+from utils.errors import NotFoundError
 
 
 async def get_sample_by_id(sample_id: int) -> SampleInfo | None:
@@ -111,3 +112,14 @@ async def get_samples_accession_and_id_as_pl_df() -> pl.DataFrame:
         query=f'select id, accession from samples;',
         uri=get_uri_for_polars()
     ).rename({'id': StandardColumnNames.sample_id})
+
+
+async def get_sample_id_by_accession(accession: str) -> int:
+    async with get_async_session() as session:
+        id_ = await session.scalar(
+            select(Sample.id)
+            .where(Sample.accession == accession)
+        )
+    if id_ is None:
+        raise NotFoundError(f'No sample found for accession: {accession}')
+    return id_

@@ -8,7 +8,7 @@ from psycopg2 import IntegrityError
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.lineage_systems import find_or_insert_lineage_system
 from DB.inserts.lineages import find_or_insert_lineage
-from DB.inserts.samples import find_sample_id_by_accession
+from DB.queries.samples import get_sample_id_by_accession
 from DB.inserts.samples_lineages import upsert_sample_lineage
 from DB.models import LineageSystem, Lineage, SampleLineage
 from utils.constants import LineageSystemNames
@@ -62,7 +62,7 @@ class FreyjaDemixedParser(FileParser):
                 continue
             # find sample
             try:
-                sample_id = await find_sample_id_by_accession(accession)
+                sample_id = await get_sample_id_by_accession(accession)
             except NotFoundError:
                 debug_info['skipped_sample_not_found'] += 1
                 continue
