@@ -1,4 +1,4 @@
-FROM python:3.13-bookworm
+FROM python:3.13-bullseye
 WORKDIR /flu
 
 EXPOSE 8000
