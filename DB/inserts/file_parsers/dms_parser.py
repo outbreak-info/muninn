@@ -8,7 +8,7 @@ from DB.inserts.phenotype_metrics import find_or_insert_metric
 from DB.models import AminoAcidSubstitution, PhenotypeMetric, PhenotypeMeasurementResult
 from utils.constants import PhenotypeMetricAssayTypes, DefaultGffFeaturesByRegion, StandardColumnNames, \
     StandardPhenoMetricNames
-from utils.csv_helpers import get_value
+from utils.csv_helpers import get_value, clean_up_gff_feature
 from utils.errors import NotFoundError
 
 
@@ -17,7 +17,7 @@ class DmsFileParser(FileParser):
     def __init__(self, filename: str, delimiter: str, gff_feature: str):
         self.filename = filename
         self.delimiter = delimiter
-        self.gff_feature = gff_feature
+        self.gff_feature = clean_up_gff_feature(gff_feature)
 
     async def parse_and_insert(self):
         debug_info = {

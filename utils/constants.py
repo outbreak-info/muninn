@@ -34,7 +34,7 @@ class PhenotypeMetricAssayTypes:
 
 
 class DefaultGffFeaturesByRegion:
-    HA = 'cds-XAJ25415.1'
+    HA = 'XAJ25415.1'
 
 
 class LineageSystemNames:
