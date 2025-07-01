@@ -39,7 +39,7 @@ services:
     volumes:
       - type: bind
         source: ${FLU_DB_SERVER_DATA_INPUT_DIR}
-        target: /flu/data
+        target: /home/muninn/data
         read_only: false
     ports:
       - "8000:8000"
