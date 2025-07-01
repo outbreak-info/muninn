@@ -7,10 +7,12 @@ Database system to store mutation and variant data for avian influenza.
 1. Clone repository and cd into it.
 2. Create `.env` file.
     ```
-    export FLU_DB_PASSWORD="default-flu"
-    export FLU_DB_SUPERUSER_PASSWORD="default-superuser"
-    
-    export FLU_DB_USER="flu"
+    export FLU_DB_READONLY_USER="flu_reader"
+    export FLU_DB_READONLY_PASSWORD="default-flu-reader"
+
+    export FLU_DB_SUPERUSER_PASSWORD="default-flu"
+    export FLU_DB_SUPERUSER="flu"
+
     export FLU_DB_HOST="localhost"
     export FLU_DB_DB_NAME="flu"
     export FLU_DB_PORT="5432"
