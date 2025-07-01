@@ -8,7 +8,8 @@ from DB.engine import get_async_session
 from DB.models import LineageSystem, Lineage, Sample, SampleLineage, GeoLocation
 from api.models import LineageCountInfo, LineageAbundanceInfo, LineageInfo, LineageAbundanceSummaryInfo
 from parser.parser import parser
-from utils.constants import DateBinOpt
+from utils.constants import DateBinOpt, NtOrAa
+from collections import defaultdict
 
 
 async def get_sample_counts_by_lineage(samples_raw_query: str | None) -> List[LineageCountInfo]:
@@ -311,3 +312,81 @@ async def get_abundance_summaries_by_collection_date(
         except KeyError:
             out_data[date] = [info]
     return out_data
+
+async def get_mutation_incidence(lineage: str, 
+    change_bin: NtOrAa,
+    include_synonymous: bool,
+    raw_query: str | None
+    ):
+
+    user_where_clause = ''
+    if raw_query is not None:
+        user_where_clause = f'and ({parser.parse(raw_query)})'
+
+    not_synonymous = 'and not ref_aa=alt_aa'
+    if include_synonymous:
+        not_synonymous = ''
+
+    async with get_async_session() as session:
+
+        sampleCount = await session.scalar(
+            text(
+                f'''
+                SELECT count(*)
+                FROM lineages
+                LEFT JOIN samples_lineages ON samples_lineages.lineage_id = lineages.id
+                WHERE lineage_name = :input_lineage
+                '''
+            ), {
+                'input_lineage': lineage
+            }
+        )
+
+        if change_bin == NtOrAa.nt:
+            res = await session.execute(
+                text(
+                    f'''
+                    SELECT region,ref_nt,position_nt,alt_nt,count(DISTINCT mutations.sample_id)
+                    FROM lineages
+                    LEFT JOIN samples_lineages ON samples_lineages.lineage_id = lineages.id
+                    LEFT JOIN samples ON samples_lineages.sample_id = samples.id
+                    LEFT JOIN mutations ON mutations.sample_id = samples.id
+                    LEFT JOIN alleles ON mutations.allele_id = alleles.id
+                    LEFT JOIN translations on translations.allele_id = mutations.allele_id
+                    INNER JOIN amino_acid_substitutions ON amino_acid_substitutions.id = amino_acid_substitution_id
+                    WHERE lineage_name = :input_lineage {not_synonymous} {user_where_clause}
+                    GROUP BY region,ref_nt,position_nt,alt_nt
+                    ORDER BY count DESC
+                    '''
+                ), {
+                    'input_lineage': lineage
+                }
+            )
+        else:
+            res = await session.execute(
+                text(
+                    f'''
+SELECT region,
+    ref_aa,
+    position_aa,
+    alt_aa,
+    count(DISTINCT mutations.sample_id)
+FROM lineages
+LEFT JOIN samples_lineages ON samples_lineages.lineage_id = lineages.id
+LEFT JOIN mutations ON mutations.sample_id = samples_lineages.sample_id
+LEFT JOIN alleles ON mutations.allele_id = alleles.id
+LEFT JOIN translations on translations.allele_id = mutations.allele_id
+INNER JOIN amino_acid_substitutions ON amino_acid_substitutions.id = amino_acid_substitution_id
+WHERE lineage_name = :input_lineage {not_synonymous} {user_where_clause}
+GROUP BY region,ref_aa,position_aa,alt_aa
+ORDER BY count DESC
+                    '''
+                ), {
+                    'input_lineage': lineage
+                }
+            )
+
+    out = defaultdict(list)
+    for region, ref, pos, alt, count in res:
+        out[region].append({"ref": ref, "alt": alt, "pos": pos, "count": count})
+    return {'samples':sampleCount,'counts':out}

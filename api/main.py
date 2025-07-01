@@ -372,3 +372,7 @@ async def get_lineage_abundance(
             return await DB.queries.lineages.get_abundance_summaries(q)
         else:
             return await DB.queries.lineages.get_abundances(q)
+
+@app.get('/v0/lineages/mutationIncidence')
+async def get_mutation_incidence(lineage:str,change_bin:NtOrAa, include_synonymous:bool = False, q: str = None):
+    return await DB.queries.lineages.get_mutation_incidence(lineage,change_bin, include_synonymous, q)
