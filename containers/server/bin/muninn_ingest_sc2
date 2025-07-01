@@ -2,7 +2,7 @@
 
 SECONDS=0
 DATE=$(date +%Y-%m-%dT%H_%M_%S_%Z)
-LOG="/flu/data/ingest_sc2_$DATE.log"
+LOG="/home/muninn/data/ingest_sc2_$DATE.log"
 echo "begin at $(date)" >> "$LOG"
 
 
@@ -14,7 +14,7 @@ if [[ "$#" -eq 0 ]]; then
 fi
 
 # bjorn-general outputs
-DATA_DIR='/flu/data'
+DATA_DIR='/home/muninn/data'
 BJORN_GENERAL_OUTPUT_ARCHIVE="$DATA_DIR/$ARCHIVE_FILENAME"
 
 # bjorn-general outputs

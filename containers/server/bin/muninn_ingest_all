@@ -1,9 +1,9 @@
 #! /bin/bash
 SECONDS=0
-LOG="/flu/data/ingest_all_$(date +%Y-%m-%dT%H_%M_%S%Z).log"
+LOG="/home/muninn/data/ingest_all_$(date +%Y-%m-%dT%H_%M_%S%Z).log"
 echo "begin at $(date)" >> "$LOG"
 
-DATA_DIR='/flu/data'
+DATA_DIR='/home/muninn/data'
 
 # bjorn-general outputs
 BJORN_GENERAL_OUTPUT_ARCHIVE="$DATA_DIR/outputs.all.zip"
