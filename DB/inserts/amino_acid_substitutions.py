@@ -3,7 +3,7 @@ from sqlalchemy import and_, select
 
 from DB.engine import get_async_write_session, get_asyncpg_connection
 from DB.models import AminoAcid
-from utils.constants import StandardColumnNames
+from utils.constants import StandardColumnNames, TableNames
 
 
 async def find_or_insert_aa_sub(aas: AminoAcid) -> int:
@@ -32,12 +32,10 @@ async def copy_insert_aa_subs(aa_subs: pl.DataFrame) -> str:
         StandardColumnNames.position_aa,
         StandardColumnNames.ref_aa,
         StandardColumnNames.alt_aa,
-        StandardColumnNames.ref_codon,
-        StandardColumnNames.alt_codon,
     ]
     conn = await get_asyncpg_connection()
     res = await conn.copy_records_to_table(
-        'amino_acid_substitutions',
+        TableNames.amino_acids,
         records=aa_subs.select(
             [pl.col(cn) for cn in columns]
         ).iter_rows(),

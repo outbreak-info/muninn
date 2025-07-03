@@ -6,7 +6,7 @@ import polars as pl
 from DB.inserts.alleles import copy_insert_alleles
 from DB.inserts.amino_acid_substitutions import copy_insert_aa_subs
 from DB.inserts.file_parsers.file_parser import FileParser
-from DB.inserts.mutations import copy_insert_mutations
+from DB.inserts.mutations import copy_insert_mutations, batch_upsert_mutations
 from DB.inserts.translations import copy_insert_translations
 from DB.inserts.variants import batch_upsert_variants, copy_insert_variants
 from DB.queries.alleles import get_all_alleles_as_pl_df
@@ -20,6 +20,7 @@ from utils.csv_helpers import clean_up_gff_feature
 
 AMINO_SUB_REF_CONFLICTS_FILE = '/tmp/amino_sub_ref_conflicts.csv'
 ALLELE_REF_CONFLICTS_FILE = '/tmp/allele_ref_conflicts.csv'
+TRANSLATIONS_REF_CONFLICTS_FILE = '/tmp/translations_ref_conflicts.csv'
 
 
 class VariantsMutationsCombinedParser(FileParser):
@@ -43,7 +44,8 @@ class VariantsMutationsCombinedParser(FileParser):
             'count_translations_added': 'unset',
             'count_mutations_added': 'unset',
             'count_preexisting_variants': 'unset',
-            'count_variants_added': 'unset'
+            'count_variants_added': 'unset',
+            'count_preexisting_mutations': 'unset',
         }
 
         #  1. read vars and muts
@@ -75,9 +77,10 @@ class VariantsMutationsCombinedParser(FileParser):
         print(f'amino subs added: {debug_info}')
 
         # 10. Get new allele / AAS ids and join back into vars and muts
-        variants_finished: pl.DataFrame
-        mutations_finished: pl.DataFrame
-        variants_finished, mutations_finished = await (
+        # vars and muts now need to include translation ids before they are finished
+        variants_with_nt_aa_ids: pl.LazyFrame
+        mutations_with_nt_aa_ids: pl.LazyFrame
+        variants_with_nt_aa_ids, mutations_with_nt_aa_ids = await (
             VariantsMutationsCombinedParser
             ._join_alleles_and_amino_subs_into_vars_and_muts(variants_with_samples, mutations_with_samples)
         )
@@ -85,29 +88,43 @@ class VariantsMutationsCombinedParser(FileParser):
         # 11. Split out and insert new translations from vars and muts
         debug_info['count_translations_added'] = await (
             VariantsMutationsCombinedParser
-            ._insert_new_translations(variants_finished, mutations_finished)
+            ._insert_new_translations(variants_with_nt_aa_ids, mutations_with_nt_aa_ids)
         )
-
         print(f'translations added: {debug_info}')
 
-        # 12. Filter out existing mutations (updates not allowed)
-        # 13. insert new mutations via copy
-        debug_info['count_mutations_added'] = await (
-            VariantsMutationsCombinedParser._insert_new_mutations(mutations_finished)
+        # 11.5: Combine translation ids back into vars and muts
+        variants_with_all_ids, mutations_with_all_ids = await (
+            VariantsMutationsCombinedParser._join_translation_ids_into_vars_and_muts(
+                variants_with_nt_aa_ids,
+                mutations_with_nt_aa_ids
+            )
         )
-        print(f'mutations added: {debug_info}')
+
+        variants_collected: pl.DataFrame = variants_with_all_ids.collect(engine='streaming')
+        mutations_collected: pl.DataFrame = mutations_with_all_ids.collect(engine='streaming')
+
+        # 12. Separate new and existing mutations.
+        # 12.5: Update existing mutations
+        # 13. insert new mutations via copy
+        existing_mutations: pl.DataFrame = await get_all_mutations_as_pl_df()
+        debug_info['count_mutations_added'] = await (
+            VariantsMutationsCombinedParser._insert_new_mutations(mutations_collected, existing_mutations)
+        )
+        debug_info['count_preexisting_mutations'] = await (
+            VariantsMutationsCombinedParser._update_existing_mutations(mutations_collected, existing_mutations)
+        )
+        print(f'mutations added / updated: {debug_info}')
 
         # 14. Separate new and existing variants
         # 15. Insert new variants via copy
         # 16. Update existing variants (new bulk process for this?)
         existing_variants = await get_all_variants_as_pl_df()
         debug_info['count_variants_added'] = await (
-            VariantsMutationsCombinedParser._insert_new_variants(variants_finished, existing_variants)
+            VariantsMutationsCombinedParser._insert_new_variants(variants_collected, existing_variants)
         )
         debug_info['count_preexisting_variants'] = await (
-            VariantsMutationsCombinedParser._update_existing_variants(variants_finished, existing_variants)
+            VariantsMutationsCombinedParser._update_existing_variants(variants_collected, existing_variants)
         )
-
         print(f'variants added / updated: {debug_info}')
 
     async def _scan_variants(self):
@@ -284,9 +301,7 @@ class VariantsMutationsCombinedParser(FileParser):
             StandardColumnNames.gff_feature,
             StandardColumnNames.position_aa,
             StandardColumnNames.ref_aa,
-            StandardColumnNames.alt_aa,
-            StandardColumnNames.ref_codon,
-            StandardColumnNames.alt_codon
+            StandardColumnNames.alt_aa
         }
         amino_subs_v = variants_with_samples.select(amino_sub_cols)
         amino_subs_m = mutations_with_samples.select(amino_sub_cols)
@@ -369,12 +384,12 @@ class VariantsMutationsCombinedParser(FileParser):
     async def _join_alleles_and_amino_subs_into_vars_and_muts(
         variants_with_samples: pl.LazyFrame,
         mutations_with_samples: pl.LazyFrame
-    ) -> (pl.DataFrame, pl.DataFrame):
+    ) -> (pl.LazyFrame, pl.LazyFrame):
         # 10. Get new allele / AAS ids and join back into vars and muts
         existing_alleles = await get_all_alleles_as_pl_df()
         existing_amino_subs = await get_all_amino_acid_subs_as_pl_df()
 
-        variants_finished = variants_with_samples.join(
+        variants_with_nt_aa_ids = variants_with_samples.join(
             existing_alleles.lazy(),
             on=[
                 StandardColumnNames.region,
@@ -390,9 +405,9 @@ class VariantsMutationsCombinedParser(FileParser):
                 StandardColumnNames.alt_aa
             ],
             how='left'
-        ).collect(engine='streaming')
+        )
 
-        mutations_finished = mutations_with_samples.join(
+        mutations_with_nt_aa_ids = mutations_with_samples.join(
             existing_alleles.lazy(),
             on=[
                 StandardColumnNames.region,
@@ -408,18 +423,19 @@ class VariantsMutationsCombinedParser(FileParser):
                 StandardColumnNames.alt_aa
             ],
             how='left'
-        ).collect(engine='streaming')
+        )
 
-        return variants_finished, mutations_finished
+        return variants_with_nt_aa_ids, mutations_with_nt_aa_ids
 
     @staticmethod
     async def _insert_new_translations(
-        variants_finished: pl.DataFrame,
-        mutations_finished: pl.DataFrame
+        variants_finished: pl.LazyFrame,
+        mutations_finished: pl.LazyFrame
     ) -> str:
         # 11. Split out and insert new translations from vars and muts
         translations_cols = {
-            StandardColumnNames.allele_id,
+            StandardColumnNames.ref_codon,
+            StandardColumnNames.alt_codon,
             StandardColumnNames.amino_acid_id
         }
 
@@ -433,19 +449,85 @@ class VariantsMutationsCombinedParser(FileParser):
         # 11a. Filter to new translations and insert
         existing_translations = await get_all_translations_as_pl_df()
         new_translations = translations.join(
-            existing_translations,
+            existing_translations.lazy(),
             on=[
-                StandardColumnNames.allele_id,
+                StandardColumnNames.alt_codon,
                 StandardColumnNames.amino_acid_id
             ],
             how='anti'
+        ).unique(
+            [
+                pl.col(StandardColumnNames.alt_codon),
+                pl.col(StandardColumnNames.amino_acid_id)
+            ]
         )
-        return await copy_insert_translations(new_translations)
+
+        # check for conflicts on ref codon
+        ref_conflicts = (
+            pl.concat(
+                [
+                    existing_translations.select(
+                        {
+                            StandardColumnNames.ref_codon,
+                            StandardColumnNames.alt_codon,
+                            StandardColumnNames.amino_acid_id
+                        }
+                    ).lazy(),
+                    translations
+                ]
+            )
+            .unique()
+            .group_by(
+                pl.col(StandardColumnNames.amino_acid_id),
+                pl.col(StandardColumnNames.alt_codon)
+            )
+            .len()
+            .filter(pl.col('len') > 1)
+            .select(
+                pl.col(StandardColumnNames.alt_codon, StandardColumnNames.amino_acid_id)
+            )
+            .collect()
+        )
+
+        if len(ref_conflicts) > 0:
+            print(
+                f'WARNING: in translations, found {len(ref_conflicts)} positions with conflicting values for ref_codon. '
+                f'Written to {TRANSLATIONS_REF_CONFLICTS_FILE}'
+            )
+            ref_conflicts.write_csv(TRANSLATIONS_REF_CONFLICTS_FILE)
+
+        return await copy_insert_translations(new_translations.collect())
 
     @staticmethod
-    async def _insert_new_mutations(mutations_finished: pl.DataFrame) -> str:
-        # 12. Filter out existing mutations (updates not allowed)
-        existing_mutations = await get_all_mutations_as_pl_df()
+    async def _join_translation_ids_into_vars_and_muts(
+        variants_with_nt_aa_ids: pl.LazyFrame,
+        mutations_with_nt_aa_ids: pl.LazyFrame,
+    ) -> (pl.LazyFrame, pl.LazyFrame):
+        # 11.5: Combine translation ids back into vars and muts
+        existing_translations = await get_all_translations_as_pl_df()
+
+        variants_plus_translation_ids = variants_with_nt_aa_ids.join(
+            existing_translations.lazy(),
+            on=[
+                StandardColumnNames.amino_acid_id,
+                StandardColumnNames.alt_codon
+            ],
+            how='left'
+        )
+
+        mutations_plus_translation_ids = mutations_with_nt_aa_ids.join(
+            existing_translations.lazy(),
+            on=[
+                StandardColumnNames.amino_acid_id,
+                StandardColumnNames.alt_codon
+            ],
+            how='left'
+        )
+        return variants_plus_translation_ids, mutations_plus_translation_ids
+
+    @staticmethod
+    async def _insert_new_mutations(mutations_finished: pl.DataFrame, existing_mutations: pl.DataFrame) -> str:
+        # 12. Separate new and existing mutations.
         new_mutations = mutations_finished.join(
             existing_mutations,
             on=[
@@ -459,8 +541,26 @@ class VariantsMutationsCombinedParser(FileParser):
         return await copy_insert_mutations(new_mutations)
 
     @staticmethod
+    async def _update_existing_mutations(mutations_collected: pl.DataFrame, existing_mutations: pl.DataFrame) -> int:
+        # 12. Separate new and existing mutations.
+        # 12.5: Update existing mutations
+        updated_mutations: pl.DataFrame = mutations_collected.join(
+            existing_mutations,
+            on=[
+                StandardColumnNames.sample_id,
+                StandardColumnNames.allele_id
+            ],
+            how='inner'
+        )
+        count_preexisting_mutations = len(updated_mutations)
+
+        await batch_upsert_mutations(updated_mutations)
+        return count_preexisting_mutations
+
+    @staticmethod
     async def _update_existing_variants(variants_finished: pl.DataFrame, existing_variants: pl.DataFrame) -> int:
         # 14. Separate new and existing variants
+        # this works b/c cols from left keep their original names
         updated_variants: pl.DataFrame = variants_finished.join(
             existing_variants,
             on=[

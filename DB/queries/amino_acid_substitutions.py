@@ -3,13 +3,13 @@ from sqlalchemy import select, and_
 
 from DB.engine import get_uri_for_polars, get_async_session
 from DB.models import AminoAcid
-from utils.constants import StandardColumnNames
+from utils.constants import StandardColumnNames, TableNames
 from utils.errors import NotFoundError
 
 
 async def get_all_amino_acid_subs_as_pl_df() -> pl.DataFrame:
     return pl.read_database_uri(
-        query='select * from amino_acid_substitutions;',
+        query=f'select * from {TableNames.amino_acids};',
         uri=get_uri_for_polars()
     ).rename({'id': StandardColumnNames.amino_acid_id})
 

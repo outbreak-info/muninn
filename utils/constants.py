@@ -195,6 +195,7 @@ class StandardPhenoMetricNames:
 class ConstraintNames:
     uq_intra_host_variants_sample_allele_pair = 'uq_intra_host_variants_sample_allele_pair'
     uq_samples_accession = 'uq_samples_accession'
+    uq_mutations_sample_allele_pair = 'uq_mutations_sample_allele_pair'
 
 # Problematic redacted SRAs
 EXCLUDED_SRAS = {

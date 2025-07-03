@@ -228,7 +228,6 @@ class Allele(Base):
         ]
     )
 
-    r_translations: Mapped[List['Translation']] = relationship(back_populates='r_allele')
     r_variants: Mapped[List['IntraHostVariant']] = relationship(back_populates='r_allele')
     r_mutations: Mapped[List['Mutation']] = relationship(back_populates='r_allele')
 
@@ -259,7 +258,7 @@ class AminoAcid(Base):
     )
 
     r_translations: Mapped[List['Translation']] = relationship(back_populates='r_amino_acid')
-    r_pheno_metric_values: Mapped[List['PhenotypeMetricValues']] = relationship(back_populates='r_amino_sub')
+    r_pheno_metric_values: Mapped[List['PhenotypeMetricValues']] = relationship(back_populates='r_amino_acid')
 
 
 class Translation(Base):
@@ -308,7 +307,7 @@ class Mutation(Base):
             UniqueConstraint(
                 StandardColumnNames.sample_id,
                 StandardColumnNames.allele_id,
-                name='uq_mutations_sample_allele_pair'
+                name=ConstraintNames.uq_mutations_sample_allele_pair
             )
         ]
     )
@@ -451,8 +450,8 @@ class PhenotypeMetricValues(Base):
         ]
     )
 
-    r_pheno_metric: Mapped['PhenotypeMetric'] = relationship(back_populates='r_pheno_measurement_results')
-    r_amino_acid: Mapped['AminoAcid'] = relationship(back_populates='r_pheno_measurement_results')
+    r_pheno_metric: Mapped['PhenotypeMetric'] = relationship(back_populates='r_pheno_metric_values')
+    r_amino_acid: Mapped['AminoAcid'] = relationship(back_populates='r_pheno_metric_values')
 
 
 class LineageSystem(Base):

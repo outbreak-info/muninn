@@ -46,6 +46,7 @@ async def copy_insert_variants(variants: pl.DataFrame):
     columns = [
         StandardColumnNames.sample_id,
         StandardColumnNames.allele_id,
+        StandardColumnNames.translation_id,
         StandardColumnNames.ref_dp,
         StandardColumnNames.alt_dp,
         StandardColumnNames.alt_freq,
@@ -80,6 +81,7 @@ async def batch_upsert_variants(variants: pl.DataFrame):
         StandardColumnNames.total_dp,
         StandardColumnNames.pval,
         StandardColumnNames.pass_qc,
+        StandardColumnNames.translation_id
     ]
     all_columns = update_columns + [
         StandardColumnNames.sample_id,
