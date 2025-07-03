@@ -73,7 +73,7 @@ class EveParser(FileParser):
 
                     updated = await insert_pheno_measurement_result(
                         PhenotypeMetricValues(
-                            amino_acid_substitution_id=aas_id,
+                            amino_acid_id=aas_id,
                             phenotype_metric_id=metric_id,
                             value=v
                         ),
