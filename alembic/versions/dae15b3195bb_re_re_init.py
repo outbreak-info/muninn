@@ -1,8 +1,8 @@
-"""re_init
+"""re_re_init
 
-Revision ID: 02f6fc29c769
+Revision ID: dae15b3195bb
 Revises: 
-Create Date: 2025-03-28 09:22:26.716031
+Create Date: 2025-07-03 12:18:34.367067
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '02f6fc29c769'
+revision: str = 'dae15b3195bb'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -31,31 +31,34 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id', name=op.f('pk_alleles')),
     sa.UniqueConstraint('region', 'position_nt', 'alt_nt', name='uq_alleles_nt_values', postgresql_nulls_not_distinct=True)
     )
-    op.create_table('amino_acid_substitutions',
+    op.create_table('amino_acids',
     sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
     sa.Column('position_aa', sa.BigInteger(), nullable=False),
     sa.Column('ref_aa', sa.Text(), nullable=False),
     sa.Column('alt_aa', sa.Text(), nullable=False),
-    sa.Column('ref_codon', sa.Text(), nullable=False),
-    sa.Column('alt_codon', sa.Text(), nullable=False),
     sa.Column('gff_feature', sa.Text(), nullable=False),
-    sa.CheckConstraint("alt_aa <> ''", name=op.f('ck_amino_acid_substitutions_`alt_aa_not_empty`')),
-    sa.CheckConstraint("gff_feature <> ''", name=op.f('ck_amino_acid_substitutions_`gff_feature_not_empty`')),
-    sa.CheckConstraint("ref_aa <> ''", name=op.f('ck_amino_acid_substitutions_`ref_aa_not_empty`')),
-    sa.PrimaryKeyConstraint('id', name=op.f('pk_amino_acid_substitutions')),
+    sa.CheckConstraint("alt_aa <> ''", name=op.f('ck_amino_acids_`alt_aa_not_empty`')),
+    sa.CheckConstraint("gff_feature <> ''", name=op.f('ck_amino_acids_`gff_feature_not_empty`')),
+    sa.CheckConstraint("ref_aa <> ''", name=op.f('ck_amino_acids_`ref_aa_not_empty`')),
+    sa.PrimaryKeyConstraint('id', name=op.f('pk_amino_acids')),
     sa.UniqueConstraint('position_aa', 'alt_aa', 'gff_feature', name='uq_amino_acid_substitutions_aa_values', postgresql_nulls_not_distinct=True)
     )
     op.create_table('geo_locations',
     sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
-    sa.Column('full_text', sa.Text(), nullable=False),
-    sa.Column('continent_name', sa.Text(), nullable=True),
-    sa.Column('country_name', sa.Text(), nullable=True),
-    sa.Column('region_name', sa.Text(), nullable=True),
-    sa.Column('locality_name', sa.Text(), nullable=True),
+    sa.Column('country_name', sa.Text(), nullable=False),
+    sa.Column('admin1_name', sa.Text(), nullable=True),
+    sa.Column('admin2_name', sa.Text(), nullable=True),
+    sa.Column('admin3_name', sa.Text(), nullable=True),
     sa.Column('geo_center_lon', sa.Double(), nullable=True),
     sa.Column('geo_center_lat', sa.Double(), nullable=True),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_geo_locations')),
-    sa.UniqueConstraint('country_name', 'region_name', 'locality_name', name='uq_geo_locations_country_name_region_name_locality_name', postgresql_nulls_not_distinct=True)
+    sa.UniqueConstraint('country_name', 'admin1_name', 'admin2_name', 'admin3_name', name='uq_geo_locations_division_names', postgresql_nulls_not_distinct=True)
+    )
+    op.create_table('lineage_systems',
+    sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
+    sa.Column('lineage_system_name', sa.Text(), nullable=False),
+    sa.PrimaryKeyConstraint('id', name=op.f('pk_lineage_systems')),
+    sa.UniqueConstraint('lineage_system_name', name='uq_lineage_systems_name')
     )
     op.create_table('phenotype_metrics',
     sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
@@ -66,15 +69,23 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id', name=op.f('pk_phenotype_metrics')),
     sa.UniqueConstraint('name', name='uq_phenotype_metrics_name')
     )
-    op.create_table('phenotype_measurement_results',
+    op.create_table('lineages',
+    sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
+    sa.Column('lineage_system_id', sa.BigInteger(), nullable=False),
+    sa.Column('lineage_name', sa.Text(), nullable=False),
+    sa.ForeignKeyConstraint(['lineage_system_id'], ['lineage_systems.id'], name=op.f('fk_lineages_lineage_system_id_lineage_systems')),
+    sa.PrimaryKeyConstraint('id', name=op.f('pk_lineages')),
+    sa.UniqueConstraint('lineage_system_id', 'lineage_name', name='uq_lineages_name_uq_within_system')
+    )
+    op.create_table('phenotype_metric_values',
     sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
     sa.Column('phenotype_metric_id', sa.BigInteger(), nullable=False),
-    sa.Column('amino_acid_substitution_id', sa.BigInteger(), nullable=False),
+    sa.Column('amino_acid_id', sa.BigInteger(), nullable=False),
     sa.Column('value', sa.Double(), nullable=False),
-    sa.ForeignKeyConstraint(['amino_acid_substitution_id'], ['amino_acid_substitutions.id'], name=op.f('fk_phenotype_measurement_results_amino_acid_substitution_id_amino_acid_substitutions')),
-    sa.ForeignKeyConstraint(['phenotype_metric_id'], ['phenotype_metrics.id'], name=op.f('fk_phenotype_measurement_results_phenotype_metric_id_phenotype_metrics')),
-    sa.PrimaryKeyConstraint('id', name=op.f('pk_phenotype_measurement_results')),
-    sa.UniqueConstraint('phenotype_metric_id', 'amino_acid_substitution_id', name='uq_phenotype_measurement_results_metric_and_amino_sub')
+    sa.ForeignKeyConstraint(['amino_acid_id'], ['amino_acids.id'], name=op.f('fk_phenotype_metric_values_amino_acid_id_amino_acids')),
+    sa.ForeignKeyConstraint(['phenotype_metric_id'], ['phenotype_metrics.id'], name=op.f('fk_phenotype_metric_values_phenotype_metric_id_phenotype_metrics')),
+    sa.PrimaryKeyConstraint('id', name=op.f('pk_phenotype_metric_values')),
+    sa.UniqueConstraint('phenotype_metric_id', 'amino_acid_id', name='uq_phenotype_metric_values_metric_and_amino_acid')
     )
     op.create_table('samples',
     sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
@@ -118,21 +129,25 @@ def upgrade() -> None:
     sa.CheckConstraint('collection_start_date <= collection_end_date', name=op.f('ck_samples_`collection_start_not_after_collection_end`')),
     sa.CheckConstraint('num_nulls(collection_start_date, collection_end_date) in (0, 2)', name=op.f('ck_samples_`collection_start_and_end_both_absent_or_both_present`')),
     sa.ForeignKeyConstraint(['geo_location_id'], ['geo_locations.id'], name=op.f('fk_samples_geo_location_id_geo_locations')),
-    sa.PrimaryKeyConstraint('id', name=op.f('pk_samples'))
+    sa.PrimaryKeyConstraint('id', name=op.f('pk_samples')),
+    sa.UniqueConstraint('accession', name='uq_samples_accession')
     )
     op.create_table('translations',
     sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
-    sa.Column('allele_id', sa.BigInteger(), nullable=False),
-    sa.Column('amino_acid_substitution_id', sa.BigInteger(), nullable=False),
-    sa.ForeignKeyConstraint(['allele_id'], ['alleles.id'], name=op.f('fk_translations_allele_id_alleles')),
-    sa.ForeignKeyConstraint(['amino_acid_substitution_id'], ['amino_acid_substitutions.id'], name=op.f('fk_translations_amino_acid_substitution_id_amino_acid_substitutions')),
+    sa.Column('amino_acid_id', sa.BigInteger(), nullable=False),
+    sa.Column('ref_codon', sa.Text(), nullable=False),
+    sa.Column('alt_codon', sa.Text(), nullable=False),
+    sa.CheckConstraint("alt_codon <> ''", name=op.f('ck_translations_`alt_codon_not_empty`')),
+    sa.CheckConstraint("ref_codon <> ''", name=op.f('ck_translations_`ref_codon_not_empty`')),
+    sa.ForeignKeyConstraint(['amino_acid_id'], ['amino_acids.id'], name=op.f('fk_translations_amino_acid_id_amino_acids')),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_translations')),
-    sa.UniqueConstraint('allele_id', 'amino_acid_substitution_id', name='uq_translations_allele_and_amino_sub')
+    sa.UniqueConstraint('amino_acid_id', 'alt_codon', name='uq_translations_amino_acid_id_alt_codon')
     )
     op.create_table('intra_host_variants',
     sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
     sa.Column('sample_id', sa.BigInteger(), nullable=False),
     sa.Column('allele_id', sa.BigInteger(), nullable=False),
+    sa.Column('translation_id', sa.BigInteger(), nullable=True),
     sa.Column('ref_dp', sa.BigInteger(), nullable=False),
     sa.Column('alt_dp', sa.BigInteger(), nullable=False),
     sa.Column('alt_freq', sa.Double(), nullable=False),
@@ -145,30 +160,58 @@ def upgrade() -> None:
     sa.Column('pass_qc', sa.Boolean(), nullable=False),
     sa.ForeignKeyConstraint(['allele_id'], ['alleles.id'], name=op.f('fk_intra_host_variants_allele_id_alleles')),
     sa.ForeignKeyConstraint(['sample_id'], ['samples.id'], name=op.f('fk_intra_host_variants_sample_id_samples')),
+    sa.ForeignKeyConstraint(['translation_id'], ['translations.id'], name=op.f('fk_intra_host_variants_translation_id_translations')),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_intra_host_variants')),
     sa.UniqueConstraint('sample_id', 'allele_id', name='uq_intra_host_variants_sample_allele_pair')
     )
+    op.create_index(op.f('ix_intra_host_variants_allele_id'), 'intra_host_variants', ['allele_id'], unique=False)
+    op.create_index(op.f('ix_intra_host_variants_translation_id'), 'intra_host_variants', ['translation_id'], unique=False)
     op.create_table('mutations',
     sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
     sa.Column('sample_id', sa.BigInteger(), nullable=False),
     sa.Column('allele_id', sa.BigInteger(), nullable=False),
+    sa.Column('translation_id', sa.BigInteger(), nullable=True),
     sa.ForeignKeyConstraint(['allele_id'], ['alleles.id'], name=op.f('fk_mutations_allele_id_alleles')),
     sa.ForeignKeyConstraint(['sample_id'], ['samples.id'], name=op.f('fk_mutations_sample_id_samples')),
+    sa.ForeignKeyConstraint(['translation_id'], ['translations.id'], name=op.f('fk_mutations_translation_id_translations')),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_mutations')),
     sa.UniqueConstraint('sample_id', 'allele_id', name='uq_mutations_sample_allele_pair')
     )
+    op.create_index(op.f('ix_mutations_allele_id'), 'mutations', ['allele_id'], unique=False)
+    op.create_index(op.f('ix_mutations_translation_id'), 'mutations', ['translation_id'], unique=False)
+    op.create_table('samples_lineages',
+    sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
+    sa.Column('sample_id', sa.BigInteger(), nullable=False),
+    sa.Column('lineage_id', sa.BigInteger(), nullable=False),
+    sa.Column('abundance', sa.Float(), nullable=True),
+    sa.Column('is_consensus_call', sa.Boolean(), nullable=False),
+    sa.CheckConstraint('(abundance is null) = is_consensus_call', name=op.f('ck_samples_lineages_`has_abundance_xor_is_consensus`')),
+    sa.ForeignKeyConstraint(['lineage_id'], ['lineages.id'], name=op.f('fk_samples_lineages_lineage_id_lineages')),
+    sa.ForeignKeyConstraint(['sample_id'], ['samples.id'], name=op.f('fk_samples_lineages_sample_id_samples')),
+    sa.PrimaryKeyConstraint('id', name=op.f('pk_samples_lineages')),
+    sa.UniqueConstraint('sample_id', 'lineage_id', 'is_consensus_call', name='uq_samples_lineages_sample_id_lineage_id_is_consensus_call')
+    )
+    op.create_index(op.f('ix_samples_lineages_lineage_id'), 'samples_lineages', ['lineage_id'], unique=False)
     # ### end Alembic commands ###
 
 
 def downgrade() -> None:
     # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_index(op.f('ix_samples_lineages_lineage_id'), table_name='samples_lineages')
+    op.drop_table('samples_lineages')
+    op.drop_index(op.f('ix_mutations_translation_id'), table_name='mutations')
+    op.drop_index(op.f('ix_mutations_allele_id'), table_name='mutations')
     op.drop_table('mutations')
+    op.drop_index(op.f('ix_intra_host_variants_translation_id'), table_name='intra_host_variants')
+    op.drop_index(op.f('ix_intra_host_variants_allele_id'), table_name='intra_host_variants')
     op.drop_table('intra_host_variants')
     op.drop_table('translations')
     op.drop_table('samples')
-    op.drop_table('phenotype_measurement_results')
+    op.drop_table('phenotype_metric_values')
+    op.drop_table('lineages')
     op.drop_table('phenotype_metrics')
+    op.drop_table('lineage_systems')
     op.drop_table('geo_locations')
-    op.drop_table('amino_acid_substitutions')
+    op.drop_table('amino_acids')
     op.drop_table('alleles')
     # ### end Alembic commands ###

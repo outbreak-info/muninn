@@ -6,7 +6,7 @@ from DB.queries.amino_acid_substitutions import find_aa_sub
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.phenotype_measurement_results import insert_pheno_measurement_result
 from DB.inserts.phenotype_metrics import find_or_insert_metric
-from DB.models import PhenotypeMeasurementResult, PhenotypeMetric, AminoAcidSubstitution
+from DB.models import PhenotypeMetricValues, PhenotypeMetric, AminoAcid
 from utils.constants import PhenotypeMetricAssayTypes, DefaultGffFeaturesByRegion
 from utils.csv_helpers import get_value, int_from_decimal_str
 from utils.errors import NotFoundError
@@ -42,7 +42,7 @@ class EveParser(FileParser):
 
                 try:
                     aas_id = await find_aa_sub(
-                        AminoAcidSubstitution(
+                        AminoAcid(
                             gff_feature=self.gff_feature,
                             position_aa=position_aa,
                             alt_aa=alt_aa,
@@ -72,7 +72,7 @@ class EveParser(FileParser):
                         cache_phenotype_metrics[col.name] = metric_id
 
                     updated = await insert_pheno_measurement_result(
-                        PhenotypeMeasurementResult(
+                        PhenotypeMetricValues(
                             amino_acid_substitution_id=aas_id,
                             phenotype_metric_id=metric_id,
                             value=v

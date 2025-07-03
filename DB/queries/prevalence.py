@@ -4,7 +4,7 @@ from typing import List, Type
 from sqlalchemy import select, and_, ColumnElement, text, func
 
 from DB.engine import get_async_session
-from DB.models import IntraHostVariant, Sample, Allele, AminoAcidSubstitution, Translation, Mutation, GeoLocation
+from DB.models import IntraHostVariant, Sample, Allele, AminoAcid, Translation, Mutation, GeoLocation
 from api.models import VariantFreqInfo, VariantCountPhenoScoreInfo, MutationCountInfo
 from parser.parser import parser
 from utils.constants import CHANGE_PATTERN
@@ -15,9 +15,9 @@ async def get_samples_variant_freq_by_aa_change(change: str) -> List[VariantFreq
 
     where_clause = and_(
         Allele.region == region,
-        AminoAcidSubstitution.ref_aa == ref_aa,
-        AminoAcidSubstitution.position_aa == position_aa,
-        AminoAcidSubstitution.alt_aa == alt_aa
+        AminoAcid.ref_aa == ref_aa,
+        AminoAcid.position_aa == position_aa,
+        AminoAcid.alt_aa == alt_aa
     )
 
     return await _get_samples_variant_freq(where_clause)
@@ -39,11 +39,11 @@ async def get_samples_variant_freq_by_nt_change(change: str) -> List[VariantFreq
 async def _get_samples_variant_freq(where_clause: ColumnElement[bool]) -> List[VariantFreqInfo]:
     # todo: should join geo_locations
     query = (
-        select(IntraHostVariant.alt_freq, Sample.accession, Allele.id, Translation.id, AminoAcidSubstitution.id)
+        select(IntraHostVariant.alt_freq, Sample.accession, Allele.id, Translation.id, AminoAcid.id)
         .join(Sample, Sample.id == IntraHostVariant.sample_id, isouter=True)
         .join(Allele, Allele.id == IntraHostVariant.allele_id, isouter=True)
         .join(Translation, Allele.id == Translation.allele_id, isouter=True)
-        .join(AminoAcidSubstitution, Translation.amino_acid_substitution_id == AminoAcidSubstitution.id, isouter=True)
+        .join(AminoAcid, Translation.amino_acid_substitution_id == AminoAcid.id, isouter=True)
         .where(where_clause)
     )
 
@@ -81,9 +81,9 @@ async def get_mutation_sample_count_by_aa(change: str) -> List[MutationCountInfo
 
     where_clause = and_(
         Allele.region == region,
-        AminoAcidSubstitution.ref_aa == ref_aa,
-        AminoAcidSubstitution.position_aa == position_aa,
-        AminoAcidSubstitution.alt_aa == alt_aa
+        AminoAcid.ref_aa == ref_aa,
+        AminoAcid.position_aa == position_aa,
+        AminoAcid.alt_aa == alt_aa
     )
 
     return await _get_mutation_sample_count(where_clause)
@@ -91,13 +91,13 @@ async def get_mutation_sample_count_by_aa(change: str) -> List[MutationCountInfo
 
 async def _get_mutation_sample_count(where_clause: ColumnElement[bool]) -> List[MutationCountInfo]:
     query = (
-        select(Sample, Mutation, Allele.id, Translation.id, AminoAcidSubstitution.id)
+        select(Sample, Mutation, Allele.id, Translation.id, AminoAcid.id)
         .join(Mutation, Sample.id == Mutation.sample_id, isouter=True)
         .join(Allele, Allele.id == Mutation.allele_id, isouter=True)
         .join(Translation, Allele.id == Translation.allele_id, isouter=True)
-        .join(AminoAcidSubstitution, Translation.amino_acid_substitution_id == AminoAcidSubstitution.id, isouter=True)
-        .with_only_columns(Allele.id, Translation.id, AminoAcidSubstitution.id, func.count())
-        .group_by(Allele.id, Translation.id, AminoAcidSubstitution.id)
+        .join(AminoAcid, Translation.amino_acid_substitution_id == AminoAcid.id, isouter=True)
+        .with_only_columns(Allele.id, Translation.id, AminoAcid.id, func.count())
+        .group_by(Allele.id, Translation.id, AminoAcid.id)
         .where(where_clause)
     )
 

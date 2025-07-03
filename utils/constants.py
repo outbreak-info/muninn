@@ -79,22 +79,23 @@ class NtOrAa(Enum):
 class TableNames:
     samples = 'samples'
     alleles = 'alleles'
-    amino_acid_substitutions = 'amino_acid_substitutions'
+    amino_acids = 'amino_acids'
     mutations = 'mutations'
     intra_host_variants = 'intra_host_variants'
     geo_locations = 'geo_locations'
     phenotype_metrics = 'phenotype_metrics'
-    phenotype_measurement_results = 'phenotype_measurement_results'
+    phenotype_metric_values = 'phenotype_metric_values'
     lineage_systems = 'lineage_systems'
     lineages = 'lineages'
     samples_lineages = 'samples_lineages'
+    translations = 'translations'
 
 
 class StandardColumnNames:
     # ids
     sample_id = 'sample_id'
     allele_id = 'allele_id'
-    amino_acid_substitution_id = 'amino_acid_substitution_id'
+    amino_acid_id = 'amino_acid_id'
     intra_host_variant_id = 'intra_host_variant_id'
     mutation_id = 'mutation_id'
     translation_id = 'translation_id'

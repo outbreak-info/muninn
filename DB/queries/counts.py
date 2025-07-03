@@ -5,7 +5,7 @@ from sqlalchemy import text, select, Result
 from sqlalchemy.sql.functions import func
 
 from DB.engine import get_async_session
-from DB.models import Sample, GeoLocation, IntraHostVariant, AminoAcidSubstitution, Allele, Mutation, Translation
+from DB.models import Sample, GeoLocation, IntraHostVariant, AminoAcid, Allele, Mutation, Translation
 from parser.parser import parser
 from utils.constants import DateBinOpt, NtOrAa
 
@@ -26,12 +26,12 @@ async def count_samples_by_column(by_col: str):
 async def count_variants_by_column(by_col: str):
     async with get_async_session() as session:
         res = await session.execute(
-            select(IntraHostVariant, Allele, Translation, AminoAcidSubstitution)
+            select(IntraHostVariant, Allele, Translation, AminoAcid)
             .join(Allele, Allele.id == IntraHostVariant.allele_id, isouter=True)
             .join(Translation, Allele.id == Translation.allele_id, isouter=True)
             .join(
-                AminoAcidSubstitution,
-                Translation.amino_acid_substitution_id == AminoAcidSubstitution.id,
+                AminoAcid,
+                Translation.amino_acid_substitution_id == AminoAcid.id,
                 isouter=True
             )
             .with_only_columns(text(by_col), func.count().label('count1'))
@@ -44,12 +44,12 @@ async def count_variants_by_column(by_col: str):
 async def count_mutations_by_column(by_col: str):
     async with get_async_session() as session:
         res = await session.execute(
-            select(Mutation, Allele, Translation, AminoAcidSubstitution)
+            select(Mutation, Allele, Translation, AminoAcid)
             .join(Allele, Allele.id == Mutation.allele_id, isouter=True)
             .join(Translation, Allele.id == Translation.allele_id, isouter=True)
             .join(
-                AminoAcidSubstitution,
-                Translation.amino_acid_substitution_id == AminoAcidSubstitution.id,
+                AminoAcid,
+                Translation.amino_acid_substitution_id == AminoAcid.id,
                 isouter=True
             )
             .with_only_columns(text(by_col), func.count().label('count1'))

@@ -3,7 +3,7 @@ from typing import List
 
 from pydantic import BaseModel
 
-from DB.models import IntraHostVariant, Sample, AminoAcidSubstitution, Mutation, PhenotypeMetric
+from DB.models import IntraHostVariant, Sample, AminoAcid, Mutation, PhenotypeMetric
 
 """
 These models define the shapes for data returned by the api.
@@ -20,7 +20,7 @@ class AminoAcidSubInfo(BaseModel):
     gff_feature: str
 
     @classmethod
-    def from_db_object(cls, dbo: 'AminoAcidSubstitution') -> 'AminoAcidSubInfo':
+    def from_db_object(cls, dbo: 'AminoAcid') -> 'AminoAcidSubInfo':
         return AminoAcidSubInfo(
             id=dbo.id,
             position_aa=dbo.position_aa,
@@ -59,7 +59,7 @@ class VariantInfo(BaseModel):
             position_nt=dbo.r_allele.position_nt,
             ref_nt=dbo.r_allele.ref_nt,
             alt_nt=dbo.r_allele.alt_nt,
-            amino_acid_mutations=[AminoAcidSubInfo.from_db_object(t.r_amino_sub) for t in dbo.r_allele.r_translations]
+            amino_acid_mutations=[AminoAcidSubInfo.from_db_object(t.r_amino_acid) for t in dbo.r_allele.r_translations]
         )
 
 
@@ -178,7 +178,7 @@ class MutationInfo(BaseModel):
             position_nt=dbo.r_allele.position_nt,
             ref_nt=dbo.r_allele.ref_nt,
             alt_nt=dbo.r_allele.alt_nt,
-            amino_acid_mutations=[AminoAcidSubInfo.from_db_object(t.r_amino_sub) for t in dbo.r_allele.r_translations]
+            amino_acid_mutations=[AminoAcidSubInfo.from_db_object(t.r_amino_acid) for t in dbo.r_allele.r_translations]
         )
 
 class PhenotypeMetricInfo(BaseModel):

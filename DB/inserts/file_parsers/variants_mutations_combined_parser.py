@@ -420,7 +420,7 @@ class VariantsMutationsCombinedParser(FileParser):
         # 11. Split out and insert new translations from vars and muts
         translations_cols = {
             StandardColumnNames.allele_id,
-            StandardColumnNames.amino_acid_substitution_id
+            StandardColumnNames.amino_acid_id
         }
 
         translations = pl.concat(
@@ -436,7 +436,7 @@ class VariantsMutationsCombinedParser(FileParser):
             existing_translations,
             on=[
                 StandardColumnNames.allele_id,
-                StandardColumnNames.amino_acid_substitution_id
+                StandardColumnNames.amino_acid_id
             ],
             how='anti'
         )

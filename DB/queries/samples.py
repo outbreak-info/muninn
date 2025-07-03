@@ -5,7 +5,7 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import contains_eager
 
 from DB.engine import get_uri_for_polars, get_async_session
-from DB.models import Sample, Mutation, GeoLocation, Allele, AminoAcidSubstitution, IntraHostVariant, Translation
+from DB.models import Sample, Mutation, GeoLocation, Allele, AminoAcid, IntraHostVariant, Translation
 from api.models import SampleInfo
 from parser.parser import parser
 from utils.constants import StandardColumnNames
@@ -58,8 +58,8 @@ async def get_samples_by_mutation(query: str) -> List['SampleInfo']:
                         select(Allele.id)
                         .join(Translation, Allele.id == Translation.allele_id, isouter=True)
                         .join(
-                            AminoAcidSubstitution,
-                            Translation.amino_acid_substitution_id == AminoAcidSubstitution.id,
+                            AminoAcid,
+                            Translation.amino_acid_substitution_id == AminoAcid.id,
                             isouter=True
                         )
                         .where(text(user_defined_query))
@@ -92,8 +92,8 @@ async def get_samples_by_variant(query: str) -> List['SampleInfo']:
                 .join(Allele, Allele.id == IntraHostVariant.allele_id, isouter=True)
                 .join(Translation, Allele.id == Translation.allele_id, isouter=True)
                 .join(
-                    AminoAcidSubstitution,
-                    Translation.amino_acid_substitution_id == AminoAcidSubstitution.id,
+                    AminoAcid,
+                    Translation.amino_acid_substitution_id == AminoAcid.id,
                     isouter=True
                 )
                 .where(text(user_query))

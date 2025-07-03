@@ -19,7 +19,7 @@ async def insert_translation(t: Translation):
 async def copy_insert_translations(translations: pl.DataFrame) -> str:
     columns = [
         StandardColumnNames.allele_id,
-        StandardColumnNames.amino_acid_substitution_id
+        StandardColumnNames.amino_acid_id
     ]
     conn = await get_asyncpg_connection()
     res = await conn.copy_records_to_table(

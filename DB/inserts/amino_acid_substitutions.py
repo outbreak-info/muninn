@@ -2,19 +2,19 @@ import polars as pl
 from sqlalchemy import and_, select
 
 from DB.engine import get_async_write_session, get_asyncpg_connection
-from DB.models import AminoAcidSubstitution
+from DB.models import AminoAcid
 from utils.constants import StandardColumnNames
 
 
-async def find_or_insert_aa_sub(aas: AminoAcidSubstitution) -> int:
+async def find_or_insert_aa_sub(aas: AminoAcid) -> int:
     async with get_async_write_session() as session:
         id_: int = await session.scalar(
-            select(AminoAcidSubstitution.id)
+            select(AminoAcid.id)
             .where(
                 and_(
-                    AminoAcidSubstitution.gff_feature == aas.gff_feature,
-                    AminoAcidSubstitution.position_aa == aas.position_aa,
-                    AminoAcidSubstitution.alt_aa == aas.alt_aa
+                    AminoAcid.gff_feature == aas.gff_feature,
+                    AminoAcid.position_aa == aas.position_aa,
+                    AminoAcid.alt_aa == aas.alt_aa
                 )
             )
         )

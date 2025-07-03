@@ -233,16 +233,14 @@ class Allele(Base):
     r_mutations: Mapped[List['Mutation']] = relationship(back_populates='r_allele')
 
 
-class AminoAcidSubstitution(Base):
-    __tablename__ = TableNames.amino_acid_substitutions
+class AminoAcid(Base):
+    __tablename__ = TableNames.amino_acids
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
     position_aa: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
     ref_aa: Mapped[str] = mapped_column(sa.Text, nullable=False)
     alt_aa: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    ref_codon: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    alt_codon: Mapped[str] = mapped_column(sa.Text, nullable=False)
     gff_feature: Mapped[str] = mapped_column(sa.Text, nullable=False)
 
     __table_args__ = tuple(
@@ -260,34 +258,35 @@ class AminoAcidSubstitution(Base):
         ]
     )
 
-    r_translations: Mapped[List['Translation']] = relationship(back_populates='r_amino_sub')
-    r_pheno_measurement_results: Mapped[List['PhenotypeMeasurementResult']] = relationship(back_populates='r_amino_sub')
+    r_translations: Mapped[List['Translation']] = relationship(back_populates='r_amino_acid')
+    r_pheno_metric_values: Mapped[List['PhenotypeMetricValues']] = relationship(back_populates='r_amino_sub')
 
 
 class Translation(Base):
-    __tablename__ = 'translations'
+    __tablename__ = TableNames.translations
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
-    allele_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.alleles}.id'), nullable=False)
-    amino_acid_substitution_id: Mapped[int] = mapped_column(
-        sa.ForeignKey(f'{TableNames.amino_acid_substitutions}.id'),
-        nullable=False,
-        index=True
-    )
+    amino_acid_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.amino_acids}.id'), nullable=False)
+
+    ref_codon: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    alt_codon: Mapped[str] = mapped_column(sa.Text, nullable=False)
 
     __table_args__ = tuple(
         [
             UniqueConstraint(
-                StandardColumnNames.allele_id,
-                StandardColumnNames.amino_acid_substitution_id,
-                name='uq_translations_allele_and_amino_sub'
-            )
+                StandardColumnNames.amino_acid_id,
+                StandardColumnNames.alt_codon,
+                name='uq_translations_amino_acid_id_alt_codon'
+            ),
+            CheckConstraint(f"{StandardColumnNames.alt_codon} <> ''", name='alt_codon_not_empty'),
+            CheckConstraint(f"{StandardColumnNames.ref_codon} <> ''", name='ref_codon_not_empty')
         ]
     )
 
-    r_allele: Mapped['Allele'] = relationship(back_populates='r_translations')
-    r_amino_sub: Mapped['AminoAcidSubstitution'] = relationship(back_populates='r_translations')
+    r_mutations: Mapped[List['Mutation']] = relationship(back_populates='r_translation')
+    r_variants: Mapped[List['IntraHostVariant']] = relationship(back_populates='r_translation')
+    r_amino_acid: Mapped['AminoAcid'] = relationship(back_populates='r_translations')
 
 
 class Mutation(Base):
@@ -297,6 +296,12 @@ class Mutation(Base):
 
     sample_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.samples}.id'), nullable=False)
     allele_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.alleles}.id'), nullable=False, index=True)
+
+    translation_id: Mapped[int] = mapped_column(
+        sa.ForeignKey(f'{TableNames.translations}.id'),
+        nullable=True,
+        index=True
+    )
 
     __table_args__ = tuple(
         [
@@ -310,6 +315,7 @@ class Mutation(Base):
 
     r_sample: Mapped['Sample'] = relationship(back_populates='r_mutations')
     r_allele: Mapped['Allele'] = relationship(back_populates='r_mutations')
+    r_translation: Mapped['Translation'] = relationship(back_populates='r_mutations')
 
 
 class IntraHostVariant(Base):
@@ -319,6 +325,12 @@ class IntraHostVariant(Base):
 
     sample_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.samples}.id'), nullable=False)
     allele_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.alleles}.id'), nullable=False, index=True)
+
+    translation_id: Mapped[int] = mapped_column(
+        sa.ForeignKey(f'{TableNames.translations}.id'),
+        nullable=True,
+        index=True
+    )
 
     ref_dp: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
     alt_dp: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
@@ -343,6 +355,7 @@ class IntraHostVariant(Base):
 
     r_sample: Mapped['Sample'] = relationship(back_populates='r_variants')
     r_allele: Mapped['Allele'] = relationship(back_populates='r_variants')
+    r_translation: Mapped['Translation'] = relationship(back_populates='r_variants')
 
     def copy_from(self, other: 'IntraHostVariant'):
         if not (other.sample_id, other.allele_id) == (self.sample_id, self.allele_id):
@@ -408,21 +421,21 @@ class PhenotypeMetric(Base):
         ]
     )
 
-    r_pheno_measurement_results: Mapped[List['PhenotypeMeasurementResult']] = relationship(
+    r_pheno_metric_values: Mapped[List['PhenotypeMetricValues']] = relationship(
         back_populates='r_pheno_metric'
     )
 
 
-class PhenotypeMeasurementResult(Base):
-    __tablename__ = TableNames.phenotype_measurement_results
+class PhenotypeMetricValues(Base):
+    __tablename__ = TableNames.phenotype_metric_values
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
     phenotype_metric_id: Mapped[int] = mapped_column(
         sa.ForeignKey(f'{TableNames.phenotype_metrics}.id'),
         nullable=False
     )
-    amino_acid_substitution_id: Mapped[int] = mapped_column(
-        sa.ForeignKey(f'{TableNames.amino_acid_substitutions}.id'),
+    amino_acid_id: Mapped[int] = mapped_column(
+        sa.ForeignKey(f'{TableNames.amino_acids}.id'),
         nullable=False
     )
 
@@ -432,14 +445,14 @@ class PhenotypeMeasurementResult(Base):
         [
             UniqueConstraint(
                 StandardColumnNames.phenotype_metric_id,
-                StandardColumnNames.amino_acid_substitution_id,
-                name='uq_phenotype_measurement_results_metric_and_amino_sub'
+                StandardColumnNames.amino_acid_id,
+                name=f'uq_{TableNames.phenotype_metric_values}_metric_and_amino_acid'
             )
         ]
     )
 
     r_pheno_metric: Mapped['PhenotypeMetric'] = relationship(back_populates='r_pheno_measurement_results')
-    r_amino_sub: Mapped['AminoAcidSubstitution'] = relationship(back_populates='r_pheno_measurement_results')
+    r_amino_acid: Mapped['AminoAcid'] = relationship(back_populates='r_pheno_measurement_results')
 
 
 class LineageSystem(Base):

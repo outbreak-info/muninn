@@ -1,18 +1,18 @@
 from sqlalchemy import select, and_
 
 from DB.engine import get_async_write_session
-from DB.models import PhenotypeMeasurementResult
+from DB.models import PhenotypeMetricValues
 
 
-async def insert_pheno_measurement_result(pmr: PhenotypeMeasurementResult, upsert: bool = False) -> bool:
+async def insert_pheno_measurement_result(pmr: PhenotypeMetricValues, upsert: bool = False) -> bool:
     updated_existing = False
     async with get_async_write_session() as session:
-        existing: PhenotypeMeasurementResult = await session.scalar(
-            select(PhenotypeMeasurementResult)
+        existing: PhenotypeMetricValues = await session.scalar(
+            select(PhenotypeMetricValues)
             .where(
                 and_(
-                    PhenotypeMeasurementResult.amino_acid_substitution_id == pmr.amino_acid_substitution_id,
-                    PhenotypeMeasurementResult.phenotype_metric_id == pmr.phenotype_metric_id
+                    PhenotypeMetricValues.amino_acid_id == pmr.amino_acid_id,
+                    PhenotypeMetricValues.phenotype_metric_id == pmr.phenotype_metric_id
                 )
             )
         )

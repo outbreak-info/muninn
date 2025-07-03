@@ -4,7 +4,7 @@ from typing import Set, Dict
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.phenotype_measurement_results import insert_pheno_measurement_result
 from DB.inserts.phenotype_metrics import find_or_insert_metric
-from DB.models import AminoAcidSubstitution, PhenotypeMetric, PhenotypeMeasurementResult
+from DB.models import AminoAcid, PhenotypeMetric, PhenotypeMetricValues
 from DB.queries.amino_acid_substitutions import find_aa_sub
 from utils.constants import PhenotypeMetricAssayTypes, DefaultGffFeaturesByRegion, StandardColumnNames, \
     StandardPhenoMetricNames
@@ -58,7 +58,7 @@ class DmsFileParser(FileParser):
                 except KeyError:
                     try:
                         aas_id = await find_aa_sub(
-                            AminoAcidSubstitution(
+                            AminoAcid(
                                 gff_feature=self.gff_feature,
                                 position_aa=position_aa,
                                 alt_aa=alt_aa,
@@ -92,7 +92,7 @@ class DmsFileParser(FileParser):
                         cache_metric_ids[canonical_name] = metric_id
 
                     updated = await insert_pheno_measurement_result(
-                        PhenotypeMeasurementResult(
+                        PhenotypeMetricValues(
                             amino_acid_substitution_id=aas_id,
                             phenotype_metric_id=metric_id,
                             value=v
