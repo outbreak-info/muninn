@@ -373,6 +373,6 @@ async def get_lineage_abundance(
         else:
             return await DB.queries.lineages.get_abundances(q)
 
-@app.get('/v0/lineages/mutationIncidence')
-async def get_mutation_incidence(lineage:str,change_bin:NtOrAa, include_synonymous:bool = False, q: str = None):
-    return await DB.queries.lineages.get_mutation_incidence(lineage,change_bin, include_synonymous, q)
+@app.get('/v0/lineages/mutationIncidence') #TODO: Create response_model
+async def get_mutation_incidence(lineage:str, lineage_system_name: str, change_bin:NtOrAa, match_reference:bool = False, q: str = None):
+    return await DB.queries.lineages.get_mutation_incidence(lineage, lineage_system_name, change_bin, match_reference, q)

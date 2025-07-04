@@ -313,80 +313,91 @@ async def get_abundance_summaries_by_collection_date(
             out_data[date] = [info]
     return out_data
 
-async def get_mutation_incidence(lineage: str, 
+async def get_mutation_incidence(
+    lineage: str,
+    lineage_system_name: str,
     change_bin: NtOrAa,
-    include_synonymous: bool,
+    match_reference: bool,
     raw_query: str | None
-    ):
+):
 
     user_where_clause = ''
     if raw_query is not None:
         user_where_clause = f'and ({parser.parse(raw_query)})'
 
-    not_synonymous = 'and not ref_aa=alt_aa'
-    if include_synonymous:
-        not_synonymous = ''
-
     async with get_async_session() as session:
 
-        sampleCount = await session.scalar(
+        sample_count = await session.scalar(
             text(
                 f'''
-                SELECT count(*)
-                FROM lineages
-                LEFT JOIN samples_lineages ON samples_lineages.lineage_id = lineages.id
-                WHERE lineage_name = :input_lineage
+                select count(*)
+                from samples s
+                left join samples_lineages sl on sl.sample_id = s.id
+                left join lineages l on l.id = sl.lineage_id
+                left join lineage_systems ls on ls.id = l.lineage_system_id 
+                WHERE l.lineage_name = :input_lineage and ls.lineage_system_name = :input_lineage_system_name
+                {user_where_clause}
                 '''
             ), {
-                'input_lineage': lineage
+                'input_lineage': lineage,
+                'input_lineage_system_name': lineage_system_name
             }
         )
 
+        sample_subset_query = f"""
+        select s.id from samples s
+        inner join samples_lineages sl ON sl.sample_id = s.id
+        inner join lineages l on l.id = sl.lineage_id
+        inner join lineage_systems ls on ls.id = l.lineage_system_id
+        where l.lineage_name = '{lineage}' and ls.lineage_system_name='{lineage_system_name}'
+        {user_where_clause}
+        """
+
         if change_bin == NtOrAa.nt:
+            not_reference = 'where ref_nt <> alt_nt'
+            if match_reference:
+                not_reference = ''
+
+            #TODO: Profile this SQL query
             res = await session.execute(
                 text(
                     f'''
-                    SELECT region,ref_nt,position_nt,alt_nt,count(DISTINCT mutations.sample_id)
-                    FROM lineages
-                    LEFT JOIN samples_lineages ON samples_lineages.lineage_id = lineages.id
-                    LEFT JOIN samples ON samples_lineages.sample_id = samples.id
-                    LEFT JOIN mutations ON mutations.sample_id = samples.id
-                    LEFT JOIN alleles ON mutations.allele_id = alleles.id
-                    LEFT JOIN translations on translations.allele_id = mutations.allele_id
-                    INNER JOIN amino_acid_substitutions ON amino_acid_substitutions.id = amino_acid_substitution_id
-                    WHERE lineage_name = :input_lineage {not_synonymous} {user_where_clause}
-                    GROUP BY region,ref_nt,position_nt,alt_nt
-                    ORDER BY count DESC
+                    WITH sample_subset as (
+                        {sample_subset_query}
+                    ) SELECT ref_nt, position_nt, alt_nt, region, count(*) as mutation_count from sample_subset
+                    inner join mutations m ON m.sample_id = sample_subset.id
+                    inner join alleles a on a.id = m.allele_id
+                    {not_reference}
+                    group by ref_nt, position_nt, alt_nt, region
                     '''
-                ), {
-                    'input_lineage': lineage
-                }
+                )
             )
         else:
+            not_reference = 'where ref_aa <> alt_aa'
+            if match_reference:
+                not_reference = ''
             res = await session.execute(
                 text(
                     f'''
-SELECT region,
-    ref_aa,
-    position_aa,
-    alt_aa,
-    count(DISTINCT mutations.sample_id)
-FROM lineages
-LEFT JOIN samples_lineages ON samples_lineages.lineage_id = lineages.id
-LEFT JOIN mutations ON mutations.sample_id = samples_lineages.sample_id
-LEFT JOIN alleles ON mutations.allele_id = alleles.id
-LEFT JOIN translations on translations.allele_id = mutations.allele_id
-INNER JOIN amino_acid_substitutions ON amino_acid_substitutions.id = amino_acid_substitution_id
-WHERE lineage_name = :input_lineage {not_synonymous} {user_where_clause}
-GROUP BY region,ref_aa,position_aa,alt_aa
-ORDER BY count DESC
+                    WITH sample_subset as (
+                        {sample_subset_query}
+                    ),
+                    sample_aa AS (
+                    SELECT DISTINCT m.sample_id,
+                                    t.amino_acid_id
+                    FROM   mutations    m
+                    JOIN   translations t ON t.id = m.translation_id
+                    ) SELECT ref_aa, position_aa, alt_aa, gff_feature, count(*) as mutation_count
+                    from sample_subset
+                    inner join sample_aa ON sample_aa.sample_id = sample_subset.id
+                    inner join amino_acids aa on aa.id = sample_aa.amino_acid_id
+                    {not_reference}
+                    group by ref_aa, position_aa, alt_aa, gff_feature;
                     '''
-                ), {
-                    'input_lineage': lineage
-                }
+                )
             )
 
     out = defaultdict(list)
-    for region, ref, pos, alt, count in res:
-        out[region].append({"ref": ref, "alt": alt, "pos": pos, "count": count})
-    return {'samples':sampleCount,'counts':out}
+    for ref, pos, alt, region_or_gff, count in res:
+        out[region_or_gff].append({"ref": ref, "alt": alt, "pos": pos, "count": count})
+    return {'sample_count': sample_count,'mutation_counts':out}
