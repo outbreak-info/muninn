@@ -3,7 +3,7 @@ from typing import List
 
 from pydantic import BaseModel
 
-from DB.models import IntraHostVariant, Sample, AminoAcid, Mutation, PhenotypeMetric
+from DB.models import IntraHostVariant, Sample, AminoAcid, Mutation, PhenotypeMetric, Translation
 
 """
 These models define the shapes for data returned by the api.
@@ -12,21 +12,25 @@ In case it's not clear, the naming convention here is 'ThingInfo'.
 """
 
 
-class AminoAcidSubInfo(BaseModel):
+class AminoAcidInfo(BaseModel):
     id: int
     position_aa: int
     ref_aa: str
     alt_aa: str
     gff_feature: str
+    ref_codon: str
+    alt_codon: str
 
     @classmethod
-    def from_db_object(cls, dbo: 'AminoAcid') -> 'AminoAcidSubInfo':
-        return AminoAcidSubInfo(
+    def from_db_object(cls, dbo: Translation) -> 'AminoAcidInfo':
+        return AminoAcidInfo(
             id=dbo.id,
-            position_aa=dbo.position_aa,
-            ref_aa=dbo.ref_aa,
-            alt_aa=dbo.alt_aa,
-            gff_feature=dbo.gff_feature
+            position_aa=dbo.r_amino_acid.position_aa,
+            ref_aa=dbo.r_amino_acid.ref_aa,
+            alt_aa=dbo.r_amino_acid.alt_aa,
+            gff_feature=dbo.r_amino_acid.gff_feature,
+            ref_codon=dbo.ref_codon,
+            alt_codon=dbo.alt_codon,
         )
 
 
@@ -44,7 +48,7 @@ class VariantInfo(BaseModel):
     ref_nt: str
     alt_nt: str
 
-    amino_acid_mutations: List['AminoAcidSubInfo']
+    amino_acid_mutation: AminoAcidInfo
 
     @classmethod
     def from_db_object(cls, dbo: 'IntraHostVariant'):
@@ -59,7 +63,7 @@ class VariantInfo(BaseModel):
             position_nt=dbo.r_allele.position_nt,
             ref_nt=dbo.r_allele.ref_nt,
             alt_nt=dbo.r_allele.alt_nt,
-            amino_acid_mutations=[AminoAcidSubInfo.from_db_object(t.r_amino_acid) for t in dbo.r_allele.r_translations]
+            amino_acid_mutation=AminoAcidInfo.from_db_object(dbo.r_translation)
         )
 
 
@@ -166,7 +170,7 @@ class MutationInfo(BaseModel):
     ref_nt: str
     alt_nt: str
 
-    amino_acid_mutations: List['AminoAcidSubInfo']
+    amino_acid_mutation: AminoAcidInfo
 
     @classmethod
     def from_db_object(cls, dbo: 'Mutation') -> 'MutationInfo':
@@ -178,7 +182,7 @@ class MutationInfo(BaseModel):
             position_nt=dbo.r_allele.position_nt,
             ref_nt=dbo.r_allele.ref_nt,
             alt_nt=dbo.r_allele.alt_nt,
-            amino_acid_mutations=[AminoAcidSubInfo.from_db_object(t.r_amino_acid) for t in dbo.r_allele.r_translations]
+            amino_acid_mutation=AminoAcidInfo.from_db_object(dbo.r_translation)
         )
 
 class PhenotypeMetricInfo(BaseModel):
