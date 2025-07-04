@@ -31,7 +31,8 @@ async def find_or_insert_mutation(m: Mutation) -> int:
 async def copy_insert_mutations(mutations: pl.DataFrame) -> str:
     columns = [
         StandardColumnNames.sample_id,
-        StandardColumnNames.allele_id
+        StandardColumnNames.allele_id,
+        StandardColumnNames.translation_id
     ]
     conn = await get_asyncpg_connection()
     res = await conn.copy_records_to_table(
