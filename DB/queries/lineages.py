@@ -317,6 +317,7 @@ async def get_mutation_incidence(
     lineage: str,
     lineage_system_name: str,
     change_bin: NtOrAa,
+    prevalence_threshold: float,
     match_reference: bool,
     raw_query: str | None
 ):
@@ -343,6 +344,7 @@ async def get_mutation_incidence(
                 'input_lineage_system_name': lineage_system_name
             }
         )
+        sample_count = float(sample_count)
 
         sample_subset_query = f"""
         select s.id from samples s
@@ -364,11 +366,12 @@ async def get_mutation_incidence(
                     f'''
                     WITH sample_subset as (
                         {sample_subset_query}
-                    ) SELECT ref_nt, position_nt, alt_nt, region, count(*) as mutation_count from sample_subset
+                    ) SELECT ref_nt, position_nt, alt_nt, region, count(*) as mutation_count, count(*) / {sample_count} as mutation_prevalence from sample_subset
                     inner join mutations m ON m.sample_id = sample_subset.id
                     inner join alleles a on a.id = m.allele_id
                     {not_reference}
                     group by ref_nt, position_nt, alt_nt, region
+                    having count(*) / {sample_count} >= {prevalence_threshold};
                     '''
                 )
             )
@@ -387,17 +390,18 @@ async def get_mutation_incidence(
                                     t.amino_acid_id
                     FROM   mutations    m
                     JOIN   translations t ON t.id = m.translation_id
-                    ) SELECT ref_aa, position_aa, alt_aa, gff_feature, count(*) as mutation_count
+                    ) SELECT ref_aa, position_aa, alt_aa, gff_feature, count(*) as mutation_count, count(*) / {sample_count} as mutation_prevalence
                     from sample_subset
                     inner join sample_aa ON sample_aa.sample_id = sample_subset.id
                     inner join amino_acids aa on aa.id = sample_aa.amino_acid_id
                     {not_reference}
-                    group by ref_aa, position_aa, alt_aa, gff_feature;
+                    group by ref_aa, position_aa, alt_aa, gff_feature
+                    having count(*) / {sample_count} >= {prevalence_threshold};
                     '''
                 )
             )
 
     out = defaultdict(list)
-    for ref, pos, alt, region_or_gff, count in res:
-        out[region_or_gff].append({"ref": ref, "alt": alt, "pos": pos, "count": count})
+    for ref, pos, alt, region_or_gff, count, prevalence in res:
+        out[region_or_gff].append({"ref": ref, "alt": alt, "pos": pos, "count": count, "prevalence": prevalence})
     return {'sample_count': sample_count,'mutation_counts':out}

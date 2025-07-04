@@ -14,7 +14,7 @@ import DB.queries.variants
 from api.models import VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
     MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo
 from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, SIMPLE_DATE_FIELDS, NtOrAa, \
-    DEFAULT_MAX_SPAN_DAYS, COLLECTION_DATE, DEFAULT_DAYS, COMMA_SEP_WORDLIKE_PATTERN, LINEAGE
+    DEFAULT_MAX_SPAN_DAYS, COLLECTION_DATE, DEFAULT_DAYS, COMMA_SEP_WORDLIKE_PATTERN, LINEAGE, DEFAULT_PREVALENCE_THRESHOLD
 from utils.errors import ParsingError
 
 app = FastAPI()
@@ -374,5 +374,5 @@ async def get_lineage_abundance(
             return await DB.queries.lineages.get_abundances(q)
 
 @app.get('/v0/lineages/mutationIncidence') #TODO: Create response_model
-async def get_mutation_incidence(lineage:str, lineage_system_name: str, change_bin:NtOrAa, match_reference:bool = False, q: str = None):
-    return await DB.queries.lineages.get_mutation_incidence(lineage, lineage_system_name, change_bin, match_reference, q)
+async def get_mutation_incidence(lineage:str, lineage_system_name: str, change_bin:NtOrAa, prevalence_threshold:float = DEFAULT_PREVALENCE_THRESHOLD, match_reference:bool = False, q: str = None):
+    return await DB.queries.lineages.get_mutation_incidence(lineage, lineage_system_name, change_bin, prevalence_threshold, match_reference, q)
