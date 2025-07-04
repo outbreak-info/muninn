@@ -161,30 +161,23 @@ async def _get_pheno_values_and_counts(
     if include_refs:
         no_refs_filter = ''
 
-    samples_query_addin = ''
-    if samples_query is not None:
-        samples_query_addin = f'''and TAB_by_allele.sample_id in (
-            select s.id from samples s 
-            left join geo_locations gl on gl.id = s.geo_location_id
-            where {parser.parse(samples_query)}
-        )
-        '''
+    samples_query_addin = '' if samples_query is None else f'and {parser.parse(samples_query)}'
 
     async with get_async_session() as session:
         res = await session.execute(
             text(
                 f'''
-                select aas.ref_aa, aas.position_aa, aas.alt_aa, pmr.value, (select 
-                    count(1) from {tablename} TAB_by_allele 
-                    where TAB_by_allele.allele_id = TAB.allele_id {samples_query_addin}
-                ) as count
-                from (select distinct allele_id from {tablename}) TAB
-                left join alleles a on a.id = TAB.allele_id
-                left join translations t on t.allele_id = a.id
-                left join amino_acid_substitutions aas on aas.id = t.amino_acid_substitution_id
-                left join phenotype_measurement_results pmr on pmr.amino_acid_substitution_id = aas.id
-                left join phenotype_metrics pm on pm.id = pmr.phenotype_metric_id
-                where  a.region = :region and pm.name = :pm_name {no_refs_filter}
+                select aas.ref_aa, aas.position_aa, aas.alt_aa, pmv.value, count(distinct s.id) as count
+                from {tablename} TAB
+                left join translations t on t.id = TAB.translation_id
+                left join samples s on s.id = TAB.sample_id
+                left join amino_acids aas on aas.id = t.amino_acid_id
+                left join phenotype_metric_values pmv on pmv.amino_acid_id = aas.id
+                left join phenotype_metrics pm on pm.id = pmv.phenotype_metric_id
+                left join geo_locations gl on gl.id = s.geo_location_id
+                where aas.gff_feature = :region and pm.name = :pm_name {no_refs_filter}
+                {samples_query_addin}
+                group by aas.ref_aa, aas.position_aa, aas.alt_aa, pmv.value
                 order by count desc;
                 '''
             ),
