@@ -40,9 +40,9 @@ async def get_mutations_by_sample(query: str) -> List['MutationInfo']:
         select(Mutation, Allele, Translation, AminoAcid)
         .join(Allele, Mutation.allele_id == Allele.id, isouter=True)
         .options(contains_eager(Mutation.r_allele))
-        .join(Translation, Allele.id == Translation.allele_id, isouter=True)
-        .options(contains_eager(Allele.r_translations))
-        .join(AminoAcid, Translation.amino_acid_substitution_id == AminoAcid.id, isouter=True)
+        .join(Translation, Translation.id == Mutation.translation_id, isouter=True)
+        .options(contains_eager(Mutation.r_translation))
+        .join(AminoAcid, AminoAcid.id == Translation.amino_acid_id, isouter=True)
         .options(contains_eager(Translation.r_amino_acid))
         .where(
             Mutation.sample_id.in_(

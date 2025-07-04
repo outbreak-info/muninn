@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import List
+from typing import List, Optional
 
 from pydantic import BaseModel
 
@@ -22,7 +22,9 @@ class AminoAcidInfo(BaseModel):
     alt_codon: str
 
     @classmethod
-    def from_db_object(cls, dbo: Translation) -> 'AminoAcidInfo':
+    def from_db_object(cls, dbo: Translation | None) -> Optional['AminoAcidInfo']:
+        if dbo is None:
+            return None
         return AminoAcidInfo(
             id=dbo.id,
             position_aa=dbo.r_amino_acid.position_aa,
@@ -48,7 +50,7 @@ class VariantInfo(BaseModel):
     ref_nt: str
     alt_nt: str
 
-    amino_acid_mutation: AminoAcidInfo
+    amino_acid_mutation: Optional['AminoAcidInfo']
 
     @classmethod
     def from_db_object(cls, dbo: 'IntraHostVariant'):
@@ -170,7 +172,7 @@ class MutationInfo(BaseModel):
     ref_nt: str
     alt_nt: str
 
-    amino_acid_mutation: AminoAcidInfo
+    amino_acid_mutation: Optional[AminoAcidInfo]
 
     @classmethod
     def from_db_object(cls, dbo: 'Mutation') -> 'MutationInfo':

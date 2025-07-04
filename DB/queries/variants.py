@@ -37,9 +37,9 @@ async def get_variants_for_sample(query: str) -> List['VariantInfo']:
         select(IntraHostVariant, Allele, Translation, AminoAcid)
         .join(Allele, IntraHostVariant.allele_id == Allele.id, isouter=True)
         .options(contains_eager(IntraHostVariant.r_allele))
-        .join(Translation, Allele.id == Translation.allele_id, isouter=True)
-        .options(contains_eager(Allele.r_translations))
-        .join(AminoAcid, Translation.amino_acid_substitution_id == AminoAcid.id, isouter=True)
+        .join(Translation, Translation.id == IntraHostVariant.translation_id, isouter=True)
+        .options(contains_eager(IntraHostVariant.r_translation))
+        .join(AminoAcid, AminoAcid.id == Translation.amino_acid_id, isouter=True)
         .options(contains_eager(Translation.r_amino_acid))
         .filter(
             IntraHostVariant.sample_id.in_(
