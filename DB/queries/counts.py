@@ -375,9 +375,9 @@ async def _count_variants_or_mutations_by_collection_date(
                         from samples s
                         left join geo_locations gl on gl.id = s.geo_location_id
                         inner join {table.__tablename__} VM on VM.sample_id = s.id
-                        inner join alleles a on a.id = VM.allele_id
-                        left join translations t on t.allele_id = a.id
-                        left join amino_acid_substitutions aas on aas.id = t.amino_acid_substitution_id
+                        left join alleles a on a.id = VM.allele_id
+                        left join translations t on t.id = VM.translation_id
+                        left join amino_acids aas on aas.id = t.amino_acid_id
                         where num_nulls(collection_end_date, collection_start_date) = 0 {user_where_clause}
                     )
                     where collection_span <= {max_span_days}

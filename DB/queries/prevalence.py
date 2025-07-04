@@ -147,7 +147,7 @@ async def get_pheno_values_and_variant_counts(
 ) -> List['VariantCountPhenoScoreInfo']:
     return await _get_pheno_values_and_counts(pheno_metric_name, region, IntraHostVariant, include_refs, samples_query)
 
-
+#TODO: Using "region" as the parameter for "gff_feature" for now.
 async def _get_pheno_values_and_counts(
     pheno_metric_name: str,
     region: str,
