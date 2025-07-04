@@ -37,13 +37,12 @@ async def get_samples_variant_freq_by_nt_change(change: str) -> List[VariantFreq
 
 
 async def _get_samples_variant_freq(where_clause: ColumnElement[bool]) -> List[VariantFreqInfo]:
-    # todo: should join geo_locations
     query = (
         select(IntraHostVariant.alt_freq, Sample.accession, Allele.id, Translation.id, AminoAcid.id)
         .join(Sample, Sample.id == IntraHostVariant.sample_id, isouter=True)
         .join(Allele, Allele.id == IntraHostVariant.allele_id, isouter=True)
-        .join(Translation, Allele.id == Translation.allele_id, isouter=True)
-        .join(AminoAcid, Translation.amino_acid_substitution_id == AminoAcid.id, isouter=True)
+        .join(Translation, Translation.id == IntraHostVariant.translation_id, isouter=True)
+        .join(AminoAcid, AminoAcid.id == Translation.amino_acid_id, isouter=True)
         .where(where_clause)
     )
 
