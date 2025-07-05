@@ -11,9 +11,10 @@ import DB.queries.phenotype_metrics
 import DB.queries.prevalence
 import DB.queries.samples
 import DB.queries.variants
+import DB.queries.variants_mutations
 from api.models import VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
     MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo, \
-    LineageInfo
+    LineageInfo, VariantMutationLagInfo
 from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, SIMPLE_DATE_FIELDS, NtOrAa, \
     DEFAULT_MAX_SPAN_DAYS, COLLECTION_DATE, DEFAULT_DAYS, COMMA_SEP_WORDLIKE_PATTERN, LINEAGE, DEFAULT_PREVALENCE_THRESHOLD
 from utils.errors import ParsingError
@@ -380,3 +381,17 @@ async def get_lineage_abundance(
 @app.get('/v0/lineages/mutationIncidence') #TODO: Create response_model
 async def get_mutation_incidence(lineage:str, lineage_system_name: str, change_bin:NtOrAa, prevalence_threshold:float = DEFAULT_PREVALENCE_THRESHOLD, match_reference:bool = False, q: str = None):
     return await DB.queries.lineages.get_mutation_incidence(lineage, lineage_system_name, change_bin, prevalence_threshold, match_reference, q)
+
+@app.get('/variants:mutationLag', response_model=List[VariantMutationLagInfo])
+async def get_variants_before_mutations(lineage: str, lineage_system_name: str) -> List[VariantMutationLagInfo]:
+    try:
+        return await DB.queries.variants_mutations.get_variants_before_mutations(lineage, lineage_system_name)
+    except ParsingError as e:
+        raise HTTPException(status_code=400, detail=e.message)
+
+@app.get('/mutations:variantLag', response_model=List[VariantMutationLagInfo])
+async def get_variants_before_mutations(lineage: str, lineage_system_name: str) -> List[VariantMutationLagInfo]:
+    try:
+        return await DB.queries.variants_mutations.get_mutations_before_variants(lineage, lineage_system_name)
+    except ParsingError as e:
+        raise HTTPException(status_code=400, detail=e.message)
