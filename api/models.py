@@ -3,7 +3,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel
 
-from DB.models import IntraHostVariant, Sample, AminoAcid, Mutation, PhenotypeMetric, Translation
+from DB.models import IntraHostVariant, Sample, AminoAcid, Mutation, PhenotypeMetric, Translation, Lineage
 
 """
 These models define the shapes for data returned by the api.
@@ -233,6 +233,15 @@ class LineageInfo(BaseModel):
     lineage_name: str
     lineage_system_id: int
     lineage_system_name: str
+
+    @classmethod
+    def from_db_object(cls, dbo: 'Lineage') -> 'LineageInfo':
+        return LineageInfo(
+            lineage_id=dbo.id,
+            lineage_name=dbo.lineage_name,
+            lineage_system_id=dbo.r_lineage_system.id,
+            lineage_system_name=dbo.r_lineage_system.lineage_system_name
+        )
 
 class LineageAbundanceInfo(BaseModel):
     lineage_info: 'LineageInfo'

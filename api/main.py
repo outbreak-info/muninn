@@ -12,7 +12,8 @@ import DB.queries.prevalence
 import DB.queries.samples
 import DB.queries.variants
 from api.models import VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
-    MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo
+    MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo, \
+    LineageInfo
 from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, SIMPLE_DATE_FIELDS, NtOrAa, \
     DEFAULT_MAX_SPAN_DAYS, COLLECTION_DATE, DEFAULT_DAYS, COMMA_SEP_WORDLIKE_PATTERN, LINEAGE, DEFAULT_PREVALENCE_THRESHOLD
 from utils.errors import ParsingError
@@ -64,6 +65,9 @@ async def get_mutations_query(q: str):
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
+@app.get('/lineages', response_model=List[LineageInfo])
+async def get_all_phenotype_metrics(lineage_system_name: str):
+    return await DB.queries.lineages.get_all_lineages_by_lineage_system(lineage_system_name)
 
 @app.get('/variants/by/sample', response_model=List[VariantInfo])
 async def get_variants_by_sample(q: str):
