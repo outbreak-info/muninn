@@ -263,7 +263,6 @@ class VariantMutationLagInfo(BaseModel):
     variants_start_date: date
     mutations_start_date: date
     lag: int
-    ref_aa: str
-    position_aa: int
-    alt_aa: str
-    gff_feature: str
+    ref: str
+    pos: int
+    alt: str

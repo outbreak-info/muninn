@@ -382,14 +382,14 @@ async def get_lineage_abundance(
 async def get_mutation_incidence(lineage:str, lineage_system_name: str, change_bin:NtOrAa, prevalence_threshold:float = DEFAULT_PREVALENCE_THRESHOLD, match_reference:bool = False, q: str = None):
     return await DB.queries.lineages.get_mutation_incidence(lineage, lineage_system_name, change_bin, prevalence_threshold, match_reference, q)
 
-@app.get('/variants:mutationLag', response_model=List[VariantMutationLagInfo])
+@app.get('/variants:mutationLag', response_model=Dict[str, List[VariantMutationLagInfo]])
 async def get_variants_before_mutations(lineage: str, lineage_system_name: str) -> List[VariantMutationLagInfo]:
     try:
         return await DB.queries.variants_mutations.get_variants_before_mutations(lineage, lineage_system_name)
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
-@app.get('/mutations:variantLag', response_model=List[VariantMutationLagInfo])
+@app.get('/mutations:variantLag', response_model=Dict[str, List[VariantMutationLagInfo]])
 async def get_variants_before_mutations(lineage: str, lineage_system_name: str) -> List[VariantMutationLagInfo]:
     try:
         return await DB.queries.variants_mutations.get_mutations_before_variants(lineage, lineage_system_name)

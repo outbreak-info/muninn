@@ -1,3 +1,4 @@
+from collections import defaultdict
 from typing import List
 from api.models import VariantMutationLagInfo
 from DB.engine import get_async_session
@@ -51,17 +52,17 @@ async def _get_lag_variants_mutations(lineage: str, lineage_system_name: str, la
             }
         )
 
-    out_data = []
+    out = defaultdict(list)
     for r in res:
-        out_data.append(
+        gff_feature = r[6]
+        out[gff_feature].append(
             VariantMutationLagInfo(
                 variants_start_date = r[0],
                 mutations_start_date = r[1],
                 lag = r[2],
-                ref_aa= r[3],
-                position_aa= r[4],
-                alt_aa = r[5],
-                gff_feature= r[6]
+                ref= r[3],
+                pos = r[4],
+                alt = r[5]
             )
         )
-    return out_data
+    return out
