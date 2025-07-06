@@ -234,15 +234,6 @@ class LineageInfo(BaseModel):
     lineage_system_id: int
     lineage_system_name: str
 
-    @classmethod
-    def from_db_object(cls, dbo: 'Lineage') -> 'LineageInfo':
-        return LineageInfo(
-            lineage_id=dbo.id,
-            lineage_name=dbo.lineage_name,
-            lineage_system_id=dbo.r_lineage_system.id,
-            lineage_system_name=dbo.r_lineage_system.lineage_system_name
-        )
-
 class LineageAbundanceInfo(BaseModel):
     lineage_info: 'LineageInfo'
     sample_id: int
@@ -266,3 +257,7 @@ class VariantMutationLagInfo(BaseModel):
     ref: str
     pos: int
     alt: str
+
+class RegionAndGffFeatureInfo(BaseModel):
+    gff_feature: str
+    region: str

@@ -11,14 +11,19 @@ from parser.parser import parser
 from utils.constants import DateBinOpt, NtOrAa
 from collections import defaultdict
 
-async def get_all_lineages_by_lineage_system(lineage_system_name: str) -> List[Lineage]:
+async def get_all_lineages_by_lineage_system(lineage_system_name: str) -> List[LineageInfo]:
     async with get_async_session() as session:
-        res = await session.scalars(
-            select(Lineage, LineageSystem)
+        res = await session.execute(
+            select(
+                Lineage.id.label("lineage_id"),
+                Lineage.lineage_name.label("lineage_name"),
+                LineageSystem.id.label("lineage_system_id"),
+                LineageSystem.lineage_system_name.label("lineage_system_name"),
+            )
             .join(LineageSystem, Lineage.lineage_system_id == LineageSystem.id)
             .where(LineageSystem.lineage_system_name == lineage_system_name)
         )
-        out_data = [LineageInfo.from_db_object(l) for l in res]
+        out_data = [LineageInfo(**row) for row in res.mappings().all()]
     return out_data
 
 async def get_sample_counts_by_lineage(samples_raw_query: str | None) -> List[LineageCountInfo]:
