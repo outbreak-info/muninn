@@ -4,9 +4,10 @@ import polars as pl
 from sqlalchemy import select, text
 from sqlalchemy.orm import contains_eager
 
+import DB.queries.variants_mutations
 from DB.engine import get_async_session, get_uri_for_polars
 from DB.models import Mutation, Allele, AminoAcid, Sample, GeoLocation, Translation
-from api.models import MutationInfo
+from api.models import MutationInfo, RegionAndGffFeatureInfo
 from parser.parser import parser
 from utils.constants import StandardColumnNames
 
@@ -64,3 +65,6 @@ async def get_all_mutations_as_pl_df() -> pl.DataFrame:
         query='select * from mutations;',
         uri=get_uri_for_polars()
     ).rename({'id': StandardColumnNames.mutation_id})
+
+async def get_region_and_gff_features() -> List['RegionAndGffFeatureInfo']:
+    return await DB.queries.variants_mutations.get_region_and_gff_features(Mutation)

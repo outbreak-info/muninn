@@ -6,10 +6,10 @@ from sqlalchemy.orm import contains_eager
 
 from DB.engine import get_async_session, get_uri_for_polars
 from DB.models import Sample, IntraHostVariant, Allele, AminoAcid, GeoLocation, Translation
-from api.models import VariantInfo
+from api.models import VariantInfo, RegionAndGffFeatureInfo
 from parser.parser import parser
 from utils.constants import StandardColumnNames
-
+import DB.queries.variants_mutations
 
 async def get_variants(query: str) -> List['VariantInfo']:
     user_query = parser.parse(query)
@@ -63,3 +63,6 @@ async def get_all_variants_as_pl_df() -> pl.DataFrame:
     ).rename(
         {'id': StandardColumnNames.intra_host_variant_id}
     )
+
+async def get_region_and_gff_features() -> List['RegionAndGffFeatureInfo']:
+        return await DB.queries.variants_mutations.get_region_and_gff_features(IntraHostVariant)

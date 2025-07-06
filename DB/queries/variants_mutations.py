@@ -1,8 +1,10 @@
 from collections import defaultdict
-from typing import List
-from api.models import VariantMutationLagInfo
+from typing import List, Type
+
+from DB.models import AminoAcid, Allele, IntraHostVariant, Mutation, Translation
+from api.models import VariantMutationLagInfo, RegionAndGffFeatureInfo
 from DB.engine import get_async_session
-from sqlalchemy import text
+from sqlalchemy import text, select
 
 async def get_mutations_before_variants(lineage: str, lineage_system_name: str) -> List[VariantMutationLagInfo]:
     return await _get_lag_variants_mutations(lineage, lineage_system_name, 'fm.start_date < fv.start_date', 'fv.start_date::date - fm.start_date::date')
@@ -66,3 +68,19 @@ async def _get_lag_variants_mutations(lineage: str, lineage_system_name: str, la
             )
         )
     return out
+
+# TODO: Figure out a better place for this function
+async def get_region_and_gff_features(
+    intermediate: Type[Mutation] | Type[IntraHostVariant],
+) -> List['RegionAndGffFeatureInfo']:
+    region_and_gff_feature_query = (
+        select(AminoAcid.gff_feature, Allele.region)
+        .distinct()
+        .join(Translation, Translation.amino_acid_id == AminoAcid.id)
+        .join(intermediate, intermediate.translation_id == Translation.id)
+        .join(Allele, Allele.id == intermediate.allele_id)
+    )
+    async with get_async_session() as session:
+        results = await session.execute(region_and_gff_feature_query)
+        out_data = [RegionAndGffFeatureInfo(**row) for row in results.mappings().all()]
+    return out_data
