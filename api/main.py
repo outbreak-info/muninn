@@ -12,6 +12,7 @@ import DB.queries.prevalence
 import DB.queries.samples
 import DB.queries.variants
 import DB.queries.variants_mutations
+from DB.models import Mutation, IntraHostVariant
 from api.models import VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
     MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo, \
     LineageInfo, VariantMutationLagInfo, RegionAndGffFeatureInfo, MutationProfileInfo
@@ -411,3 +412,45 @@ async def get_region_and_gff_features() -> List[RegionAndGffFeatureInfo]:
         return await DB.queries.mutations.get_region_and_gff_features()
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
+
+# TODO: Generalize this endpoint for other date fields
+@app.get('/v0/phenotype_metric_values:countMutationsByCollectionDate', response_model=List[Dict])
+async def get_phenotype_metric_counts(
+    phenotype_metric_name: str,
+    phenotype_metric_value_threshold: str,
+    date_bin: DateBinOpt = DateBinOpt.month,
+    days: int = DEFAULT_DAYS,
+    q: str | None = None,
+    max_span_days: int = DEFAULT_MAX_SPAN_DAYS
+):
+
+    return await DB.queries.phenotype_metrics._count_variants_or_mutations_gte_pheno_value_by_collection_date(
+        date_bin,
+        phenotype_metric_name,
+        phenotype_metric_value_threshold,
+        days,
+        max_span_days,
+        q,
+        Mutation
+    )
+
+# TODO: Generalize this endpoint for other date fields
+@app.get('/v0/phenotype_metric_values:countVariantsByCollectionDate', response_model=List[Dict])
+async def get_phenotype_metric_counts(
+    phenotype_metric_name: str,
+    phenotype_metric_value_threshold: str,
+    date_bin: DateBinOpt = DateBinOpt.month,
+    days: int = DEFAULT_DAYS,
+    q: str | None = None,
+    max_span_days: int = DEFAULT_MAX_SPAN_DAYS
+):
+
+    return await DB.queries.phenotype_metrics._count_variants_or_mutations_gte_pheno_value_by_collection_date(
+        date_bin,
+        phenotype_metric_name,
+        phenotype_metric_value_threshold,
+        days,
+        max_span_days,
+        q,
+        IntraHostVariant
+    )
