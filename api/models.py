@@ -261,3 +261,9 @@ class VariantMutationLagInfo(BaseModel):
 class RegionAndGffFeatureInfo(BaseModel):
     gff_feature: str
     region: str
+
+class MutationProfileInfo(BaseModel):
+    ref_nt: str
+    alt_nt: str
+    region: str
+    count: int

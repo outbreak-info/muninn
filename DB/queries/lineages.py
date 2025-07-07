@@ -5,10 +5,11 @@ from sqlalchemy import select, func, distinct, text, and_
 from sqlalchemy.orm import contains_eager
 
 from DB.engine import get_async_session
-from DB.models import LineageSystem, Lineage, Sample, SampleLineage, GeoLocation
-from api.models import LineageCountInfo, LineageAbundanceInfo, LineageInfo, LineageAbundanceSummaryInfo
+from DB.models import LineageSystem, Lineage, Sample, SampleLineage, GeoLocation, Allele, Mutation
+from api.models import LineageCountInfo, LineageAbundanceInfo, LineageInfo, LineageAbundanceSummaryInfo, \
+    MutationProfileInfo
 from parser.parser import parser
-from utils.constants import DateBinOpt, NtOrAa
+from utils.constants import DateBinOpt, NtOrAa, NUCLEOTIDE_CHARACTERS
 from collections import defaultdict
 
 async def get_all_lineages_by_lineage_system(lineage_system_name: str) -> List[LineageInfo]:
@@ -419,3 +420,40 @@ async def get_mutation_incidence(
     for ref, pos, alt, region_or_gff, count, prevalence in res:
         out[region_or_gff].append({"ref": ref, "alt": alt, "pos": pos, "count": count, "prevalence": prevalence})
     return {'sample_count': sample_count,'mutation_counts':out}
+
+async def get_mutation_profile(lineage: str, lineage_system_name: str, samples_raw_query: str | None) -> List['MutationProfileInfo']:
+    samples_query = parser.parse(samples_raw_query) if samples_raw_query else None
+    query = (
+        select(
+            Allele.region,
+            Allele.ref_nt,
+            Allele.alt_nt,
+            func.count().label("count")
+        )
+        .select_from(Mutation)
+        .join(Sample, Sample.id == Mutation.sample_id)
+        .join(Allele, Allele.id == Mutation.allele_id)
+        .join(SampleLineage, Sample.id == SampleLineage.sample_id)
+        .join(Lineage, SampleLineage.lineage_id == Lineage.id)
+        .join(LineageSystem, Lineage.lineage_system_id == LineageSystem.id)
+        .where(
+LineageSystem.lineage_system_name == lineage_system_name,
+            Lineage.lineage_name == lineage,
+            Allele.alt_nt.in_(NUCLEOTIDE_CHARACTERS),
+            Allele.ref_nt.in_(NUCLEOTIDE_CHARACTERS)
+        )
+        .group_by(
+            Allele.ref_nt,
+            Allele.alt_nt,
+            Allele.region,
+            Lineage.lineage_name
+        )
+    )
+    if samples_query is not None:
+        query = (
+            query.where(text(samples_query))
+        )
+    async with get_async_session() as session:
+        results = await session.execute(query)
+        out_data = [MutationProfileInfo(**row) for row in results.mappings().all()]
+    return out_data

@@ -14,7 +14,7 @@ import DB.queries.variants
 import DB.queries.variants_mutations
 from api.models import VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
     MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo, \
-    LineageInfo, VariantMutationLagInfo, RegionAndGffFeatureInfo
+    LineageInfo, VariantMutationLagInfo, RegionAndGffFeatureInfo, MutationProfileInfo
 from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, SIMPLE_DATE_FIELDS, NtOrAa, \
     DEFAULT_MAX_SPAN_DAYS, COLLECTION_DATE, DEFAULT_DAYS, COMMA_SEP_WORDLIKE_PATTERN, LINEAGE, DEFAULT_PREVALENCE_THRESHOLD
 from utils.errors import ParsingError
@@ -226,8 +226,6 @@ async def get_lineage_abundance_summary_stats(q: str | None = None):
         return await DB.queries.lineages.get_abundance_summaries(q)
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
-
-
 @app.get(
     '/v0/samples:count',
     response_model=Dict[str, int] | Dict[str, Dict[str, Dict[str, int]]] | List[LineageCountInfo]
@@ -378,9 +376,13 @@ async def get_lineage_abundance(
         else:
             return await DB.queries.lineages.get_abundances(q)
 
-@app.get('/v0/lineages/mutationIncidence') #TODO: Create response_model
+@app.get('/v0/lineages:mutationIncidence') #TODO: Create response_model
 async def get_mutation_incidence(lineage:str, lineage_system_name: str, change_bin:NtOrAa, prevalence_threshold:float = DEFAULT_PREVALENCE_THRESHOLD, match_reference:bool = False, q: str = None):
     return await DB.queries.lineages.get_mutation_incidence(lineage, lineage_system_name, change_bin, prevalence_threshold, match_reference, q)
+
+@app.get('/v0/lineages:mutationProfile', response_model=List[MutationProfileInfo])
+async def get_mutation_profile(lineage:str, lineage_system_name: str, q: str = None) -> List[MutationProfileInfo]:
+    return await DB.queries.lineages.get_mutation_profile(lineage, lineage_system_name, q)
 
 @app.get('/variants:mutationLag', response_model=Dict[str, List[VariantMutationLagInfo]])
 async def get_variants_before_mutations(lineage: str, lineage_system_name: str) -> List[VariantMutationLagInfo]:
