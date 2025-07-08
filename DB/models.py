@@ -259,7 +259,7 @@ class AminoAcid(Base):
 
     r_translations: Mapped[List['Translation']] = relationship(back_populates='r_amino_acid')
     r_pheno_metric_values: Mapped[List['PhenotypeMetricValues']] = relationship(back_populates='r_amino_acid')
-    r_annotations: Mapped[List['Annotation']] = relationship(back_populates='r_amino_sub')
+    r_annotations: Mapped[List['Annotation']] = relationship(back_populates='r_amino_acid')
 
 
 class Translation(Base):
@@ -546,7 +546,7 @@ class Effect(Base):
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
-    detail: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    detail: Mapped[str] = mapped_column(sa.Text, nullable=False) # todo: should be unique
 
     r_annotations: Mapped[List['Annotation']] = relationship(back_populates='r_effect')
 

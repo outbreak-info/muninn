@@ -1,4 +1,7 @@
+import re
 from typing import Dict, Callable
+
+from utils.constants import CHANGE_PATTERN
 
 
 def get_value(
@@ -41,3 +44,18 @@ def clean_up_gff_feature(gff_feature: str) -> str:
         out = gff_feature.split(':')[1]
     out = out.replace('cds-', '')
     return out
+
+
+def parse_change_string(change: str) -> (str, str, int, str):
+    pattern = re.compile(CHANGE_PATTERN)
+    match = pattern.fullmatch(change)
+
+    if match is None:
+        raise ValueError(f'This change string fails validation: {change}')
+
+    region = match[1]
+    ref = match[2]
+    position = int(match[3])
+    alt = match[4]
+
+    return region, ref, position, alt

@@ -1,17 +1,16 @@
-import re
 from typing import List, Type
 
 from sqlalchemy import select, and_, ColumnElement, text, func
 
 from DB.engine import get_async_session
-from DB.models import IntraHostVariant, Sample, Allele, AminoAcid, Translation, Mutation, GeoLocation
+from DB.models import IntraHostVariant, Sample, Allele, AminoAcid, Translation, Mutation
 from api.models import VariantFreqInfo, VariantCountPhenoScoreInfo, MutationCountInfo
 from parser.parser import parser
-from utils.constants import CHANGE_PATTERN
+from utils.csv_helpers import parse_change_string
 
 
 async def get_samples_variant_freq_by_aa_change(change: str) -> List[VariantFreqInfo]:
-    region, ref_aa, position_aa, alt_aa = _parse_change_string(change)
+    region, ref_aa, position_aa, alt_aa = parse_change_string(change)
 
     where_clause = and_(
         Allele.region == region,
@@ -24,7 +23,7 @@ async def get_samples_variant_freq_by_aa_change(change: str) -> List[VariantFreq
 
 
 async def get_samples_variant_freq_by_nt_change(change: str) -> List[VariantFreqInfo]:
-    region, ref_nt, position_nt, alt_nt = _parse_change_string(change)
+    region, ref_nt, position_nt, alt_nt = parse_change_string(change)
 
     where_clause = and_(
         Allele.region == region,
@@ -63,7 +62,7 @@ async def _get_samples_variant_freq(where_clause: ColumnElement[bool]) -> List[V
 
 # todo: I think the queries here need to be double-checked
 async def get_mutation_sample_count_by_nt(change: str) -> List[MutationCountInfo]:
-    region, ref_nt, position_nt, alt_nt = _parse_change_string(change)
+    region, ref_nt, position_nt, alt_nt = parse_change_string(change)
 
     where_clause = and_(
         Allele.region == region,
@@ -76,7 +75,7 @@ async def get_mutation_sample_count_by_nt(change: str) -> List[MutationCountInfo
 
 
 async def get_mutation_sample_count_by_aa(change: str) -> List[MutationCountInfo]:
-    region, ref_aa, position_aa, alt_aa = _parse_change_string(change)
+    region, ref_aa, position_aa, alt_aa = parse_change_string(change)
 
     where_clause = and_(
         Allele.region == region,
@@ -113,21 +112,6 @@ async def _get_mutation_sample_count(where_clause: ColumnElement[bool]) -> List[
             )
         )
     return out_data
-
-
-def _parse_change_string(change: str) -> (str, str, int, str):
-    pattern = re.compile(CHANGE_PATTERN)
-    match = pattern.fullmatch(change)
-
-    if match is None:
-        raise ValueError(f'This change string fails validation: {change}')
-
-    region = match[1]
-    ref = match[2]
-    position = int(match[3])
-    alt = match[4]
-
-    return region, ref, position, alt
 
 
 async def get_pheno_values_and_mutation_counts(

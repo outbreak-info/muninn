@@ -3,10 +3,10 @@ from enum import Enum
 from typing import Set
 
 from DB.inserts.amino_acid_substitutions import find_aa_sub, insert_aa_sub
-from DB.inserts.effect_insert import find_or_insert_effect
-from DB.inserts.annotation_insert import find_or_insert_annotation
-from DB.inserts.paper_insert import find_or_insert_paper
-from DB.inserts.annotation_paper_insert import insert_annotation_paper
+from DB.inserts.effects import find_or_insert_effect
+from DB.inserts.annotations import find_or_insert_annotation
+from DB.inserts.papers import find_or_insert_paper
+from DB.inserts.annotations_papers import find_or_insert_annotation_paper
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.models import AminoAcidSubstitution, Paper, AnnotationPaper, Annotation, Effect
 from utils.csv_helpers import get_value
@@ -146,7 +146,7 @@ class AnnotationsFileParser(FileParser):
                     )
                     cache_paper_ids[(author,publication_year)] = paper_id
 
-                existing = await insert_annotation_paper(
+                existing = await find_or_insert_annotation_paper(
                     Paper(
                         annotation_id=annotation_id,
                         paper_id=paper_id

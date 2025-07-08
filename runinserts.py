@@ -5,12 +5,8 @@ from datetime import datetime
 from os import path
 from typing import Any
 
-<<<<<<< HEAD
+from DB.inserts.file_parsers.flumut_annotations_parser import FlumutTsvParser
 from DB.inserts.file_parsers.dms_parser import HaRegionDmsTsvParser, HaRegionDmsCsvParser
-=======
-from DB.inserts.file_parsers.dms_parser import HaRegionDmsTsvParser
-from DB.inserts.file_parsers.annotation_parser import AnnotationParser
->>>>>>> annotations
 from DB.inserts.file_parsers.eve_parser import EveCsvParser
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.file_parsers.freyja_demixed_parser import FreyjaDemixedParser
@@ -30,12 +26,9 @@ def main():
         'ha_dms_tsv': HaRegionDmsTsvParser,
         'ha_dms_csv': HaRegionDmsCsvParser,
         'freyja_demixed': FreyjaDemixedParser,
-<<<<<<< HEAD
         'variants_mutations_combined_tsv': VariantsMutationsCombinedParser,
-        'sc2_samples': SC2SamplesParser
-=======
-        'annotations_csv': AnnotationParser
->>>>>>> annotations
+        'sc2_samples': SC2SamplesParser,
+        'flumut_tsv': FlumutTsvParser,
     }
 
     ## Parse and verify args ##

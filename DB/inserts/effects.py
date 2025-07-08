@@ -1,23 +1,22 @@
 from sqlalchemy import select, and_
 
-from DB.engine import get_async_session
+from DB.engine import get_async_write_session
 from DB.models import Effect
 
 
-
-async def find_or_insert_effect(pmr: Effect) -> bool:
-    async with get_async_session() as session:
+async def find_or_insert_effect(e: Effect) -> bool:
+    async with get_async_write_session() as session:
         id_ = await session.scalar(
             select(Effect.id)
             .where(
                 and_(
-                    Effect.detail == pmr.detail,
+                    Effect.detail == e.detail,
                 )                
             )
         )
         if id_ is None:
-            session.add(pm)
+            session.add(e)
             await session.commit()
-            await session.refresh(pm)
-            id_ = pm.id
+            await session.refresh(e)
+            id_ = e.id
     return id_

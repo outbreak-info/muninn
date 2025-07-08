@@ -15,7 +15,7 @@ class Env:
     FLU_DB_DB_NAME = 'FLU_DB_DB_NAME'
 
 
-CHANGE_PATTERN = r'^(\w+):([a-zA-Z])(\d+)([a-zA-Z\-+]+)'
+CHANGE_PATTERN = r'^([\w-]+):([a-zA-Z])(\d+)([a-zA-Z\-+]+)'
 WORDLIKE_PATTERN = re.compile(r'\w+')
 COMMA_SEP_WORDLIKE_PATTERN = re.compile(r'(\w+,)*\w+')
 # these dates are "simple" b/c they are a single timestamp and not null
