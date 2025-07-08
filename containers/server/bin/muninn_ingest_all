@@ -21,6 +21,7 @@ HA_DMS_FILE="dms/dms_HA.tsv"
 EVE_FILE="eve_dms_data.csv"
 GENOFLU_FILE="genoflu_results.tsv"
 FREYJA_DEMIXED_DIR="demixed"
+FLUMUT_FILE="flumut_annotations.tsv"
 
 # Debug output files for ref conflicts
 AMINO_SUB_REF_CONFLICTS_FILE="/tmp/amino_sub_ref_conflicts.csv"
@@ -51,6 +52,7 @@ unzip -d "$ARCHIVE_DEST_DIR" "$BJORN_GENERAL_OUTPUT_ARCHIVE"
   python3 -u runinserts.py "$DATA_DIR/$EVE_FILE" --format eve_dms_csv
   python3 -u runinserts.py "$DATA_DIR/$GENOFLU_FILE" --format genoflu_lineages
   python3 -u runinserts.py "$DATA_DIR/$FREYJA_DEMIXED_DIR" --format freyja_demixed
+  python3 -u runinserts.py "$DATA_DIR/$FLUMUT_FILE" --format flumut_tsv
 } &>> "$LOG"
 
 # Copying over some debug files
