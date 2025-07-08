@@ -186,12 +186,13 @@ class StandardColumnNames:
     # phenotype metrics
     name = 'name'
 
-    # Annotations
     # papers
     authors = 'authors'
     publication_year = 'publication_year'
     title = 'title'
 
+    # effects
+    detail = 'detail'
 
     # Lineages
     lineage_system_name = 'lineage_system_name'

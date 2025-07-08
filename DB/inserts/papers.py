@@ -4,7 +4,7 @@ from DB.engine import get_async_write_session
 from DB.models import Paper
 
 
-async def find_or_insert_paper(p: Paper) -> bool:
+async def find_or_insert_paper(p: Paper) -> int:
     async with get_async_write_session() as session:
         id_ = await session.scalar(
             select(Paper.id)

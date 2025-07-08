@@ -4,9 +4,9 @@ from DB.engine import get_async_write_session
 from DB.models import Effect
 
 
-async def find_or_insert_effect(e: Effect) -> bool:
+async def find_or_insert_effect(e: Effect) -> int:
     async with get_async_write_session() as session:
-        id_ = await session.scalar(
+        id_: int  = await session.scalar(
             select(Effect.id)
             .where(
                 and_(

@@ -546,7 +546,16 @@ class Effect(Base):
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
-    detail: Mapped[str] = mapped_column(sa.Text, nullable=False) # todo: should be unique
+    detail: Mapped[str] = mapped_column(sa.Text, nullable=False)
+
+    __table_args__ = tuple(
+        [
+            UniqueConstraint(
+                StandardColumnNames.detail,
+                name='uq_effects_detail'
+            )
+        ]
+    )
 
     r_annotations: Mapped[List['Annotation']] = relationship(back_populates='r_effect')
 
