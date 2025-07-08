@@ -1,6 +1,5 @@
 import datetime
-from collections import defaultdict
-from typing import List, Type
+from typing import List, Type, Dict
 
 from sqlalchemy import select, text
 
@@ -104,3 +103,40 @@ async def _count_variants_or_mutations_gte_pheno_value_by_collection_date(
             "n": r[3]
         })
     return out_data
+
+async def get_phenotype_metric_value_by_variant_quantile(
+            phenotype_metric_name: str,
+            quantile: float) -> Dict[str, float]:
+    return await _get_phenotype_metric_value_quantile(phenotype_metric_name, quantile, IntraHostVariant)
+
+async def get_phenotype_metric_value_by_mutation_quantile(
+            phenotype_metric_name: str,
+            quantile: float) -> Dict[str, float]:
+    return await _get_phenotype_metric_value_quantile(phenotype_metric_name, quantile, Mutation)
+
+async def _get_phenotype_metric_value_quantile(
+        phenotype_metric_name: str,
+        quantile: float,
+        by_table: Type[IntraHostVariant] | Type[Mutation]) -> Dict[str, float]:
+    query = f"""
+    SELECT percentile_disc({quantile}) within group (order by pmv.value)
+        FROM amino_acids aa
+        INNER JOIN translations t ON t.amino_acid_id = aa.id
+        INNER JOIN {by_table.__tablename__} vm ON vm.translation_id = t.id
+        INNER JOIN samples s on s.id = vm.sample_id
+        INNER JOIN samples_lineages sl on sl.sample_id = s.id
+        INNER JOIN lineages l ON l.id = sl.lineage_id
+        INNER JOIN lineage_systems ls on ls.id = l.lineage_system_id
+        INNER JOIN phenotype_metric_values pmv ON pmv.amino_acid_id = aa.id
+        INNER JOIN phenotype_metrics pm on pm.id = pmv.phenotype_metric_id
+    WHERE pm.name='{phenotype_metric_name}' AND pmv.value != 0;
+    """
+    async with get_async_session() as session:
+        res = await session.scalars(
+            text(query)
+        )
+    value = next(res)
+    return {
+        "quantile": quantile,
+        "phenotype_metric_value": value
+    }
