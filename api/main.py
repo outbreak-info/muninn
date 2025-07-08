@@ -12,6 +12,7 @@ import DB.queries.prevalence
 import DB.queries.samples
 import DB.queries.variants
 import DB.queries.variants_mutations
+import DB.queries.annotations
 from DB.models import Mutation, IntraHostVariant
 from api.models import VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
     MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo, \
@@ -462,3 +463,27 @@ async def get_phenotype_metric_value_by_mutation_quantile(phenotype_metric_name:
 @app.get('/v0/phenotype_metric_values:byVariantsQuantile', response_model=Dict[str, float])
 async def get_phenotype_metric_value_by_variant_quantile(phenotype_metric_name: str, quantile: float) -> Dict[str, float]:
     return await DB.queries.phenotype_metrics.get_phenotype_metric_value_by_variant_quantile(phenotype_metric_name, quantile)
+
+@app.get('/v0/annotations:byMutationsAndCollectionDate', response_model=List[Dict])
+async def get_annotations_by_mutations_and_collection_date(
+    effect_detail: str,
+    date_bin: DateBinOpt = DateBinOpt.month,
+    days: int = DEFAULT_DAYS,
+    max_span_days: int = DEFAULT_MAX_SPAN_DAYS,
+    q: str | None = None
+) -> List[Dict]:
+    return await DB.queries.annotations.get_annotations_by_mutations_and_collection_date(effect_detail, date_bin, days, max_span_days, q)
+
+@app.get('/v0/annotations:byVariantsAndCollectionDate', response_model=List[Dict])
+async def get_annotations_by_mutations_and_collection_date(
+    effect_detail: str,
+    date_bin: DateBinOpt = DateBinOpt.month,
+    days: int = DEFAULT_DAYS,
+    max_span_days: int = DEFAULT_MAX_SPAN_DAYS,
+    q: str | None = None
+) -> List[Dict]:
+    return await DB.queries.annotations.get_annotations_by_variants_and_collection_date(effect_detail, date_bin, days, max_span_days, q)
+
+@app.get('/v0/annotationEffects', response_model=List[str])
+async def get_annotations_by_mutations_and_collection_date() -> List[str]:
+    return await DB.queries.annotations.get_all_annotation_effects()
