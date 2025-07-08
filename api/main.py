@@ -454,3 +454,11 @@ async def get_phenotype_metric_counts(
         q,
         IntraHostVariant
     )
+
+@app.get('/v0/phenotype_metric_values:byMutationsQuantile', response_model=Dict[str, float])
+async def get_phenotype_metric_value_by_mutation_quantile(phenotype_metric_name: str, quantile: float) -> Dict[str, float]:
+    return await DB.queries.phenotype_metrics.get_phenotype_metric_value_by_mutation_quantile(phenotype_metric_name, quantile)
+
+@app.get('/v0/phenotype_metric_values:byVariantsQuantile', response_model=Dict[str, float])
+async def get_phenotype_metric_value_by_variant_quantile(phenotype_metric_name: str, quantile: float) -> Dict[str, float]:
+    return await DB.queries.phenotype_metrics.get_phenotype_metric_value_by_variant_quantile(phenotype_metric_name, quantile)
