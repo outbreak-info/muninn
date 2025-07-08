@@ -92,6 +92,10 @@ class TableNames:
     lineages = 'lineages'
     samples_lineages = 'samples_lineages'
     translations = 'translations'
+    papers = 'papers'
+    effects = 'effects'
+    annotations = 'annotations'
+    annotations_papers = 'annotations_papers'
 
 
 class StandardColumnNames:
@@ -105,6 +109,9 @@ class StandardColumnNames:
     phenotype_metric_id = 'phenotype_metric_id'
     lineage_system_id = 'lineage_system_id'
     lineage_id = 'lineage_id'
+    effect_id = 'effect_id'
+    paper_id = 'paper_id'
+    annotation_id = 'annotation_id'
 
     # samples
     accession = 'accession'
@@ -178,6 +185,12 @@ class StandardColumnNames:
 
     # phenotype metrics
     name = 'name'
+
+    # Annotations
+    # papers
+    authors = 'authors'
+    publication_year = 'publication_year'
+    title = 'title'
 
 
     # Lineages

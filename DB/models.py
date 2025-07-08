@@ -259,6 +259,7 @@ class AminoAcid(Base):
 
     r_translations: Mapped[List['Translation']] = relationship(back_populates='r_amino_acid')
     r_pheno_metric_values: Mapped[List['PhenotypeMetricValues']] = relationship(back_populates='r_amino_acid')
+    r_annotations: Mapped[List['Annotation']] = relationship(back_populates='r_amino_sub')
 
 
 class Translation(Base):
@@ -515,3 +516,84 @@ class SampleLineage(Base):
 
     r_lineage: Mapped['Lineage'] = relationship(back_populates='r_sample_lineages')
     r_sample: Mapped['Sample'] = relationship(back_populates='r_sample_lineages')
+
+
+class Paper(Base):
+    __tablename__ = TableNames.papers
+
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+
+    authors: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    title: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    publication_year: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
+
+    __table_args__ = tuple(
+        [
+            UniqueConstraint(
+                StandardColumnNames.authors,
+                StandardColumnNames.publication_year,
+                StandardColumnNames.title,
+                name='uq_papers_authors_title_year'
+            )
+        ]
+    )
+
+    r_annotations_papers: Mapped[List['AnnotationPaper']] = relationship(back_populates='r_paper')
+
+
+class Effect(Base):
+    __tablename__ = TableNames.effects
+
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+
+    detail: Mapped[str] = mapped_column(sa.Text, nullable=False)
+
+    r_annotations: Mapped[List['Annotation']] = relationship(back_populates='r_effect')
+
+
+class Annotation(Base):
+    __tablename__ = TableNames.annotations
+
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+
+    amino_acid_id: Mapped[int] = mapped_column(
+        sa.ForeignKey(f'{TableNames.amino_acids}.id'),
+        nullable=False
+    )
+    effect_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.effects}.id'), nullable=False)
+
+    __table_args__ = tuple(
+        [
+            UniqueConstraint(
+                StandardColumnNames.amino_acid_id,
+                StandardColumnNames.effect_id,
+                name='uq_annotations_amino_acid_effect'
+            )
+        ]
+    )
+
+    r_amino_acid: Mapped['AminoAcid'] = relationship(back_populates='r_annotations')
+    r_annotations_papers: Mapped[List['AnnotationPaper']] = relationship(back_populates='r_annotation')
+    r_effect: Mapped['Effect'] = relationship(back_populates='r_annotations')
+
+
+class AnnotationPaper(Base):
+    __tablename__ = TableNames.annotations_papers
+
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+
+    paper_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.papers}.id'), nullable=False)
+    annotation_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.annotations}.id'), nullable=False)
+
+    __table_args__ = tuple(
+        [
+            UniqueConstraint(
+                StandardColumnNames.paper_id,
+                StandardColumnNames.annotation_id,
+                name='uq_annotations_papers_annotation_paper_pair'
+            )
+        ]
+    )
+
+    r_paper: Mapped['Paper'] = relationship(back_populates='r_annotations_papers')
+    r_annotation: Mapped['Annotation'] = relationship(back_populates='r_annotations_papers')

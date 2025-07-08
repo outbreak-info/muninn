@@ -343,7 +343,24 @@ async def get_mutation_incidence(
 
     async with get_async_session() as session:
 
+<<<<<<< HEAD
         sample_count = await session.scalar(
+=======
+        sampleCount = await session.execute(
+            text(
+                f'''
+                SELECT count(*)
+                FROM lineages
+                LEFT JOIN samples_lineages ON samples_lineages.lineage_id = lineages.id
+                WHERE lineage_name = :input_lineage
+                '''
+            ), {
+                'input_lineage': lineage
+            }
+        )
+
+        res = await session.execute(
+>>>>>>> annotations
             text(
                 f'''
                 select count(*)
@@ -359,6 +376,7 @@ async def get_mutation_incidence(
                 'input_lineage_system_name': lineage_system_name
             }
         )
+<<<<<<< HEAD
         sample_count = float(sample_count)
 
         sample_subset_query = f"""
@@ -457,3 +475,10 @@ LineageSystem.lineage_system_name == lineage_system_name,
         results = await session.execute(query)
         out_data = [MutationProfileInfo(**row) for row in results.mappings().all()]
     return out_data
+=======
+    counts = sampleCount.scalar_one()
+    out = dict()
+    for region,ref_nt,position_nt,alt_nt,count in res:
+        out[f'{region}:{ref_nt}{position_nt}{alt_nt}'] = count
+    return {'samples':counts,'counts':out}
+>>>>>>> annotations
