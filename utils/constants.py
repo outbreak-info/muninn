@@ -96,6 +96,7 @@ class TableNames:
     effects = 'effects'
     annotations = 'annotations'
     annotations_papers = 'annotations_papers'
+    annotations_amino_acids = 'annotations_amino_acids'
 
 
 class StandardColumnNames:

@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase, relationship
 
-from parser.parser import parser
 from utils.constants import ConstraintNames, TableNames, StandardColumnNames
 
 #########################################################################################
@@ -259,7 +258,7 @@ class AminoAcid(Base):
 
     r_translations: Mapped[List['Translation']] = relationship(back_populates='r_amino_acid')
     r_pheno_metric_values: Mapped[List['PhenotypeMetricValues']] = relationship(back_populates='r_amino_acid')
-    r_annotations: Mapped[List['Annotation']] = relationship(back_populates='r_amino_acid')
+    r_annotations_amino_acids: Mapped[List['AnnotationAminoAcid']] = relationship(back_populates='r_amino_acid')
 
 
 class Translation(Base):
@@ -564,24 +563,9 @@ class Annotation(Base):
     __tablename__ = TableNames.annotations
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
-
-    amino_acid_id: Mapped[int] = mapped_column(
-        sa.ForeignKey(f'{TableNames.amino_acids}.id'),
-        nullable=False
-    )
     effect_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.effects}.id'), nullable=False)
 
-    __table_args__ = tuple(
-        [
-            UniqueConstraint(
-                StandardColumnNames.amino_acid_id,
-                StandardColumnNames.effect_id,
-                name='uq_annotations_amino_acid_effect'
-            )
-        ]
-    )
-
-    r_amino_acid: Mapped['AminoAcid'] = relationship(back_populates='r_annotations')
+    r_annotations_amino_acids: Mapped[List['AnnotationAminoAcid']] = relationship(back_populates='r_annotation')
     r_annotations_papers: Mapped[List['AnnotationPaper']] = relationship(back_populates='r_annotation')
     r_effect: Mapped['Effect'] = relationship(back_populates='r_annotations')
 
@@ -593,6 +577,8 @@ class AnnotationPaper(Base):
 
     paper_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.papers}.id'), nullable=False)
     annotation_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.annotations}.id'), nullable=False)
+
+    quotation: Mapped[str] = mapped_column(sa.Text, nullable=True)
 
     __table_args__ = tuple(
         [
@@ -606,3 +592,24 @@ class AnnotationPaper(Base):
 
     r_paper: Mapped['Paper'] = relationship(back_populates='r_annotations_papers')
     r_annotation: Mapped['Annotation'] = relationship(back_populates='r_annotations_papers')
+
+
+class AnnotationAminoAcid(Base):
+    __tablename__ = TableNames.annotations_amino_acids
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+
+    amino_acid_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.amino_acids}.id'), nullable=False)
+    annotation_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.annotations}.id'), nullable=False)
+
+    __table_args__ = tuple(
+        [
+            UniqueConstraint(
+                StandardColumnNames.amino_acid_id,
+                StandardColumnNames.annotation_id,
+                name='uq_annotations_amino_acids_pair'
+            )
+        ]
+    )
+
+    r_annotation: Mapped['Annotation'] = relationship(back_populates='r_annotations_amino_acids')
+    r_amino_acid: Mapped['AminoAcid'] = relationship(back_populates='r_annotations_amino_acids')
