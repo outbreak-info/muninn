@@ -1,23 +1,29 @@
-from sqlalchemy import select, and_
+from typing import Set
+
 
 from DB.engine import get_async_write_session
-from DB.models import Annotation
+from DB.models import Annotation, AnnotationAminoAcid
+from DB.queries.amino_acid_substitutions import get_aa_ids_for_annotation_effect
+from utils.errors import DuplicateAnnotationError
 
 
-async def find_or_insert_annotation(a: Annotation) -> int:
+async def insert_annotation(a: Annotation, amino_acid_ids: Set[int]) -> int:
+    # make sure we aren't making a duplicate
+    amino_acid_ids = set(amino_acid_ids) # no, you're paranoid
+    existing_id_sets = await get_aa_ids_for_annotation_effect(a.effect_id)
+    if amino_acid_ids in existing_id_sets:
+        raise DuplicateAnnotationError(message='No')
+
     async with get_async_write_session() as session:
-        id_ = await session.scalar(
-            select(Annotation.id)
-            .where(
-                and_(
-                    Annotation.amino_acid_id == a.amino_acid_id,
-                    Annotation.effect_id == a.effect_id
-                )                
-            )
-        )
-        if id_ is None:
-            session.add(a)
-            await session.commit()
-            await session.refresh(a)
-            id_ = a.id
-    return id_
+        session.add(a)
+        await session.commit()
+        await session.refresh(a)
+
+        aaas = [
+            AnnotationAminoAcid(amino_acid_id=aaid, annotation_id=a.id)
+            for aaid in amino_acid_ids
+        ]
+        session.add_all(aaas)
+        await session.commit()
+    return a.id
+
