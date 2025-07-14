@@ -9,7 +9,6 @@ from parser.parser import parser
 from utils.constants import DateBinOpt
 
 
-# TODO: Add Effect to DB.models and EffectInfo to api.models
 async def get_all_annotation_effects() -> List[str]:
     async with get_async_session() as session:
         res = await session.execute(
@@ -53,13 +52,6 @@ async def get_annotations_by_variants_and_collection_date(
     )
 
 
-# todo:
-#  this is now a bit broken because of the many-many relationship between amino acids and annotations
-#  for example: say that amino acid changes aaX and aaY cause effect E.
-#  say a sample S has a variant with aaX, but not aaY
-#  under the query as it stands, we will count 1 annotation for E on the date for S
-#  but have we really seen that annotation if we saw only one of the two amino acid changes flagged
-#  as necessary to achieve the effect?
 async def _get_annotations_by_collection_date(
     effect_detail: str,
     date_bin: DateBinOpt,
@@ -109,11 +101,30 @@ async def _get_annotations_by_collection_date(
                     sample_id,
                     (collection_start_date + ((collection_end_date - collection_start_date) / 2))::date AS mid_collection_date
                     from (
-                        select 
-                        s.id as sample_id,
-                        collection_start_date, collection_end_date,
-                        collection_end_date - collection_start_date as collection_span
+                        select s.id as sample_id,
+                               collection_start_date,
+                               collection_end_date,
+                               collection_end_date - collection_start_date as collection_span
                         from samples s
+                        inner join (
+                            select *
+                            from (
+                                select s.id samp_id, array_agg(aa.id) mut_aas
+                                from samples s
+                                inner join {table.__tablename__} inter on inter.sample_id = s.id
+                                inner join translations t on t.id = inter.translation_id
+                                inner join amino_acids aa on aa.id = t.amino_acid_id
+                                group by s.id
+                            ) samp_side
+                            cross join (
+                                select annotation_id, array_agg(aaa.amino_acid_id) annot_aas
+                                from effects e
+                                inner join annotations a on a.effect_id = e.id
+                                inner join annotations_amino_acids aaa on aaa.annotation_id = a.id
+                                group by annotation_id
+                            ) annot_side
+                            where samp_side.mut_aas @> annot_side.annot_aas
+                        ) matchup on matchup.samp_id = s.id
                         left join geo_locations gl on gl.id = s.geo_location_id
                         inner join {table.__tablename__} VM on VM.sample_id = s.id
                         inner join samples_lineages sl on sl.sample_id = s.id
@@ -126,15 +137,18 @@ async def _get_annotations_by_collection_date(
                         inner join effects e on e.id = a.effect_id
                         inner join annotations_papers ap on ap.annotation_id = a.id
                         inner join papers p on p.id = ap.paper_id
-                        where num_nulls(collection_end_date, collection_start_date) = 0 
-                        and e.detail = '{effect_detail}' 
+                        where num_nulls(collection_end_date, collection_start_date) = 0
+                        and e.detail = :effect_detail
                         {user_where_clause}
                     )
                     where collection_span <= {max_span_days}
                 )
-                {group_and_order_clause}
+                {group_and_order_clause};
                 '''
-            )
+            ),
+            {
+                'effect_detail': effect_detail
+            }
         )
     out_data = []
     for r in res:
