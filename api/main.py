@@ -340,6 +340,25 @@ async def get_mutation_counts(
     else:
         return await DB.queries.counts.count_mutations_by_column(group_by)
 
+@app.get('/v0/mutations:countByCollectionDate', response_model=List[Dict])
+async def get_aa_variant_frequency_by_collection_date(
+    position_aa: int,
+    alt_aa: str,
+    gff_feature: str,
+    date_bin: DateBinOpt = DateBinOpt.month,
+    days: int = DEFAULT_DAYS,
+    q: str | None = None,
+    max_span_days: int = DEFAULT_MAX_SPAN_DAYS
+):
+    return await DB.queries.mutations.get_aa_mutation_count_by_simple_date_bin(
+        date_bin,
+        position_aa,
+        alt_aa,
+        gff_feature,
+        days,
+        max_span_days,
+        q
+    )
 
 # todo: I'm not crazy about this name.
 #  We're not counting lineages here, we're counting how often they show up
