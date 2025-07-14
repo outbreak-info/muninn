@@ -68,6 +68,7 @@ async def get_all_variants_as_pl_df() -> pl.DataFrame:
 async def get_region_and_gff_features() -> List['RegionAndGffFeatureInfo']:
         return await DB.queries.variants_mutations.get_region_and_gff_features(IntraHostVariant)
 
+# TODO: Generalize this for nucleotide mutations
 async def get_aa_variant_frequency_by_simple_date_bin(
     date_bin: DateBinOpt,
     position_aa: int,
@@ -141,7 +142,7 @@ async def get_aa_variant_frequency_by_simple_date_bin(
                             s.collection_end_date,
                             collection_end_date - collection_start_date as collection_span
                         from samples s
-                        inner join public.intra_host_variants ihv on ihv.sample_id = s.id
+                        inner join intra_host_variants ihv on ihv.sample_id = s.id
                         inner join translations t on t.id = ihv.translation_id
                         inner join amino_acids aa on aa.id = t.amino_acid_id
                         where aa.position_aa = {position_aa} and aa.alt_aa='{alt_aa}' and gff_feature='{gff_feature}' {user_where_clause}
