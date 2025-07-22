@@ -200,7 +200,11 @@ column_name_map = {
     StandardColumnNames.release_date: 'ReleaseDate',
     StandardColumnNames.creation_date: 'UpdateDate',  # todo: check on this mapping
     GEO_LOCATION: 'Geographic_Location',
-    StandardColumnNames.bases: 'Length'
+    StandardColumnNames.bases: 'Length',
+    StandardColumnNames.ww_viral_load: 'viral_load',
+    StandardColumnNames.ww_catchment_population : 'population',
+    StandardColumnNames.ww_site_id: 'site_id',
+    StandardColumnNames.ww_collected_by: 'collected_by'
 }
 
 fields_not_present_not_null = {
