@@ -105,7 +105,8 @@ async def _get_annotations_by_collection_date(
                         inner join lineage_systems ls on ls.id = l.lineage_system_id
                         left join translations t on t.id = VM.translation_id
                         left join amino_acids aa on aa.id = t.amino_acid_id
-                        inner join annotations a on a.amino_acid_id = aa.id
+                        inner join annotations_amino_acids aaa on aaa.amino_acid_id = aa.id
+                        inner join annotations a on a.id = aaa.annotation_id
                         inner join effects e on e.id = a.effect_id
                         inner join annotations_papers ap on ap.annotation_id = a.id
                         where num_nulls(collection_end_date, collection_start_date) = 0 and e.detail = '{effect_detail}' {user_where_clause}
