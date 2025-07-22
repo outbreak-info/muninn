@@ -63,17 +63,17 @@ async def _count_variants_or_mutations_gte_pheno_value_by_collection_date(
                 f'''
                 select
                 {extract_clause},
-                count(distinct sample_id) filter (where value >= {phenotype_metric_value_threshold}) as n_gte,
-                count(distinct sample_id) as n
+                count(distinct aa_id) filter (where value >= {phenotype_metric_value_threshold}) as n_gte,
+                count(distinct aa_id) as n
                 from(
                     select 
                     value,
-                    sample_id,
+                    aa_id,
                     (collection_start_date + ((collection_end_date - collection_start_date) / 2))::date AS mid_collection_date
                     from (
                         select 
                         pmv.value as value,
-                        s.id as sample_id,
+                        aa.id as aa_id,
                         collection_start_date, collection_end_date,
                         collection_end_date - collection_start_date as collection_span
                         from samples s
