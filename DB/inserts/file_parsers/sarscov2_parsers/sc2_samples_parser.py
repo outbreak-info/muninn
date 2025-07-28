@@ -28,14 +28,10 @@ class SC2SamplesParser(FileParser):
             .rename({old: new for new, old in column_name_map.items()})
             .select(set(column_name_map.keys()))
             .drop_nulls([pl.col(COLLECTION_DATE)])
-            .cast(
-                {
-                    StandardColumnNames.release_date: pl.Datetime,
-                    StandardColumnNames.creation_date: pl.Datetime
-                }
-            )
-            .with_columns(  # This column has some missing values that must be filled
-                pl.col(StandardColumnNames.bio_project).fill_null('NA')
+            .with_columns(  # These columns are not used in the data, but are required by the schema
+                pl.col(StandardColumnNames.bio_project).fill_null('NA'),
+                pl.col(StandardColumnNames.release_date).str.to_datetime(format="%Y-%m-%d", strict=False),
+                pl.col(StandardColumnNames.creation_date).str.to_datetime(format="%Y-%m-%d", strict=False),
             )
         )
         # unique by accession? No, leave it out for now to force errors on conflict.
