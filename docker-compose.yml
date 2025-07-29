@@ -3,12 +3,12 @@ version: "3.8"
 services:
   postgres:
     container_name: "flu_db_pg"
-    image: postgres:16-bullseye
+    build:
+      context: .
+      dockerfile: pg.dockerfile
     restart: always
     ports:
       - "${FLU_DB_PORT}:5432"
-    # todo: eventually I'd like to not use the superuser for everything
-    # The superuser should be postgres, and flu just own the flu db
     environment:
       POSTGRES_USER: ${FLU_DB_SUPERUSER}
       POSTGRES_PASSWORD: ${FLU_DB_SUPERUSER_PASSWORD}
@@ -20,7 +20,7 @@ services:
       - "-c"
       - "config_file=/docker-entrypoint-initdb.d/${PG_CONFIG_NAME}.postgresql.conf"
     healthcheck:
-      test: pg_isready -U flu -d flu
+      test: pg_isready -U flu_reader -d flu
       interval: 2s
       timeout: 3s
       retries: 15
