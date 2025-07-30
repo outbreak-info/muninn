@@ -7,21 +7,26 @@ Database system to store mutation and variant data for avian influenza.
 1. Clone repository and cd into it.
 2. Create `.env` file.
     ```
-    export FLU_DB_READONLY_USER="flu_reader"
-    export FLU_DB_READONLY_PASSWORD="default-flu-reader"
+    export MUNINN_DB_READONLY_USER="flu_reader"
+    export MUNINN_DB_READONLY_PASSWORD="default-flu-reader"
 
-    export FLU_DB_SUPERUSER_PASSWORD="default-flu"
-    export FLU_DB_SUPERUSER="flu"
+    export MUNINN_DB_SUPERUSER_PASSWORD="default-flu"
+    export MUNINN_DB_SUPERUSER="flu"
 
-    export FLU_DB_HOST="localhost"
-    export FLU_DB_DB_NAME="flu"
-    export FLU_DB_PORT="5432"
-    
-   # this will be mounted to the server container as /flu/data
-    export FLU_DB_SERVER_DATA_INPUT_DIR="/dev/null"
+    export MUNINN_DB_HOST="localhost"
+    export MUNINN_DB_NAME="flu"
+    export MUNINN_DB_PORT="5432"
    
-   # this controls which config file is applied to postgres
-    export PG_CONFIG_NAME="local"
+    export MUNINN_SERVER_PORT="8000"
+    
+    # this will be mounted to the server container as /flu/data
+    export MUNINN_SERVER_DATA_INPUT_DIR="/dev/null"
+   
+    # this controls which config file is applied to postgres
+    export MUNINN_PG_CONFIG_NAME="local"
+   
+    # this will be used as a prefix to the container names
+    export MUNINN_INSTANCE_NAME="flu_db"
     ```
     - On kenny, you may need to mess with the port to avoid conflicting with the container I have running.
       Changing the setting in .env will cascade to everywhere else, so just change it there.
