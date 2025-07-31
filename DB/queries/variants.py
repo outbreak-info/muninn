@@ -71,9 +71,6 @@ async def get_region_and_gff_features() -> List['RegionAndGffFeatureInfo']:
 # TODO: Generalize this for nucleotide mutations
 async def get_aa_variant_frequency_by_simple_date_bin(
     date_bin: DateBinOpt,
-    position_aa: int,
-    alt_aa: str,
-    gff_feature: str,
     days: int,
     max_span_days: int,
     raw_query: str
@@ -145,7 +142,10 @@ async def get_aa_variant_frequency_by_simple_date_bin(
                         inner join intra_host_variants ihv on ihv.sample_id = s.id
                         inner join translations t on t.id = ihv.translation_id
                         inner join amino_acids aa on aa.id = t.amino_acid_id
-                        where aa.position_aa = {position_aa} and aa.alt_aa='{alt_aa}' and gff_feature='{gff_feature}' {user_where_clause}
+                        left join samples_lineages sl on sl.sample_id = s.id
+                        left join lineages l on l.id = sl.lineage_id
+                        left join lineage_systems ls on ls.id = l.lineage_system_id
+                        where num_nulls(collection_end_date, collection_start_date) = 0 {user_where_clause}
                     )
                     where collection_span <= {max_span_days}
                 )
