@@ -340,7 +340,7 @@ async def get_mutation_counts(
     else:
         return await DB.queries.counts.count_mutations_by_column(group_by)
 
-@app.get('/v0/mutations:countByCollectionDate', response_model=List[Dict])
+@app.get('/v0/mutations:countByCollectionDateAndLineage', response_model=List[Dict])
 async def get_aa_variant_frequency_by_collection_date(
     position_aa: int,
     alt_aa: str,
