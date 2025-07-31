@@ -52,6 +52,12 @@ async def get_samples_query(q: str):
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
+@app.get('/samples:collectionReleaseLag', response_model=List[Dict])
+async def get_samples_query(max_span_days: int = DEFAULT_MAX_SPAN_DAYS):
+    try:
+        return await DB.queries.samples.get_sample_collection_release_lag(max_span_days)
+    except ParsingError as e:
+        raise HTTPException(status_code=400, detail=e.message)
 
 @app.get('/variants', response_model=List[VariantInfo])
 async def get_variants_query(q: str):

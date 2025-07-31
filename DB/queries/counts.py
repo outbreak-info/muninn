@@ -316,6 +316,7 @@ async def count_mutations_by_collection_date(
     )
 
 
+# TODO: Generalize for nucleotide mutations
 async def _count_variants_or_mutations_by_collection_date(
     date_bin: DateBinOpt,
     change_bin: NtOrAa,
