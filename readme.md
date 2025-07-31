@@ -32,7 +32,7 @@ Database system to store mutation and variant data for avian influenza.
       Changing the setting in .env will cascade to everywhere else, so just change it there.
     - For now, 'flu' will be the postgres superuser and own everything, eventually we'll want to have less privileged
       roles.
-    - Change the value for `FLU_DB_SERVER_DATA_INPUT_DIR` to allow the server to read input data from a host directory.
+    - Change the value for `MUNINN_DB_SERVER_DATA_INPUT_DIR` to allow the server to read input data from a host directory.
 3. Run docker compose to start the database and api containers.
     1. `docker-compose -f docker-compose.yml up -d --build`
     2. This will start up two containers, `flu_db_pg` for postgres, and `flu_db_server` for the webserver.
@@ -40,16 +40,47 @@ Database system to store mutation and variant data for avian influenza.
     4. Use `docker logs flu_db_server` to see server logs.
 4. Update the database schema: `docker exec -d flu_db_server muninn_schema_update`
 5. Load or update data:  `docker exec -d flu_db_server muninn_ingest_all`
-    1. Input data must be placed in `FLU_DB_SERVER_DATA_INPUT_DIR` on the host machine.
+    1. Input data must be placed in `MUNINN_DB_SERVER_DATA_INPUT_DIR` on the host machine.
        For details read ingestion script: `containers/server/bin/muninn_ingest_all`
     2. This process will take 15-45 minutes to finish, but existing records will be updated in-place, and the webserver
        will remain available.
     3. For information on logs see Troubleshooting Information > Webserver
-6. Load or update test data: `docker exec -d flu_db_server muninn_ingest_playset ${FLU_DB_SERVER_DATA_INPUT_DIR}/<archive name>`
-    1. Input data must be placed in `FLU_DB_SERVER_DATA_INPUT_DIR` on the host machine.
+6. Load or update test data: `docker exec -d flu_db_server muninn_ingest_playset ${MUNINN_DB_SERVER_DATA_INPUT_DIR}/<archive name>`
+    1. Input data must be placed in `MUNINN_DB_SERVER_DATA_INPUT_DIR` on the host machine.
        For details read ingestion script: `containers/server/bin/muninn_ingest_playset`
     2. This process will take a few minutes and data will persist in a docker volume. Please see `docker-compoase.yml` for details.
     3. For information on logs see Troubleshooting Information > Webserver
+
+### Running Multiple Instances
+
+In some cases we want to run multiple instances of Muninn on one host. 
+For most use-cases this shouldn't be required, so these notes are largely for my own use and might not be complete.
+
+The motivation here is using an instance of the server on server A to do the data ingestion for a database on server B. 
+We have a few reasons for wanting to do it this way, but primarily, we want to avoid needing to copy the input data over.
+This way we avoid that issue by reusing the ingestion machinery we already have in place, and simply pointing it at a different target.
+
+It's best to have two copies of the project, one for each instance.
+By default, docker's `project-name` will be set using the name of the root dir of the project.
+If you run multiple instances from a single copy, then you'll have to explicitly set `project-name`:
+```commandline
+docker compose --project-name $MUNINN_INSTANCE_NAME up -d --build
+docker compose --project-name $MUNINN_INSTANCE_NAME down -v
+```
+Just make a second copy of the repo, it's the easier way.
+Beyond this point, these instructions will assume separate directories.
+
+In the `.env` file for your new instance: 
+1. Change the `MUNINN_INSTANCE_NAME` to something other than the default.
+2. Change the server and database ports.
+3. Ideally, change `MUNINN_SERVER_DATA_INPUT_DIR`. 
+Allowing multiple instances to share the input directory shouldn't break anything, but it introduces opportunities for bugs and confusion.
+
+
+Obviously what we want, then, is to run only the server, and not the database: 
+```commandline
+docker compose -f docker-compose.yml up -d --no-deps --no-recreate --build server
+```
 
 ## Troubleshooting Tools
 
