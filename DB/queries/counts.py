@@ -316,6 +316,7 @@ async def count_mutations_by_collection_date(
     )
 
 
+# TODO: Generalize for nucleotide mutations
 async def _count_variants_or_mutations_by_collection_date(
     date_bin: DateBinOpt,
     change_bin: NtOrAa,
@@ -338,7 +339,7 @@ async def _count_variants_or_mutations_by_collection_date(
             '''
 
             group_and_order_clause = f'''
-            group by year, chunk, region, {change_fields}
+            group by year, chunk, gff_feature, {change_fields}
             order by year, chunk
             '''
         case DateBinOpt.day:
@@ -349,7 +350,7 @@ async def _count_variants_or_mutations_by_collection_date(
             '''
 
             group_and_order_clause = f'''
-            group by bin_start, bin_end, region, {change_fields}
+            group by bin_start, bin_end, gff_feature, {change_fields}
             order by bin_start
             '''
         case _:
@@ -362,22 +363,24 @@ async def _count_variants_or_mutations_by_collection_date(
                 select
                 {extract_clause},
                 count(*),
-                region, {change_fields}
+                gff_feature, {change_fields}
                 from(
                     select 
                     *,
                     (collection_start_date + ((collection_end_date - collection_start_date) / 2))::date AS mid_collection_date
                     from (
                         select 
-                        region, {change_fields},
+                        gff_feature, {change_fields},
                         collection_start_date, collection_end_date,
                         collection_end_date - collection_start_date as collection_span
                         from samples s
                         left join geo_locations gl on gl.id = s.geo_location_id
                         inner join {table.__tablename__} VM on VM.sample_id = s.id
-                        left join alleles a on a.id = VM.allele_id
                         left join translations t on t.id = VM.translation_id
                         left join amino_acids aas on aas.id = t.amino_acid_id
+                        left join samples_lineages sl on sl.sample_id = s.id
+                        left join lineages l on l.id = sl.lineage_id
+                        left join lineage_systems ls on ls.id = l.lineage_system_id
                         where num_nulls(collection_end_date, collection_start_date) = 0 {user_where_clause}
                     )
                     where collection_span <= {max_span_days}

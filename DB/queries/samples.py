@@ -1,7 +1,7 @@
-from typing import List
+from typing import List, Dict
 
 import polars as pl
-from sqlalchemy import select, text
+from sqlalchemy import select, text, cast, Date, func, Integer
 from sqlalchemy.orm import contains_eager
 
 from DB.engine import get_uri_for_polars, get_async_session
@@ -10,6 +10,7 @@ from api.models import SampleInfo
 from parser.parser import parser
 from utils.constants import StandardColumnNames
 from utils.errors import NotFoundError
+from utils.constants import DateBinOpt
 
 
 async def get_sample_by_id(sample_id: int) -> SampleInfo | None:
@@ -112,3 +113,54 @@ async def get_sample_id_by_accession(accession: str) -> int:
     if id_ is None:
         raise NotFoundError(f'No sample found for accession: {accession}')
     return id_
+
+
+async def get_sample_collection_release_lag(max_span_days: int) -> List[Dict]:
+    start = cast(Sample.collection_start_date, Date)
+    end = cast(Sample.collection_end_date, Date)
+    release = cast(Sample.release_date, Date)
+
+    half_span = cast((end - start) / 2, Integer)
+    midpoint = start + half_span
+
+    year = cast(func.date_part('year', midpoint), Integer)
+    month = cast(func.date_part('month', midpoint), Integer)
+
+    lag = release - midpoint
+
+    sub_query = (
+        select(
+            lag.label("lag"),
+            year.label("year"),
+            month.label("month")
+        )
+        .where((end - start) <= max_span_days)
+        .subquery()
+    )
+
+    query = (
+        select(
+            sub_query.c.year,
+            sub_query.c.month,
+            func.percentile_cont(0.25).within_group(sub_query.c.lag).label("q1"),
+            func.percentile_cont(0.5).within_group(sub_query.c.lag).label("median"),
+            func.percentile_cont(0.75).within_group(sub_query.c.lag).label("q3")
+        )
+        .group_by(sub_query.c.year, sub_query.c.month)
+    )
+    date_bin = DateBinOpt("month") # TODO: Generalize this to other intervals
+    async with get_async_session() as session:
+        result = await session.execute(query)
+        if result is None:
+            return []
+        rows = result.all()
+        return [
+            {
+                "collection_date_bin": date_bin.format_iso_chunk(row.year, row.month),
+                "lag_q1": row.q1,
+                "lag_median": row.median,
+                "lag_q3": row.q3
+            }
+            for row in rows
+        ]
+
