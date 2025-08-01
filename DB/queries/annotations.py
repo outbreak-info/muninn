@@ -93,18 +93,17 @@ async def _get_annotations_by_collection_date(
         res = await session.execute(
             text(
                 f'''
-                select
-                {extract_clause},
-                count(distinct sample_id ) as n
-                from(
+                WITH base as (
                     select 
-                    sample_id,
+                    aa_id,
+                    detail,
                     (collection_start_date + ((collection_end_date - collection_start_date) / 2))::date AS mid_collection_date
                     from (
-                        select s.id as sample_id,
-                               collection_start_date,
-                               collection_end_date,
-                               collection_end_date - collection_start_date as collection_span
+                        select 
+                        aa.id as aa_id,
+                        e.detail,
+                        collection_start_date, collection_end_date,
+                        collection_end_date - collection_start_date as collection_span
                         from samples s
                         inner join (
                             select *
@@ -143,7 +142,14 @@ async def _get_annotations_by_collection_date(
                     )
                     where collection_span <= {max_span_days}
                 )
-                {group_and_order_clause};
+                select
+                {extract_clause},
+                count(DISTINCT aa_id) FILTER (where detail = '{effect_detail}') as n,
+                COUNT(DISTINCT aa_id) as n_total,
+                COUNT(DISTINCT aa_id) FILTER (WHERE detail = 'Reduced susceptibility to Zanamivir')::numeric
+                    / NULLIF(COUNT(DISTINCT aa_id), 0) AS proportion
+                from BASE
+                {group_and_order_clause}
                 '''
             ),
             {
@@ -153,10 +159,10 @@ async def _get_annotations_by_collection_date(
     out_data = []
     for r in res:
         date = date_bin.format_iso_chunk(r[0], r[1])
-        out_data.append(
-            {
-                "date": date,
-                "n": r[2]
-            }
-        )
+        out_data.append({
+            "date": date,
+            "n": r[2],
+            "n_total": r[3],
+            "proportion": r[4]
+        })
     return out_data
