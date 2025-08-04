@@ -50,7 +50,7 @@ services:
       MUNINN_DB_SUPERUSER: "${MUNINN_DB_SUPERUSER}"
       MUNINN_DB_HOST: "postgres"
       MUNINN_DB_NAME: "${MUNINN_DB_NAME}"
-      MUNINN_DB_PORT: "5432" # b/c it's going through docker, it doesn't use the exposed port
+      MUNINN_DB_PORT: "${MUNINN_DB_PORT_FOR_SERVER}"
     command: bash -c "
       sleep 30
       && fastapi run api/main.py
