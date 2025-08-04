@@ -16,8 +16,12 @@ Database system to store mutation and variant data for avian influenza.
     export MUNINN_DB_NAME="flu"
     export MUNINN_DB_PORT="5432"
     
-    # If the DB and server are on the same host then this should be 5432, regardless of the value of MUNINN_DB_PORT.
+    # If the DB and server are on the same host then:
+    # Port should be 5432, regardless of the value of MUNINN_DB_PORT.
+    # Host should be "postgres"
     export MUNINN_DB_PORT_FOR_SERVER="5432"
+    export MUNINN_DB_HOST_FOR_SERVER="postgres"
+   
     export MUNINN_SERVER_PORT="8000"
     
     # this will be mounted to the server container as /flu/data
@@ -31,7 +35,8 @@ Database system to store mutation and variant data for avian influenza.
     ```
     - Change the value for `MUNINN_DB_SERVER_DATA_INPUT_DIR` to allow the server to read input data from a host directory.
     - If the server and DB are running on the same host, they will talk through the docker network.
-    In that case, `MUNINN_DB_PORT_FOR_SERVER` should be 5432, regardless of the value of `MUNINN_DB_PORT` (which controls only the external side of the port mapping).
+    In that case, `MUNINN_DB_PORT_FOR_SERVER` should be 5432, regardless of the value of `MUNINN_DB_PORT`, and 
+    `MUNINN_DB_HOST_FOR_SERVER` should be `"postgres"`, which is the name of the database service within docker.
     If the DB and server are on different hosts, then this must be the same as `MUNINN_DB_PORT`
 3. Run docker compose to start the database and api containers.
     1. `docker-compose -f docker-compose.yml up -d --build`
