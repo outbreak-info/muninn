@@ -11,16 +11,13 @@ Database system to store mutation and variant data for avian influenza.
     export MUNINN_DB_READONLY_PASSWORD="default-flu-reader"
     export MUNINN_DB_SUPERUSER="flu"
     export MUNINN_DB_SUPERUSER_PASSWORD="default-flu"
-    
-    export MUNINN_DB_HOST="localhost"
     export MUNINN_DB_NAME="flu"
-    export MUNINN_DB_PORT="5432"
     
-    # If the DB and server are on the same host then:
-    # Port should be 5432, regardless of the value of MUNINN_DB_PORT.
-    # Host should be "postgres"
+    # Use "postgres" when running on same host (linked via docker network)
+    export MUNINN_DB_HOST="postgres"
+    export MUNINN_DB_PORT="5432"
+    # If running on the same host (and using docker networking) this should be 5432 regardless of the value of MUNINN_DB_PORT
     export MUNINN_DB_PORT_FOR_SERVER="5432"
-    export MUNINN_DB_HOST_FOR_SERVER="postgres"
    
     export MUNINN_SERVER_PORT="8000"
     
@@ -34,10 +31,10 @@ Database system to store mutation and variant data for avian influenza.
     export MUNINN_INSTANCE_NAME="flu_db"
     ```
     - Change the value for `MUNINN_DB_SERVER_DATA_INPUT_DIR` to allow the server to read input data from a host directory.
-    - If the server and DB are running on the same host, they will talk through the docker network.
-    In that case, `MUNINN_DB_PORT_FOR_SERVER` should be 5432, regardless of the value of `MUNINN_DB_PORT`, and 
-    `MUNINN_DB_HOST_FOR_SERVER` should be `"postgres"`, which is the name of the database service within docker.
-    If the DB and server are on different hosts, then this must be the same as `MUNINN_DB_PORT`
+    - If the server and DB are running on the same host, they will talk through the docker network. 
+    In that case, `MUNINN_DB_PORT_FOR_SERVER` should be 5432, regardless of the value of `MUNINN_DB_PORT`, 
+    and `MUNINN_DB_HOST` should be `"postgres"`, which is the name of the database service within docker.
+    - If the DB and server are on different hosts, then `MUNINN_DB_HOST` should be the DB host, and `MUNINN_DB_PORT_FOR_SERVER` must be the same as `MUNINN_DB_PORT`
 3. Run docker compose to start the database and api containers.
     1. `docker-compose -f docker-compose.yml up -d --build`
     2. This will start up two containers, `flu_db_pg` for postgres, and `flu_db_server` for the webserver.
@@ -53,7 +50,7 @@ Database system to store mutation and variant data for avian influenza.
 6. Load or update test data: `docker exec -d flu_db_server muninn_ingest_playset ${MUNINN_DB_SERVER_DATA_INPUT_DIR}/<archive name>`
     1. Input data must be placed in `MUNINN_DB_SERVER_DATA_INPUT_DIR` on the host machine.
        For details read ingestion script: `containers/server/bin/muninn_ingest_playset`
-    2. This process will take a few minutes and data will persist in a docker volume. Please see `docker-compoase.yml` for details.
+    2. This process will take a few minutes and data will persist in a docker volume. Please see `docker-compose.yml` for details.
     3. For information on logs see Troubleshooting Information > Webserver
 
 ### Running Multiple Instances
@@ -61,12 +58,12 @@ Database system to store mutation and variant data for avian influenza.
 In some cases we want to run multiple instances of Muninn on one host. 
 For most use-cases this shouldn't be required, so these notes are largely for my own use and might not be complete.
 
-The motivation here is using an instance of the server on server A to do the data ingestion for a database on server B. 
+The motivation here is using an instance of the server on host A to do the data ingestion for a database on host B. 
 We have a few reasons for wanting to do it this way, but primarily, we want to avoid needing to copy the input data over.
 This way we avoid that issue by reusing the ingestion machinery we already have in place, and simply pointing it at a different target.
 
 It's best to have two copies of the project, one for each instance.
-By default, docker's `project-name` will be set using the name of the root dir of the project.
+By default, docker's `project-name` will be set using the name of the root directory of the project.
 If you run multiple instances from a single copy, then you'll have to explicitly set `project-name`:
 ```commandline
 docker compose --project-name $MUNINN_INSTANCE_NAME up -d --build
@@ -81,10 +78,10 @@ In the `.env` file for your new instance:
 3. Ideally, change `MUNINN_SERVER_DATA_INPUT_DIR`. 
 Allowing multiple instances to share the input directory shouldn't break anything, but it introduces opportunities for bugs and confusion.
 
-
+Recall our goal: to use a server instance on host A to manage data ingestion for a database on host B. 
 Obviously what we want, then, is to run only the server, and not the database: 
 ```commandline
-docker compose -f docker-compose.yml up -d --no-deps --no-recreate --build server
+docker compose -f docker-compose.yml up -d --no-deps --build server
 ```
 
 ## Troubleshooting Tools
@@ -189,12 +186,12 @@ Simple counts:
 
 Prevalence:
 
-- `/variants/freqency?aa=HA:Q238R`
+- `/variants/frequency?aa=HA:Q238R`
     - Also allows queries based on nucleotide with parameter `nt=HA:A123C`
 - `/mutations/frequency?aa=HA:Q238R`
     - Also allows queries based on nucleotide as above.
     - Returns count of samples associated with the given amino acid or nucleotide change.
-- `/variants/frequency/score?region=HA&metric=stablility`
+- `/variants/frequency/score?region=HA&metric=stability`
 
 Note: using `id` as a field in any query (e.g.: `id = 1234`) is likely to fail.
 This is because multiple tables, each with their own `id` column are joined before being queried, and SQL will not allow
