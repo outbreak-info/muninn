@@ -1,4 +1,5 @@
 # This is cribbed from https://stackoverflow.com/a/71102510
+# Pycharm is broadly wrong about its type checks in this file
 
 import hmac
 import sys
@@ -12,6 +13,7 @@ iterations = 4096
 
 
 def b64enc(b: bytes) -> str:
+    # noinspection PyTypeChecker
     return standard_b64encode(b).decode('utf8')
 
 

@@ -1,4 +1,5 @@
 import re
+import os
 from datetime import datetime
 from enum import Enum
 
@@ -6,13 +7,13 @@ from utils.dates_and_times import format_iso_month, format_iso_week, format_iso_
 
 
 class Env:
-    FLU_DB_READONLY_USER = 'FLU_DB_READONLY_USER'
-    FLU_DB_READONLY_PASSWORD = 'FLU_DB_READONLY_PASSWORD'
-    FLU_DB_SUPERUSER_PASSWORD = 'FLU_DB_SUPERUSER_PASSWORD'
-    FLU_DB_SUPERUSER = 'FLU_DB_SUPERUSER'
-    FLU_DB_PORT = 'FLU_DB_PORT'
-    FLU_DB_HOST = 'FLU_DB_HOST'
-    FLU_DB_DB_NAME = 'FLU_DB_DB_NAME'
+    MUNINN_DB_READONLY_USER = os.environ['MUNINN_DB_READONLY_USER']
+    MUNINN_DB_READONLY_PASSWORD = os.environ['MUNINN_DB_READONLY_PASSWORD']
+    MUNINN_DB_SUPERUSER_PASSWORD = os.environ['MUNINN_DB_SUPERUSER_PASSWORD']
+    MUNINN_DB_SUPERUSER = os.environ['MUNINN_DB_SUPERUSER']
+    MUNINN_DB_PORT = os.environ['MUNINN_DB_PORT']
+    MUNINN_DB_HOST = os.environ['MUNINN_DB_HOST']
+    MUNINN_DB_NAME = os.environ['MUNINN_DB_NAME']
 
 
 CHANGE_PATTERN = r'^([\w-]+):([a-zA-Z])(\d+)([a-zA-Z\-+]+)'
@@ -29,7 +30,9 @@ DEFAULT_DAYS = 5
 DEFAULT_PREVALENCE_THRESHOLD = 0.75
 ASYNCPG_MAX_QUERY_ARGS = 32767
 NUCLEOTIDE_CHARACTERS = ['A', 'C', 'G', 'T']
-NUCLEOTIDE_CHARACTERS_AMBIGUOUS = ['A', 'C', 'G', 'T', 'M', 'R', 'W', 'S', 'Y', 'K', 'B', 'D', 'H', 'V', 'N'] # https://en.wikipedia.org/wiki/Nucleic_acid_notation
+# https://en.wikipedia.org/wiki/Nucleic_acid_notation
+NUCLEOTIDE_CHARACTERS_AMBIGUOUS = ['A', 'C', 'G', 'T', 'M', 'R', 'W', 'S', 'Y', 'K', 'B', 'D', 'H', 'V', 'N']
+
 
 class PhenotypeMetricAssayTypes:
     DMS = 'DMS'
@@ -201,6 +204,7 @@ class StandardColumnNames:
     is_consensus_call = 'is_consensus_call'
     abundance = 'abundance'
 
+
 class StandardPhenoMetricNames:
     species_sera_escape = 'species_sera_escape'
     entry_in_293t_cells = 'entry_in_293t_cells'
@@ -210,10 +214,12 @@ class StandardPhenoMetricNames:
     ferret_sera_escape = 'ferret_sera_escape'
     mouse_sera_escape = 'mouse_sera_escape'
 
+
 class ConstraintNames:
     uq_intra_host_variants_sample_allele_pair = 'uq_intra_host_variants_sample_allele_pair'
     uq_samples_accession = 'uq_samples_accession'
     uq_mutations_sample_allele_pair = 'uq_mutations_sample_allele_pair'
+
 
 # Problematic redacted SRAs
 EXCLUDED_SRAS = {

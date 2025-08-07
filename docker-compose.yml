@@ -2,23 +2,23 @@ version: "3.8"
 
 services:
   postgres:
-    container_name: "flu_db_pg"
+    container_name: "${MUNINN_INSTANCE_NAME}_pg"
     build:
       context: .
       dockerfile: pg.dockerfile
     restart: always
     ports:
-      - "${FLU_DB_PORT}:5432"
+      - "${MUNINN_DB_PORT}:5432"
     environment:
-      POSTGRES_USER: ${FLU_DB_SUPERUSER}
-      POSTGRES_PASSWORD: ${FLU_DB_SUPERUSER_PASSWORD}
-      POSTGRES_DB: ${FLU_DB_DB_NAME}
-      FLU_DB_READONLY_PASSWORD: ${FLU_DB_READONLY_PASSWORD}
-      FLU_DB_READONLY_USER: ${FLU_DB_READONLY_USER}
+      POSTGRES_USER: ${MUNINN_DB_SUPERUSER}
+      POSTGRES_PASSWORD: ${MUNINN_DB_SUPERUSER_PASSWORD}
+      POSTGRES_DB: ${MUNINN_DB_NAME}
+      MUNINN_DB_READONLY_PASSWORD: ${MUNINN_DB_READONLY_PASSWORD}
+      MUNINN_DB_READONLY_USER: ${MUNINN_DB_READONLY_USER}
     command:
       - "postgres"
       - "-c"
-      - "config_file=/docker-entrypoint-initdb.d/${PG_CONFIG_NAME}.postgresql.conf"
+      - "config_file=/docker-entrypoint-initdb.d/${MUNINN_PG_CONFIG_NAME}.postgresql.conf"
     healthcheck:
       test: pg_isready -U flu_reader -d flu
       interval: 2s
@@ -32,25 +32,25 @@ services:
         read_only: true
 
   server:
-    container_name: "flu_db_server"
+    container_name: "${MUNINN_INSTANCE_NAME}_server"
     build:
       context: .
       dockerfile: server.dockerfile
     volumes:
       - type: bind
-        source: ${FLU_DB_SERVER_DATA_INPUT_DIR}
+        source: ${MUNINN_SERVER_DATA_INPUT_DIR}
         target: /home/muninn/data
         read_only: false
     ports:
-      - "8000:8000"
+      - "${MUNINN_SERVER_PORT}:8000"
     environment:
-      FLU_DB_READONLY_USER: "${FLU_DB_READONLY_USER}"
-      FLU_DB_READONLY_PASSWORD: "${FLU_DB_READONLY_PASSWORD}"
-      FLU_DB_SUPERUSER_PASSWORD: "${FLU_DB_SUPERUSER_PASSWORD}"
-      FLU_DB_SUPERUSER: "${FLU_DB_SUPERUSER}"
-      FLU_DB_HOST: "postgres"
-      FLU_DB_DB_NAME: "${FLU_DB_DB_NAME}"
-      FLU_DB_PORT: "5432" # b/c it's going through docker, it doesn't use the exposed port
+      MUNINN_DB_READONLY_USER: "${MUNINN_DB_READONLY_USER}"
+      MUNINN_DB_READONLY_PASSWORD: "${MUNINN_DB_READONLY_PASSWORD}"
+      MUNINN_DB_SUPERUSER_PASSWORD: "${MUNINN_DB_SUPERUSER_PASSWORD}"
+      MUNINN_DB_SUPERUSER: "${MUNINN_DB_SUPERUSER}"
+      MUNINN_DB_HOST: "${MUNINN_DB_HOST}"
+      MUNINN_DB_NAME: "${MUNINN_DB_NAME}"
+      MUNINN_DB_PORT: "${MUNINN_DB_PORT_FOR_SERVER}"
     command: bash -c "
       sleep 30
       && fastapi run api/main.py
