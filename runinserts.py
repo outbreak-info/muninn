@@ -5,6 +5,7 @@ from datetime import datetime
 from os import path
 from typing import Any
 
+from DB.inserts.file_parsers.dms_parser_tmp import TmpHaRegionDmsCsvParser
 from DB.inserts.file_parsers.flumut_annotations_parser import FlumutTsvParser
 from DB.inserts.file_parsers.dms_parser import HaRegionDmsTsvParser, HaRegionDmsCsvParser
 from DB.inserts.file_parsers.eve_parser import EveCsvParser
@@ -29,6 +30,7 @@ def main():
         'variants_mutations_combined_tsv': VariantsMutationsCombinedParser,
         'sc2_samples': SC2SamplesParser,
         'flumut_tsv': FlumutTsvParser,
+        'dms_tmp_csv': TmpHaRegionDmsCsvParser,
     }
 
     ## Parse and verify args ##
