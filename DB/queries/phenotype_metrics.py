@@ -1,10 +1,10 @@
 import datetime
-from typing import List, Type, Dict
+from typing import List, Type, Dict, Any, Coroutine
 
-from sqlalchemy import select, text
+from sqlalchemy import select, text, and_, func
 
 from DB.engine import get_async_session
-from DB.models import PhenotypeMetric, IntraHostVariant, Mutation
+from DB.models import PhenotypeMetric, IntraHostVariant, Mutation, PhenotypeMetricValues
 from api.models import PhenotypeMetricInfo
 from utils.constants import DateBinOpt, NtOrAa
 from parser.parser import parser
@@ -17,6 +17,21 @@ async def get_all_pheno_metrics() -> List[PhenotypeMetricInfo]:
         out_data = [PhenotypeMetricInfo.from_db_object(pm) for pm in res]
     return out_data
 
+async def get_min_max_pheno_metric_value(phenotype_metric_name: str) -> List:
+    async with get_async_session() as session:
+        res = await session.execute(
+            select(
+                func.min(PhenotypeMetricValues.value),
+                func.max(PhenotypeMetricValues.value)
+            )
+            .join(PhenotypeMetric, PhenotypeMetricValues.phenotype_metric_id == PhenotypeMetric.id)
+            .where(PhenotypeMetric.name == phenotype_metric_name)
+        )
+        row = res.one_or_none()
+        if row is None:
+            return [None, None]
+        min_val, max_val = row
+        return [min_val, max_val]
 
 async def _count_variants_or_mutations_gte_pheno_value_by_collection_date(
     date_bin: DateBinOpt,

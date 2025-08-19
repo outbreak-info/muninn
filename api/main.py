@@ -536,6 +536,10 @@ async def get_phenotype_metric_value_by_mutation_quantile(phenotype_metric_name:
 async def get_phenotype_metric_value_by_variant_quantile(phenotype_metric_name: str, quantile: float) -> Dict[str, float]:
     return await DB.queries.phenotype_metrics.get_phenotype_metric_value_by_variant_quantile(phenotype_metric_name, quantile)
 
+@app.get('/v0/phenotype_metric_values:getMinAndMaxValues', response_model=List)
+async def get_phenotype_metric_value_by_variant_quantile(phenotype_metric_name: str) -> List:
+    return await DB.queries.phenotype_metrics.get_min_max_pheno_metric_value(phenotype_metric_name)
+
 @app.get('/v0/annotations:byMutationsAndCollectionDate', response_model=List[Dict])
 async def get_annotations_by_mutations_and_collection_date(
     effect_detail: str,
