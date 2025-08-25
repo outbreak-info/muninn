@@ -52,6 +52,12 @@ async def get_samples_query(q: str):
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
+@app.get('/samples:collectionReleaseLag', response_model=List[Dict])
+async def get_samples_query(max_span_days: int = DEFAULT_MAX_SPAN_DAYS):
+    try:
+        return await DB.queries.samples.get_sample_collection_release_lag(max_span_days)
+    except ParsingError as e:
+        raise HTTPException(status_code=400, detail=e.message)
 
 @app.get('/variants', response_model=List[VariantInfo])
 async def get_variants_query(q: str):
@@ -298,6 +304,19 @@ async def get_variant_counts(
     else:
         return await DB.queries.counts.count_variants_by_column(group_by)
 
+@app.get('/v0/variants:freqByCollectionDate', response_model=List[Dict])
+async def get_aa_variant_frequency_by_collection_date(
+    date_bin: DateBinOpt = DateBinOpt.month,
+    days: int = DEFAULT_DAYS,
+    q: str | None = None,
+    max_span_days: int = DEFAULT_MAX_SPAN_DAYS
+):
+    return await DB.queries.variants.get_aa_variant_frequency_by_simple_date_bin(
+        date_bin,
+        days,
+        max_span_days,
+        q
+    )
 
 @app.get('/v0/mutations:count', response_model=Dict[str, Dict[str, int]] | Dict[str, int])
 async def get_mutation_counts(
@@ -321,6 +340,25 @@ async def get_mutation_counts(
     else:
         return await DB.queries.counts.count_mutations_by_column(group_by)
 
+@app.get('/v0/mutations:countByCollectionDateAndLineage', response_model=List[Dict])
+async def get_aa_variant_frequency_by_collection_date(
+    position_aa: int,
+    alt_aa: str,
+    gff_feature: str,
+    date_bin: DateBinOpt = DateBinOpt.month,
+    days: int = DEFAULT_DAYS,
+    q: str | None = None,
+    max_span_days: int = DEFAULT_MAX_SPAN_DAYS
+):
+    return await DB.queries.mutations.get_aa_mutation_count_by_simple_date_bin(
+        date_bin,
+        position_aa,
+        alt_aa,
+        gff_feature,
+        days,
+        max_span_days,
+        q
+    )
 
 # todo: I'm not crazy about this name.
 #  We're not counting lineages here, we're counting how often they show up
@@ -439,7 +477,7 @@ async def get_phenotype_metric_counts(
 @app.get('/v0/phenotype_metric_values:countVariantsByCollectionDate', response_model=List[Dict])
 async def get_phenotype_metric_counts(
     phenotype_metric_name: str,
-    phenotype_metric_value_threshold: str,
+    phenotype_metric_value_threshold: float,
     date_bin: DateBinOpt = DateBinOpt.month,
     days: int = DEFAULT_DAYS,
     q: str | None = None,
@@ -456,6 +494,40 @@ async def get_phenotype_metric_counts(
         IntraHostVariant
     )
 
+@app.get('/v0/phenotype_metric_values:forMutationsAggregateBySampleAndCollectionDate', response_model=List[Dict])
+async def get_phenotype_metric_counts(
+    phenotype_metric_name: str,
+    date_bin: DateBinOpt = DateBinOpt.month,
+    days: int = DEFAULT_DAYS,
+    q: str | None = None,
+    max_span_days: int = DEFAULT_MAX_SPAN_DAYS
+):
+
+    return await DB.queries.phenotype_metrics.get_pheno_value_for_mutations_by_sample_and_collection_date(
+        date_bin,
+        phenotype_metric_name,
+        days,
+        max_span_days,
+        q
+    )
+
+@app.get('/v0/phenotype_metric_values:forVariantsAggregateBySampleAndCollectionDate', response_model=List[Dict])
+async def get_phenotype_metric_counts(
+    phenotype_metric_name: str,
+    date_bin: DateBinOpt = DateBinOpt.month,
+    days: int = DEFAULT_DAYS,
+    q: str | None = None,
+    max_span_days: int = DEFAULT_MAX_SPAN_DAYS
+):
+
+    return await DB.queries.phenotype_metrics.get_pheno_value_for_variants_by_sample_and_collection_date(
+        date_bin,
+        phenotype_metric_name,
+        days,
+        max_span_days,
+        q
+    )
+
 @app.get('/v0/phenotype_metric_values:byMutationsQuantile', response_model=Dict[str, float])
 async def get_phenotype_metric_value_by_mutation_quantile(phenotype_metric_name: str, quantile: float) -> Dict[str, float]:
     return await DB.queries.phenotype_metrics.get_phenotype_metric_value_by_mutation_quantile(phenotype_metric_name, quantile)
@@ -463,6 +535,10 @@ async def get_phenotype_metric_value_by_mutation_quantile(phenotype_metric_name:
 @app.get('/v0/phenotype_metric_values:byVariantsQuantile', response_model=Dict[str, float])
 async def get_phenotype_metric_value_by_variant_quantile(phenotype_metric_name: str, quantile: float) -> Dict[str, float]:
     return await DB.queries.phenotype_metrics.get_phenotype_metric_value_by_variant_quantile(phenotype_metric_name, quantile)
+
+@app.get('/v0/phenotype_metric_values:getMinAndMaxValues', response_model=List)
+async def get_phenotype_metric_value_by_variant_quantile(phenotype_metric_name: str) -> List:
+    return await DB.queries.phenotype_metrics.get_min_max_pheno_metric_value(phenotype_metric_name)
 
 @app.get('/v0/annotations:byMutationsAndCollectionDate', response_model=List[Dict])
 async def get_annotations_by_mutations_and_collection_date(

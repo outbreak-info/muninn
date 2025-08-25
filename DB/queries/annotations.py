@@ -8,7 +8,7 @@ from DB.models import IntraHostVariant, Mutation
 from parser.parser import parser
 from utils.constants import DateBinOpt
 
-
+# TODO: Add Effect to DB.models and EffectInfo to api.models
 async def get_all_annotation_effects() -> List[str]:
     async with get_async_session() as session:
         res = await session.execute(
@@ -93,38 +93,18 @@ async def _get_annotations_by_collection_date(
         res = await session.execute(
             text(
                 f'''
-                select
-                {extract_clause},
-                count(distinct sample_id ) as n
-                from(
+                WITH base as (
                     select 
-                    sample_id,
+                    aa_id,
+                    detail,
                     (collection_start_date + ((collection_end_date - collection_start_date) / 2))::date AS mid_collection_date
                     from (
-                        select s.id as sample_id,
-                               collection_start_date,
-                               collection_end_date,
-                               collection_end_date - collection_start_date as collection_span
+                        select 
+                        aa.id as aa_id,
+                        e.detail,
+                        collection_start_date, collection_end_date,
+                        collection_end_date - collection_start_date as collection_span
                         from samples s
-                        inner join (
-                            select *
-                            from (
-                                select s.id samp_id, array_agg(aa.id) mut_aas
-                                from samples s
-                                inner join {table.__tablename__} inter on inter.sample_id = s.id
-                                inner join translations t on t.id = inter.translation_id
-                                inner join amino_acids aa on aa.id = t.amino_acid_id
-                                group by s.id
-                            ) samp_side
-                            cross join (
-                                select annotation_id, array_agg(aaa.amino_acid_id) annot_aas
-                                from effects e
-                                inner join annotations a on a.effect_id = e.id
-                                inner join annotations_amino_acids aaa on aaa.annotation_id = a.id
-                                group by annotation_id
-                            ) annot_side
-                            where samp_side.mut_aas @> annot_side.annot_aas
-                        ) matchup on matchup.samp_id = s.id
                         left join geo_locations gl on gl.id = s.geo_location_id
                         inner join {table.__tablename__} VM on VM.sample_id = s.id
                         inner join samples_lineages sl on sl.sample_id = s.id
@@ -136,14 +116,18 @@ async def _get_annotations_by_collection_date(
                         inner join annotations a on a.id = aaa.annotation_id
                         inner join effects e on e.id = a.effect_id
                         inner join annotations_papers ap on ap.annotation_id = a.id
-                        inner join papers p on p.id = ap.paper_id
-                        where num_nulls(collection_end_date, collection_start_date) = 0
-                        and e.detail = :effect_detail
-                        {user_where_clause}
+                        where num_nulls(collection_end_date, collection_start_date) = 0 {user_where_clause}
                     )
                     where collection_span <= {max_span_days}
                 )
-                {group_and_order_clause};
+                select
+                {extract_clause},
+                count(DISTINCT aa_id) FILTER (where detail = :effect_detail) as n,
+                COUNT(DISTINCT aa_id) as n_total,
+                COUNT(DISTINCT aa_id) FILTER (WHERE detail = :effect_detail)::numeric
+                    / NULLIF(COUNT(DISTINCT aa_id), 0) AS proportion
+                from BASE
+                {group_and_order_clause}
                 '''
             ),
             {
@@ -153,10 +137,10 @@ async def _get_annotations_by_collection_date(
     out_data = []
     for r in res:
         date = date_bin.format_iso_chunk(r[0], r[1])
-        out_data.append(
-            {
-                "date": date,
-                "n": r[2]
-            }
-        )
+        out_data.append({
+            "date": date,
+            "n": r[2],
+            "n_total": r[3],
+            "proportion": r[4]
+        })
     return out_data
