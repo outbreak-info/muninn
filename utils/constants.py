@@ -158,6 +158,8 @@ class StandardColumnNames:
     ww_catchment_population = 'ww_catchment_population'
     ww_site_id = 'ww_site_id'
     ww_collected_by = 'ww_collected_by'
+    ww_epiweek = 'ww_epiweek'
+    ww_census_region = 'ww_census_region'
 
     # alleles
     position_nt = 'position_nt'
