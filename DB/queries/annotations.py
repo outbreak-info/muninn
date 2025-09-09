@@ -1,4 +1,5 @@
 import datetime
+from collections import defaultdict
 from typing import Type, List, Dict
 
 from sqlalchemy import text
@@ -144,3 +145,66 @@ async def _get_annotations_by_collection_date(
             "proportion": r[4]
         })
     return out_data
+
+async def get_annotations_by_variants_and_amino_acid_position(
+    effect_detail: str,
+    raw_query: str
+) -> Dict:
+    return await _get_annotations_by_amino_acid_position(
+        effect_detail,
+        raw_query,
+        IntraHostVariant
+    )
+
+async def get_annotations_by_mutations_and_amino_acid_position(
+    effect_detail: str,
+    raw_query: str
+) -> Dict:
+    return await _get_annotations_by_amino_acid_position(
+        effect_detail,
+        raw_query,
+        Mutation
+    )
+
+async def _get_annotations_by_amino_acid_position(
+    effect_detail: str,
+    raw_query: str,
+    table: Type[IntraHostVariant] | Type[Mutation]
+) -> Dict:
+    user_where_clause = ''
+    if raw_query is not None:
+        user_where_clause = f'and ({parser.parse(raw_query)})'
+
+    async with get_async_session() as session:
+        res = await session.execute(
+            text(
+                f'''
+                SELECT aa.gff_feature, aa.position_aa, aa.alt_aa, aa.ref_aa, COUNT(*)  FROM amino_acids aa
+                    inner join translations t on t.amino_acid_id = aa.id
+                    inner join annotations_amino_acids aaa on aaa.amino_acid_id = aa.id
+                    inner join annotations a on a.id = aaa.annotation_id
+                    inner join {table.__tablename__} VM on VM.translation_id = t.id
+                    inner join samples s on VM.sample_id = s.id
+                    inner join samples_lineages sl on sl.sample_id = s.id
+                    inner join lineages l ON l.id = sl.lineage_id
+                    inner join lineage_systems ls on ls.id = l.lineage_system_id
+                    inner join effects e on e.id = a.effect_id
+                    inner join annotations_papers ap on ap.annotation_id = a.id
+                    where e.detail = :effect_detail {user_where_clause}
+                GROUP BY aa.position_aa, aa.gff_feature, aa.alt_aa, aa.ref_aa;
+                '''
+            ),
+            {
+                'effect_detail': effect_detail
+            }
+        )
+    out = defaultdict(list)
+    for r in res:
+        gff_feature, position_aa, alt_aa, ref_aa, count = r
+        out[gff_feature].append({
+            "position_aa": position_aa,
+            "alt_aa": alt_aa,
+            "ref_aa": ref_aa,
+            "count": count
+        })
+    return out

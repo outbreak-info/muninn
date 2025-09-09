@@ -551,7 +551,7 @@ async def get_annotations_by_mutations_and_collection_date(
     return await DB.queries.annotations.get_annotations_by_mutations_and_collection_date(effect_detail, date_bin, days, max_span_days, q)
 
 @app.get('/v0/annotations:byVariantsAndCollectionDate', response_model=List[Dict])
-async def get_annotations_by_mutations_and_collection_date(
+async def get_annotations_by_variants_and_collection_date(
     effect_detail: str,
     date_bin: DateBinOpt = DateBinOpt.month,
     days: int = DEFAULT_DAYS,
@@ -563,3 +563,17 @@ async def get_annotations_by_mutations_and_collection_date(
 @app.get('/v0/annotationEffects', response_model=List[str])
 async def get_annotations_by_mutations_and_collection_date() -> List[str]:
     return await DB.queries.annotations.get_all_annotation_effects()
+
+@app.get('/v0/annotations:byVariantsAndAminoAcidPosition', response_model=Dict)
+async def get_annotations_by_variants_and_amino_acid_position(
+    effect_detail: str,
+    q: str | None = None
+) -> Dict:
+    return await DB.queries.annotations.get_annotations_by_variants_and_amino_acid_position(effect_detail, q)
+
+@app.get('/v0/annotations:byMutationsAndAminoAcidPosition', response_model=Dict)
+async def get_annotations_by_mutations_and_amino_acid_position(
+    effect_detail: str,
+    q: str | None = None
+) -> Dict:
+    return await DB.queries.annotations.get_annotations_by_mutations_and_amino_acid_position(effect_detail, q)
