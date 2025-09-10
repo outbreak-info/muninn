@@ -124,7 +124,7 @@ ALLELE_REF_CONFLICTS_FILE="/tmp/allele_ref_conflicts.csv"
 
   # ingest random other outputs
   python3 -u runinserts.py "$DATA_DIR/$EVE_FILE" --format eve_dms_csv
-  python3 -u runinserts.py "$DATA_DIR/$GENOFLU_FILE" --format genoflu_lineages
+  python3 -u runinserts.py "$GENOFLU_FILE" --format genoflu_lineages
   python3 -u runinserts.py "$DATA_DIR/$FREYJA_DEMIXED_DIR" --format freyja_demixed
   python3 -u runinserts.py "$DATA_DIR/$FLUMUT_FILE" --format flumut_tsv
 } &>> "$LOG"
