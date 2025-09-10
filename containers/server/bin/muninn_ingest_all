@@ -116,10 +116,10 @@ ALLELE_REF_CONFLICTS_FILE="/tmp/allele_ref_conflicts.csv"
 {
   # ingest bjorn-general outputs
   python3 -u runinserts.py "$SAMPLES_FILE" --format samples_tsv
-  python3 -u runinserts.py \
-  "$VARIANTS_FILE" \
-  "$MUTATIONS_FILE" \
-  --format variants_mutations_combined_tsv
+#  python3 -u runinserts.py \
+#  "$VARIANTS_FILE" \
+#  "$MUTATIONS_FILE" \
+#  --format variants_mutations_combined_tsv
   python3 -u runinserts.py "$HA_DMS_FILE" --format ha_dms_tsv
 
   # ingest random other outputs
