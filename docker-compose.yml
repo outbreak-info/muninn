@@ -53,7 +53,7 @@ services:
       MUNINN_DB_PORT: "${MUNINN_DB_PORT_FOR_SERVER}"
     command: bash -c "
       sleep 30
-      && fastapi run api/main.py
+      && fastapi run --workers 33 api/main.py
       "
 
 volumes:
