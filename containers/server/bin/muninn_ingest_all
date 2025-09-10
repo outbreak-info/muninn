@@ -67,7 +67,7 @@ MUTATIONS_FILE="$ARCHIVE_DEST_SUBDIR/mutations/mutations.tsv"
 
 # look in Bjorn general, default to external
 GENOFLU_FILE="genoflu_results.tsv"
-HA_DMS_FILE="dms_HA.tsv"
+HA_DMS_FILE="$DATA_DIR/dms_HA.tsv"
 
 # If in auto mode, find bjorn-general input files
 if [[ $AUTO = true ]]; then
