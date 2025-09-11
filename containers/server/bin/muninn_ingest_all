@@ -3,31 +3,37 @@ SECONDS=0
 LOG="/home/muninn/data/ingest_all_$(date +%Y-%m-%dT%H_%M_%S%Z).log"
 echo "begin at $(date)" >> "$LOG"
 
+# when in auto mode, we will automatically try to find the input files within the input archive
+AUTO=false
+
 DATA_DIR='/home/muninn/data'
+
+ARCHIVE_IN_NAME="UNSET"
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+  --archive_in)
+    ARCHIVE_IN_NAME="$2"
+    shift
+    shift
+    ;;
+  --auto)
+    AUTO=true
+    echo "Auto mode: will attempt to locate files within input archive" >> "$LOG"
+    shift
+    ;;
+  esac
+done
 
 # bjorn-general outputs
 BJORN_GENERAL_OUTPUT_ARCHIVE="$DATA_DIR/outputs.all.zip"
 ARCHIVE_DEST_DIR="$DATA_DIR/outputs.all"
 
-# b/c the archive is a compressed directory, we have to go down another layer
-ARCHIVE_DEST_SUBDIR="$ARCHIVE_DEST_DIR/outputs"
+if [[ ! "$ARCHIVE_IN_NAME" = "UNSET" ]]; then
+  BJORN_GENERAL_OUTPUT_ARCHIVE="$DATA_DIR/$ARCHIVE_IN_NAME"
+fi
 
-SAMPLES_FILE="metadata/metadata.tsv"
-VARIANTS_FILE="intrahost_dms/combined_variants.tsv"
-MUTATIONS_FILE="mutations/mutations.tsv"
-HA_DMS_FILE="dms/dms_HA.tsv"
-
-# these are not part of the output from bjorn-general
-EVE_FILE="eve_dms_data.csv"
-GENOFLU_FILE="genoflu_results.tsv"
-FREYJA_DEMIXED_DIR="demixed"
-FLUMUT_FILE="flumut_annotations.tsv"
-
-# Debug output files for ref conflicts
-AMINO_SUB_REF_CONFLICTS_FILE="/tmp/amino_sub_ref_conflicts.csv"
-ALLELE_REF_CONFLICTS_FILE="/tmp/allele_ref_conflicts.csv"
-
-# unpack zip file
+# unpack archive
 if [[ -d "$ARCHIVE_DEST_DIR" ]]; then
   rm -r "$ARCHIVE_DEST_DIR"
 fi
@@ -37,20 +43,88 @@ if [[ ! -f "$BJORN_GENERAL_OUTPUT_ARCHIVE" ]]; then
   exit 1
 fi
 
-unzip -d "$ARCHIVE_DEST_DIR" "$BJORN_GENERAL_OUTPUT_ARCHIVE"
+if [[ "$BJORN_GENERAL_OUTPUT_ARCHIVE" = *.zip ]]; then
+  unzip -d "$ARCHIVE_DEST_DIR" "$BJORN_GENERAL_OUTPUT_ARCHIVE"
+elif [[ "$BJORN_GENERAL_OUTPUT_ARCHIVE" = *.tar.gz ]]; then
+  if [[ ! -d  "$ARCHIVE_DEST_DIR" ]]; then
+    mkdir "$ARCHIVE_DEST_DIR"
+  fi
+  tar -xzf "$BJORN_GENERAL_OUTPUT_ARCHIVE" -C "$ARCHIVE_DEST_DIR"
+else
+  echo "Unknown archive type. $BJORN_GENERAL_OUTPUT_ARCHIVE should be .zip or .tar.gz" >> "$LOG"
+  exit 1
+fi
+
+# b/c the archive is a compressed directory, we have to go down another layer
+# this is not used in auto mode
+ARCHIVE_DEST_SUBDIR="$ARCHIVE_DEST_DIR/outputs"
+
+# Expected to be in bjorn general
+SAMPLES_FILE="$ARCHIVE_DEST_SUBDIR/metadata/metadata.tsv"
+VARIANTS_FILE="$ARCHIVE_DEST_SUBDIR/intrahost_dms/combined_variants.tsv"
+MUTATIONS_FILE="$ARCHIVE_DEST_SUBDIR/mutations/mutations.tsv"
+
+
+# look in Bjorn general, default to external
+GENOFLU_FILE="genoflu_results.tsv"
+HA_DMS_FILE="$DATA_DIR/dms_HA.tsv"
+
+# If in auto mode, find bjorn-general input files
+if [[ $AUTO = true ]]; then
+  # samples metadata
+  TMP_FILE=$(find "$ARCHIVE_DEST_DIR" -type f -name "SraRunTable*.tsv" | head -1)
+  if [[ -f "$TMP_FILE" ]]; then
+    SAMPLES_FILE="$TMP_FILE"
+    echo "using samples file: $SAMPLES_FILE" >> "$LOG"
+  fi
+
+  # Variants file
+  TMP_FILE=$(find "$ARCHIVE_DEST_DIR" -type f -name "*variants*.tsv" | head -1)
+  if [[ -f "$TMP_FILE" ]]; then
+    VARIANTS_FILE="$TMP_FILE"
+    echo "using variants file: $VARIANTS_FILE" >> "$LOG"
+  fi
+  # Mutations file
+  TMP_FILE=$(find "$ARCHIVE_DEST_DIR" -type f -name "mutations*.tsv" | head -1)
+  if [[ -f "$TMP_FILE" ]]; then
+    MUTATIONS_FILE="$TMP_FILE"
+    echo "using mutations file: $MUTATIONS_FILE" >> "$LOG"
+  fi
+  # HA DMS File
+  TMP_FILE=$(find "$ARCHIVE_DEST_DIR" -type f -name "dms_HA*.tsv" | head -1)
+  if [[ -f "$TMP_FILE" ]]; then
+    HA_DMS_FILE="$TMP_FILE"
+    echo "using HA DMS file: $HA_DMS_FILE" >> "$LOG"
+  fi
+
+  TMP_FILE=$(find "$ARCHIVE_DEST_DIR" -type f -name "*genoflu_results*.tsv" | head -1)
+  if [[ -f "$TMP_FILE" ]]; then
+    GENOFLU_FILE="$TMP_FILE"
+    echo "using genoflu results file: $GENOFLU_FILE" >> "$LOG"
+  fi
+fi
+
+# these are not part of the output from bjorn-general
+EVE_FILE="eve_dms_data.csv"
+FREYJA_DEMIXED_DIR="demixed"
+FLUMUT_FILE="flumut_annotations.tsv"
+
+# Debug output files for ref conflicts
+AMINO_SUB_REF_CONFLICTS_FILE="/tmp/amino_sub_ref_conflicts.csv"
+ALLELE_REF_CONFLICTS_FILE="/tmp/allele_ref_conflicts.csv"
 
 {
   # ingest bjorn-general outputs
-  python3 -u runinserts.py "$ARCHIVE_DEST_SUBDIR/$SAMPLES_FILE" --format samples_tsv
+  python3 -u runinserts.py "$SAMPLES_FILE" --format samples_tsv
   python3 -u runinserts.py \
-  "$ARCHIVE_DEST_SUBDIR/$VARIANTS_FILE" \
-  "$ARCHIVE_DEST_SUBDIR/$MUTATIONS_FILE" \
+  "$VARIANTS_FILE" \
+  "$MUTATIONS_FILE" \
   --format variants_mutations_combined_tsv
-  python3 -u runinserts.py "$ARCHIVE_DEST_SUBDIR/$HA_DMS_FILE" --format ha_dms_tsv
+  python3 -u runinserts.py "$HA_DMS_FILE" --format ha_dms_tsv
 
   # ingest random other outputs
   python3 -u runinserts.py "$DATA_DIR/$EVE_FILE" --format eve_dms_csv
-  python3 -u runinserts.py "$DATA_DIR/$GENOFLU_FILE" --format genoflu_lineages
+  python3 -u runinserts.py "$GENOFLU_FILE" --format genoflu_lineages
   python3 -u runinserts.py "$DATA_DIR/$FREYJA_DEMIXED_DIR" --format freyja_demixed
   python3 -u runinserts.py "$DATA_DIR/$FLUMUT_FILE" --format flumut_tsv
 } &>> "$LOG"
