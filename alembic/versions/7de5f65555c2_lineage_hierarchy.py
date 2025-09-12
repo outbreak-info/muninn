@@ -36,9 +36,13 @@ def upgrade() -> None:
     op.execute(sqltext=DB.models.SqlSnippets.create_view_lineages_deep_children)
     op.execute(sqltext=DB.models.SqlSnippets.create_function_check_cyclic_lineage)
     op.execute(sqltext=DB.models.SqlSnippets.create_trigger_check_cyclic_lineage)
+    op.execute(sqltext=DB.models.SqlSnippets.create_function_check_cross_system_lineage)
+    op.execute(sqltext=DB.models.SqlSnippets.create_trigger_check_cross_system_lineage)
 
 
 def downgrade() -> None:
+    op.execute(sqltext=DB.models.SqlSnippets.drop_trigger_check_cross_system_lineage)
+    op.execute(sqltext=DB.models.SqlSnippets.drop_function_check_cross_system_lineage)
     op.execute(sqltext=DB.models.SqlSnippets.drop_trigger_check_cyclic_lineage)
     op.execute(sqltext=DB.models.SqlSnippets.drop_function_check_cyclic_lineage)
     op.execute(sqltext=DB.models.SqlSnippets.drop_view_lineages_deep_children)

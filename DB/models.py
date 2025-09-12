@@ -701,3 +701,49 @@ class SqlSnippets:
     '''
 
     drop_trigger_check_cyclic_lineage = f'drop trigger if exists {MiscDbNames.check_cyclic_lineage_trigger} on {TableNames.lineages_immediate_children};'
+
+
+    create_function_check_cross_system_lineage = f'''
+    create or replace function {MiscDbNames.check_cross_system_lineage}()
+        returns trigger as
+    $$
+    declare
+        num_systems int;
+    begin
+        select count(distinct({StandardColumnNames.lineage_system_id}))
+        into num_systems
+        from {TableNames.lineages} l
+        where l.id = new.{StandardColumnNames.parent_id} or l.id = new.{StandardColumnNames.child_id};
+        if num_systems > 1 then
+            raise exception 'parent and child are from different lineage systems';
+        end if;
+        return new;
+    end;
+    $$
+        language plpgsql;
+    '''
+
+    drop_function_check_cross_system_lineage = f'drop function if exists {MiscDbNames.check_cross_system_lineage};'
+
+    create_trigger_check_cross_system_lineage = f'''
+    do
+    $$
+        begin
+            if not exists (
+                select *
+                from information_schema.triggers
+                where event_object_table = '{TableNames.lineages_immediate_children}'
+                  and trigger_name = '{MiscDbNames.check_cross_system_lineage_trigger}'
+            )
+            then
+                create trigger {MiscDbNames.check_cross_system_lineage_trigger}
+                    before insert or update
+                    on {TableNames.lineages_immediate_children}
+                    for each row
+                execute procedure {MiscDbNames.check_cross_system_lineage}();
+            end if;
+        end;
+    $$;
+    '''
+
+    drop_trigger_check_cross_system_lineage = f'drop trigger if exists {MiscDbNames.check_cross_system_lineage_trigger} on {TableNames.lineages_immediate_children};'
