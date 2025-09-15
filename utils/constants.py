@@ -229,7 +229,8 @@ class ConstraintNames:
 class MiscDbNames:
     check_cyclic_lineage = 'check_cyclic_lineage'
     check_cyclic_lineage_trigger = 'check_cyclic_lineage_trigger'
-
+    check_cross_system_lineage = 'check_cross_system_lineage'
+    check_cross_system_lineage_trigger = 'check_cross_system_lineage_trigger'
 
 # Problematic redacted SRAs
 EXCLUDED_SRAS = {
