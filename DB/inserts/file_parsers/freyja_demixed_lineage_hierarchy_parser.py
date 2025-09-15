@@ -17,7 +17,7 @@ PARENT_NAME = 'parent_name'
 CHILD_NAME = 'child_name'
 
 
-class FreyjaDemixLineageHierarchyYamlParser(FileParser):
+class FreyjaDemixedLineageHierarchyYamlParser(FileParser):
 
     def __init__(self, filename: str):
         self.filename = filename
