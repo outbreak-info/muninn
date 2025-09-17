@@ -7,7 +7,7 @@ from sqlalchemy.orm import contains_eager
 from DB.engine import get_async_session
 from DB.models import LineageSystem, Lineage, Sample, SampleLineage, GeoLocation, Allele, Mutation
 from api.models import LineageCountInfo, LineageAbundanceInfo, LineageInfo, LineageAbundanceSummaryInfo, \
-    MutationProfileInfo
+    MutationProfileInfo, BinnedLineageAbundanceInfo
 from parser.parser import parser
 from utils.constants import DateBinOpt, NtOrAa, NUCLEOTIDE_CHARACTERS
 from collections import defaultdict
@@ -238,6 +238,101 @@ async def get_abundance_summaries_by_simple_date(
             out_data[date] = [info]
     return out_data
 
+
+async def get_averaged_abundances(
+    date_bin: DateBinOpt,
+    # geo location bin? 
+    raw_query: str | None,
+) -> Dict[str, List[LineageAbundanceInfo]]:
+    user_where_clause = ''
+    if raw_query is not None:
+        user_where_clause = f'and ({parser.parse(raw_query)})'
+
+    match date_bin:
+        case DateBinOpt.week | DateBinOpt.month:
+            extract_clause = f'''
+                extract(year from mid_collection_date) as year,
+                extract({date_bin} from mid_collection_date) as chunk
+               '''
+            group_by_date_cols = 'year, chunk'
+    
+        case _:
+            raise ValueError(f'illegal value for date_bin: {repr(date_bin)}')
+        
+    async with get_async_session() as session:
+        res = await session.execute(
+            text(
+                f'''
+                with base_data as (
+                    select
+                        l.lineage_name,
+                        ls.lineage_system_name,
+                        gl.admin1_name as location,
+                        s.collection_start_date,
+                        s.collection_end_date,
+                        sl.abundance,
+                        s.ww_catchment_population,
+                        sl.abundance * s.ww_catchment_population as pop_weighted_prevalence,
+                        (
+                            s.collection_start_date +
+                            ((s.collection_end_date - s.collection_start_date) / 2)
+                        )::date as mid_collection_date
+                    from samples_lineages sl
+                    inner join lineages l on l.id = sl.lineage_id
+                    inner join lineage_systems ls on ls.id = l.lineage_system_id
+                    inner join samples s on s.id = sl.sample_id
+                    left join geo_locations gl on gl.id = s.geo_location_id
+                    where (s.collection_end_date - s.collection_start_date) <= 30
+                    where {user_where_clause}
+                ),
+                total_prevalences as (
+                    select
+                        {extract_clause},
+                        location,
+                        sum(pop_weighted_prevalence) as total_prevalence,
+                        count(*) as sample_count
+                    from base_data
+                    group by {group_by_date_cols}, location
+                ),
+                lineage_prevalences as (
+                    select
+                        {extract_clause},
+                        location,
+                        lineage_name,
+                        sum(pop_weighted_prevalence) as lineage_prevalence,
+                        count(*) as sample_count
+                    from base_data
+                    group by {group_by_date_cols}, location, lineage_name
+                )
+                select
+                    lp.year,
+                    lp.chunk,
+                    lp.lineage_name as lineage_name,
+                    lp.admin1_name,
+                    lp.sample_count,
+                    lp.lineage_prevalence / tp.total_prevalence as mean_lineage_prevalence
+                from lineage_prevalences lp
+                join total_prevalences tp
+                    on lp.year = tp.year
+                    and lp.chunk = tp.chunk;
+                '''
+            )
+        )
+
+    out_data = dict()
+    for r in res:
+        date = date_bin.format_iso_chunk(r[0], r[1])
+        info = BinnedLineageAbundanceInfo(
+            lineage_name=r[2],
+            location=r[3],
+            sample_count=r[4],
+            mean_lineage_prevalence=r[5]
+        )
+        try:
+            out_data[date].append(info)
+        except KeyError:
+            out_data[date] = [info]
+    return out_data
 
 async def get_abundance_summaries_by_collection_date(
     date_bin: DateBinOpt,

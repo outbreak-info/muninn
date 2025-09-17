@@ -240,6 +240,14 @@ class LineageAbundanceInfo(BaseModel):
     accession: str
     abundance: float
 
+class BinnedLineageAbundanceInfo(BaseModel):
+    year: int
+    chunk: int
+    lineage_name: str
+    location: str
+    sample_count: int
+    mean_lineage_prevalence: float
+
 class LineageAbundanceSummaryInfo(BaseModel):
     lineage_name: str
     lineage_system_name: str
