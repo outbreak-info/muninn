@@ -201,8 +201,6 @@ column_name_map = {
     StandardColumnNames.ww_catchment_population : 'population',
     StandardColumnNames.ww_site_id: 'site_id',
     StandardColumnNames.ww_collected_by: 'collected_by',
-    StandardColumnNames.ww_epiweek: 'epiweek',
-    StandardColumnNames.ww_census_region: 'census_region'
 }
 
 fields_not_present_not_null = {
