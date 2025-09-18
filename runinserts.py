@@ -32,7 +32,7 @@ def main():
         'sc2_samples': SC2SamplesParser,
         'flumut_tsv': FlumutTsvParser,
         'dms_tmp_csv': TmpHaRegionDmsCsvParser,
-        'freyja_demixed_hierarchy': FreyjaDemixedLineageHierarchyYamlParser
+        'freyja_demixed_hierarchy_yaml': FreyjaDemixedLineageHierarchyYamlParser
     }
 
     ## Parse and verify args ##
