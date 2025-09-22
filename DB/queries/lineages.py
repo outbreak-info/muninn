@@ -7,7 +7,7 @@ from sqlalchemy.orm import contains_eager
 from DB.engine import get_async_session
 from DB.models import LineageSystem, Lineage, Sample, SampleLineage, GeoLocation, Allele, Mutation
 from api.models import LineageCountInfo, LineageAbundanceInfo, LineageInfo, LineageAbundanceSummaryInfo, \
-    MutationProfileInfo, BinnedLineageAbundanceInfo
+    MutationProfileInfo, AverageLineageAbundanceInfo
 from parser.parser import parser
 from utils.constants import DateBinOpt, NtOrAa, NUCLEOTIDE_CHARACTERS
 from collections import defaultdict
@@ -242,7 +242,7 @@ async def get_abundance_summaries_by_simple_date(
 async def get_averaged_abundances(
     date_bin: DateBinOpt,
     # geo location bin? 
-    raw_query: str | None,
+    raw_query: str,
 ) -> Dict[str, List[LineageAbundanceInfo]]:
     user_where_clause = ''
     if raw_query is not None:
@@ -265,7 +265,7 @@ async def get_averaged_abundances(
                 f'''
                 with base_data as (
                     select
-                        l.lineage_name,
+                        l.lineage_name as lineage_name,
                         ls.lineage_system_name,
                         gl.admin1_name as location,
                         s.collection_start_date,
@@ -282,8 +282,8 @@ async def get_averaged_abundances(
                     inner join lineage_systems ls on ls.id = l.lineage_system_id
                     inner join samples s on s.id = sl.sample_id
                     left join geo_locations gl on gl.id = s.geo_location_id
-                    where (s.collection_end_date - s.collection_start_date) <= 30
-                    where {user_where_clause}
+                    where (s.collection_end_date - s.collection_start_date) <= 30 
+                    {user_where_clause}
                 ),
                 total_prevalences as (
                     select
@@ -308,7 +308,7 @@ async def get_averaged_abundances(
                     lp.year,
                     lp.chunk,
                     lp.lineage_name as lineage_name,
-                    lp.admin1_name,
+                    lp.location,
                     lp.sample_count,
                     lp.lineage_prevalence / tp.total_prevalence as mean_lineage_prevalence
                 from lineage_prevalences lp
@@ -319,19 +319,19 @@ async def get_averaged_abundances(
             )
         )
 
-    out_data = dict()
+    out_data = list()
     for r in res:
-        date = date_bin.format_iso_chunk(r[0], r[1])
-        info = BinnedLineageAbundanceInfo(
+        info = AverageLineageAbundanceInfo(
+            year=r[0],
+            chunk=r[1],
             lineage_name=r[2],
             location=r[3],
             sample_count=r[4],
             mean_lineage_prevalence=r[5]
         )
-        try:
-            out_data[date].append(info)
-        except KeyError:
-            out_data[date] = [info]
+
+        out_data.append(info)
+ 
     return out_data
 
 async def get_abundance_summaries_by_collection_date(

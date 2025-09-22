@@ -240,7 +240,7 @@ class LineageAbundanceInfo(BaseModel):
     accession: str
     abundance: float
 
-class BinnedLineageAbundanceInfo(BaseModel):
+class AverageLineageAbundanceInfo(BaseModel):
     year: int
     chunk: int
     lineage_name: str
