@@ -1,4 +1,5 @@
 import csv
+import time
 from typing import List, Set
 
 import polars as pl
@@ -22,6 +23,14 @@ AMINO_SUB_REF_CONFLICTS_FILE = '/tmp/amino_sub_ref_conflicts.csv'
 ALLELE_REF_CONFLICTS_FILE = '/tmp/allele_ref_conflicts.csv'
 TRANSLATIONS_REF_CONFLICTS_FILE = '/tmp/translations_ref_conflicts.csv'
 
+# rm
+def probe_lazy(df: pl.LazyFrame, name: str, stream: bool = False) -> None:
+    engine = 'in-memory'
+    if stream:
+        engine = 'streaming'
+    df.show_graph(
+        output_path=f'/tmp/{name}.png', show=False, engine=engine, plan_stage="physical"
+    )
 
 class VariantsMutationsCombinedParser(FileParser):
 
@@ -47,7 +56,7 @@ class VariantsMutationsCombinedParser(FileParser):
             'count_variants_added': 'unset',
             'count_preexisting_mutations': 'unset',
         }
-
+        t0 = time.time()
         #  1. read vars and muts
         variants_input: pl.LazyFrame = await self._scan_variants()
         mutations_input: pl.LazyFrame = await self._scan_mutations()
@@ -57,7 +66,8 @@ class VariantsMutationsCombinedParser(FileParser):
         variants_with_samples, mutations_with_samples = await (
             VariantsMutationsCombinedParser._get_vars_and_muts_for_existing_samples(variants_input, mutations_input)
         )
-
+        t1 = time.time()
+        print(f'read files, filtered for existing samples. Elapsed: {t1 - t0}')
         #  4. split out and combine alleles
         #  5. filter out existing alleles
         #  6. Insert new alleles via copy
@@ -66,6 +76,8 @@ class VariantsMutationsCombinedParser(FileParser):
             mutations_with_samples,
         )
         print(f'alleles added: {debug_info}')
+        t2 = time.time()
+        print(f'inserted new alleles. Elapsed: {t2 - t1}')
 
         #  7. split out and combine amino acid subs
         #  8. filter out existing AA subs
@@ -75,6 +87,8 @@ class VariantsMutationsCombinedParser(FileParser):
             mutations_with_samples
         )
         print(f'amino subs added: {debug_info}')
+        t3 = time.time()
+        print(f'inserted new amino acids. Elapsed: {t3 - t2}')
 
         # 10. Get new allele / AAS ids and join back into vars and muts
         # vars and muts now need to include translation ids before they are finished
@@ -91,6 +105,8 @@ class VariantsMutationsCombinedParser(FileParser):
             ._insert_new_translations(variants_with_nt_aa_ids, mutations_with_nt_aa_ids)
         )
         print(f'translations added: {debug_info}')
+        t4 = time.time()
+        print(f'inserted translations. Elapsed: {t4 - t3}')
 
         # 11.5: Combine translation ids back into vars and muts
         variants_with_all_ids, mutations_with_all_ids = await (
@@ -100,9 +116,16 @@ class VariantsMutationsCombinedParser(FileParser):
             )
         )
 
-        variants_collected: pl.DataFrame = variants_with_all_ids.collect(engine='streaming')
-        mutations_collected: pl.DataFrame = mutations_with_all_ids.collect(engine='streaming')
+        # rm graphs
+        probe_lazy(mutations_with_all_ids, 'graph_11.5_variants_final', stream=True)
+        probe_lazy(mutations_with_all_ids, 'graph_11.5_mutations_final', stream=True)
 
+        variants_collected: pl.DataFrame = variants_with_all_ids.collect(engine='streaming')
+        t5 = time.time()
+        print(f'collected variants. Elapsed: {t5 - t4}')
+        mutations_collected: pl.DataFrame = mutations_with_all_ids.collect(engine='streaming')
+        t6 = time.time()
+        print(f'collected mutations. Elapsed: {t6 - t5}')
         # 12. Separate new and existing mutations.
         # 12.5: Update existing mutations
         # 13. insert new mutations via copy
@@ -114,6 +137,8 @@ class VariantsMutationsCombinedParser(FileParser):
             VariantsMutationsCombinedParser._update_existing_mutations(mutations_collected, existing_mutations)
         )
         print(f'mutations added / updated: {debug_info}')
+        t7 = time.time()
+        print(f'added / updated mutations. Elapsed: {t7 - t6}')
 
         # 14. Separate new and existing variants
         # 15. Insert new variants via copy
@@ -126,6 +151,8 @@ class VariantsMutationsCombinedParser(FileParser):
             VariantsMutationsCombinedParser._update_existing_variants(variants_collected, existing_variants)
         )
         print(f'variants added / updated: {debug_info}')
+        t8 = time.time()
+        print(f'added / updated variants. Elapsed: {t8 - t7}')
 
     async def _scan_variants(self):
         def variants_colname_mapping(cns: List[str]) -> List[str]:
@@ -259,7 +286,7 @@ class VariantsMutationsCombinedParser(FileParser):
         )
 
         # Check for ref conflicts
-        ref_conflicts = (pl.concat(
+        tmp = (pl.concat(
             [
                 existing_alleles.select(allele_cols).lazy(),
                 alleles
@@ -277,7 +304,10 @@ class VariantsMutationsCombinedParser(FileParser):
             pl.col(StandardColumnNames.region),
             pl.col(StandardColumnNames.position_nt),
             pl.col(StandardColumnNames.alt_nt)
-        )).collect()
+        ))
+        # rm
+        probe_lazy(tmp, 'graph_5_allele_ref_conflicts')
+        ref_conflicts = tmp.collect()
 
         if len(ref_conflicts) > 0:
             print(
@@ -287,8 +317,9 @@ class VariantsMutationsCombinedParser(FileParser):
             ref_conflicts.write_csv(ALLELE_REF_CONFLICTS_FILE)
 
         # ref conflicts have already been filtered out of new_alleles above, so we are good to insert
-
         #  6. Insert new alleles via copy
+        # rm
+        probe_lazy(new_alleles, 'graph_6_new_alleles')
         return await copy_insert_alleles(new_alleles.collect())
 
     @staticmethod
@@ -366,7 +397,9 @@ class VariantsMutationsCombinedParser(FileParser):
             pl.col(StandardColumnNames.gff_feature),
             pl.col(StandardColumnNames.position_aa),
             pl.col(StandardColumnNames.alt_aa)
-        )).collect()
+        ))
+        probe_lazy(ref_conflicts, 'graph_8_aa_ref_conflicts') # rm
+        ref_conflicts = ref_conflicts.collect()
 
         if len(ref_conflicts) > 0:
             print(
@@ -378,6 +411,7 @@ class VariantsMutationsCombinedParser(FileParser):
         # ref conflicts have already been filtered out of new_amino_subs above, so we are good to insert
 
         #  9. insert new aa subs via copy
+        probe_lazy(new_amino_subs, 'graph_9_new_aas') # rm
         return await copy_insert_aa_subs(new_amino_subs.collect())
 
     @staticmethod
@@ -486,9 +520,9 @@ class VariantsMutationsCombinedParser(FileParser):
             .select(
                 pl.col(StandardColumnNames.alt_codon, StandardColumnNames.amino_acid_id)
             )
-            .collect()
         )
-
+        probe_lazy(ref_conflicts, 'graph_11_translation_ref_conflicts') # rm
+        ref_conflicts = ref_conflicts.collect()
         if len(ref_conflicts) > 0:
             print(
                 f'WARNING: in translations, found {len(ref_conflicts)} positions with conflicting values for ref_codon. '
@@ -496,6 +530,7 @@ class VariantsMutationsCombinedParser(FileParser):
             )
             ref_conflicts.write_csv(TRANSLATIONS_REF_CONFLICTS_FILE)
 
+        probe_lazy(new_translations, 'graph_11_new_translations') # rm
         return await copy_insert_translations(new_translations.collect())
 
     @staticmethod
