@@ -196,6 +196,7 @@ column_name_map = {
     StandardColumnNames.release_date: 'ReleaseDate',
     StandardColumnNames.creation_date: 'UpdateDate',  # todo: check on this mapping
     GEO_LOCATION: 'Geographic_Location',
+    StandardColumnNames.census_region: 'census_region',
     StandardColumnNames.bases: 'Length',
     StandardColumnNames.ww_viral_load: 'viral_load',
     StandardColumnNames.ww_catchment_population : 'population',
