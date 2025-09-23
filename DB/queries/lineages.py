@@ -241,12 +241,14 @@ async def get_abundance_summaries_by_simple_date(
 
 async def get_averaged_abundances(
     date_bin: DateBinOpt,
-    # geo location bin? 
     raw_query: str,
 ) -> Dict[str, List[LineageAbundanceInfo]]:
     user_where_clause = ''
     if raw_query is not None:
-        user_where_clause = f'and ({parser.parse(raw_query)})'
+        user_where_clause = f'and ({parser.parse(raw_query)})' \
+            .replace('state', 'gl.admin1_name') \
+            .replace('census_region', 's.ww_census_region') \
+            .replace('country', 'gl.admin0_name')
 
     match date_bin:
         case DateBinOpt.week | DateBinOpt.month:
