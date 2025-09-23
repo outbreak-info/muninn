@@ -9,6 +9,11 @@ echo "begin at $(date)" >> "$LOG"
 AMINO_SUB_REF_CONFLICTS_FILE="/tmp/amino_sub_ref_conflicts.csv"
 ALLELE_REF_CONFLICTS_FILE="/tmp/allele_ref_conflicts.csv"
 
+DATA_DIR='/home/muninn/data'
+ARCHIVE_DEST_DIR="$DATA_DIR/outputs_sc2"
+ARCHIVE_HASH_FILENAME="$ARCHIVE_DEST_DIR/expanded_archive.md5"
+ARCHIVE_HASH="UNSET"
+
 ARCHIVE_FILENAME="UNSET"
 AUTO=false
 
@@ -28,30 +33,44 @@ while [[ $# -gt 0 ]]; do
 done
 
 # bjorn-general outputs
-DATA_DIR='/home/muninn/data'
 BJORN_GENERAL_OUTPUT_ARCHIVE="$DATA_DIR/$ARCHIVE_FILENAME"
-ARCHIVE_DEST_DIR="$DATA_DIR/outputs_sc2"
+
 
 # check that archive exists
+SKIP_DECOMPRESSION=false
 if [[ ! -f "$BJORN_GENERAL_OUTPUT_ARCHIVE" ]]; then
   echo "bjorn-general outputs archive not found: $BJORN_GENERAL_OUTPUT_ARCHIVE" >> "$LOG"
   exit 1
 fi
 
 if [[ -d "$ARCHIVE_DEST_DIR" ]]; then
-  rm -r "$ARCHIVE_DEST_DIR"
+  if [[ -f "$ARCHIVE_HASH_FILENAME" ]]; then
+    ARCHIVE_HASH=$(md5sum "$BJORN_GENERAL_OUTPUT_ARCHIVE")
+    if [[ "$ARCHIVE_HASH" = $(cat "$ARCHIVE_HASH_FILENAME") ]]; then
+      echo "It appears this input archive has already been expanded (hashes matched) so skipping decompression"
+      SKIP_DECOMPRESSION=true
+    fi
+  fi
+  if [[ "$SKIP_DECOMPRESSION" = false ]]; then
+    rm -r "$ARCHIVE_DEST_DIR"
+  fi
 fi
 
-if [[ "$BJORN_GENERAL_OUTPUT_ARCHIVE" = *.zip ]]; then
-  unzip -d "$ARCHIVE_DEST_DIR" "$BJORN_GENERAL_OUTPUT_ARCHIVE"
-elif [[ "$BJORN_GENERAL_OUTPUT_ARCHIVE" = *.tar.gz ]]; then
-  if [[ ! -d  "$ARCHIVE_DEST_DIR" ]]; then
-    mkdir "$ARCHIVE_DEST_DIR"
+if [[ "$SKIP_DECOMPRESSION" = false ]]; then
+
+  if [[ "$BJORN_GENERAL_OUTPUT_ARCHIVE" = *.zip ]]; then
+    unzip -d "$ARCHIVE_DEST_DIR" "$BJORN_GENERAL_OUTPUT_ARCHIVE"
+  elif [[ "$BJORN_GENERAL_OUTPUT_ARCHIVE" = *.tar.gz ]]; then
+    if [[ ! -d  "$ARCHIVE_DEST_DIR" ]]; then
+      mkdir "$ARCHIVE_DEST_DIR"
+    fi
+    tar -xzf "$BJORN_GENERAL_OUTPUT_ARCHIVE" -C "$ARCHIVE_DEST_DIR"
+  else
+    echo "Unknown archive type. $BJORN_GENERAL_OUTPUT_ARCHIVE should be .zip or .tar.gz" >> "$LOG"
+    exit 1
   fi
-  tar -xzf "$BJORN_GENERAL_OUTPUT_ARCHIVE" -C "$ARCHIVE_DEST_DIR"
-else
-  echo "Unknown archive type. $BJORN_GENERAL_OUTPUT_ARCHIVE should be .zip or .tar.gz" >> "$LOG"
-  exit 1
+
+  md5sum "$BJORN_GENERAL_OUTPUT_ARCHIVE" > "$ARCHIVE_HASH_FILENAME"
 fi
 
 SAMPLES_FILE="$ARCHIVE_DEST_DIR/metadata_sc2.tsv"
