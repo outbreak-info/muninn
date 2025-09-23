@@ -230,8 +230,9 @@ async def get_lineage_abundance_info(q: str | None = None):
 @app.get('/lineages/abundances/average_abundances', response_model=List[AverageLineageAbundanceInfo])
 async def get_average_lineage_abundance(q: str | None = None):
     date_bin = DateBinOpt.week
+    geo_bin = "state"
     try:
-        return await DB.queries.lineages.get_averaged_abundances(date_bin, q)
+        return await DB.queries.lineages.get_averaged_abundances(date_bin, geo_bin, q)
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 

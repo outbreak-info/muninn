@@ -241,6 +241,7 @@ async def get_abundance_summaries_by_simple_date(
 
 async def get_averaged_abundances(
     date_bin: DateBinOpt,
+    geo_bin: str,
     raw_query: str,
 ) -> Dict[str, List[LineageAbundanceInfo]]:
     user_where_clause = ''
@@ -261,6 +262,15 @@ async def get_averaged_abundances(
         case _:
             raise ValueError(f'illegal value for date_bin: {repr(date_bin)}')
         
+
+    match geo_bin:
+        case 'state':
+            group_by_geo_level = 'gl.admin1_name'
+        case 'census_region':
+            group_by_geo_level =  's.ww_census_region'
+        case _:
+            raise ValueError(f'illegal value for geo_bin: {repr(geo_bin)}')
+        
     async with get_async_session() as session:
         res = await session.execute(
             text(
@@ -269,7 +279,7 @@ async def get_averaged_abundances(
                     select
                         l.lineage_name as lineage_name,
                         ls.lineage_system_name,
-                        gl.admin1_name as location,
+                        {group_by_geo_level} as location,
                         s.collection_start_date,
                         s.collection_end_date,
                         sl.abundance,
