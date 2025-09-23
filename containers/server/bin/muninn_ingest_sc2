@@ -82,12 +82,11 @@ fi
 
 {
   # ingest bjorn-general outputs
-  python3 -u runinserts.py "$ARCHIVE_DEST_DIR/$SAMPLES_FILE" --format sc2_samples
+  python3 -u runinserts.py "$SAMPLES_FILE" --format sc2_samples
   python3 -u runinserts.py \
-  "$ARCHIVE_DEST_DIR/$VARIANTS_FILE" \
-  "$ARCHIVE_DEST_DIR/$MUTATIONS_FILE" \
+  "$VARIANTS_FILE" \
+  "$MUTATIONS_FILE" \
   --format variants_mutations_combined_tsv
-
 } &>> "$LOG"
 
 # Copying over some debug files
