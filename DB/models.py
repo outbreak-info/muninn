@@ -136,6 +136,12 @@ class Sample(Base):
     datastore_region: Mapped[str] = mapped_column(sa.Text, nullable=False)
     datastore_provider: Mapped[str] = mapped_column(sa.Text, nullable=False)
 
+    # wastewater-specific columns
+    ww_viral_load: Mapped[float] = mapped_column(sa.Double, nullable=True)
+    ww_catchment_population: Mapped[int] = mapped_column(sa.BigInteger, nullable=True)
+    ww_site_id: Mapped[str] = mapped_column(sa.Text, nullable=True)
+    ww_collected_by: Mapped[str] = mapped_column(sa.Text, nullable=True)
+
     __table_args__ = tuple(
         [
             UniqueConstraint(StandardColumnNames.accession, name=ConstraintNames.uq_samples_accession),
