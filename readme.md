@@ -223,7 +223,7 @@ A.1     A.1.2
 A       A.1.1
 A       A.1.2
 ```
-
+(Lineage names are used here for simplicity. In the actual implementation, only IDs are used.)
 Lineages are allowed to form a DAG, and a `BEFORE INSERT` trigger prevents any cycle-producing entries from being added to `lineages_immediate_children`.
 
 
