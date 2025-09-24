@@ -246,8 +246,8 @@ async def get_averaged_abundances(
 ) -> Dict[str, List[LineageAbundanceInfo]]:
     user_where_clause = ''
     if raw_query is not None:
-        user_where_clause = f'and ({parser.parse(raw_query)})' \
-            .replace('state', 'gl.admin1_name') \
+        user_where_clause = f'({parser.parse(raw_query)})' \
+            .replace('state', 'lp.location') \
             .replace('census_region', 's.ww_census_region') \
             .replace('country', 'gl.admin0_name')
 
@@ -265,9 +265,9 @@ async def get_averaged_abundances(
 
     match geo_bin:
         case 'state':
-            group_by_geo_level = 'gl.admin1_name'
+            group_by_geo_level = 'state'
         case 'census_region':
-            group_by_geo_level =  's.ww_census_region'
+            group_by_geo_level =  'census_region'
         case _:
             raise ValueError(f'illegal value for geo_bin: {repr(geo_bin)}')
         
@@ -279,7 +279,8 @@ async def get_averaged_abundances(
                     select
                         l.lineage_name as lineage_name,
                         ls.lineage_system_name,
-                        {group_by_geo_level} as location,
+                        gl.admin1_name as state,
+                        s.ww_census_region as census_region,
                         s.collection_start_date,
                         s.collection_end_date,
                         sl.abundance,
@@ -295,32 +296,34 @@ async def get_averaged_abundances(
                     inner join samples s on s.id = sl.sample_id
                     left join geo_locations gl on gl.id = s.geo_location_id
                     where (s.collection_end_date - s.collection_start_date) <= 30 
-                    {user_where_clause}
                 ),
                 total_prevalences as (
                     select
                         {extract_clause},
-                        location,
+                        state,
+                        census_region,
                         sum(pop_weighted_prevalence) as total_prevalence,
                         count(*) as sample_count
                     from base_data
-                    group by {group_by_date_cols}, location
+                    group by {group_by_date_cols}, state, census_region
                 ),
                 lineage_prevalences as (
                     select
                         {extract_clause},
-                        location,
+                        state,
+                        census_region,
                         lineage_name,
                         sum(pop_weighted_prevalence) as lineage_prevalence,
                         count(*) as sample_count
                     from base_data
-                    group by {group_by_date_cols}, location, lineage_name
+                    group by {group_by_date_cols}, state, census_region, lineage_name
                 )
                 select
                     lp.year,
                     lp.chunk,
                     lp.lineage_name as lineage_name,
-                    lp.location,
+                    lp.state,
+                    lp.census_region,
                     lp.sample_count,
                     lp.lineage_prevalence / tp.total_prevalence as mean_lineage_prevalence
                 from lineage_prevalences lp
@@ -337,9 +340,10 @@ async def get_averaged_abundances(
             year=r[0],
             chunk=r[1],
             lineage_name=r[2],
-            location=r[3],
-            sample_count=r[4],
-            mean_lineage_prevalence=r[5]
+            state=r[3],
+            census_region=r[4],
+            sample_count=r[5],
+            mean_lineage_prevalence=r[6]
         )
 
         out_data.append(info)
