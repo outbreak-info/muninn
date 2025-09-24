@@ -17,11 +17,11 @@ from DB.queries.samples import get_samples_accession_and_id_as_pl_df
 from DB.queries.translations import get_all_translations_as_pl_df
 from DB.queries.variants import get_all_variants_as_pl_df
 from utils.constants import StandardColumnNames, EXCLUDED_SRAS
-from utils.csv_helpers import clean_up_gff_feature
 
 AMINO_SUB_REF_CONFLICTS_FILE = '/tmp/amino_sub_ref_conflicts.csv'
 ALLELE_REF_CONFLICTS_FILE = '/tmp/allele_ref_conflicts.csv'
 TRANSLATIONS_REF_CONFLICTS_FILE = '/tmp/translations_ref_conflicts.csv'
+
 
 # rm
 def probe_lazy(df: pl.LazyFrame, name: str, stream: bool = False) -> None:
@@ -31,6 +31,7 @@ def probe_lazy(df: pl.LazyFrame, name: str, stream: bool = False) -> None:
     df.show_graph(
         output_path=f'/tmp/{name}.png', show=False, engine=engine, plan_stage="physical"
     )
+
 
 class VariantsMutationsCombinedParser(FileParser):
 
@@ -201,9 +202,9 @@ class VariantsMutationsCombinedParser(FileParser):
             pl.col(StandardColumnNames.alt_codon).str.to_uppercase().alias(StandardColumnNames.alt_codon),
             (
                 pl.col(StandardColumnNames.gff_feature)
-                .map_elements(clean_up_gff_feature, return_dtype=pl.String)
+                # clean up gff feature (HA:cds-XAJ25415.1  -->  XAJ25415.1)
+                .str.extract(r'([\w\-]+:)?(cds-)?(.*)', 3)
                 .alias(StandardColumnNames.gff_feature)
-
             ),
             pl.col(StandardColumnNames.position_aa).cast(pl.Int64)
         ).unique(
@@ -398,7 +399,7 @@ class VariantsMutationsCombinedParser(FileParser):
             pl.col(StandardColumnNames.position_aa),
             pl.col(StandardColumnNames.alt_aa)
         ))
-        probe_lazy(ref_conflicts, 'graph_8_aa_ref_conflicts') # rm
+        probe_lazy(ref_conflicts, 'graph_8_aa_ref_conflicts')  # rm
         ref_conflicts = ref_conflicts.collect()
 
         if len(ref_conflicts) > 0:
@@ -411,7 +412,7 @@ class VariantsMutationsCombinedParser(FileParser):
         # ref conflicts have already been filtered out of new_amino_subs above, so we are good to insert
 
         #  9. insert new aa subs via copy
-        probe_lazy(new_amino_subs, 'graph_9_new_aas') # rm
+        probe_lazy(new_amino_subs, 'graph_9_new_aas')  # rm
         return await copy_insert_aa_subs(new_amino_subs.collect())
 
     @staticmethod
@@ -521,7 +522,7 @@ class VariantsMutationsCombinedParser(FileParser):
                 pl.col(StandardColumnNames.alt_codon, StandardColumnNames.amino_acid_id)
             )
         )
-        probe_lazy(ref_conflicts, 'graph_11_translation_ref_conflicts') # rm
+        probe_lazy(ref_conflicts, 'graph_11_translation_ref_conflicts')  # rm
         ref_conflicts = ref_conflicts.collect()
         if len(ref_conflicts) > 0:
             print(
@@ -530,7 +531,7 @@ class VariantsMutationsCombinedParser(FileParser):
             )
             ref_conflicts.write_csv(TRANSLATIONS_REF_CONFLICTS_FILE)
 
-        probe_lazy(new_translations, 'graph_11_new_translations') # rm
+        probe_lazy(new_translations, 'graph_11_new_translations')  # rm
         return await copy_insert_translations(new_translations.collect())
 
     @staticmethod
