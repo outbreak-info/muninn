@@ -266,9 +266,12 @@ async def get_averaged_abundances(
         case 'state':
             group_by_geo_level = 'state, census_region'
             lp_group_by = 'lp.state, lp.census_region'
+
         case 'census_region':
             group_by_geo_level =  'census_region'
             lp_group_by = 'lp.census_region'
+            if user_where_clause.contains('state'):
+                raise ValueError('state cannot be used in the raw_query when geo_bin is "census_region"')
         case _:
             raise ValueError(f'illegal value for geo_bin: {repr(geo_bin)}')
         
