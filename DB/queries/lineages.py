@@ -246,10 +246,9 @@ async def get_averaged_abundances(
 ) -> Dict[str, List[LineageAbundanceInfo]]:
     user_where_clause = ''
     if raw_query is not None:
-        user_where_clause = f'({parser.parse(raw_query)})' \
-            .replace('state', 'lp.location') \
-            .replace('census_region', 's.ww_census_region') \
-            .replace('country', 'gl.admin0_name')
+        user_where_clause = f'where ({parser.parse(raw_query)})' \
+            .replace('state', 'lp.state') \
+            .replace('census_region', 'lp.census_region') \
 
     match date_bin:
         case DateBinOpt.week | DateBinOpt.month:
@@ -265,9 +264,11 @@ async def get_averaged_abundances(
 
     match geo_bin:
         case 'state':
-            group_by_geo_level = 'state'
+            group_by_geo_level = 'state, census_region'
+            lp_group_by = 'lp.state, lp.census_region'
         case 'census_region':
             group_by_geo_level =  'census_region'
+            lp_group_by = 'lp.census_region'
         case _:
             raise ValueError(f'illegal value for geo_bin: {repr(geo_bin)}')
         
@@ -300,53 +301,64 @@ async def get_averaged_abundances(
                 total_prevalences as (
                     select
                         {extract_clause},
-                        state,
-                        census_region,
+                        {group_by_geo_level},
                         sum(pop_weighted_prevalence) as total_prevalence,
                         count(*) as sample_count
                     from base_data
-                    group by {group_by_date_cols}, state, census_region
+                    group by {group_by_date_cols}, {group_by_geo_level}
                 ),
                 lineage_prevalences as (
                     select
                         {extract_clause},
-                        state,
-                        census_region,
+                        {group_by_geo_level},
                         lineage_name,
                         sum(pop_weighted_prevalence) as lineage_prevalence,
                         count(*) as sample_count
                     from base_data
-                    group by {group_by_date_cols}, state, census_region, lineage_name
+                    group by {group_by_date_cols}, {group_by_geo_level}, lineage_name
                 )
                 select
                     lp.year,
                     lp.chunk,
                     lp.lineage_name as lineage_name,
-                    lp.state,
-                    lp.census_region,
+                    {lp_group_by},
                     lp.sample_count,
                     lp.lineage_prevalence / tp.total_prevalence as mean_lineage_prevalence
                 from lineage_prevalences lp
                 join total_prevalences tp
                     on lp.year = tp.year
-                    and lp.chunk = tp.chunk;
+                    and lp.chunk = tp.chunk
+                {user_where_clause};
                 '''
             )
         )
 
     out_data = list()
-    for r in res:
-        info = AverageLineageAbundanceInfo(
-            year=r[0],
-            chunk=r[1],
-            lineage_name=r[2],
-            state=r[3],
-            census_region=r[4],
-            sample_count=r[5],
-            mean_lineage_prevalence=r[6]
-        )
-
-        out_data.append(info)
+    if geo_bin == 'state':
+        for r in res:
+            print(r)
+            info = AverageLineageAbundanceInfo(
+                year=r[0],
+                chunk=r[1],
+                lineage_name=r[2],
+                state=r[3],
+                census_region=r[4],
+                sample_count=r[5],
+                mean_lineage_prevalence=r[6]
+            )
+            out_data.append(info)
+    elif geo_bin == 'census_region':
+        for r in res:
+            info = AverageLineageAbundanceInfo(
+                year=r[0],
+                chunk=r[1],
+                lineage_name=r[2],
+                state=None,
+                census_region=r[3],
+                sample_count=r[4],
+                mean_lineage_prevalence=r[5]
+            )
+            out_data.append(info)
  
     return out_data
 

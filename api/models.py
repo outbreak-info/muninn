@@ -244,7 +244,7 @@ class AverageLineageAbundanceInfo(BaseModel):
     year: int
     chunk: int
     lineage_name: str
-    state: str
+    state: str | None
     census_region: str
     sample_count: int
     mean_lineage_prevalence: float
