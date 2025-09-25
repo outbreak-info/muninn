@@ -47,7 +47,7 @@ if [[ -d "$ARCHIVE_DEST_DIR" ]]; then
   if [[ -f "$ARCHIVE_HASH_FILENAME" ]]; then
     ARCHIVE_HASH=$(md5sum "$BJORN_GENERAL_OUTPUT_ARCHIVE")
     if [[ "$ARCHIVE_HASH" = $(cat "$ARCHIVE_HASH_FILENAME") ]]; then
-      echo "It appears this input archive has already been expanded (hashes matched) so skipping decompression"
+      echo "It appears this input archive has already been expanded (hashes matched) so skipping decompression" >> "$LOG"
       SKIP_DECOMPRESSION=true
     fi
   fi
