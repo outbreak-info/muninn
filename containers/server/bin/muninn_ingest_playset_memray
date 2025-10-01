@@ -30,7 +30,7 @@ FLUMUT="$TMP/flumut_annotations.tsv"
 
 # ingest bjorn-general outputs
 python3 -u runinserts.py "$SAMPLES" --format samples_tsv
-python3 -u -m memray run --aggregate -o "$VM_MEMRAY_OUT" runinserts.py "$VARIANTS" "$MUTATIONS" --format variants_mutations_combined_tsv
+python3 -u -m memray run -f -o "$VM_MEMRAY_OUT" runinserts.py "$VARIANTS" "$MUTATIONS" --format variants_mutations_combined_tsv
 python3 -u runinserts.py "$DMS_HA" --format ha_dms_tsv
 
 # ingest random other outputs
