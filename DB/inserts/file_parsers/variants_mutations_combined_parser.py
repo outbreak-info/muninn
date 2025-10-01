@@ -1,5 +1,6 @@
 import csv
 import time
+import datetime
 from typing import List, Set
 
 import polars as pl
@@ -22,9 +23,9 @@ AMINO_SUB_REF_CONFLICTS_FILE = '/tmp/amino_sub_ref_conflicts.csv'
 ALLELE_REF_CONFLICTS_FILE = '/tmp/allele_ref_conflicts.csv'
 TRANSLATIONS_REF_CONFLICTS_FILE = '/tmp/translations_ref_conflicts.csv'
 
-
 # rm
 def probe_lazy(df: pl.LazyFrame, name: str, stream: bool = False) -> None:
+    return
     engine = 'in-memory'
     if stream:
         engine = 'streaming'
@@ -127,6 +128,7 @@ class VariantsMutationsCombinedParser(FileParser):
         mutations_collected: pl.DataFrame = mutations_with_all_ids.collect(engine='streaming')
         t6 = time.time()
         print(f'collected mutations. Elapsed: {t6 - t5}')
+
         # 12. Separate new and existing mutations.
         # 12.5: Update existing mutations
         # 13. insert new mutations via copy

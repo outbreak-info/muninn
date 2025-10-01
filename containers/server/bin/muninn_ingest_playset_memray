@@ -1,0 +1,43 @@
+#! /bin/bash
+
+ARCHIVE_FILENAME="$1"
+DATA_DIR=$(dirname "$ARCHIVE_FILENAME")
+VM_MEMRAY_OUT="/home/muninn/data/variants_mutations_playset.memray"
+
+if [[ "$#" -eq 0 ]]; then
+  echo "archive name not provided"
+  exit 1
+fi
+
+if [[ ! -f "$ARCHIVE_FILENAME" ]]; then
+  echo "File not found: $ARCHIVE_FILENAME"
+  exit 1
+fi
+
+TMP="$DATA_DIR/playset_tmp"
+mkdir "$TMP"
+
+tar -C "$TMP" -xzvf "$ARCHIVE_FILENAME"
+
+SAMPLES="$TMP/samples.tsv"
+VARIANTS="$TMP/variants.tsv"
+MUTATIONS="$TMP/mutations.tsv"
+DMS_HA="$TMP/dms.tsv"
+EVE="$TMP/eve.csv"
+GENOFLU="$TMP/genoflu.tsv"
+DEMIXED_DIR="$TMP/demixed_out"
+FLUMUT="$TMP/flumut_annotations.tsv"
+
+# ingest bjorn-general outputs
+python3 -u runinserts.py "$SAMPLES" --format samples_tsv
+python3 -u -m memray run --aggregate -o "$VM_MEMRAY_OUT" runinserts.py "$VARIANTS" "$MUTATIONS" --format variants_mutations_combined_tsv
+python3 -u runinserts.py "$DMS_HA" --format ha_dms_tsv
+
+# ingest random other outputs
+python3 -u runinserts.py "$EVE"  --format eve_dms_csv
+python3 -u runinserts.py "$GENOFLU"  --format genoflu_lineages
+python3 -u runinserts.py "$DEMIXED_DIR"  --format freyja_demixed
+python3 -u runinserts.py "$FLUMUT"  --format flumut_tsv
+
+rm -r "$TMP"
+
