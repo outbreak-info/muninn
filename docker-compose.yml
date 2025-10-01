@@ -25,7 +25,7 @@ services:
       timeout: 3s
       retries: 15
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data"
       - type: bind
         source: ./containers/database/initdb.d
         target: /docker-entrypoint-initdb.d
@@ -58,3 +58,4 @@ services:
 
 volumes:
   postgres_data:
+    name: "${MUNINN_INSTANCE_NAME}_postgres_data"
