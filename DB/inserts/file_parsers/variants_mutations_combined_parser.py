@@ -65,13 +65,13 @@ class VariantsMutationsCombinedParser(FileParser):
         }
         t0 = time.time()
         #  1. read vars and muts
-        variants_input: pl.LazyFrame = await self._scan_variants()
-        mutations_input: pl.LazyFrame = await self._scan_mutations()
+        variants: pl.LazyFrame = await self._scan_variants()
+        mutations: pl.LazyFrame = await self._scan_mutations()
 
         #  2. Get accession -> id mapping from db
         #  3. Filter out vars and muts with accessions missing from db
-        variants_with_samples, mutations_with_samples = await (
-            VariantsMutationsCombinedParser._get_vars_and_muts_for_existing_samples(variants_input, mutations_input)
+        variants, mutations = await (
+            VariantsMutationsCombinedParser._get_vars_and_muts_for_existing_samples(variants, mutations)
         )
         t1 = time.time()
         print(f'read files, filtered for existing samples. Elapsed: {t1 - t0}')
@@ -79,8 +79,8 @@ class VariantsMutationsCombinedParser(FileParser):
         #  5. filter out existing alleles
         #  6. Insert new alleles via copy
         debug_info['count_alleles_added'] = await VariantsMutationsCombinedParser._insert_new_alleles(
-            variants_with_samples,
-            mutations_with_samples,
+            variants,
+            mutations,
         )
         print(f'alleles added: {debug_info}')
         t2 = time.time()
@@ -90,8 +90,8 @@ class VariantsMutationsCombinedParser(FileParser):
         #  8. filter out existing AA subs
         #  9. insert new aa subs via copy
         debug_info['count_amino_subs_added'] = await VariantsMutationsCombinedParser._insert_new_amino_acid_subs(
-            variants_with_samples,
-            mutations_with_samples
+            variants,
+            mutations
         )
         print(f'amino subs added: {debug_info}')
         t3 = time.time()
@@ -99,35 +99,33 @@ class VariantsMutationsCombinedParser(FileParser):
 
         # 10. Get new allele / AAS ids and join back into vars and muts
         # vars and muts now need to include translation ids before they are finished
-        variants_with_nt_aa_ids: pl.LazyFrame
-        mutations_with_nt_aa_ids: pl.LazyFrame
-        variants_with_nt_aa_ids, mutations_with_nt_aa_ids = await (
+        variants, mutations = await (
             VariantsMutationsCombinedParser
-            ._join_alleles_and_amino_subs_into_vars_and_muts(variants_with_samples, mutations_with_samples)
+            ._join_alleles_and_amino_subs_into_vars_and_muts(variants, mutations)
         )
 
         # 11. Split out and insert new translations from vars and muts
         debug_info['count_translations_added'] = await (
             VariantsMutationsCombinedParser
-            ._insert_new_translations(variants_with_nt_aa_ids, mutations_with_nt_aa_ids)
+            ._insert_new_translations(variants, mutations)
         )
         print(f'translations added: {debug_info}')
         t4 = time.time()
         print(f'inserted translations. Elapsed: {t4 - t3}')
 
         # 11.5: Combine translation ids back into vars and muts
-        variants_with_all_ids, mutations_with_all_ids = await (
+        variants, mutations = await (
             VariantsMutationsCombinedParser._join_translation_ids_into_vars_and_muts(
-                variants_with_nt_aa_ids,
-                mutations_with_nt_aa_ids
+                variants,
+                mutations
             )
         )
 
         # rm graphs
-        probe_lazy(mutations_with_all_ids, 'graph_11.5_variants_final', stream=True)
-        probe_lazy(mutations_with_all_ids, 'graph_11.5_mutations_final', stream=True)
+        probe_lazy(variants, 'graph_11.5_variants_final', stream=True)
+        probe_lazy(mutations, 'graph_11.5_mutations_final', stream=True)
 
-        variants_collected, profile_variants = variants_with_all_ids.profile(engine='streaming')
+        variants_collected, profile_variants = variants.profile(engine='streaming')
         profile_variants = profile_variants.with_columns(elapsed = pl.col('end') - pl.col('start'))
         print(profile_variants)
         t5 = time.time()
@@ -143,13 +141,12 @@ class VariantsMutationsCombinedParser(FileParser):
         debug_info['count_preexisting_variants'] = await (
             VariantsMutationsCombinedParser._update_existing_variants(variants_collected, existing_variants)
         )
-        existing_variants = variants_collected = None
         print(f'variants added / updated: {debug_info}')
         t6 = time.time()
         print(f'added / updated variants. Elapsed: {t6 - t5}')
 
 
-        mutations_collected, profile_mutations = mutations_with_all_ids.profile(engine='streaming')
+        mutations_collected, profile_mutations = mutations.profile(engine='streaming')
         profile_mutations = profile_mutations.with_columns(elapsed=pl.col('end') - pl.col('start'))
         print(profile_mutations)
         t7 = time.time()
