@@ -43,6 +43,10 @@ services:
         read_only: false
     ports:
       - "${MUNINN_SERVER_PORT}:8000"
+    deploy:
+      resources:
+        limits:
+          memory: 400G
     environment:
       MUNINN_DB_READONLY_USER: "${MUNINN_DB_READONLY_USER}"
       MUNINN_DB_READONLY_PASSWORD: "${MUNINN_DB_READONLY_PASSWORD}"
