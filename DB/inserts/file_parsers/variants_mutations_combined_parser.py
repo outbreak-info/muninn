@@ -1,5 +1,4 @@
 import csv
-import math
 import time
 import datetime
 from typing import List, Set
@@ -30,11 +29,9 @@ def probe_lazy(df: pl.LazyFrame, name: str, stream: bool = False) -> None:
     engine = 'in-memory'
     if stream:
         engine = 'streaming'
-    # df.show_graph(
-    #     output_path=f'/tmp/{name}.png', show=False, engine=engine, plan_stage="physical"
-    # )
-    with open(f'/tmp/{name}_explain.txt', 'w+') as f:
-        print(df.explain(streaming=True, ), file=f)
+    df.show_graph(
+        output_path=f'/tmp/{name}.png', show=False, engine=engine, plan_stage="physical"
+    )
 
 
 class VariantsMutationsCombinedParser(FileParser):
@@ -50,9 +47,6 @@ class VariantsMutationsCombinedParser(FileParser):
             self.variants_filename = mutations_filename
             self.mutations_filename = variants_filename
             self._verify_headers()
-
-        pl.Config.set_verbose(True) # rm
-        print(f'pl.thread_pool_size: {pl.thread_pool_size()}')
 
     async def parse_and_insert(self):
         debug_info = {
