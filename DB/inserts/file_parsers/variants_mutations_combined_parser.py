@@ -136,14 +136,13 @@ class VariantsMutationsCombinedParser(FileParser):
         # 12. Separate new and existing mutations.
         # 12.5: Update existing mutations
         # 13. insert new mutations via copy
-        # existing_mutations: pl.DataFrame = await get_all_mutations_as_pl_df()
-        # debug_info['count_mutations_added'] = await (
-        #     VariantsMutationsCombinedParser._insert_new_mutations(mutations_collected, existing_mutations)
-        # )
-        # debug_info['count_preexisting_mutations'] = await (
-        #     VariantsMutationsCombinedParser._update_existing_mutations(mutations_collected, existing_mutations)
-        # )
-        await VariantsMutationsCombinedParser._upsert_mutations(mutations_collected)
+        existing_mutations: pl.DataFrame = await get_all_mutations_as_pl_df()
+        debug_info['count_mutations_added'] = await (
+            VariantsMutationsCombinedParser._insert_new_mutations(mutations_collected, existing_mutations)
+        )
+        debug_info['count_preexisting_mutations'] = await (
+            VariantsMutationsCombinedParser._update_existing_mutations(mutations_collected, existing_mutations)
+        )
         print(f'mutations added / updated: {debug_info}')
         t7 = time.time()
         print(f'added / updated mutations. Elapsed: {t7 - t6}')
@@ -599,10 +598,6 @@ class VariantsMutationsCombinedParser(FileParser):
 
         await batch_upsert_mutations(updated_mutations)
         return count_preexisting_mutations
-
-    @staticmethod
-    async def _upsert_mutations(mutations_finished: pl.DataFrame):
-        await batch_upsert_mutations(mutations_finished)
 
     @staticmethod
     async def _update_existing_variants(variants_finished: pl.DataFrame, existing_variants: pl.DataFrame) -> int:
