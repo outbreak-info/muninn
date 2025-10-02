@@ -127,11 +127,28 @@ class VariantsMutationsCombinedParser(FileParser):
         print(profile_variants)
         t5 = time.time()
         print(f'collected variants. Elapsed: {t5 - t4}')
+
+        # 14. Separate new and existing variants
+        # 15. Insert new variants via copy
+        # 16. Update existing variants (new bulk process for this?)
+        existing_variants = await get_all_variants_as_pl_df()
+        debug_info['count_variants_added'] = await (
+            VariantsMutationsCombinedParser._insert_new_variants(variants_collected, existing_variants)
+        )
+        debug_info['count_preexisting_variants'] = await (
+            VariantsMutationsCombinedParser._update_existing_variants(variants_collected, existing_variants)
+        )
+        existing_variants = variants_collected = None
+        print(f'variants added / updated: {debug_info}')
+        t6 = time.time()
+        print(f'added / updated variants. Elapsed: {t6 - t5}')
+
+
         mutations_collected, profile_mutations = mutations_with_all_ids.profile(engine='streaming')
         profile_mutations = profile_mutations.with_columns(elapsed=pl.col('end') - pl.col('start'))
         print(profile_mutations)
-        t6 = time.time()
-        print(f'collected mutations. Elapsed: {t6 - t5}')
+        t7 = time.time()
+        print(f'collected mutations. Elapsed: {t7 - t6}')
 
         # 12. Separate new and existing mutations.
         # 12.5: Update existing mutations
@@ -144,22 +161,8 @@ class VariantsMutationsCombinedParser(FileParser):
             VariantsMutationsCombinedParser._update_existing_mutations(mutations_collected, existing_mutations)
         )
         print(f'mutations added / updated: {debug_info}')
-        t7 = time.time()
-        print(f'added / updated mutations. Elapsed: {t7 - t6}')
-
-        # 14. Separate new and existing variants
-        # 15. Insert new variants via copy
-        # 16. Update existing variants (new bulk process for this?)
-        existing_variants = await get_all_variants_as_pl_df()
-        debug_info['count_variants_added'] = await (
-            VariantsMutationsCombinedParser._insert_new_variants(variants_collected, existing_variants)
-        )
-        debug_info['count_preexisting_variants'] = await (
-            VariantsMutationsCombinedParser._update_existing_variants(variants_collected, existing_variants)
-        )
-        print(f'variants added / updated: {debug_info}')
         t8 = time.time()
-        print(f'added / updated variants. Elapsed: {t8 - t7}')
+        print(f'added / updated mutations. Elapsed: {t8 - t7}')
 
     async def _scan_variants(self):
         def variants_colname_mapping(cns: List[str]) -> List[str]:
