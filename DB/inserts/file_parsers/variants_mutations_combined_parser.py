@@ -602,7 +602,7 @@ class VariantsMutationsCombinedParser(FileParser):
         existing_variants = await get_all_variants_as_pl_df()
 
         variants: pl.LazyFrame = variants.join(
-            existing_variants,
+            existing_variants.lazy(),
             on=[
                 StandardColumnNames.sample_id,
                 StandardColumnNames.allele_id
@@ -641,7 +641,9 @@ class VariantsMutationsCombinedParser(FileParser):
         t0 = time.time()
         new_variants = variants.filter(
             pl.col(StandardColumnNames.intra_host_variant_id).is_null()
-        ).collect(engine='streaming')
+        )
+        probe_lazy(new_variants, 'graph_14_new_variants', stream=True)
+        new_variants = new_variants.collect(engine='streaming')
         t1 = time.time()
         print(f'Collected new variants in: {t1 - t0}')
         # 15. Insert new variants via copy
