@@ -122,10 +122,14 @@ class VariantsMutationsCombinedParser(FileParser):
         probe_lazy(mutations_with_all_ids, 'graph_11.5_variants_final', stream=True)
         probe_lazy(mutations_with_all_ids, 'graph_11.5_mutations_final', stream=True)
 
-        variants_collected: pl.DataFrame = variants_with_all_ids.collect(engine='streaming')
+        variants_collected, profile_variants = variants_with_all_ids.profile(engine='streaming')
+        profile_variants = profile_variants.with_columns(elapsed = pl.col('end') - pl.col('start'))
+        print(profile_variants)
         t5 = time.time()
         print(f'collected variants. Elapsed: {t5 - t4}')
-        mutations_collected: pl.DataFrame = mutations_with_all_ids.collect(engine='streaming')
+        mutations_collected, profile_mutations = mutations_with_all_ids.profile(engine='streaming')
+        profile_mutations = profile_mutations.with_columns(elapsed=pl.col('end') - pl.col('start'))
+        print(profile_mutations)
         t6 = time.time()
         print(f'collected mutations. Elapsed: {t6 - t5}')
 

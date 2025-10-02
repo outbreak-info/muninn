@@ -1,3 +1,4 @@
+from datetime import datetime
 from math import floor
 
 import polars as pl
@@ -35,13 +36,20 @@ async def copy_insert_mutations(mutations: pl.DataFrame) -> str:
         StandardColumnNames.translation_id
     ]
     conn = await get_asyncpg_connection()
+
+    t0 = datetime.now()
+    records = mutations.select(
+            [pl.col(cn) for cn in columns]
+        ).iter_rows()
+    t1 = datetime.now()
+    print(f'mutations records took: {t1 - t0}') #rm
     res = await conn.copy_records_to_table(
         Mutation.__tablename__,
-        records=mutations.select(
-            [pl.col(cn) for cn in columns]
-        ).iter_rows(),
+        records=records,
         columns=columns
     )
+    t2 = datetime.now()
+    print(f'copy mutations took {t2 - t1}') #rm
     return res
 
 
