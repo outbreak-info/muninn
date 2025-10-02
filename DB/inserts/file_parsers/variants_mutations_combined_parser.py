@@ -26,6 +26,7 @@ TRANSLATIONS_REF_CONFLICTS_FILE = '/tmp/translations_ref_conflicts.csv'
 
 # rm
 def probe_lazy(df: pl.LazyFrame, name: str, stream: bool = False) -> None:
+    return
     engine = 'in-memory'
     if stream:
         engine = 'streaming'
@@ -125,46 +126,8 @@ class VariantsMutationsCombinedParser(FileParser):
         probe_lazy(variants, 'graph_11.5_variants_final', stream=True)
         probe_lazy(mutations, 'graph_11.5_mutations_final', stream=True)
 
-        variants_collected, profile_variants = variants.profile(engine='streaming')
-        profile_variants = profile_variants.with_columns(elapsed = pl.col('end') - pl.col('start'))
-        print(profile_variants)
-        t5 = time.time()
-        print(f'collected variants. Elapsed: {t5 - t4}')
-
-        # 14. Separate new and existing variants
-        # 15. Insert new variants via copy
-        # 16. Update existing variants (new bulk process for this?)
-        existing_variants = await get_all_variants_as_pl_df()
-        debug_info['count_variants_added'] = await (
-            VariantsMutationsCombinedParser._insert_new_variants(variants_collected, existing_variants)
-        )
-        debug_info['count_preexisting_variants'] = await (
-            VariantsMutationsCombinedParser._update_existing_variants(variants_collected, existing_variants)
-        )
-        print(f'variants added / updated: {debug_info}')
-        t6 = time.time()
-        print(f'added / updated variants. Elapsed: {t6 - t5}')
-
-
-        mutations_collected, profile_mutations = mutations.profile(engine='streaming')
-        profile_mutations = profile_mutations.with_columns(elapsed=pl.col('end') - pl.col('start'))
-        print(profile_mutations)
-        t7 = time.time()
-        print(f'collected mutations. Elapsed: {t7 - t6}')
-
-        # 12. Separate new and existing mutations.
-        # 12.5: Update existing mutations
-        # 13. insert new mutations via copy
-        existing_mutations: pl.DataFrame = await get_all_mutations_as_pl_df()
-        debug_info['count_mutations_added'] = await (
-            VariantsMutationsCombinedParser._insert_new_mutations(mutations_collected, existing_mutations)
-        )
-        debug_info['count_preexisting_mutations'] = await (
-            VariantsMutationsCombinedParser._update_existing_mutations(mutations_collected, existing_mutations)
-        )
-        print(f'mutations added / updated: {debug_info}')
-        t8 = time.time()
-        print(f'added / updated mutations. Elapsed: {t8 - t7}')
+        await VariantsMutationsCombinedParser._insert_and_update_variants(variants, debug_info)
+        await VariantsMutationsCombinedParser._insert_and_update_mutations(mutations, debug_info)
 
     async def _scan_variants(self):
         def variants_colname_mapping(cns: List[str]) -> List[str]:
@@ -572,6 +535,30 @@ class VariantsMutationsCombinedParser(FileParser):
         )
         return variants_plus_translation_ids, mutations_plus_translation_ids
 
+
+    # todo: this and the variants one could return a promise to finish their insertion and clear some memory?
+    @staticmethod
+    async def _insert_and_update_mutations(mutations: pl.LazyFrame, debug_info: dict):
+        mutations_collected, profile_mutations = mutations.profile(engine='streaming')
+        profile_mutations = profile_mutations.with_columns(elapsed=pl.col('end') - pl.col('start'))
+        print(profile_mutations)
+        # t7 = time.time()
+        # print(f'collected mutations. Elapsed: {t7 - t6}')
+
+        # 12. Separate new and existing mutations.
+        # 12.5: Update existing mutations
+        # 13. insert new mutations via copy
+        existing_mutations: pl.DataFrame = await get_all_mutations_as_pl_df()
+        debug_info['count_mutations_added'] = await (
+            VariantsMutationsCombinedParser._insert_new_mutations(mutations_collected, existing_mutations)
+        )
+        debug_info['count_preexisting_mutations'] = await (
+            VariantsMutationsCombinedParser._update_existing_mutations(mutations_collected, existing_mutations)
+        )
+        print(f'mutations added / updated: {debug_info}')
+        # t8 = time.time()
+        # print(f'added / updated mutations. Elapsed: {t8 - t7}')
+
     @staticmethod
     async def _insert_new_mutations(mutations_finished: pl.DataFrame, existing_mutations: pl.DataFrame) -> str:
         # 12. Separate new and existing mutations.
@@ -603,6 +590,29 @@ class VariantsMutationsCombinedParser(FileParser):
 
         await batch_upsert_mutations(updated_mutations)
         return count_preexisting_mutations
+
+    @staticmethod
+    async def _insert_and_update_variants(variants: pl.LazyFrame, debug_info: dict):
+        variants_collected, profile_variants = variants.profile(engine='streaming')
+        profile_variants = profile_variants.with_columns(elapsed=pl.col('end') - pl.col('start'))
+        print(profile_variants)
+        # t5 = time.time()
+        # print(f'collected variants. Elapsed: {t5 - t4}')
+
+        # 14. Separate new and existing variants
+        # 15. Insert new variants via copy
+        # 16. Update existing variants (new bulk process for this?)
+
+        existing_variants = await get_all_variants_as_pl_df()
+        debug_info['count_variants_added'] = await (
+            VariantsMutationsCombinedParser._insert_new_variants(variants_collected, existing_variants)
+        )
+        debug_info['count_preexisting_variants'] = await (
+            VariantsMutationsCombinedParser._update_existing_variants(variants_collected, existing_variants)
+        )
+        print(f'variants added / updated: {debug_info}')
+        # t6 = time.time()
+        # print(f'added / updated variants. Elapsed: {t6 - t5}')
 
     @staticmethod
     async def _update_existing_variants(variants_finished: pl.DataFrame, existing_variants: pl.DataFrame) -> int:
