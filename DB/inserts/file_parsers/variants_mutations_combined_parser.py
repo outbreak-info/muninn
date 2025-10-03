@@ -49,6 +49,8 @@ class VariantsMutationsCombinedParser(FileParser):
             self.mutations_filename = variants_filename
             self._verify_headers()
 
+        pl.Config.set_streaming_chunk_size(1000) # rm
+
     async def parse_and_insert(self):
         # todo: add some timestamps to debug data.
         debug_info = {
