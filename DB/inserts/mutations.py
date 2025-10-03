@@ -62,7 +62,7 @@ async def batch_upsert_mutations(mutations: pl.DataFrame):
 
     batch_size = floor(ASYNCPG_MAX_QUERY_ARGS / len(all_columns))
     slice_start = 0
-    while slice_start < len(mutations):
+    while slice_start < mutations.select(pl.len()).item():
         mutations_slice = mutations.slice(slice_start, batch_size)
         slice_start += batch_size
 

@@ -1,6 +1,7 @@
 import csv
 import time
-import datetime
+from datetime import datetime
+from math import ceil
 from typing import List, Set
 
 import polars as pl
@@ -49,7 +50,7 @@ class VariantsMutationsCombinedParser(FileParser):
             self.mutations_filename = variants_filename
             self._verify_headers()
 
-        pl.Config.set_streaming_chunk_size(1000) # rm
+        pl.Config.set_streaming_chunk_size(1000)  # rm
 
     async def parse_and_insert(self):
         # todo: add some timestamps to debug data.
@@ -88,7 +89,7 @@ class VariantsMutationsCombinedParser(FileParser):
         #  7. split out and combine amino acid subs
         #  8. filter out existing AA subs
         #  9. insert new aa subs via copy
-        debug_info['count_amino_subs_added'] = await VariantsMutationsCombinedParser._insert_new_amino_acid_subs(
+        debug_info['count_amino_subs_added'] = await VariantsMutationsCombinedParser._insert_new_amino_acids(
             variants,
             mutations
         )
@@ -124,8 +125,19 @@ class VariantsMutationsCombinedParser(FileParser):
         probe_lazy(variants, 'graph_11.5_variants_final', stream=True)
         probe_lazy(mutations, 'graph_11.5_mutations_final', stream=True)
 
-        await VariantsMutationsCombinedParser._insert_and_update_variants(variants, debug_info)
-        await VariantsMutationsCombinedParser._insert_and_update_mutations(mutations, debug_info)
+        count_variants_added, count_preexisting_variants = await(
+            VariantsMutationsCombinedParser._insert_and_update_variants(variants)
+        )
+        debug_info['count_variants_added'] = count_variants_added
+        debug_info['count_preexisting_variants'] = count_preexisting_variants
+        print(f'variants added / updated: {debug_info}')
+
+        count_mutations_added, count_preexisting_mutations = await(
+            VariantsMutationsCombinedParser._insert_and_update_mutations(mutations)
+        )
+        debug_info['count_mutations_added'] = count_mutations_added
+        debug_info['count_preexisting_mutations'] = count_preexisting_mutations
+        print(f'mutations added / updated: {debug_info}')
 
     async def _scan_variants(self):
         def variants_colname_mapping(cns: List[str]) -> List[str]:
@@ -196,10 +208,12 @@ class VariantsMutationsCombinedParser(FileParser):
     @staticmethod
     async def _get_vars_and_muts_for_existing_samples(
         variants_input: pl.LazyFrame,
-        mutations_input: pl.LazyFrame
+        mutations_input: pl.LazyFrame,
+        existing_samples: pl.DataFrame | None = None
     ) -> (pl.LazyFrame, pl.LazyFrame):
-        #  2. Get accession -> id mapping from db
-        existing_samples: pl.DataFrame = await get_samples_accession_and_id_as_pl_df()
+        if existing_samples is None:
+            #  2. Get accession -> id mapping from db
+            existing_samples: pl.DataFrame = await get_samples_accession_and_id_as_pl_df()
 
         #  3. Filter out vars and muts with accessions missing from db
         variants_with_samples = variants_input.join(
@@ -296,7 +310,7 @@ class VariantsMutationsCombinedParser(FileParser):
         return await copy_insert_alleles(new_alleles.collect())
 
     @staticmethod
-    async def _insert_new_amino_acid_subs(
+    async def _insert_new_amino_acids(
         variants_with_samples: pl.LazyFrame,
         mutations_with_samples: pl.LazyFrame,
     ) -> str:
@@ -535,7 +549,7 @@ class VariantsMutationsCombinedParser(FileParser):
 
     # todo: this and the variants one could return a promise to finish their insertion and clear some memory?
     @staticmethod
-    async def _insert_and_update_mutations(mutations: pl.LazyFrame, debug_info: dict):
+    async def _insert_and_update_mutations(mutations: pl.LazyFrame) -> (str, int):
         # mutations_collected, profile_mutations = mutations.profile(engine='streaming')
         # profile_mutations = profile_mutations.with_columns(elapsed=pl.col('end') - pl.col('start'))
         # print(profile_mutations)
@@ -557,15 +571,16 @@ class VariantsMutationsCombinedParser(FileParser):
             ]
         )
 
-        debug_info['count_mutations_added'] = await (
+        count_mutations_added = await (
             VariantsMutationsCombinedParser._insert_new_mutations(mutations, existing_mutations)
         )
-        debug_info['count_preexisting_mutations'] = await (
+        count_preexisting_mutations = await (
             VariantsMutationsCombinedParser._update_existing_mutations(mutations, existing_mutations)
         )
-        print(f'mutations added / updated: {debug_info}')
+        # rm
         # t8 = time.time()
         # print(f'added / updated mutations. Elapsed: {t8 - t7}')
+        return count_mutations_added, count_preexisting_mutations
 
     @staticmethod
     async def _insert_new_mutations(mutations: pl.LazyFrame, existing_mutations: pl.DataFrame) -> str:
@@ -604,7 +619,7 @@ class VariantsMutationsCombinedParser(FileParser):
         return count_preexisting_mutations
 
     @staticmethod
-    async def _insert_and_update_variants(variants: pl.LazyFrame, debug_info: dict):
+    async def _insert_and_update_variants(variants: pl.LazyFrame) -> (str, int):
         # variants_collected, profile_variants = variants.profile(engine='streaming')
         # profile_variants = profile_variants.with_columns(elapsed=pl.col('end') - pl.col('start'))
         # print(profile_variants)
@@ -626,15 +641,16 @@ class VariantsMutationsCombinedParser(FileParser):
             how='left'
         )
 
-        debug_info['count_variants_added'] = await (
+        count_variants_added = await (
             VariantsMutationsCombinedParser._insert_new_variants(variants)
         )
-        debug_info['count_preexisting_variants'] = await (
+        count_preexisting_variants = await (
             VariantsMutationsCombinedParser._update_existing_variants(variants)
         )
-        print(f'variants added / updated: {debug_info}')
+
         # t6 = time.time()
         # print(f'added / updated variants. Elapsed: {t6 - t5}')
+        return count_variants_added, count_preexisting_variants
 
     @staticmethod
     async def _update_existing_variants(variants: pl.LazyFrame) -> int:
@@ -722,3 +738,130 @@ class VariantsMutationsCombinedParser(FileParser):
         StandardColumnNames.alt_aa: 'alt_aa',
         StandardColumnNames.position_aa: 'pos_aa',
     }
+
+
+class VariantsMutationsCombinedChunkedParser(VariantsMutationsCombinedParser):
+    CHUNK_SIZE = 50_000
+
+    async def parse_and_insert(self):
+        debug_info = {
+            'alleles_added': 'unset',
+            'timestamp_alleles_added': 'unset',
+            'amino_acids_added': 'unset',
+            'timestamp_amino_acids_added': 'unset',
+            'translations_added': 'unset',
+            'timestamp_translations_added': 'unset',
+            'variant_chunk_timestamps': [],
+            'mutation_chunk_timestamps': [],
+            'variant_chunk_sizes': [],
+            'mutation_chunk_sizes': []
+        }
+        # 1) read and cleanup the variants and mutations as before
+        variants: pl.LazyFrame = await self._scan_variants()
+        mutations: pl.LazyFrame = await self._scan_mutations()
+
+        # 2) Get all the samples + accessions out of the DB
+        existing_samples: pl.DataFrame = await get_samples_accession_and_id_as_pl_df()
+
+        # 2.1) Filter to existing samples as before
+        variants, mutations = await VariantsMutationsCombinedParser._get_vars_and_muts_for_existing_samples(
+            variants,
+            mutations,
+            existing_samples
+        )
+
+        # 3) Do alleles as before
+        debug_info['count_alleles_added'] = await VariantsMutationsCombinedParser._insert_new_alleles(
+            variants,
+            mutations
+        )
+        debug_info['timestamp_alleles_added'] = datetime.now().isoformat()
+        print(debug_info)
+
+        # 4) do aminos as before
+        debug_info['amino_acids_added'] = await VariantsMutationsCombinedParser._insert_new_amino_acids(
+            variants,
+            mutations
+        )
+        debug_info['timestamp_amino_acids_added'] = datetime.now().isoformat()
+        print(debug_info)
+
+        # 5) Lazy-join alleles and amino acids back into vars and muts
+        variants, mutations = await (
+            VariantsMutationsCombinedParser
+            ._join_alleles_and_amino_subs_into_vars_and_muts(variants, mutations)
+        )
+
+        # 6) do translations as before
+        debug_info['translations_added'] = await VariantsMutationsCombinedParser._insert_new_translations(
+            variants,
+            mutations
+        )
+        debug_info['timestamp_translations_added'] = datetime.now().isoformat()
+        print(debug_info)
+
+        # 7) Lazy-join translations back into the variants and mutations frames
+        variants, mutations = await(
+            VariantsMutationsCombinedParser._join_translation_ids_into_vars_and_muts(variants, mutations)
+        )
+
+        # 8) Iterate through sample accessions in chunks, and process connected variants and mutations.
+        # 8.1) Get chunk of samples, and for each chunk...
+        n_samples = existing_samples.select(pl.len()).item()
+        print(
+            f'variants and mutations will be processed in '
+            f'{ceil(n_samples / VariantsMutationsCombinedChunkedParser.CHUNK_SIZE)} chunks'
+        )
+        chunk_start = 0
+        while chunk_start < n_samples:
+            chunk_sample_ids = (
+                existing_samples
+                .slice(chunk_start, VariantsMutationsCombinedChunkedParser.CHUNK_SIZE)
+                .select(pl.col(StandardColumnNames.sample_id))
+            )
+            chunk_start += VariantsMutationsCombinedChunkedParser.CHUNK_SIZE
+
+            # 8.2) Filter to connected variants
+            # 8.3) Upsert variants
+            debug_info['variant_chunk_sizes'].append(
+                await VariantsMutationsCombinedChunkedParser._upsert_variants_chunk(variants, chunk_sample_ids)
+            )
+            debug_info['variant_chunk_timestamps'].append(datetime.now().isoformat())
+
+            # 8.4) Filter to connected mutations
+            # 8.5) upsert mutations
+            debug_info['mutation_chunk_sizes'].append(
+                await VariantsMutationsCombinedChunkedParser._upsert_mutations_chunk(mutations, chunk_sample_ids)
+            )
+            debug_info['mutation_chunk_timestamps'].append(datetime.now().isoformat())
+            print(f'Chunk finished: {debug_info}')
+
+    @staticmethod
+    async def _upsert_variants_chunk(variants: pl.LazyFrame, chunk_sample_ids: pl.DataFrame) -> int:
+        # 8.2) Filter to connected variants
+        chunk_variants: pl.DataFrame = (
+            variants.join(
+                chunk_sample_ids.lazy(),
+                on=pl.col(StandardColumnNames.sample_id),
+                how='inner'
+            )
+        ).collect(engine='streaming')
+
+        # 8.3) Upsert variants
+        await batch_upsert_variants(chunk_variants)
+        return chunk_variants.select(pl.len()).item()
+
+    @staticmethod
+    async def _upsert_mutations_chunk(mutations: pl.LazyFrame, chunk_sample_ids: pl.DataFrame) -> int:
+        # 8.4) Filter to connected mutations
+        chunk_mutations: pl.DataFrame = (
+            mutations.join(
+                chunk_sample_ids.lazy(),
+                on=pl.col(StandardColumnNames.sample_id),
+                how='inner'
+            )
+        ).collect(engine='streaming')
+
+        # 8.5) Upsert mutations
+        await batch_upsert_mutations(chunk_mutations)
+        return chunk_mutations.select(pl.len()).item()

@@ -106,7 +106,7 @@ fi
   python3 -u -m memray run -o "$VM_MEMRAY_OUT" runinserts.py \
   "$VARIANTS_FILE" \
   "$MUTATIONS_FILE" \
-  --format variants_mutations_combined_tsv
+  --format variants_mutations_combined_chunked_tsv
 } &>> "$LOG"
 
 # Copying over some debug files
