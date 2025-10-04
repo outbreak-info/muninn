@@ -50,8 +50,6 @@ class VariantsMutationsCombinedParser(FileParser):
             self.mutations_filename = variants_filename
             self._verify_headers()
 
-        pl.Config.set_streaming_chunk_size(1000)  # rm
-
     async def parse_and_insert(self):
         # todo: add some timestamps to debug data.
         debug_info = {
@@ -547,7 +545,6 @@ class VariantsMutationsCombinedParser(FileParser):
         )
         return variants_plus_translation_ids, mutations_plus_translation_ids
 
-    # todo: this and the variants one could return a promise to finish their insertion and clear some memory?
     @staticmethod
     async def _insert_and_update_mutations(mutations: pl.LazyFrame) -> (str, int):
         # mutations_collected, profile_mutations = mutations.profile(engine='streaming')
@@ -771,12 +768,12 @@ class VariantsMutationsCombinedChunkedParser(VariantsMutationsCombinedParser):
         )
 
         # 3) Do alleles as before
-        debug_info['count_alleles_added'] = await VariantsMutationsCombinedParser._insert_new_alleles(
+        debug_info['alleles_added'] = await VariantsMutationsCombinedParser._insert_new_alleles(
             variants,
             mutations
         )
         debug_info['timestamp_alleles_added'] = datetime.now().isoformat()
-        print(debug_info)
+        print(f'alleles added: {debug_info}')
 
         # 4) do aminos as before
         debug_info['amino_acids_added'] = await VariantsMutationsCombinedParser._insert_new_amino_acids(
@@ -784,7 +781,7 @@ class VariantsMutationsCombinedChunkedParser(VariantsMutationsCombinedParser):
             mutations
         )
         debug_info['timestamp_amino_acids_added'] = datetime.now().isoformat()
-        print(debug_info)
+        print(f'amino acids added: {debug_info}')
 
         # 5) Lazy-join alleles and amino acids back into vars and muts
         variants, mutations = await (
@@ -798,7 +795,7 @@ class VariantsMutationsCombinedChunkedParser(VariantsMutationsCombinedParser):
             mutations
         )
         debug_info['timestamp_translations_added'] = datetime.now().isoformat()
-        print(debug_info)
+        print(f'translations added: {debug_info}')
 
         # 7) Lazy-join translations back into the variants and mutations frames
         variants, mutations = await(
