@@ -185,7 +185,7 @@ class VariantsMutationsCombinedParser(FileParser):
             (
                 pl.col(StandardColumnNames.gff_feature)
                 # clean up gff feature (HA:cds-XAJ25415.1  -->  XAJ25415.1)
-                .str.extract(r'([\w\-]+:)?(cds-)?(.*)', 3)
+                .str.extract(r'^\s*([\w\-]+:)?(cds-)?(.*)\s*$', 3)
                 .alias(StandardColumnNames.gff_feature)
             ),
             pl.col(StandardColumnNames.position_aa).cast(pl.Int64)
