@@ -1,5 +1,7 @@
 version: "3.8"
 
+name: "${MUNINN_INSTANCE_NAME}_project"
+
 services:
   postgres:
     container_name: "${MUNINN_INSTANCE_NAME}_pg"
@@ -59,7 +61,11 @@ services:
       sleep 30
       && fastapi run --workers 33 api/main.py
       "
-
 volumes:
   postgres_data:
     name: "${MUNINN_INSTANCE_NAME}_postgres_data"
+
+networks:
+  default:
+    name: "${MUNINN_INSTANCE_NAME}_network"
+    driver: "bridge"
