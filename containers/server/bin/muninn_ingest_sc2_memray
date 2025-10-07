@@ -3,6 +3,7 @@
 SECONDS=0
 DATE=$(date +%Y-%m-%dT%H_%M_%S_%Z)
 LOG="/home/muninn/data/ingest_sc2_$DATE.log"
+VM_MEMRAY_OUT="/home/muninn/data/variants_mutations_$DATE.memray"
 echo "begin at $(date)" >> "$LOG"
 
 # Debug output files for ref conflicts
@@ -102,10 +103,10 @@ fi
 {
   # ingest bjorn-general outputs
   python3 -u runinserts.py "$SAMPLES_FILE" --format sc2_samples
-  python3 -u runinserts.py \
+  python3 -u -m memray run -o "$VM_MEMRAY_OUT" runinserts.py \
   "$VARIANTS_FILE" \
   "$MUTATIONS_FILE" \
-  --format variants_mutations_combined_tsv
+  --format variants_mutations_combined_chunked_tsv
 } &>> "$LOG"
 
 # Copying over some debug files
