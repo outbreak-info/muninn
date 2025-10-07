@@ -24,6 +24,7 @@ def upgrade() -> None:
     op.add_column('samples', sa.Column('ww_catchment_population', sa.BigInteger(), nullable=True))
     op.add_column('samples', sa.Column('ww_site_id', sa.Text(), nullable=True))
     op.add_column('samples', sa.Column('ww_collected_by', sa.Text(), nullable=True))
+    op.add_column('samples', sa.Column('census_region', sa.Text(), nullable=True))
     # ### end Alembic commands ###
 
 
@@ -33,4 +34,5 @@ def downgrade() -> None:
     op.drop_column('samples', 'ww_site_id')
     op.drop_column('samples', 'ww_catchment_population')
     op.drop_column('samples', 'ww_viral_load')
+    op.drop_column('samples', 'census_region')
     # ### end Alembic commands ###
