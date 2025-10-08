@@ -27,7 +27,6 @@ TRANSLATIONS_REF_CONFLICTS_FILE = '/tmp/translations_ref_conflicts.csv'
 
 # rm
 def probe_lazy(df: pl.LazyFrame, name: str, stream: bool = False) -> None:
-    return
     engine = 'in-memory'
     if stream:
         engine = 'streaming'
@@ -851,14 +850,16 @@ class VariantsMutationsCombinedChunkedParser(VariantsMutationsCombinedParser):
     @staticmethod
     async def _upsert_mutations_chunk(mutations: pl.LazyFrame, chunk_sample_ids: pl.DataFrame) -> int:
         # 8.4) Filter to connected mutations
-        chunk_mutations: pl.DataFrame = (
+        chunk_mutations = (
             mutations.join(
                 chunk_sample_ids.lazy(),
                 on=pl.col(StandardColumnNames.sample_id),
                 how='inner'
             )
-        ).collect(engine='streaming')
-
+        )
+        probe_lazy(chunk_mutations, 'graph_chunk_mutations', stream=True)
+        chunk_mutations = chunk_mutations.collect(engine='streaming')
+        chunk_mutations.write_csv('/home/muninn/data/last_mutations_chunk.csv') #rm
         # 8.5) Upsert mutations
         await batch_upsert_mutations(chunk_mutations)
         return chunk_mutations.select(pl.len()).item()
