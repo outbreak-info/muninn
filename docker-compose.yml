@@ -1,6 +1,6 @@
 version: "3.8"
 
-# name: "${MUNINN_INSTANCE_NAME}_project"
+name: "${MUNINN_INSTANCE_NAME}_project"
 
 services:
   postgres:
