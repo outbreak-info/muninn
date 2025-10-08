@@ -1,6 +1,6 @@
 version: "3.8"
 
-name: "${MUNINN_INSTANCE_NAME}_project"
+# name: "${MUNINN_INSTANCE_NAME}_project"
 
 services:
   postgres:
@@ -49,6 +49,8 @@ services:
       resources:
         limits:
           memory: 400G
+        reservations:
+          memory: 350G
     environment:
       MUNINN_DB_READONLY_USER: "${MUNINN_DB_READONLY_USER}"
       MUNINN_DB_READONLY_PASSWORD: "${MUNINN_DB_READONLY_PASSWORD}"
