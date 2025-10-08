@@ -243,6 +243,7 @@ class LineageAbundanceInfo(BaseModel):
 class AverageLineageAbundanceInfo(BaseModel):
     year: int
     chunk: int
+    epiweek: int
     lineage_name: str
     state: str | None
     census_region: str

@@ -239,7 +239,7 @@ async def get_abundance_summaries_by_simple_date(
     return out_data
 
 
-async def get_averaged_abundances(
+async def get_averaged_abundances_by_location(
     date_bin: DateBinOpt,
     geo_bin: str,
     raw_query: str,
@@ -249,6 +249,7 @@ async def get_averaged_abundances(
         user_where_clause = f'where ({parser.parse(raw_query)})' \
             .replace('state', 'lp.state') \
             .replace('census_region', 'lp.census_region') \
+            .replace("epiweek", "concat(lp.year, lpad(lp.chunk::text, 2, '0'))::int")
 
     match date_bin:
         case DateBinOpt.week | DateBinOpt.month:
@@ -284,7 +285,7 @@ async def get_averaged_abundances(
                         l.lineage_name as lineage_name,
                         ls.lineage_system_name,
                         gl.admin1_name as state,
-                        s.ww_census_region as census_region,
+                        s.census_region as census_region,
                         s.collection_start_date,
                         s.collection_end_date,
                         sl.abundance,
@@ -323,6 +324,7 @@ async def get_averaged_abundances(
                 select
                     lp.year,
                     lp.chunk,
+                    concat(lp.year, lpad(lp.chunk::text, 2, '0')) as epiweek,
                     lp.lineage_name as lineage_name,
                     {lp_group_by},
                     lp.sample_count,
@@ -339,15 +341,15 @@ async def get_averaged_abundances(
     out_data = list()
     if geo_bin == 'state':
         for r in res:
-            print(r)
             info = AverageLineageAbundanceInfo(
                 year=r[0],
                 chunk=r[1],
-                lineage_name=r[2],
-                state=r[3],
-                census_region=r[4],
-                sample_count=r[5],
-                mean_lineage_prevalence=r[6]
+                epiweek=r[2],
+                lineage_name=r[3],
+                state=r[4],
+                census_region=r[5],
+                sample_count=r[6],
+                mean_lineage_prevalence=r[7]
             )
             out_data.append(info)
     elif geo_bin == 'census_region':
@@ -355,11 +357,12 @@ async def get_averaged_abundances(
             info = AverageLineageAbundanceInfo(
                 year=r[0],
                 chunk=r[1],
-                lineage_name=r[2],
+                epiweek=r[2],
+                lineage_name=r[3],
                 state=None,
-                census_region=r[3],
-                sample_count=r[4],
-                mean_lineage_prevalence=r[5]
+                census_region=r[4],
+                sample_count=r[5],
+                mean_lineage_prevalence=r[6]
             )
             out_data.append(info)
  
