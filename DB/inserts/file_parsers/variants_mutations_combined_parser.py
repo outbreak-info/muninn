@@ -27,6 +27,7 @@ TRANSLATIONS_REF_CONFLICTS_FILE = '/tmp/translations_ref_conflicts.csv'
 
 # rm
 def probe_lazy(df: pl.LazyFrame, name: str, stream: bool = False) -> None:
+    return
     engine = 'in-memory'
     if stream:
         engine = 'streaming'

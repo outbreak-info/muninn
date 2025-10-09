@@ -23,7 +23,7 @@ MarkupSafe==3.0.2
 mdurl==0.1.2
 memray==1.18.0
 ply==3.11
-polars==1.30.0
+polars==1.22.0
 psycopg2-binary==2.9.10
 pyarrow==20.0.0
 pydantic==2.10.6
