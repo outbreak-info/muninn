@@ -5,6 +5,7 @@ from math import ceil
 from typing import List, Set
 
 import polars as pl
+import dask.dataframe as dd
 
 from DB.inserts.alleles import copy_insert_alleles
 from DB.inserts.amino_acid_substitutions import copy_insert_aa_subs
@@ -23,17 +24,6 @@ from utils.constants import StandardColumnNames, EXCLUDED_SRAS
 AMINO_SUB_REF_CONFLICTS_FILE = '/tmp/amino_sub_ref_conflicts.csv'
 ALLELE_REF_CONFLICTS_FILE = '/tmp/allele_ref_conflicts.csv'
 TRANSLATIONS_REF_CONFLICTS_FILE = '/tmp/translations_ref_conflicts.csv'
-
-
-# rm
-def probe_lazy(df: pl.LazyFrame, name: str, stream: bool = False) -> None:
-    return
-    engine = 'in-memory'
-    if stream:
-        engine = 'streaming'
-    df.show_graph(
-        output_path=f'/tmp/{name}.png', show=False, engine=engine, plan_stage="physical"
-    )
 
 
 class VariantsMutationsCombinedParser(FileParser):
@@ -118,10 +108,6 @@ class VariantsMutationsCombinedParser(FileParser):
                 mutations
             )
         )
-
-        # rm graphs
-        probe_lazy(variants, 'graph_11.5_variants_final', stream=True)
-        probe_lazy(mutations, 'graph_11.5_mutations_final', stream=True)
 
         count_variants_added, count_preexisting_variants = await(
             VariantsMutationsCombinedParser._insert_and_update_variants(variants)
@@ -271,7 +257,7 @@ class VariantsMutationsCombinedParser(FileParser):
         )
 
         # Check for ref conflicts
-        tmp = (pl.concat(
+        ref_conflicts = (pl.concat(
             [
                 existing_alleles.select(allele_cols).lazy(),
                 alleles
@@ -289,10 +275,7 @@ class VariantsMutationsCombinedParser(FileParser):
             pl.col(StandardColumnNames.region),
             pl.col(StandardColumnNames.position_nt),
             pl.col(StandardColumnNames.alt_nt)
-        ))
-        # rm
-        probe_lazy(tmp, 'graph_5_allele_ref_conflicts')
-        ref_conflicts = tmp.collect()
+        )).collect()
 
         if len(ref_conflicts) > 0:
             print(
@@ -303,8 +286,6 @@ class VariantsMutationsCombinedParser(FileParser):
 
         # ref conflicts have already been filtered out of new_alleles above, so we are good to insert
         #  6. Insert new alleles via copy
-        # rm
-        probe_lazy(new_alleles, 'graph_6_new_alleles')
         return await copy_insert_alleles(new_alleles.collect())
 
     @staticmethod
@@ -382,9 +363,7 @@ class VariantsMutationsCombinedParser(FileParser):
             pl.col(StandardColumnNames.gff_feature),
             pl.col(StandardColumnNames.position_aa),
             pl.col(StandardColumnNames.alt_aa)
-        ))
-        probe_lazy(ref_conflicts, 'graph_8_aa_ref_conflicts')  # rm
-        ref_conflicts = ref_conflicts.collect()
+        )).collect()
 
         if len(ref_conflicts) > 0:
             print(
@@ -396,7 +375,6 @@ class VariantsMutationsCombinedParser(FileParser):
         # ref conflicts have already been filtered out of new_amino_subs above, so we are good to insert
 
         #  9. insert new aa subs via copy
-        probe_lazy(new_amino_subs, 'graph_9_new_aas')  # rm
         return await copy_insert_aa_subs(new_amino_subs.collect())
 
     @staticmethod
@@ -505,9 +483,7 @@ class VariantsMutationsCombinedParser(FileParser):
             .select(
                 pl.col(StandardColumnNames.alt_codon, StandardColumnNames.amino_acid_id)
             )
-        )
-        probe_lazy(ref_conflicts, 'graph_11_translation_ref_conflicts')  # rm
-        ref_conflicts = ref_conflicts.collect()
+        ).collect()
         if len(ref_conflicts) > 0:
             print(
                 f'WARNING: in translations, found {len(ref_conflicts)} positions with conflicting values for ref_codon. '
@@ -515,7 +491,6 @@ class VariantsMutationsCombinedParser(FileParser):
             )
             ref_conflicts.write_csv(TRANSLATIONS_REF_CONFLICTS_FILE)
 
-        probe_lazy(new_translations, 'graph_11_new_translations')  # rm
         return await copy_insert_translations(new_translations.collect())
 
     @staticmethod
@@ -670,9 +645,7 @@ class VariantsMutationsCombinedParser(FileParser):
         t0 = time.time()
         new_variants = variants.filter(
             pl.col(StandardColumnNames.intra_host_variant_id).is_null()
-        )
-        probe_lazy(new_variants, 'graph_14_new_variants', stream=True)
-        new_variants = new_variants.collect(engine='streaming')
+        ).collect(engine='streaming')
         t1 = time.time()
         print(f'Collected new variants in: {t1 - t0}')
         # 15. Insert new variants via copy
@@ -836,12 +809,10 @@ class VariantsMutationsCombinedChunkedParser(VariantsMutationsCombinedParser):
     @staticmethod
     async def _upsert_variants_chunk(variants: pl.LazyFrame, chunk_sample_ids: pl.DataFrame) -> int:
         # 8.2) Filter to connected variants
-        chunk_variants: pl.DataFrame = (
-            variants.join(
-                chunk_sample_ids.lazy(),
-                on=pl.col(StandardColumnNames.sample_id),
-                how='inner'
-            )
+        chunk_variants: pl.DataFrame = variants.join(
+            chunk_sample_ids.lazy(),
+            on=pl.col(StandardColumnNames.sample_id),
+            how='inner'
         ).collect(engine='streaming')
 
         # 8.3) Upsert variants
@@ -857,10 +828,26 @@ class VariantsMutationsCombinedChunkedParser(VariantsMutationsCombinedParser):
                 on=pl.col(StandardColumnNames.sample_id),
                 how='inner'
             )
-        )
-        probe_lazy(chunk_mutations, 'graph_chunk_mutations', stream=True)
-        chunk_mutations = chunk_mutations.collect(engine='streaming')
-        chunk_mutations.write_csv('/home/muninn/data/last_mutations_chunk.csv') #rm
+        ).collect(engine='streaming')
+        chunk_mutations.write_csv('/home/muninn/data/last_mutations_chunk.csv')  # rm
         # 8.5) Upsert mutations
         await batch_upsert_mutations(chunk_mutations)
         return chunk_mutations.select(pl.len()).item()
+
+
+class VariantsMutationsCombinedParserDask(VariantsMutationsCombinedParser):
+
+
+    async def parse_and_insert(self):
+        mutations = await self.read_mutations_file()
+        return mutations
+
+    async def read_mutations_file(self):
+        mutations: dd.DataFrame = dd.read_csv(self.mutations_filename, delimiter=self.delimiter)
+        rename_mapping = {v: k for k, v in VariantsMutationsCombinedParser.mutations_column_mapping.items()}
+        mutations = mutations.rename(columns=rename_mapping)
+
+        return mutations
+
+    def _verify_headers(self):
+        pass
