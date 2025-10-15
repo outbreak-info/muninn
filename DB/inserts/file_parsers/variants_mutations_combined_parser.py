@@ -837,13 +837,14 @@ class VariantsMutationsCombinedChunkedParser(VariantsMutationsCombinedParser):
 
 class VariantsMutationsCombinedParserDask(VariantsMutationsCombinedParser):
 
-
     async def parse_and_insert(self):
         mutations = await self.read_mutations_file()
         return mutations
 
     async def read_mutations_file(self):
-        mutations: dd.DataFrame = dd.read_csv(self.mutations_filename, delimiter=self.delimiter)
+        dtype_mapping = {v: VariantsMutationsCombinedParserDask.mutations_column_types[k]
+                         for k, v in VariantsMutationsCombinedParser.mutations_column_mapping.items()}
+        mutations: dd.DataFrame = dd.read_csv(self.mutations_filename, delimiter=self.delimiter, dtype=dtype_mapping)
         rename_mapping = {v: k for k, v in VariantsMutationsCombinedParser.mutations_column_mapping.items()}
         mutations = mutations.rename(columns=rename_mapping)
 
@@ -851,3 +852,17 @@ class VariantsMutationsCombinedParserDask(VariantsMutationsCombinedParser):
 
     def _verify_headers(self):
         pass
+
+    mutations_column_types = {
+        StandardColumnNames.accession: 'string',
+        StandardColumnNames.position_nt: 'Int32',
+        StandardColumnNames.ref_nt: 'string',
+        StandardColumnNames.alt_nt: 'string',
+        StandardColumnNames.region: 'string',
+        StandardColumnNames.gff_feature: 'string',
+        StandardColumnNames.ref_codon: 'string',
+        StandardColumnNames.alt_codon: 'string',
+        StandardColumnNames.ref_aa: 'string',
+        StandardColumnNames.alt_aa: 'string',
+        StandardColumnNames.position_aa: 'Int32',
+    }
