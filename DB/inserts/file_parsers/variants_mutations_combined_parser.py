@@ -3,9 +3,11 @@ import time
 from datetime import datetime
 from math import ceil
 from typing import List, Set
+import csv
 
 import polars as pl
 import dask.dataframe as dd
+from dask.diagnostics import ResourceProfiler
 
 from DB.inserts.alleles import copy_insert_alleles
 from DB.inserts.amino_acid_substitutions import copy_insert_aa_subs
@@ -839,12 +841,20 @@ class VariantsMutationsCombinedParserDask(VariantsMutationsCombinedParser):
 
     async def parse_and_insert(self):
         mutations = await self.read_mutations_file()
-        return mutations
+        with ResourceProfiler as rprof:
+            mutations = mutations.compute()
+        # rm
+        with open('data/mutations.rprof.csv', 'w+') as f:
+            writer = csv.writer(f)
+            writer.writerow(['time', 'mem', 'cpu'])
+            writer.writerows(rprof.results)
+        return mutations, rprof
 
     async def read_mutations_file(self):
         dtype_mapping = {v: VariantsMutationsCombinedParserDask.mutations_column_types[k]
                          for k, v in VariantsMutationsCombinedParser.mutations_column_mapping.items()}
-        mutations: dd.DataFrame = dd.read_csv(self.mutations_filename, delimiter=self.delimiter, dtype=dtype_mapping)
+        # todo: make the blocksize configurable
+        mutations: dd.DataFrame = dd.read_csv(self.mutations_filename, delimiter=self.delimiter, dtype=dtype_mapping, blocksize='128MB')
         rename_mapping = {v: k for k, v in VariantsMutationsCombinedParser.mutations_column_mapping.items()}
         mutations = mutations.rename(columns=rename_mapping)
 
