@@ -77,3 +77,7 @@ def get_async_session():
 
 def get_uri_for_polars():
     return get_url(polars=True).render_as_string(hide_password=False)
+
+# todo: async?
+def get_uri_for_dask():
+    return get_url(False, False, True).render_as_string(hide_password=False)

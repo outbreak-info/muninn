@@ -3,12 +3,14 @@ from typing import List, Dict
 import polars as pl
 from sqlalchemy import select, text, cast, Date, func, Integer
 from sqlalchemy.orm import contains_eager
+import dask.dataframe as dd
 
-from DB.engine import get_uri_for_polars, get_async_session
+import DB.engine
+from DB.engine import get_uri_for_polars, get_async_session, get_uri_for_dask
 from DB.models import Sample, Mutation, GeoLocation, Allele, AminoAcid, IntraHostVariant, Translation
 from api.models import SampleInfo
 from parser.parser import parser
-from utils.constants import StandardColumnNames
+from utils.constants import StandardColumnNames, TableNames
 from utils.errors import NotFoundError
 from utils.constants import DateBinOpt
 
@@ -103,6 +105,55 @@ async def get_samples_accession_and_id_as_pl_df() -> pl.DataFrame:
         uri=get_uri_for_polars()
     ).rename({'id': StandardColumnNames.sample_id})
 
+# todo: all this messing around with divisions to get the index set up right may be unnecessary.
+async def get_samples_accession_and_id_as_dask_df():
+    divisions = await _get_sample_accession_divisions()
+    uri = get_uri_for_dask()
+    query = select(Sample.id, Sample.accession)
+    # noinspection PyTypeChecker
+    samples: dd.DataFrame = dd.read_sql_query(query, uri, index_col=StandardColumnNames.accession, divisions=divisions)
+    samples = samples.rename(columns={'id': StandardColumnNames.sample_id})
+    return samples
+
+async def _get_sample_accession_divisions(n_divisions: int = 3) -> list[str]:
+    """
+    Return a list of accessions that will partition samples into N buckets of approximately
+    equal size, when sorted by accession.
+    todo: this may not actually be necessary
+    :param n_divisions: number of buckets desired
+    :return: Accessions evenly spaced to produce N or N-1 buckets
+    """
+    query = f'''
+            select {StandardColumnNames.accession}, n from (
+            select {StandardColumnNames.accession},
+                   (row_number() over (order by {StandardColumnNames.accession} asc)) as n,
+                   max_n
+            from {TableNames.samples}
+                cross join(
+                    select count(*) as max_n
+                    from {TableNames.samples}
+                ) _
+            ) acc where
+            (acc.n % (select floor(count(*)/{n_divisions})::bigint from {TableNames.samples})) = 0
+            or acc.n = 1
+            or acc.n = max_n;
+            '''
+    async with get_async_session() as session:
+        res = await session.execute(text(query))
+
+    out = []
+    n0 = n1 = n2 = 0
+    for acc, n in res:
+        n2 = n1
+        n1 = n0
+        n0 = n
+        out.append(acc)
+    # Check that the last division is properly spaced
+    # This is determined by the second-to-last entry, b/c the last must always be the last sample
+    # the last gap must be at least half the size of the preceding one
+    if (n0 - n1) / (n1 - n2) < 0.5:
+        out = out[:-2] + out[-1:]
+    return out
 
 async def get_sample_id_by_accession(accession: str) -> int:
     async with get_async_session() as session:

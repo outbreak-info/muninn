@@ -3,10 +3,9 @@ import time
 from datetime import datetime
 from math import ceil
 from typing import List, Set
-import csv
 
-import polars as pl
 import dask.dataframe as dd
+import polars as pl
 from dask.diagnostics import ResourceProfiler
 
 from DB.inserts.alleles import copy_insert_alleles
@@ -15,10 +14,10 @@ from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.mutations import copy_insert_mutations, batch_upsert_mutations
 from DB.inserts.translations import copy_insert_translations
 from DB.inserts.variants import batch_upsert_variants, copy_insert_variants
-from DB.queries.alleles import get_all_alleles_as_pl_df
+from DB.queries.alleles import get_all_alleles_as_pl_df, get_all_alleles_as_dask_df
 from DB.queries.amino_acid_substitutions import get_all_amino_acid_subs_as_pl_df
 from DB.queries.mutations import get_all_mutations_as_pl_df
-from DB.queries.samples import get_samples_accession_and_id_as_pl_df
+from DB.queries.samples import get_samples_accession_and_id_as_pl_df, get_samples_accession_and_id_as_dask_df
 from DB.queries.translations import get_all_translations_as_pl_df
 from DB.queries.variants import get_all_variants_as_pl_df
 from utils.constants import StandardColumnNames, EXCLUDED_SRAS
@@ -839,30 +838,181 @@ class VariantsMutationsCombinedChunkedParser(VariantsMutationsCombinedParser):
 
 class VariantsMutationsCombinedParserDask(VariantsMutationsCombinedParser):
 
+    def __init__(self, variants_filename: str, mutations_filename: str):
+        super().__init__(variants_filename, mutations_filename)
+        # todo: make configurable
+        self.blocksize = '128MB'
+
     async def parse_and_insert(self):
-        mutations = await self.read_mutations_file()
-        with ResourceProfiler as rprof:
+        existing_samples: dd.DataFrame = await get_samples_accession_and_id_as_dask_df()
+
+        mutations: dd.DataFrame = await self.read_mutations_file()
+        mutations = VariantsMutationsCombinedParserDask._clean_up_gff_feature(mutations)
+
+        variants: dd.DataFrame = await self.read_variants_file()
+        variants = VariantsMutationsCombinedParserDask._clean_up_gff_feature(variants)
+
+        # join in sample ids, filter down to existing samples
+        # todo: drop the accessions at this point?
+        mutations = mutations.join(
+            existing_samples,
+            on=StandardColumnNames.accession,
+            how='inner'
+        )
+        variants = variants.join(
+            existing_samples,
+            on=StandardColumnNames.accession,
+            how='inner'
+        )
+
+        # alleles
+        combined_alleles: dd.DataFrame = (
+            dd.concat(
+                [
+                    mutations[[
+                        StandardColumnNames.region,
+                        StandardColumnNames.ref_nt,
+                        StandardColumnNames.position_nt,
+                        StandardColumnNames.alt_nt
+                    ]],
+                    variants[[
+                        StandardColumnNames.region,
+                        StandardColumnNames.ref_nt,
+                        StandardColumnNames.position_nt,
+                        StandardColumnNames.alt_nt
+                    ]]
+                ]
+            ).drop_duplicates(ignore_index=True)
+        )
+
+        # find ref conflicts
+        ref_conflicts: dd.DataFrame = (
+            combined_alleles.groupby(
+                by=[
+                    StandardColumnNames.region,
+                    StandardColumnNames.position_nt,
+                    StandardColumnNames.alt_nt
+                ]
+            )
+            .count()
+            .query(f'{StandardColumnNames.ref_nt} > 1')
+            .compute()
+        )
+        # todo: warn about ref conflicts
+
+        combined_alleles = combined_alleles.drop_duplicates(
+            subset=[
+                StandardColumnNames.region,
+                StandardColumnNames.position_nt,
+                StandardColumnNames.alt_nt
+            ],
+            ignore_index=True
+        )
+
+        # get new alleles
+        existing_alleles: dd.DataFrame = await get_all_alleles_as_dask_df()
+        new_alleles: dd.DataFrame = dd.DataFrame.from_dict({})
+        if len(existing_alleles.index) == 0:
+            new_alleles = combined_alleles
+        else:
+            alleles_with_ids: dd.DataFrame = combined_alleles.merge(
+                existing_alleles,
+                on=[
+                    StandardColumnNames.region,
+                    StandardColumnNames.position_nt,
+                    StandardColumnNames.alt_nt
+                ],
+                how='left'
+            )
+
+            updated_alleles: dd.DataFrame = alleles_with_ids.dropna(subset=[StandardColumnNames.allele_id])
+            # todo: update alleles
+            # todo: calculate new alleles too
+        # insert new alleles
+        status = await copy_insert_alleles(new_alleles)
+        print(status)
+
+        # get alleles again
+        existing_alleles: dd.DataFrame = await get_all_alleles_as_dask_df()
+
+        # join to mutations and variants
+        # keep just the ref from the db after this
+        mutations = (
+            mutations.merge(
+                existing_alleles,
+                on=[
+                    StandardColumnNames.region,
+                    StandardColumnNames.position_nt,
+                    StandardColumnNames.alt_nt
+                ],
+                how='left'
+            )
+            .drop(columns=f'{StandardColumnNames.ref_nt}_x')
+            .rename(columns={f'{StandardColumnNames.ref_nt}_y': StandardColumnNames.ref_nt})
+        )
+        # amino acids
+        # translations
+        # mutations
+        # variants
+
+        with ResourceProfiler() as rprof:
             mutations = mutations.compute()
         # rm
-        with open('data/mutations.rprof.csv', 'w+') as f:
+        with open(f'data/mutations.rprof.{datetime.now().isoformat(timespec="seconds")}.csv', 'w+') as f:
             writer = csv.writer(f)
             writer.writerow(['time', 'mem', 'cpu'])
             writer.writerows(rprof.results)
-        return mutations, rprof
+        # rm
+        print(mutations.info())
+        print(mutations.memory_usage())
+        return
 
     async def read_mutations_file(self):
-        dtype_mapping = {v: VariantsMutationsCombinedParserDask.mutations_column_types[k]
-                         for k, v in VariantsMutationsCombinedParser.mutations_column_mapping.items()}
-        # todo: make the blocksize configurable
-        mutations: dd.DataFrame = dd.read_csv(self.mutations_filename, delimiter=self.delimiter, dtype=dtype_mapping, blocksize='128MB')
+        dtype_mapping = {
+            v: VariantsMutationsCombinedParserDask.mutations_column_types[k]
+            for k, v in VariantsMutationsCombinedParser.mutations_column_mapping.items()
+        }
+
+        mutations: dd.DataFrame = dd.read_csv(
+            self.mutations_filename,
+            delimiter=self.delimiter,
+            dtype=dtype_mapping,
+            blocksize=self.blocksize
+        )
         rename_mapping = {v: k for k, v in VariantsMutationsCombinedParser.mutations_column_mapping.items()}
         mutations = mutations.rename(columns=rename_mapping)
 
         return mutations
 
-    def _verify_headers(self):
-        pass
+    async def read_variants_file(self):
+        dtype_mapping = {
+            v: VariantsMutationsCombinedParserDask.variants_column_types[k]
+            for k, v in VariantsMutationsCombinedParser.variants_column_mapping.items()
+        }
+        variants: dd.DataFrame = dd.read_csv(
+            self.variants_filename,
+            delimiter=self.delimiter,
+            dtype=dtype_mapping,
+            blocksize=self.blocksize
+        )
+        rename_mapping = {v: k for k, v in VariantsMutationsCombinedParser.variants_column_mapping.items()}
+        variants = variants.rename(columns=rename_mapping)
+        return variants
 
+    @staticmethod
+    def _clean_up_gff_feature(df: dd.DataFrame) -> dd.DataFrame:
+        # todo: this is a bug waiting to happen, GFF features should be cleaned up before we see them here.
+        # clean up gff feature (HA:cds-XAJ25415.1  -->  XAJ25415.1)
+        return df.replace(
+            {StandardColumnNames.gff_feature: r'^\s*([\w\-]+:)?(cds-)?'},
+            {StandardColumnNames.gff_feature: ''},
+            regex=True
+        )
+
+    def _verify_headers(self):
+        super()._verify_headers()
+
+    # todo: try reading in the region as a categorical
     mutations_column_types = {
         StandardColumnNames.accession: 'string',
         StandardColumnNames.position_nt: 'Int32',
@@ -875,4 +1025,28 @@ class VariantsMutationsCombinedParserDask(VariantsMutationsCombinedParser):
         StandardColumnNames.ref_aa: 'string',
         StandardColumnNames.alt_aa: 'string',
         StandardColumnNames.position_aa: 'Int32',
+    }
+
+    variants_column_types = {
+        StandardColumnNames.region: 'string',
+        StandardColumnNames.position_nt: 'Int32',
+        StandardColumnNames.ref_nt: 'string',
+        StandardColumnNames.alt_nt: 'string',
+        StandardColumnNames.position_aa: 'Int32',
+        StandardColumnNames.ref_aa: 'string',
+        StandardColumnNames.alt_aa: 'string',
+        StandardColumnNames.gff_feature: 'string',
+        StandardColumnNames.ref_codon: 'string',
+        StandardColumnNames.alt_codon: 'string',
+        StandardColumnNames.accession: 'string',
+        StandardColumnNames.pval: 'Float32',
+        StandardColumnNames.ref_dp: 'Int32',
+        StandardColumnNames.ref_rv: 'Int32',
+        StandardColumnNames.ref_qual: 'Float32',
+        StandardColumnNames.alt_dp: 'Int32',
+        StandardColumnNames.alt_rv: 'Int32',
+        StandardColumnNames.alt_qual: 'Float32',
+        StandardColumnNames.pass_qc: 'boolean',
+        StandardColumnNames.alt_freq: 'Float32',
+        StandardColumnNames.total_dp: 'Int32',
     }

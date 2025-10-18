@@ -10,7 +10,7 @@ from DB.queries.mutations import get_mutations_by_sample, get_mutations
 from DB.queries.prevalence import get_samples_variant_freq_by_aa_change, get_samples_variant_freq_by_nt_change, \
     get_mutation_sample_count_by_aa, get_mutation_sample_count_by_nt, get_pheno_values_and_variant_counts, \
     get_pheno_values_and_mutation_counts
-from DB.queries.samples import get_samples_by_mutation, get_samples_by_variant
+from DB.queries.samples import get_samples_by_mutation, get_samples_by_variant, get_samples_accession_and_id_as_dask_df
 from DB.queries.variants import get_variants, get_variants_for_sample
 
 logging.basicConfig()
@@ -63,5 +63,6 @@ logger.setLevel(logging.INFO) # set debug to log results as well
 # r = asyncio.run(get_abundances(None))
 # r = asyncio.run(get_abundance_summaries("lineage_name=H5Nx-A"))
 # r = asyncio.run(get_all_alleles_as_pl_df())
-r = asyncio.run(get_aa_ids_for_annotation_effect('etaoin'))
+# r = asyncio.run(get_aa_ids_for_annotation_effect('etaoin'))
+r = asyncio.run(get_samples_accession_and_id_as_dask_df())
 pprint(r)

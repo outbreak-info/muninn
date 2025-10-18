@@ -1,14 +1,10 @@
-import logging
-from typing import Any
-
+import dask.dataframe as dd
 import polars as pl
-from sqlalchemy import select, and_, text, insert
+from sqlalchemy import select, and_
 
 from DB.engine import get_async_write_session, get_asyncpg_connection
 from DB.models import Allele
-from DB.queries.alleles import get_all_alleles_as_pl_df
 from utils.constants import StandardColumnNames
-from utils.gathering_task_group import GatheringTaskGroup
 
 
 async def find_or_insert_allele(a: Allele) -> int:
@@ -32,19 +28,34 @@ async def find_or_insert_allele(a: Allele) -> int:
     return id_
 
 
-async def copy_insert_alleles(alleles: pl.DataFrame) -> str:
+async def copy_insert_alleles(alleles: pl.DataFrame | dd.DataFrame) -> str:
     columns = [
         StandardColumnNames.region,
         StandardColumnNames.position_nt,
         StandardColumnNames.ref_nt,
         StandardColumnNames.alt_nt
     ]
+    records = None
+    if type(alleles) is dd.DataFrame:
+        records = alleles[columns].astype(
+            {
+                StandardColumnNames.region: str,
+                StandardColumnNames.position_nt: int,
+                StandardColumnNames.ref_nt: str,
+                StandardColumnNames.alt_nt: str
+            }
+        ).itertuples(index=False, name=None)
+    elif type(alleles) is pl.DataFrame:
+        records = alleles.select(
+            [pl.col(cn) for cn in columns]
+        ).iter_rows()
+    else:
+        raise TypeError
+
     conn = await get_asyncpg_connection()
     res = await conn.copy_records_to_table(
         Allele.__tablename__,
-        records=alleles.select(
-            [pl.col(cn) for cn in columns]
-        ).iter_rows(),
+        records=records,
         columns=columns
     )
     return res
