@@ -38,7 +38,7 @@ partd==1.4.2
 pillow==11.3.0
 platformdirs==4.4.0
 ply==3.11
-polars==1.22.0
+polars==1.30.0
 psutil==7.1.0
 psycopg2-binary==2.9.10
 pyarrow==20.0.0
