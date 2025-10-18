@@ -844,6 +844,10 @@ class VariantsMutationsCombinedParserDask(VariantsMutationsCombinedParser):
         self.blocksize = '128MB'
 
     async def parse_and_insert(self):
+        # rm
+        rprof = ResourceProfiler()
+        rprof.register()
+
         existing_samples: dd.DataFrame = await get_samples_accession_and_id_as_dask_df()
 
         mutations: dd.DataFrame = await self.read_mutations_file()
@@ -955,8 +959,7 @@ class VariantsMutationsCombinedParserDask(VariantsMutationsCombinedParser):
         # mutations
         # variants
 
-        with ResourceProfiler() as rprof:
-            mutations = mutations.compute()
+
         # rm
         with open(f'data/mutations.rprof.{datetime.now().isoformat(timespec="seconds")}.csv', 'w+') as f:
             writer = csv.writer(f)

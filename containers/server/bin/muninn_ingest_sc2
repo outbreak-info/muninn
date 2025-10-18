@@ -113,7 +113,7 @@ fi
   python3 -u runinserts.py \
   "$VARIANTS_FILE" \
   "$MUTATIONS_FILE" \
-  --format variants_mutations_combined_tsv
+  --format variants_mutations_combined_dask
   python3 -u runinserts.py "$FREYJA_DEMIXED_DIR" --format freyja_demixed
 } &>> "$LOG"
 
