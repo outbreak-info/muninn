@@ -119,7 +119,7 @@ ALLELE_REF_CONFLICTS_FILE="/tmp/allele_ref_conflicts.csv"
   python3 -u runinserts.py \
   "$VARIANTS_FILE" \
   "$MUTATIONS_FILE" \
-  --format variants_mutations_combined_tsv
+  --format variants_mutations_combined_dask
   python3 -u runinserts.py "$HA_DMS_FILE" --format ha_dms_tsv
 
   # ingest random other outputs
