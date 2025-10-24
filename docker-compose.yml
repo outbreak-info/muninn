@@ -1,5 +1,7 @@
 version: "3.8"
 
+name: "${MUNINN_INSTANCE_NAME}_project"
+
 services:
   postgres:
     container_name: "${MUNINN_INSTANCE_NAME}_pg"
@@ -30,7 +32,7 @@ services:
         source: ./containers/database/initdb.d
         target: /docker-entrypoint-initdb.d
         read_only: true
-
+    shm_size: 1g
   server:
     container_name: "${MUNINN_INSTANCE_NAME}_server"
     build:
@@ -53,8 +55,13 @@ services:
       MUNINN_DB_PORT: "${MUNINN_DB_PORT_FOR_SERVER}"
     command: bash -c "
       sleep 30
-      && fastapi run api/main.py
+      && fastapi run --workers 33 api/main.py
       "
-
 volumes:
   postgres_data:
+    name: "${MUNINN_INSTANCE_NAME}_postgres_data"
+
+networks:
+  default:
+    name: "${MUNINN_INSTANCE_NAME}_network"
+    driver: "bridge"

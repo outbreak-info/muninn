@@ -41,12 +41,13 @@ Database system to store mutation and variant data for avian influenza.
     3. The server container will automatically start fastAPI.
     4. Use `docker logs flu_db_server` to see server logs.
 4. Update the database schema: `docker exec -d flu_db_server muninn_schema_update`
-5. Load or update data:  `docker exec -d flu_db_server muninn_ingest_all`
-    1. Input data must be placed in `MUNINN_DB_SERVER_DATA_INPUT_DIR` on the host machine.
-       For details read ingestion script: `containers/server/bin/muninn_ingest_all`
+5. Load or update data:  `docker exec -d flu_db_server muninn_ingest_all --auto --archive_in <name of archive>`
+    1. Input data must be placed in `MUNINN_DB_SERVER_DATA_INPUT_DIR` on the host machine, in either `.zip` or `.tar.gz` format.
+           For details read ingestion script: `containers/server/bin/muninn_ingest_all`
     2. This process will take 15-45 minutes to finish, but existing records will be updated in-place, and the webserver
        will remain available.
     3. For information on logs see Troubleshooting Information > Webserver
+    4. The `--auto` flag is optional, but this mode avoids the need to adhere to specific file and dir names within the input archive.
 6. Load or update test data: `docker exec -d flu_db_server muninn_ingest_playset ${MUNINN_DB_SERVER_DATA_INPUT_DIR}/<archive name>`
     1. Input data must be placed in `MUNINN_DB_SERVER_DATA_INPUT_DIR` on the host machine.
        For details read ingestion script: `containers/server/bin/muninn_ingest_playset`
