@@ -32,6 +32,7 @@ services:
         source: ./containers/database/initdb.d
         target: /docker-entrypoint-initdb.d
         read_only: true
+    shm_size: 1g
   server:
     container_name: "${MUNINN_INSTANCE_NAME}_server"
     build:
