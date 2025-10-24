@@ -7,7 +7,7 @@ from typing import List, Set
 import dask.dataframe as dd
 import polars as pl
 from dask.diagnostics import ResourceProfiler
-
+from dask.distributed import Client
 from DB.inserts.alleles import copy_insert_alleles
 from DB.inserts.amino_acid_substitutions import copy_insert_aa_subs
 from DB.inserts.file_parsers.file_parser import FileParser
@@ -845,130 +845,134 @@ class VariantsMutationsCombinedParserDask(VariantsMutationsCombinedParser):
 
     async def parse_and_insert(self):
         # rm
-        rprof = ResourceProfiler()
-        rprof.register()
+        # rprof = ResourceProfiler()
+        # rprof.register()
 
-        existing_samples: dd.DataFrame = await get_samples_accession_and_id_as_dask_df()
+        with Client(asynchronous=True) as dask_client:
+            existing_samples: dd.DataFrame = await get_samples_accession_and_id_as_dask_df()
+            existing_samples = dask_client.compute(existing_samples, sync=True)
+            mutations: dd.DataFrame = await self.read_mutations_file()
+            mutations = VariantsMutationsCombinedParserDask._clean_up_gff_feature(mutations)
+            mutations = dask_client.compute(mutations, sync=True)
 
-        mutations: dd.DataFrame = await self.read_mutations_file()
-        mutations = VariantsMutationsCombinedParserDask._clean_up_gff_feature(mutations)
+            variants: dd.DataFrame = await self.read_variants_file()
+            variants = VariantsMutationsCombinedParserDask._clean_up_gff_feature(variants)
 
-        variants: dd.DataFrame = await self.read_variants_file()
-        variants = VariantsMutationsCombinedParserDask._clean_up_gff_feature(variants)
-
-        # join in sample ids, filter down to existing samples
-        # todo: drop the accessions at this point?
-        mutations = mutations.join(
-            existing_samples,
-            on=StandardColumnNames.accession,
-            how='inner'
-        )
-        variants = variants.join(
-            existing_samples,
-            on=StandardColumnNames.accession,
-            how='inner'
-        )
-
-        # alleles
-        combined_alleles: dd.DataFrame = (
-            dd.concat(
-                [
-                    mutations[[
-                        StandardColumnNames.region,
-                        StandardColumnNames.ref_nt,
-                        StandardColumnNames.position_nt,
-                        StandardColumnNames.alt_nt
-                    ]],
-                    variants[[
-                        StandardColumnNames.region,
-                        StandardColumnNames.ref_nt,
-                        StandardColumnNames.position_nt,
-                        StandardColumnNames.alt_nt
-                    ]]
-                ]
-            ).drop_duplicates(ignore_index=True)
-        )
-
-        # find ref conflicts
-        ref_conflicts: dd.DataFrame = (
-            combined_alleles.groupby(
-                by=[
-                    StandardColumnNames.region,
-                    StandardColumnNames.position_nt,
-                    StandardColumnNames.alt_nt
-                ]
+            # join in sample ids, filter down to existing samples
+            # todo: drop the accessions at this point?
+            mutations = dask_client.compute(mutations.merge(
+                existing_samples,
+                on=StandardColumnNames.accession,
+                how='inner'
+            ),
+                sync=True
             )
-            .count()
-            .query(f'{StandardColumnNames.ref_nt} > 1')
-            .compute()
-        )
-        # todo: warn about ref conflicts
+            variants = variants.merge(
+                existing_samples,
+                on=StandardColumnNames.accession,
+                how='inner'
+            )
 
-        combined_alleles = combined_alleles.drop_duplicates(
-            subset=[
-                StandardColumnNames.region,
-                StandardColumnNames.position_nt,
-                StandardColumnNames.alt_nt
-            ],
-            ignore_index=True
-        )
+            # alleles
+            combined_alleles: dd.DataFrame = (
+                dd.concat(
+                    [
+                        mutations[[
+                            StandardColumnNames.region,
+                            StandardColumnNames.ref_nt,
+                            StandardColumnNames.position_nt,
+                            StandardColumnNames.alt_nt
+                        ]],
+                        variants[[
+                            StandardColumnNames.region,
+                            StandardColumnNames.ref_nt,
+                            StandardColumnNames.position_nt,
+                            StandardColumnNames.alt_nt
+                        ]]
+                    ]
+                ).drop_duplicates(ignore_index=True)
+            )
 
-        # get new alleles
-        existing_alleles: dd.DataFrame = await get_all_alleles_as_dask_df()
-        new_alleles: dd.DataFrame = dd.DataFrame.from_dict({})
-        if len(existing_alleles.index) == 0:
-            new_alleles = combined_alleles
-        else:
-            alleles_with_ids: dd.DataFrame = combined_alleles.merge(
-                existing_alleles,
-                on=[
+            # find ref conflicts
+            ref_conflicts: dd.DataFrame = dask_client.compute(
+                combined_alleles.groupby(
+                    by=[
+                        StandardColumnNames.region,
+                        StandardColumnNames.position_nt,
+                        StandardColumnNames.alt_nt
+                    ]
+                )
+                .count()
+                .query(f'{StandardColumnNames.ref_nt} > 1'),
+                sync=True
+            )
+            # todo: warn about ref conflicts
+
+            combined_alleles = combined_alleles.drop_duplicates(
+                subset=[
                     StandardColumnNames.region,
                     StandardColumnNames.position_nt,
                     StandardColumnNames.alt_nt
                 ],
-                how='left'
+                ignore_index=True
             )
 
-            updated_alleles: dd.DataFrame = alleles_with_ids.dropna(subset=[StandardColumnNames.allele_id])
-            # todo: update alleles
-            # todo: calculate new alleles too
-        # insert new alleles
-        status = await copy_insert_alleles(new_alleles)
-        print(status)
+            # get new alleles
+            existing_alleles: dd.DataFrame = await get_all_alleles_as_dask_df()
+            new_alleles: dd.DataFrame = dd.DataFrame.from_dict({})
+            if len(existing_alleles.index) == 0:
+                new_alleles = combined_alleles
+            else:
+                alleles_with_ids: dd.DataFrame = combined_alleles.merge(
+                    existing_alleles,
+                    on=[
+                        StandardColumnNames.region,
+                        StandardColumnNames.position_nt,
+                        StandardColumnNames.alt_nt
+                    ],
+                    how='left'
+                )
 
-        # get alleles again
-        existing_alleles: dd.DataFrame = await get_all_alleles_as_dask_df()
+                updated_alleles: dd.DataFrame = alleles_with_ids.dropna(subset=[StandardColumnNames.allele_id])
+                # todo: update alleles
+                # todo: calculate new alleles too
+            # insert new alleles
+            status = await copy_insert_alleles(new_alleles)
+            print(status)
 
-        # join to mutations and variants
-        # keep just the ref from the db after this
-        mutations = (
-            mutations.merge(
-                existing_alleles,
-                on=[
-                    StandardColumnNames.region,
-                    StandardColumnNames.position_nt,
-                    StandardColumnNames.alt_nt
-                ],
-                how='left'
+            # get alleles again
+            existing_alleles: dd.DataFrame = await get_all_alleles_as_dask_df()
+
+            # join to mutations and variants
+            # keep just the ref from the db after this
+            mutations = (
+                mutations.merge(
+                    existing_alleles,
+                    on=[
+                        StandardColumnNames.region,
+                        StandardColumnNames.position_nt,
+                        StandardColumnNames.alt_nt
+                    ],
+                    how='left'
+                )
+                .drop(columns=f'{StandardColumnNames.ref_nt}_x')
+                .rename(columns={f'{StandardColumnNames.ref_nt}_y': StandardColumnNames.ref_nt})
             )
-            .drop(columns=f'{StandardColumnNames.ref_nt}_x')
-            .rename(columns={f'{StandardColumnNames.ref_nt}_y': StandardColumnNames.ref_nt})
-        )
-        # amino acids
-        # translations
-        # mutations
-        # variants
+            # amino acids
+            # translations
+            # mutations
+            # variants
 
 
-        # rm
-        with open(f'data/mutations.rprof.{datetime.now().isoformat(timespec="seconds")}.csv', 'w+') as f:
-            writer = csv.writer(f)
-            writer.writerow(['time', 'mem', 'cpu'])
-            writer.writerows(rprof.results)
-        # rm
-        print(mutations.info())
-        print(mutations.memory_usage())
-        return
+            # # rm
+            # with open(f'data/mutations.rprof.{datetime.now().isoformat(timespec="seconds")}.csv', 'w+') as f:
+            #     writer = csv.writer(f)
+            #     writer.writerow(['time', 'mem', 'cpu'])
+            #     writer.writerows(rprof.results)
+            # rm
+            print(mutations.info())
+            print(mutations.memory_usage())
+            return
 
     async def read_mutations_file(self):
         dtype_mapping = {

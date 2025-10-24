@@ -107,12 +107,12 @@ async def get_samples_accession_and_id_as_pl_df() -> pl.DataFrame:
 
 # todo: all this messing around with divisions to get the index set up right may be unnecessary.
 async def get_samples_accession_and_id_as_dask_df():
-    divisions = await _get_sample_accession_divisions()
+    # divisions = await _get_sample_accession_divisions()
     uri = get_uri_for_dask()
     query = select(Sample.id, Sample.accession)
     # noinspection PyTypeChecker
-    samples: dd.DataFrame = dd.read_sql_query(query, uri, index_col=StandardColumnNames.accession, divisions=divisions)
-    samples = samples.rename(columns={'id': StandardColumnNames.sample_id})
+    samples: dd.DataFrame = dd.read_sql_query(query, uri, index_col='id')
+    samples[StandardColumnNames.sample_id] = samples.index
     return samples
 
 async def _get_sample_accession_divisions(n_divisions: int = 3) -> list[str]:
