@@ -102,6 +102,8 @@ class TableNames:
     annotations_amino_acids = 'annotations_amino_acids'
     lineages_immediate_children = 'lineages_immediate_children'
     lineages_deep_children = 'lineages_deep_children' # actually a view.
+    mutations_translations = 'mutation_translations'
+    intra_host_translations = 'intra_host_translations'
 
 
 class StandardColumnNames:
