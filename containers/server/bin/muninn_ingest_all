@@ -112,6 +112,7 @@ FLUMUT_FILE="flumut_annotations.tsv"
 # Debug output files for ref conflicts
 AMINO_SUB_REF_CONFLICTS_FILE="/tmp/amino_sub_ref_conflicts.csv"
 ALLELE_REF_CONFLICTS_FILE="/tmp/allele_ref_conflicts.csv"
+TRANSLATIONS_REF_CONFLICTS_FILE="/tmp/translations_ref_conflicts.csv"
 
 {
   # ingest bjorn-general outputs
@@ -135,6 +136,9 @@ if [[ -f "$ALLELE_REF_CONFLICTS_FILE" ]]; then
 fi
 if [[ -f "$AMINO_SUB_REF_CONFLICTS_FILE" ]]; then
   cp "$AMINO_SUB_REF_CONFLICTS_FILE" "$DATA_DIR"
+fi
+if [[ -f "$TRANSLATIONS_REF_CONFLICTS_FILE" ]]; then
+  cp "$TRANSLATIONS_REF_CONFLICTS_FILE" "$DATA_DIR"
 fi
 
 echo "end at $(date)" >> "$LOG"

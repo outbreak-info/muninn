@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase, relationship
 
-from utils.constants import ConstraintNames, TableNames, StandardColumnNames
+from utils.constants import ConstraintNames, TableNames, StandardColumnNames, MiscDbNames
 
 #########################################################################################
 # NOTE:
@@ -517,6 +517,27 @@ class SampleLineage(Base):
     r_sample: Mapped['Sample'] = relationship(back_populates='r_sample_lineages')
 
 
+class LineageImmediateChild(Base):
+    __tablename__ = TableNames.lineages_immediate_children
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+
+    parent_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.lineages}.id'))
+    child_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.lineages}.id'))
+
+    __table_args__ = tuple(
+        [
+            UniqueConstraint(
+                StandardColumnNames.parent_id,
+                StandardColumnNames.child_id,
+                name=f'uq_{TableNames.lineages_immediate_children}_parent_child'
+            ),
+            CheckConstraint(
+                f'{StandardColumnNames.parent_id} <> {StandardColumnNames.child_id}',
+                name='no_self_parenthood'
+            )
+        ]
+    )
+
 class Paper(Base):
     __tablename__ = TableNames.papers
 
@@ -613,3 +634,116 @@ class AnnotationAminoAcid(Base):
 
     r_annotation: Mapped['Annotation'] = relationship(back_populates='r_annotations_amino_acids')
     r_amino_acid: Mapped['AminoAcid'] = relationship(back_populates='r_annotations_amino_acids')
+
+
+class SqlSnippets:
+    create_view_lineages_deep_children = f'''
+    create or replace view {TableNames.lineages_deep_children} as
+    with recursive deep_children(parent_id, child_id) as (
+        select lic.{StandardColumnNames.parent_id},
+               lic.{StandardColumnNames.child_id}
+        from {TableNames.lineages_immediate_children} lic
+        union all
+        select dc.parent_id,
+               lic.{StandardColumnNames.child_id}
+        from deep_children dc
+        inner join {TableNames.lineages_immediate_children} lic on dc.child_id = lic.{StandardColumnNames.parent_id}
+    )
+    select {StandardColumnNames.parent_id}, {StandardColumnNames.child_id}
+    from deep_children;
+    '''
+
+    drop_view_lineages_deep_children = f'drop view if exists {TableNames.lineages_deep_children};'
+
+    create_function_check_cyclic_lineage = f'''
+    create or replace function {MiscDbNames.check_cyclic_lineage}()
+        returns trigger as
+    $$
+    declare
+        num_rows integer;
+    begin
+        select count(*)
+        into num_rows
+        from {TableNames.lineages_deep_children}
+        where 
+            {StandardColumnNames.child_id} = new.{StandardColumnNames.parent_id} 
+            and {StandardColumnNames.parent_id} = new.{StandardColumnNames.child_id};
+        if num_rows > 0 then
+            raise exception 'cyclic lineage hierarchy';
+        end if;
+        return new;
+    end;
+    $$
+        language plpgsql;
+    '''
+
+    drop_function_check_cyclic_lineage = f'drop function if exists {MiscDbNames.check_cyclic_lineage};'
+
+    create_trigger_check_cyclic_lineage = f'''
+    do
+    $$
+        begin
+            if not exists (
+                select *
+                from information_schema.triggers
+                where event_object_table = '{TableNames.lineages_immediate_children}'
+                  and trigger_name = '{MiscDbNames.check_cyclic_lineage_trigger}'
+            )
+            then
+                create trigger {MiscDbNames.check_cyclic_lineage_trigger}
+                    before insert or update
+                    on {TableNames.lineages_immediate_children}
+                    for each row
+                execute procedure {MiscDbNames.check_cyclic_lineage}();
+            end if;
+        end;
+    $$;
+    '''
+
+    drop_trigger_check_cyclic_lineage = f'drop trigger if exists {MiscDbNames.check_cyclic_lineage_trigger} on {TableNames.lineages_immediate_children};'
+
+
+    create_function_check_cross_system_lineage = f'''
+    create or replace function {MiscDbNames.check_cross_system_lineage}()
+        returns trigger as
+    $$
+    declare
+        num_systems int;
+    begin
+        select count(distinct({StandardColumnNames.lineage_system_id}))
+        into num_systems
+        from {TableNames.lineages} l
+        where l.id = new.{StandardColumnNames.parent_id} or l.id = new.{StandardColumnNames.child_id};
+        if num_systems > 1 then
+            raise exception 'parent and child are from different lineage systems';
+        end if;
+        return new;
+    end;
+    $$
+        language plpgsql;
+    '''
+
+    drop_function_check_cross_system_lineage = f'drop function if exists {MiscDbNames.check_cross_system_lineage};'
+
+    create_trigger_check_cross_system_lineage = f'''
+    do
+    $$
+        begin
+            if not exists (
+                select *
+                from information_schema.triggers
+                where event_object_table = '{TableNames.lineages_immediate_children}'
+                  and trigger_name = '{MiscDbNames.check_cross_system_lineage_trigger}'
+            )
+            then
+                create trigger {MiscDbNames.check_cross_system_lineage_trigger}
+                    before insert or update
+                    on {TableNames.lineages_immediate_children}
+                    for each row
+                execute procedure {MiscDbNames.check_cross_system_lineage}();
+            end if;
+        end;
+    $$;
+    '''
+
+    drop_trigger_check_cross_system_lineage = f'drop trigger if exists {MiscDbNames.check_cross_system_lineage_trigger} on {TableNames.lineages_immediate_children};'

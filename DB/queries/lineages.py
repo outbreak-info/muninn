@@ -1,16 +1,18 @@
 import datetime
+from collections import defaultdict
 from typing import List, Dict
 
+import polars as pl
 from sqlalchemy import select, func, distinct, text, and_
 from sqlalchemy.orm import contains_eager
 
-from DB.engine import get_async_session
+from DB.engine import get_async_session, get_uri_for_polars
 from DB.models import LineageSystem, Lineage, Sample, SampleLineage, GeoLocation, Allele, Mutation
 from api.models import LineageCountInfo, LineageAbundanceInfo, LineageInfo, LineageAbundanceSummaryInfo, \
     MutationProfileInfo
 from parser.parser import parser
-from utils.constants import DateBinOpt, NtOrAa, NUCLEOTIDE_CHARACTERS
-from collections import defaultdict
+from utils.constants import DateBinOpt, NtOrAa, NUCLEOTIDE_CHARACTERS, TableNames, StandardColumnNames
+
 
 async def get_all_lineages_by_lineage_system(lineage_system_name: str) -> List[LineageInfo]:
     async with get_async_session() as session:
@@ -26,6 +28,21 @@ async def get_all_lineages_by_lineage_system(lineage_system_name: str) -> List[L
         )
         out_data = [LineageInfo(**row) for row in res.mappings().all()]
     return out_data
+
+
+async def get_all_lineages_by_lineage_system_as_pl_df(lineage_system_name: str) -> pl.DataFrame:
+    return pl.read_database_uri(
+        query=f'''
+        select 
+            l.id as {StandardColumnNames.lineage_id},
+            l.{StandardColumnNames.lineage_name}
+        from {TableNames.lineages} l
+        inner join {TableNames.lineage_systems} ls on ls.id = l.{StandardColumnNames.lineage_system_id}
+        where ls.{StandardColumnNames.lineage_system_name} = '{lineage_system_name}'
+        ''',
+        uri=get_uri_for_polars()
+    )
+
 
 async def get_sample_counts_by_lineage(samples_raw_query: str | None) -> List[LineageCountInfo]:
     lineage_count_query = (
@@ -328,6 +345,7 @@ async def get_abundance_summaries_by_collection_date(
             out_data[date] = [info]
     return out_data
 
+
 async def get_mutation_incidence(
     lineage: str,
     lineage_system_name: str,
@@ -336,7 +354,6 @@ async def get_mutation_incidence(
     match_reference: bool,
     raw_query: str | None
 ):
-
     user_where_clause = ''
     if raw_query is not None:
         user_where_clause = f'and ({parser.parse(raw_query)})'
@@ -374,7 +391,7 @@ async def get_mutation_incidence(
             if match_reference:
                 not_reference = ''
 
-            #TODO: Profile this SQL query
+            # TODO: Profile this SQL query
             res = await session.execute(
                 text(
                     f'''
@@ -418,9 +435,11 @@ async def get_mutation_incidence(
     out = defaultdict(list)
     for ref, pos, alt, region_or_gff, count, prevalence in res:
         out[region_or_gff].append({"ref": ref, "alt": alt, "pos": pos, "count": count, "prevalence": prevalence})
-    return {'sample_count': sample_count,'mutation_counts':out}
+    return {'sample_count': sample_count, 'mutation_counts': out}
 
-async def get_mutation_profile(lineage: str, lineage_system_name: str, samples_raw_query: str | None) -> List['MutationProfileInfo']:
+
+async def get_mutation_profile(lineage: str, lineage_system_name: str, samples_raw_query: str | None) -> List[
+    'MutationProfileInfo']:
     samples_query = parser.parse(samples_raw_query) if samples_raw_query else None
     query = (
         select(
@@ -436,7 +455,7 @@ async def get_mutation_profile(lineage: str, lineage_system_name: str, samples_r
         .join(Lineage, SampleLineage.lineage_id == Lineage.id)
         .join(LineageSystem, Lineage.lineage_system_id == LineageSystem.id)
         .where(
-LineageSystem.lineage_system_name == lineage_system_name,
+            LineageSystem.lineage_system_name == lineage_system_name,
             Lineage.lineage_name == lineage,
             Allele.alt_nt.in_(NUCLEOTIDE_CHARACTERS),
             Allele.ref_nt.in_(NUCLEOTIDE_CHARACTERS)
@@ -456,4 +475,3 @@ LineageSystem.lineage_system_name == lineage_system_name,
         results = await session.execute(query)
         out_data = [MutationProfileInfo(**row) for row in results.mappings().all()]
     return out_data
-

@@ -100,6 +100,8 @@ class TableNames:
     annotations = 'annotations'
     annotations_papers = 'annotations_papers'
     annotations_amino_acids = 'annotations_amino_acids'
+    lineages_immediate_children = 'lineages_immediate_children'
+    lineages_deep_children = 'lineages_deep_children' # actually a view.
 
 
 class StandardColumnNames:
@@ -204,6 +206,9 @@ class StandardColumnNames:
     is_consensus_call = 'is_consensus_call'
     abundance = 'abundance'
 
+    # lineage hierarchy
+    parent_id = 'parent_id'
+    child_id = 'child_id'
 
 class StandardPhenoMetricNames:
     species_sera_escape = 'species_sera_escape'
@@ -221,6 +226,11 @@ class ConstraintNames:
     uq_samples_accession = 'uq_samples_accession'
     uq_mutations_sample_allele_pair = 'uq_mutations_sample_allele_pair'
 
+class MiscDbNames:
+    check_cyclic_lineage = 'check_cyclic_lineage'
+    check_cyclic_lineage_trigger = 'check_cyclic_lineage_trigger'
+    check_cross_system_lineage = 'check_cross_system_lineage'
+    check_cross_system_lineage_trigger = 'check_cross_system_lineage_trigger'
 
 # Problematic redacted SRAs
 EXCLUDED_SRAS = {
