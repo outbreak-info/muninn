@@ -2,7 +2,6 @@ import argparse
 import asyncio
 import sys
 from datetime import datetime
-from os import path
 from typing import Any
 
 from DB.inserts.file_parsers.dms_parser_tmp import TmpHaRegionDmsCsvParser
@@ -20,18 +19,19 @@ from DB.inserts.file_parsers.variants_mutations_combined_parser import VariantsM
 
 def main():
     # define allowed formats, give names and point to parsers
+    # todo: flagged parsers will need overhaul
     formats = {
         'samples_csv': SamplesCsvParser,
         'samples_tsv': SamplesTsvParser,
-        'eve_dms_csv': EveCsvParser,
+        'eve_dms_csv': EveCsvParser, # todo
         'genoflu_lineages': GenofluLineagesParser,
-        'ha_dms_tsv': HaRegionDmsTsvParser,
-        'ha_dms_csv': HaRegionDmsCsvParser,
+        'ha_dms_tsv': HaRegionDmsTsvParser, # todo
+        'ha_dms_csv': HaRegionDmsCsvParser, # todo
         'freyja_demixed': FreyjaDemixedParser,
         'variants_mutations_combined_tsv': VariantsMutationsCombinedParser,
         'sc2_samples': SC2SamplesParser,
-        'flumut_tsv': FlumutTsvParser,
-        'dms_tmp_csv': TmpHaRegionDmsCsvParser,
+        'flumut_tsv': FlumutTsvParser, # todo
+        'dms_tmp_csv': TmpHaRegionDmsCsvParser, # todo
         'freyja_demixed_hierarchy_yaml': FreyjaDemixedLineageHierarchyYamlParser
     }
 
@@ -67,12 +67,6 @@ def main():
         print(f'Invalid format name given: {args.format}')
         argparser.print_help()
         sys.exit(1)
-
-    for f in args.filenames:
-        if not path.exists(f):
-            print(f'Input file or dir not found: {f}')
-            argparser.print_help()
-            sys.exit(1)
 
     file_parser: FileParser = formats[args.format]
     filename: str = args.filenames[0]
