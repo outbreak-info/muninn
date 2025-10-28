@@ -1,7 +1,7 @@
 import csv
 from datetime import datetime
 from os import path
-from typing import  Set
+from typing import Set
 
 from sqlalchemy.sql.expression import text
 
@@ -16,13 +16,19 @@ ALLELE_REF_CONFLICTS_FILE = '/tmp/allele_ref_conflicts.csv'
 class VariantsMutationsCombinedParser(FileParser):
 
     def __init__(self, variants_filename: str, mutations_filename: str):
-        self.variants_filename_relative = variants_filename
-        self.mutations_filename_relative = mutations_filename
+        self.variants_filename = variants_filename
+        self.mutations_filename = mutations_filename
         self.delimiter = '\t'
 
-        # find out where our files are (are we in a container or not?)
-        self.mutations_filename_local = self._find_path_to_filename(self.mutations_filename_relative)
-        self.variants_filename_local = self._find_path_to_filename(self.variants_filename_relative)
+        # find out where our files are (are we in a container or not?) and get absolute paths
+        self.mutations_filename_relative, self.mutations_filename_local = (
+            self._find_relative_and_local_abs_paths(self.mutations_filename)
+        )
+        self.variants_filename_relative, self.variants_filename_local = (
+            self._find_relative_and_local_abs_paths(self.variants_filename)
+        )
+
+        # we also need paths relative to the data directory for use in the db container
 
         try:
             self._verify_headers()
@@ -290,8 +296,10 @@ class VariantsMutationsCombinedParser(FileParser):
         with open(ALLELE_REF_CONFLICTS_FILE, 'w+') as f:
             if len(conflicts) > 0:
                 impact = sum([c['count'] for c in conflicts])
-                print(f'Warning: {len(conflicts)} allele ref conflicts found, '
-                      f'impacting {impact} mutation/variant records. See {ALLELE_REF_CONFLICTS_FILE}')
+                print(
+                    f'Warning: {len(conflicts)} allele ref conflicts found, '
+                    f'impacting {impact} mutation/variant records. See {ALLELE_REF_CONFLICTS_FILE}'
+                )
                 writer = csv.DictWriter(f, fieldnames=conflicts[0].keys())
                 writer.writeheader()
                 writer.writerows(conflicts)
@@ -397,8 +405,10 @@ class VariantsMutationsCombinedParser(FileParser):
         with open(AMINO_ACID_REF_CONFLICTS_FILE, 'w+') as f:
             if len(conflicts) > 0:
                 impact = sum([c['count'] for c in conflicts])
-                print(f'Warning: {len(conflicts)} amino acid ref conflicts found, '
-                      f'impacting {impact} mutation/variant records. See {AMINO_ACID_REF_CONFLICTS_FILE}')
+                print(
+                    f'Warning: {len(conflicts)} amino acid ref conflicts found, '
+                    f'impacting {impact} mutation/variant records. See {AMINO_ACID_REF_CONFLICTS_FILE}'
+                )
                 writer = csv.DictWriter(f, fieldnames=conflicts[0].keys())
                 writer.writeheader()
                 writer.writerows(conflicts)
@@ -522,30 +532,32 @@ class VariantsMutationsCombinedParser(FileParser):
         return ordered_header
 
     @staticmethod
-    def _find_path_to_filename(filename):
+    def _find_relative_and_local_abs_paths(filename: str) -> (str, str):
         """
-        Find given filename either within container's bound data directory (if running in a container)
+        Find absolute and relative paths for given filename
+        either within container's bound data directory (if running in a container)
         or within the bound directory on the host machine (if running outside container).
         Raise ValueError if filename not found in either place.
         :param filename: input filename
-        :return: Appropriate path to filename
+        :return: (relative path, absolute local path)
         """
         if path.isabs(filename):
-            raise ValueError(
-                f'Error: provided file name: {filename} is an absolute path. '
-                f'Files must be in the data directory bound to the containers'
-                f'and paths must be relative to that directory.'
-            )
-        putative = path.join(CONTAINER_DATA_DIRECTORY, filename)
-        if path.isfile(putative):
-            return putative
+            # if we're given an abs path, it must point to one of these locations.
+            for data_dir in [CONTAINER_DATA_DIRECTORY, Env.MUNINN_SERVER_DATA_INPUT_DIR]:
+                if path.commonprefix([filename, data_dir]) == data_dir:
+                    if path.isfile(filename):
+                        return path.relpath(filename, data_dir), filename
         else:
-            putative = path.join(Env.MUNINN_SERVER_DATA_INPUT_DIR, filename)
-            if path.isfile(putative):
-                return putative
-            else:
-                raise ValueError(f'{filename} not found within {CONTAINER_DATA_DIRECTORY} or '
-                                 f'{Env.MUNINN_SERVER_DATA_INPUT_DIR}. The file must be in the bound data directory.')
+            # we have a relative path. try to find the file in each valid dir.
+            for data_dir in [CONTAINER_DATA_DIRECTORY, Env.MUNINN_SERVER_DATA_INPUT_DIR]:
+                putative_abs = path.join(data_dir, filename)
+                if path.isfile(putative_abs):
+                    return filename, putative_abs
+
+        raise ValueError(
+            f'{filename} not found within {CONTAINER_DATA_DIRECTORY} or {Env.MUNINN_SERVER_DATA_INPUT_DIR}. '
+            f'The file must be in the bound data directory.'
+        )
 
     @classmethod
     def get_required_column_set(cls) -> Set[str]:
