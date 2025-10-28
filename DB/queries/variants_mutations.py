@@ -1,7 +1,7 @@
 from collections import defaultdict
 from typing import List, Type
 
-from DB.models import AminoAcid, Allele, IntraHostVariant, Mutation, Translation
+from DB.models import AminoAcid, Allele, IntraHostVariant, Mutation, MutationTranslation, IntraHostTranslation
 from api.models import VariantMutationLagInfo, RegionAndGffFeatureInfo
 from DB.engine import get_async_session
 from sqlalchemy import text, select
@@ -73,11 +73,18 @@ async def _get_lag_variants_mutations(lineage: str, lineage_system_name: str, la
 async def get_region_and_gff_features(
     intermediate: Type[Mutation] | Type[IntraHostVariant],
 ) -> List['RegionAndGffFeatureInfo']:
+
+    translation_table = None
+    if type(intermediate) is Mutation:
+        translation_table = MutationTranslation
+    elif type(intermediate) is IntraHostVariant:
+        translation_table = IntraHostTranslation
+
     region_and_gff_feature_query = (
         select(AminoAcid.gff_feature, Allele.region)
         .distinct()
-        .join(Translation, Translation.amino_acid_id == AminoAcid.id)
-        .join(intermediate, intermediate.translation_id == Translation.id)
+        .join(translation_table, translation_table.amino_acid_id == AminoAcid.id)
+        .join(intermediate, intermediate.id == Translation.id)
         .join(Allele, Allele.id == intermediate.allele_id)
     )
     async with get_async_session() as session:

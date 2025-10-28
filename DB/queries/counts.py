@@ -5,7 +5,8 @@ from sqlalchemy import text, select, Result
 from sqlalchemy.sql.functions import func
 
 from DB.engine import get_async_session
-from DB.models import Sample, GeoLocation, IntraHostVariant, AminoAcid, Allele, Mutation, Translation
+from DB.models import Sample, GeoLocation, IntraHostVariant, AminoAcid, Allele, Mutation, IntraHostTranslation, \
+    MutationTranslation
 from parser.parser import parser
 from utils.constants import DateBinOpt, NtOrAa
 
@@ -26,10 +27,10 @@ async def count_samples_by_column(by_col: str):
 async def count_variants_by_column(by_col: str):
     async with get_async_session() as session:
         res = await session.execute(
-            select(IntraHostVariant, Allele, Translation, AminoAcid)
+            select(IntraHostVariant, Allele, IntraHostTranslation, AminoAcid)
             .join(Allele, Allele.id == IntraHostVariant.allele_id, isouter=True)
-            .join(Translation, Translation.id == IntraHostVariant.translation_id, isouter=True)
-            .join(AminoAcid, AminoAcid.id == Translation.amino_acid_id, isouter=True)
+            .join(IntraHostTranslation, IntraHostTranslation.intra_host_variant_id == IntraHostVariant.id, isouter=True)
+            .join(AminoAcid, AminoAcid.id == IntraHostTranslation.amino_acid_id, isouter=True)
             .with_only_columns(text(by_col), func.count().label('count1'))
             .group_by(text(by_col))
             .order_by(text('count1 desc'))
@@ -40,10 +41,10 @@ async def count_variants_by_column(by_col: str):
 async def count_mutations_by_column(by_col: str):
     async with get_async_session() as session:
         res = await session.execute(
-            select(Mutation, Allele, Translation, AminoAcid)
+            select(Mutation, Allele, MutationTranslation, AminoAcid)
             .join(Allele, Allele.id == Mutation.allele_id, isouter=True)
-            .join(Translation, Translation.id == Mutation.translation_id, isouter=True)
-            .join(AminoAcid, AminoAcid.id == Translation.amino_acid_id, isouter=True)
+            .join(MutationTranslation, MutationTranslation.mutation_id == Mutation.id, isouter=True)
+            .join(AminoAcid, AminoAcid.id == MutationTranslation.amino_acid_id, isouter=True)
             .with_only_columns(text(by_col), func.count().label('count1'))
             .group_by(text(by_col))
             .order_by(text('count1 desc'))
