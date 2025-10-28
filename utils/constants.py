@@ -14,6 +14,7 @@ class Env:
     MUNINN_DB_PORT = os.environ['MUNINN_DB_PORT']
     MUNINN_DB_HOST = os.environ['MUNINN_DB_HOST']
     MUNINN_DB_NAME = os.environ['MUNINN_DB_NAME']
+    MUNINN_SERVER_DATA_INPUT_DIR = os.environ['MUNINN_SERVER_DATA_INPUT_DIR']
 
 
 CHANGE_PATTERN = r'^([\w-]+):([a-zA-Z])(\d+)([a-zA-Z\-+]+)'
@@ -32,7 +33,7 @@ ASYNCPG_MAX_QUERY_ARGS = 32767
 NUCLEOTIDE_CHARACTERS = ['A', 'C', 'G', 'T']
 # https://en.wikipedia.org/wiki/Nucleic_acid_notation
 NUCLEOTIDE_CHARACTERS_AMBIGUOUS = ['A', 'C', 'G', 'T', 'M', 'R', 'W', 'S', 'Y', 'K', 'B', 'D', 'H', 'V', 'N']
-
+CONTAINER_DATA_DIRECTORY = '/home/muninn/data'
 
 class PhenotypeMetricAssayTypes:
     DMS = 'DMS'
