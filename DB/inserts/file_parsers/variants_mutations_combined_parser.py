@@ -16,15 +16,13 @@ ALLELE_REF_CONFLICTS_FILE = '/tmp/allele_ref_conflicts.csv'
 class VariantsMutationsCombinedParser(FileParser):
 
     def __init__(self, variants_filename: str, mutations_filename: str):
-        self.variants_filename = variants_filename
-        self.mutations_filename = mutations_filename
+        self.variants_filename_relative = variants_filename
+        self.mutations_filename_relative = mutations_filename
         self.delimiter = '\t'
-        self.start_time: str = datetime.now().isoformat(timespec='seconds')  # todo usage
 
         # find out where our files are (are we in a container or not?)
-        # todo: unfuxk what I did with the names here
-        self.mutations_filename_local = self._check_file_paths(self.mutations_filename)
-        self.variants_filename_local = self._check_file_paths(self.variants_filename)
+        self.mutations_filename_local = self._find_path_to_filename(self.mutations_filename_relative)
+        self.variants_filename_local = self._find_path_to_filename(self.variants_filename_relative)
 
         try:
             self._verify_headers()
@@ -35,9 +33,9 @@ class VariantsMutationsCombinedParser(FileParser):
             self.mutations_filename_local = hold
             self._verify_headers()
             # if that worked, we also want these swapped
-            hold = self.variants_filename
-            self.variants_filename = self.mutations_filename
-            self.mutations_filename = hold
+            hold = self.variants_filename_relative
+            self.variants_filename_relative = self.mutations_filename_relative
+            self.mutations_filename_relative = hold
 
         # get orders of headers
         self.variants_header_order = self._get_header_order(
@@ -50,29 +48,29 @@ class VariantsMutationsCombinedParser(FileParser):
         )
 
     async def parse_and_insert(self):
-        debug_info = {
-            'count_alleles_added': 'unset',
-            'count_amino_subs_added': 'unset',
-            'count_translations_added': 'unset',
-            'count_mutations_added': 'unset',
-            'count_preexisting_variants': 'unset',
-            'count_variants_added': 'unset',
-            'count_preexisting_mutations': 'unset',
-        }
-        # todo: debug info
-        # todo: make some of these happen in parallel?
+        print(f'{self._get_timestamp()} read mutations')
         await self._read_mutations_input()
+        print(f'{self._get_timestamp()} read variants')
         await self._read_variants_input()
+        print(f'{self._get_timestamp()} insert alleles')
         await self._insert_alleles()
+        print(f'{self._get_timestamp()} allele ref conflicts')
         await self._write_allele_ref_conflicts()
+        print(f'{self._get_timestamp()} insert amino acids')
         await self._insert_amino_acids()
+        print(f'{self._get_timestamp()} amino acid ref conflicts')
         await self._write_amino_acid_ref_conflicts()
+        print(f'{self._get_timestamp()} insert variants')
         await self._insert_variants()
+        print(f'{self._get_timestamp()} insert mutations')
         await self._insert_mutations()
+        print(f'{self._get_timestamp()} insert intra host translations')
         await self._insert_intra_host_translations()
+        print(f'{self._get_timestamp()} insert mutation translations')
         await self._insert_mutation_translations()
-
+        print(f'{self._get_timestamp()} clean up tmp tables')
         await self._clean_up_tmp_tables()
+        print(f'Finished at {self._get_timestamp()}')
 
     async def _read_mutations_input(self):
         async with get_async_write_session() as session:
@@ -104,7 +102,7 @@ class VariantsMutationsCombinedParser(FileParser):
                             accession, region, position_nt, ref_nt, alt_nt, gff_feature, 
                             ref_codon, alt_codon, ref_aa, alt_aa, position_aa
                         )
-                        from '/muninn/data/{self.mutations_filename}' delimiter E'{self.delimiter}' csv header;
+                        from '/muninn/data/{self.mutations_filename_relative}' delimiter E'{self.delimiter}' csv header;
                         '''
                 )
             )
@@ -170,7 +168,7 @@ class VariantsMutationsCombinedParser(FileParser):
                         alt_dp, alt_rv, alt_qual, alt_freq, total_dp, pval, pass_qc, gff_feature, 
                         ref_codon, ref_aa, alt_codon, alt_aa, position_aa, accession
                     )
-                    from '/muninn/data/{self.variants_filename}' delimiter E'{self.delimiter}' csv header;
+                    from '/muninn/data/{self.variants_filename_relative}' delimiter E'{self.delimiter}' csv header;
                     '''
                 )
             )
@@ -524,7 +522,14 @@ class VariantsMutationsCombinedParser(FileParser):
         return ordered_header
 
     @staticmethod
-    def _check_file_paths(filename):
+    def _find_path_to_filename(filename):
+        """
+        Find given filename either within container's bound data directory (if running in a container)
+        or within the bound directory on the host machine (if running outside container).
+        Raise ValueError if filename not found in either place.
+        :param filename: input filename
+        :return: Appropriate path to filename
+        """
         if path.isabs(filename):
             raise ValueError(
                 f'Error: provided file name: {filename} is an absolute path. '
@@ -539,7 +544,8 @@ class VariantsMutationsCombinedParser(FileParser):
             if path.isfile(putative):
                 return putative
             else:
-                raise ValueError
+                raise ValueError(f'{filename} not found within {CONTAINER_DATA_DIRECTORY} or '
+                                 f'{Env.MUNINN_SERVER_DATA_INPUT_DIR}. The file must be in the bound data directory.')
 
     @classmethod
     def get_required_column_set(cls) -> Set[str]:
@@ -551,15 +557,19 @@ class VariantsMutationsCombinedParser(FileParser):
     def _verify_headers(self):
         with open(self.variants_filename_local, 'r') as f:
             reader = csv.DictReader(f, delimiter=self.delimiter)
-            required_columns = set(VariantsMutationsCombinedParser.variants_column_mapping.values())
+            required_columns = set(self.variants_column_mapping.values())
             if not set(reader.fieldnames) >= required_columns:
                 raise ValueError(f'Missing required fields: {required_columns - set(reader.fieldnames)}')
 
         with open(self.mutations_filename_local, 'r') as f:
             reader = csv.DictReader(f, delimiter=self.delimiter)
-            required_columns = set(VariantsMutationsCombinedParser.mutations_column_mapping.values())
+            required_columns = set(self.mutations_column_mapping.values())
             if not set(reader.fieldnames) >= required_columns:
                 raise ValueError(f'Missing required fields: {required_columns - set(reader.fieldnames)}')
+
+    @staticmethod
+    def _get_timestamp():
+        return datetime.now().isoformat(timespec='seconds')
 
     variants_column_mapping = {
         StandardColumnNames.region: 'REGION',
