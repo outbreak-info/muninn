@@ -27,7 +27,7 @@ VARIANTS_FILE="variants_sc2.tsv"
 MUTATIONS_FILE="mutations_sc2.tsv"
 
 # Debug output files for ref conflicts
-AMINO_SUB_REF_CONFLICTS_FILE="/tmp/amino_sub_ref_conflicts.csv"
+AMINO_SUB_REF_CONFLICTS_FILE="/tmp/amino_acid_ref_conflicts.csv"
 ALLELE_REF_CONFLICTS_FILE="/tmp/allele_ref_conflicts.csv"
 
 # unpack archive
