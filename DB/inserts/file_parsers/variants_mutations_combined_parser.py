@@ -89,7 +89,7 @@ class VariantsMutationsCombinedParser(FileParser):
                         accession   text      not null,
                         region      text      not null,
                         position_nt int       not null,
-                        ref_nt      text      not null,
+                        ref_nt      text,
                         alt_nt      text      not null,
                         gff_feature text,
                         ref_codon   text,
@@ -130,6 +130,15 @@ class VariantsMutationsCombinedParser(FileParser):
                     '''
                 )
             )
+            # todo: info and warning about this
+            await session.execute(
+                text(
+                    '''
+                    delete from tmp_mutations where ref_nt is null;
+                    '''
+                )
+            )
+
             await session.commit()
 
     async def _read_variants_input(self):
