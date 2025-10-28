@@ -5,7 +5,8 @@ from sqlalchemy import select, text, cast, Date, func, Integer
 from sqlalchemy.orm import contains_eager
 
 from DB.engine import get_uri_for_polars, get_async_session
-from DB.models import Sample, Mutation, GeoLocation, Allele, AminoAcid, IntraHostVariant, Translation
+from DB.models import Sample, Mutation, GeoLocation, Allele, AminoAcid, IntraHostVariant, MutationTranslation, \
+    IntraHostTranslation
 from api.models import SampleInfo
 from parser.parser import parser
 from utils.constants import StandardColumnNames
@@ -55,8 +56,8 @@ async def get_samples_by_mutation(query: str) -> List['SampleInfo']:
             Sample.id.in_(
                 select(Mutation.sample_id)
                 .join(Allele, Allele.id == Mutation.allele_id, isouter=True)
-                .join(Translation, Translation.id == Mutation.translation_id, isouter=True)
-                .join(AminoAcid, AminoAcid.id == Translation.amino_acid_id, isouter=True)
+                .join(MutationTranslation, MutationTranslation.mutation_id== Mutation.id, isouter=True)
+                .join(AminoAcid, AminoAcid.id == MutationTranslation.amino_acid_id, isouter=True)
                 .where(text(user_defined_query))
 
             )
@@ -84,8 +85,8 @@ async def get_samples_by_variant(query: str) -> List['SampleInfo']:
             Sample.id.in_(
                 select(IntraHostVariant.sample_id)
                 .join(Allele, Allele.id == IntraHostVariant.allele_id, isouter=True)
-                .join(Translation, Translation.id == IntraHostVariant.translation_id, isouter=True)
-                .join(AminoAcid, AminoAcid.id == Translation.amino_acid_id, isouter=True)
+                .join(IntraHostTranslation, IntraHostTranslation.intra_host_variant_id == IntraHostVariant.id, isouter=True)
+                .join(AminoAcid, AminoAcid.id == IntraHostTranslation.amino_acid_id, isouter=True)
                 .where(text(user_query))
             )
         )
