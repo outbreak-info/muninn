@@ -20,15 +20,13 @@ class VariantsMutationsCombinedParser(FileParser):
         self.mutations_filename = mutations_filename
         self.delimiter = '\t'
 
-        # find out where our files are (are we in a container or not?) and get absolute paths
+        # find out where our files are (are we in a container or not?) and get absolute and relative paths
         self.mutations_filename_relative, self.mutations_filename_local = (
             self._find_relative_and_local_abs_paths(self.mutations_filename)
         )
         self.variants_filename_relative, self.variants_filename_local = (
             self._find_relative_and_local_abs_paths(self.variants_filename)
         )
-
-        # we also need paths relative to the data directory for use in the db container
 
         try:
             self._verify_headers()
@@ -104,12 +102,9 @@ class VariantsMutationsCombinedParser(FileParser):
             await session.execute(
                 text(
                     f'''
-                        copy tmp_mutations (
-                            accession, region, position_nt, ref_nt, alt_nt, gff_feature, 
-                            ref_codon, alt_codon, ref_aa, alt_aa, position_aa
-                        )
-                        from '/muninn/data/{self.mutations_filename_relative}' delimiter E'{self.delimiter}' csv header;
-                        '''
+                    copy tmp_mutations ({", ".join(self.mutations_header_order)})
+                    from '/muninn/data/{self.mutations_filename_relative}' delimiter E'{self.delimiter}' csv header;
+                    '''
                 )
             )
             await session.execute(
@@ -130,7 +125,17 @@ class VariantsMutationsCombinedParser(FileParser):
                     '''
                 )
             )
-            # todo: info and warning about this
+            res = await session.execute(
+                text(
+                    '''
+                    select count(*) from tmp_mutations where ref_nt is null;
+                    '''
+                )
+            )
+            count = res.mappings().one()['count']
+            if count > 0:
+                print(f'Warning: {count} mutations had null ref_nt and will be ignored')
+
             await session.execute(
                 text(
                     '''
@@ -178,11 +183,7 @@ class VariantsMutationsCombinedParser(FileParser):
             await session.execute(
                 text(
                     f'''
-                    copy tmp_variants (
-                        region, position_nt, ref_nt, alt_nt, ref_dp, ref_rv, ref_qual, 
-                        alt_dp, alt_rv, alt_qual, alt_freq, total_dp, pval, pass_qc, gff_feature, 
-                        ref_codon, ref_aa, alt_codon, alt_aa, position_aa, accession
-                    )
+                    copy tmp_variants ({', '.join(self.variants_header_order)})
                     from '/muninn/data/{self.variants_filename_relative}' delimiter E'{self.delimiter}' csv header;
                     '''
                 )
