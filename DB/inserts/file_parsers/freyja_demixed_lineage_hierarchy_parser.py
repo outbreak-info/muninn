@@ -5,12 +5,11 @@ import polars as pl
 import yaml
 
 from DB.inserts.file_parsers.file_parser import FileParser
-from DB.inserts.lineage_children import batch_delete_lineage_children, copy_insert_lineage_children
+from DB.inserts.lineage_children import batch_delete_lineage_children, copy_insert_lineage_children, \
+    get_all_lineages_immediate_children_by_system_as_pl_df
 from DB.inserts.lineage_systems import find_or_insert_lineage_system
-from DB.inserts.lineages import copy_insert_lineages
+from DB.inserts.lineages import copy_insert_lineages, get_all_lineages_by_lineage_system_as_pl_df
 from DB.models import LineageSystem
-from DB.queries.ingestion_queries import get_all_lineages_immediate_children_by_system_as_pl_df, \
-    get_all_lineages_by_lineage_system_as_pl_df
 from utils.constants import StandardColumnNames, LineageSystemNames
 
 PARENT_NAME = 'parent_name'

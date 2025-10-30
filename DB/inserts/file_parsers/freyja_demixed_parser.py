@@ -8,7 +8,7 @@ from psycopg2 import IntegrityError
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.lineage_systems import find_or_insert_lineage_system
 from DB.inserts.lineages import find_or_insert_lineage
-from DB.queries.ingestion_queries import get_sample_id_by_accession
+from DB.inserts.samples import get_sample_id_by_accession
 from DB.inserts.samples_lineages import upsert_sample_lineage
 from DB.models import LineageSystem, Lineage, SampleLineage
 from utils.constants import LineageSystemNames

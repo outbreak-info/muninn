@@ -11,7 +11,7 @@ from DB.inserts.file_parsers.file_parser import FileParser
 
 from DB.inserts.papers import find_or_insert_paper
 from DB.models import AminoAcid, Effect, Paper, Annotation, AnnotationPaper
-from DB.queries.ingestion_queries import find_aa_sub
+from DB.inserts.amino_acids import find_amino_acid
 from utils.constants import DefaultGffFeaturesByRegion
 from utils.csv_helpers import parse_change_string, get_value
 from utils.errors import NotFoundError, DuplicateAnnotationError
@@ -97,7 +97,7 @@ class FlumutParser(FileParser):
                         position += 16
 
                     amino_acid_ids.append(
-                        await find_aa_sub(
+                        await find_amino_acid(
                             AminoAcid(
                                 gff_feature=gff_feature,
                                 position_aa=position,

@@ -95,7 +95,6 @@ class TableNames:
     lineage_systems = 'lineage_systems'
     lineages = 'lineages'
     samples_lineages = 'samples_lineages'
-    translations = 'translations' # todo: deprecated
     papers = 'papers'
     effects = 'effects'
     annotations = 'annotations'
@@ -114,7 +113,6 @@ class StandardColumnNames:
     amino_acid_id = 'amino_acid_id'
     intra_host_variant_id = 'intra_host_variant_id'
     mutation_id = 'mutation_id'
-    translation_id = 'translation_id' # todo: deprecated
     phenotype_metric_id = 'phenotype_metric_id'
     lineage_system_id = 'lineage_system_id'
     lineage_id = 'lineage_id'

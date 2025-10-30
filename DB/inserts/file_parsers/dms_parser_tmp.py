@@ -5,7 +5,7 @@ from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.phenotype_measurement_results import insert_pheno_measurement_result
 from DB.inserts.phenotype_metrics import find_or_insert_metric
 from DB.models import AminoAcid, PhenotypeMetric, PhenotypeMetricValues
-from DB.queries.ingestion_queries import find_aa_sub
+from DB.inserts.amino_acids import find_amino_acid
 from utils.constants import PhenotypeMetricAssayTypes, DefaultGffFeaturesByRegion, StandardColumnNames, \
     StandardPhenoMetricNames
 from utils.csv_helpers import get_value, clean_up_gff_feature
@@ -57,7 +57,7 @@ class DmsFileParserTmp(FileParser):
                     aas_id = cache_amino_sub_ids[(position_aa, ref_aa, alt_aa)]
                 except KeyError:
                     try:
-                        aas_id = await find_aa_sub(
+                        aas_id = await find_amino_acid(
                             AminoAcid(
                                 gff_feature=self.gff_feature,
                                 position_aa=position_aa,

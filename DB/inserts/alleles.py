@@ -1,13 +1,7 @@
-import logging
-from typing import Any
+from sqlalchemy import select, and_
 
-import polars as pl
-from sqlalchemy import select, and_, text, insert
-
-from DB.engine import get_async_write_session, get_asyncpg_connection
+from DB.engine import get_async_write_session
 from DB.models import Allele
-
-from utils.constants import StandardColumnNames
 
 
 async def find_or_insert_allele(a: Allele) -> int:
