@@ -2,8 +2,7 @@ import asyncio
 import logging
 from pprint import pprint
 
-from DB.queries.alleles import get_all_alleles_as_pl_df
-from DB.queries.amino_acid_substitutions import get_aa_ids_for_annotation_effect
+from DB.queries.amino_acids import get_aa_ids_for_annotation_effect
 from DB.queries.counts import count_variants_by_column, count_mutations_by_column
 from DB.queries.lineages import get_sample_counts_by_lineage, get_abundances, get_abundance_summaries
 from DB.queries.mutations import get_mutations_by_sample, get_mutations

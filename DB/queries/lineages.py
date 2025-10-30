@@ -2,11 +2,10 @@ import datetime
 from collections import defaultdict
 from typing import List, Dict
 
-import polars as pl
 from sqlalchemy import select, func, distinct, text, and_
 from sqlalchemy.orm import contains_eager
 
-from DB.engine import get_async_session, get_uri_for_polars
+from DB.engine import get_async_session
 from DB.models import LineageSystem, Lineage, Sample, SampleLineage, GeoLocation, Allele, Mutation
 from api.models import LineageCountInfo, LineageAbundanceInfo, LineageInfo, LineageAbundanceSummaryInfo, \
     MutationProfileInfo
@@ -28,20 +27,6 @@ async def get_all_lineages_by_lineage_system(lineage_system_name: str) -> List[L
         )
         out_data = [LineageInfo(**row) for row in res.mappings().all()]
     return out_data
-
-
-async def get_all_lineages_by_lineage_system_as_pl_df(lineage_system_name: str) -> pl.DataFrame:
-    return pl.read_database_uri(
-        query=f'''
-        select 
-            l.id as {StandardColumnNames.lineage_id},
-            l.{StandardColumnNames.lineage_name}
-        from {TableNames.lineages} l
-        inner join {TableNames.lineage_systems} ls on ls.id = l.{StandardColumnNames.lineage_system_id}
-        where ls.{StandardColumnNames.lineage_system_name} = '{lineage_system_name}'
-        ''',
-        uri=get_uri_for_polars()
-    )
 
 
 async def get_sample_counts_by_lineage(samples_raw_query: str | None) -> List[LineageCountInfo]:
@@ -391,7 +376,6 @@ async def get_mutation_incidence(
             if match_reference:
                 not_reference = ''
 
-            # TODO: Profile this SQL query
             res = await session.execute(
                 text(
                     f'''
@@ -420,7 +404,7 @@ async def get_mutation_incidence(
                     SELECT DISTINCT m.sample_id,
                                     t.amino_acid_id
                     FROM   mutations    m
-                    JOIN   translations t ON t.id = m.translation_id
+                    JOIN   {TableNames.mutations_translations} t ON t.{StandardColumnNames.mutation_id} = m.id
                     ) SELECT ref_aa, position_aa, alt_aa, gff_feature, count(*) as mutation_count, count(*) / {sample_count} as mutation_prevalence
                     from sample_subset
                     inner join sample_aa ON sample_aa.sample_id = sample_subset.id

@@ -5,7 +5,7 @@ from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.phenotype_measurement_results import insert_pheno_measurement_result
 from DB.inserts.phenotype_metrics import find_or_insert_metric
 from DB.models import AminoAcid, PhenotypeMetric, PhenotypeMetricValues
-from DB.queries.amino_acid_substitutions import find_aa_sub
+from DB.queries.ingestion_queries import find_aa_sub
 from utils.constants import PhenotypeMetricAssayTypes, DefaultGffFeaturesByRegion, StandardColumnNames, \
     StandardPhenoMetricNames
 from utils.csv_helpers import get_value, clean_up_gff_feature

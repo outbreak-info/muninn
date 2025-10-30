@@ -6,6 +6,7 @@ from sqlalchemy import text
 
 from DB.engine import get_async_session
 from DB.models import IntraHostVariant, Mutation
+from DB.queries.helpers import get_appropriate_translations_table_and_id
 from parser.parser import parser
 from utils.constants import DateBinOpt
 
@@ -90,6 +91,7 @@ async def _get_annotations_by_collection_date(
         case _:
             raise ValueError
 
+    translations_table, translations_join_col = get_appropriate_translations_table_and_id(table)
     async with get_async_session() as session:
         res = await session.execute(
             text(
@@ -111,7 +113,7 @@ async def _get_annotations_by_collection_date(
                         inner join samples_lineages sl on sl.sample_id = s.id
                         inner join lineages l ON l.id = sl.lineage_id
                         inner join lineage_systems ls on ls.id = l.lineage_system_id
-                        left join translations t on t.id = VM.translation_id
+                        left join {translations_table} t on t.{translations_join_col} = VM.id
                         left join amino_acids aa on aa.id = t.amino_acid_id
                         inner join annotations_amino_acids aaa on aaa.amino_acid_id = aa.id
                         inner join annotations a on a.id = aaa.annotation_id
@@ -175,15 +177,17 @@ async def _get_annotations_by_amino_acid_position(
     if raw_query is not None:
         user_where_clause = f'and ({parser.parse(raw_query)})'
 
+    translations_table, translations_join_col = get_appropriate_translations_table_and_id(table)
+
     async with get_async_session() as session:
         res = await session.execute(
             text(
                 f'''
                 SELECT aa.gff_feature, aa.position_aa, aa.alt_aa, aa.ref_aa, COUNT(*)  FROM amino_acids aa
-                    inner join translations t on t.amino_acid_id = aa.id
+                    inner join {translations_table} t on t.amino_acid_id = aa.id
                     inner join annotations_amino_acids aaa on aaa.amino_acid_id = aa.id
                     inner join annotations a on a.id = aaa.annotation_id
-                    inner join {table.__tablename__} VM on VM.translation_id = t.id
+                    inner join {table.__tablename__} VM on VM.id = t.{translations_join_col}
                     inner join samples s on VM.sample_id = s.id
                     inner join samples_lineages sl on sl.sample_id = s.id
                     inner join lineages l ON l.id = sl.lineage_id

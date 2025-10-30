@@ -3,9 +3,11 @@ from typing import List, Type
 from sqlalchemy import select, and_, ColumnElement, text, func
 
 from DB.engine import get_async_session
-from DB.models import IntraHostVariant, Sample, Allele, AminoAcid, Translation, Mutation
+from DB.models import IntraHostVariant, Sample, Allele, AminoAcid, Mutation, IntraHostTranslation, MutationTranslation
+from DB.queries.helpers import get_appropriate_translations_table_and_id
 from api.models import VariantFreqInfo, VariantCountPhenoScoreInfo, MutationCountInfo
 from parser.parser import parser
+from utils.constants import TableNames, StandardColumnNames
 from utils.csv_helpers import parse_change_string
 
 
@@ -37,11 +39,11 @@ async def get_samples_variant_freq_by_nt_change(change: str) -> List[VariantFreq
 
 async def _get_samples_variant_freq(where_clause: ColumnElement[bool]) -> List[VariantFreqInfo]:
     query = (
-        select(IntraHostVariant.alt_freq, Sample.accession, Allele.id, Translation.id, AminoAcid.id)
+        select(IntraHostVariant.alt_freq, Sample.accession, Allele.id, IntraHostTranslation.id, AminoAcid.id)
         .join(Sample, Sample.id == IntraHostVariant.sample_id, isouter=True)
         .join(Allele, Allele.id == IntraHostVariant.allele_id, isouter=True)
-        .join(Translation, Translation.id == IntraHostVariant.translation_id, isouter=True)
-        .join(AminoAcid, AminoAcid.id == Translation.amino_acid_id, isouter=True)
+        .join(IntraHostTranslation, IntraHostTranslation.intra_host_variant_id == IntraHostVariant.id, isouter=True)
+        .join(AminoAcid, AminoAcid.id == IntraHostTranslation.amino_acid_id, isouter=True)
         .where(where_clause)
     )
 
@@ -59,6 +61,7 @@ async def _get_samples_variant_freq(where_clause: ColumnElement[bool]) -> List[V
             )
         )
     return out_data
+
 
 # todo: I think the queries here need to be double-checked
 async def get_mutation_sample_count_by_nt(change: str) -> List[MutationCountInfo]:
@@ -89,13 +92,13 @@ async def get_mutation_sample_count_by_aa(change: str) -> List[MutationCountInfo
 
 async def _get_mutation_sample_count(where_clause: ColumnElement[bool]) -> List[MutationCountInfo]:
     query = (
-        select(Sample, Mutation, Allele.id, Translation.id, AminoAcid.id)
+        select(Sample, Mutation, Allele.id, MutationTranslation.id, AminoAcid.id)
         .join(Mutation, Sample.id == Mutation.sample_id, isouter=True)
         .join(Allele, Allele.id == Mutation.allele_id, isouter=True)
-        .join(Translation, Translation.id == Mutation.translation_id, isouter=True)
-        .join(AminoAcid, AminoAcid.id == Translation.amino_acid_id, isouter=True)
-        .with_only_columns(Allele.id, Translation.id, AminoAcid.id, func.count())
-        .group_by(Allele.id, Translation.id, AminoAcid.id)
+        .join(MutationTranslation, MutationTranslation.mutation_id == Mutation.id, isouter=True)
+        .join(AminoAcid, AminoAcid.id == MutationTranslation.amino_acid_id, isouter=True)
+        .with_only_columns(Allele.id, MutationTranslation.id, AminoAcid.id, func.count())
+        .group_by(Allele.id, MutationTranslation.id, AminoAcid.id)
         .where(where_clause)
     )
 
@@ -131,7 +134,8 @@ async def get_pheno_values_and_variant_counts(
 ) -> List['VariantCountPhenoScoreInfo']:
     return await _get_pheno_values_and_counts(pheno_metric_name, region, IntraHostVariant, include_refs, samples_query)
 
-#TODO: Using "region" as the parameter for "gff_feature" for now.
+
+# TODO: Using "region" as the parameter for "gff_feature" for now.
 async def _get_pheno_values_and_counts(
     pheno_metric_name: str,
     region: str,
@@ -147,13 +151,15 @@ async def _get_pheno_values_and_counts(
 
     samples_query_addin = '' if samples_query is None else f'and {parser.parse(samples_query)}'
 
+    translations_table, translations_join_id = get_appropriate_translations_table_and_id(intermediate)
+
     async with get_async_session() as session:
         res = await session.execute(
             text(
                 f'''
                 select aas.ref_aa, aas.position_aa, aas.alt_aa, pmv.value, count(distinct s.id) as count
                 from {tablename} TAB
-                left join translations t on t.id = TAB.translation_id
+                left join {translations_table} t on t.{translations_join_id} = TAB.id
                 left join samples s on s.id = TAB.sample_id
                 left join amino_acids aas on aas.id = t.amino_acid_id
                 left join phenotype_metric_values pmv on pmv.amino_acid_id = aas.id

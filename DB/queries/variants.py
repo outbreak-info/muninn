@@ -1,28 +1,27 @@
 import datetime
 from typing import List
 
-import polars as pl
 from sqlalchemy import select, text
 from sqlalchemy.orm import contains_eager
 
-from DB.engine import get_async_session, get_uri_for_polars
-from DB.models import Sample, IntraHostVariant, Allele, AminoAcid, GeoLocation, Translation
-from api.models import VariantInfo, RegionAndGffFeatureInfo
+from DB.engine import get_async_session
+from DB.models import Sample, IntraHostVariant, Allele, AminoAcid, GeoLocation, IntraHostTranslation
+from api.models import VariantInfo
 from parser.parser import parser
-from utils.constants import StandardColumnNames, DateBinOpt
-import DB.queries.variants_mutations
+from utils.constants import StandardColumnNames, DateBinOpt, TableNames
+
 
 async def get_variants(query: str) -> List['VariantInfo']:
     user_query = parser.parse(query)
 
     variants_query = (
-        select(IntraHostVariant, Allele, Translation, AminoAcid)
+        select(IntraHostVariant, Allele, IntraHostTranslation, AminoAcid)
         .join(Allele, IntraHostVariant.allele_id == Allele.id, isouter=True)
         .options(contains_eager(IntraHostVariant.r_allele))
-        .join(Translation, Translation.id == IntraHostVariant.translation_id, isouter=True)
-        .options(contains_eager(IntraHostVariant.r_translation))
-        .join(AminoAcid, AminoAcid.id == Translation.amino_acid_id, isouter=True)
-        .options(contains_eager(Translation.r_amino_acid))
+        .join(IntraHostTranslation, IntraHostTranslation.intra_host_variant_id == IntraHostVariant.id, isouter=True)
+        .options(contains_eager(IntraHostVariant.r_translations))
+        .join(AminoAcid, AminoAcid.id == IntraHostTranslation.amino_acid_id, isouter=True)
+        .options(contains_eager(IntraHostTranslation.r_amino_acid))
         .where(text(user_query))
     )
 
@@ -35,13 +34,13 @@ async def get_variants(query: str) -> List['VariantInfo']:
 async def get_variants_for_sample(query: str) -> List['VariantInfo']:
     user_query = parser.parse(query)
     variants_query = (
-        select(IntraHostVariant, Allele, Translation, AminoAcid)
+        select(IntraHostVariant, Allele, IntraHostTranslation, AminoAcid)
         .join(Allele, IntraHostVariant.allele_id == Allele.id, isouter=True)
         .options(contains_eager(IntraHostVariant.r_allele))
-        .join(Translation, Translation.id == IntraHostVariant.translation_id, isouter=True)
-        .options(contains_eager(IntraHostVariant.r_translation))
-        .join(AminoAcid, AminoAcid.id == Translation.amino_acid_id, isouter=True)
-        .options(contains_eager(Translation.r_amino_acid))
+        .join(IntraHostTranslation, IntraHostTranslation.intra_host_variant_id == IntraHostVariant.id, isouter=True)
+        .options(contains_eager(IntraHostVariant.r_translations))
+        .join(AminoAcid, AminoAcid.id == IntraHostTranslation.amino_acid_id, isouter=True)
+        .options(contains_eager(IntraHostTranslation.r_amino_acid))
         .filter(
             IntraHostVariant.sample_id.in_(
                 select(Sample.id)
@@ -56,17 +55,6 @@ async def get_variants_for_sample(query: str) -> List['VariantInfo']:
         out_data = [VariantInfo.from_db_object(v) for v in results.unique()]
     return out_data
 
-
-async def get_all_variants_as_pl_df() -> pl.DataFrame:
-    return pl.read_database_uri(
-        query=f'select * from {IntraHostVariant.__tablename__};',
-        uri=get_uri_for_polars()
-    ).rename(
-        {'id': StandardColumnNames.intra_host_variant_id}
-    )
-
-async def get_region_and_gff_features() -> List['RegionAndGffFeatureInfo']:
-        return await DB.queries.variants_mutations.get_region_and_gff_features(IntraHostVariant)
 
 # TODO: Generalize this for nucleotide mutations
 async def get_aa_variant_frequency_by_simple_date_bin(
@@ -140,7 +128,7 @@ async def get_aa_variant_frequency_by_simple_date_bin(
                             collection_end_date - collection_start_date as collection_span
                         from samples s
                         inner join intra_host_variants ihv on ihv.sample_id = s.id
-                        inner join translations t on t.id = ihv.translation_id
+                        inner join {TableNames.intra_host_variants} t on t.{StandardColumnNames.intra_host_variant_id} = ihv.id
                         inner join amino_acids aa on aa.id = t.amino_acid_id
                         left join samples_lineages sl on sl.sample_id = s.id
                         left join lineages l on l.id = sl.lineage_id
@@ -156,15 +144,17 @@ async def get_aa_variant_frequency_by_simple_date_bin(
     out_data = []
     for r in res:
         date = date_bin.format_iso_chunk(r[0], r[1])
-        out_data.append({
-            "date": date,
-            "n": r[2],
-            "alt_freq_q1": r[3],
-            "alt_freq_median": r[4],
-            "alt_freq_q3": r[5],
-            "gff_feature": r[6],
-            "ref_aa": r[7],
-            "position_aa": r[8],
-            "alt_aa": r[9]
-        })
+        out_data.append(
+            {
+                "date": date,
+                "n": r[2],
+                "alt_freq_q1": r[3],
+                "alt_freq_median": r[4],
+                "alt_freq_q3": r[5],
+                "gff_feature": r[6],
+                "ref_aa": r[7],
+                "position_aa": r[8],
+                "alt_aa": r[9]
+            }
+        )
     return out_data

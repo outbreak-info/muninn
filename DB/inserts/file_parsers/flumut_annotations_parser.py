@@ -11,7 +11,7 @@ from DB.inserts.file_parsers.file_parser import FileParser
 
 from DB.inserts.papers import find_or_insert_paper
 from DB.models import AminoAcid, Effect, Paper, Annotation, AnnotationPaper
-from DB.queries.amino_acid_substitutions import find_aa_sub
+from DB.queries.ingestion_queries import find_aa_sub
 from utils.constants import DefaultGffFeaturesByRegion
 from utils.csv_helpers import parse_change_string, get_value
 from utils.errors import NotFoundError, DuplicateAnnotationError

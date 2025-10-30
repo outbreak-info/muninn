@@ -13,6 +13,7 @@ import DB.queries.samples
 import DB.queries.variants
 import DB.queries.variants_mutations
 import DB.queries.annotations
+import DB.queries.helpers
 from DB.models import Mutation, IntraHostVariant
 from api.models import VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
     MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo, \
@@ -434,7 +435,7 @@ async def get_variants_before_mutations(lineage: str, lineage_system_name: str) 
 @app.get('/variants:regionAndGffFeature', response_model=List[RegionAndGffFeatureInfo])
 async def get_region_and_gff_features() -> List[RegionAndGffFeatureInfo]:
     try:
-        return await DB.queries.variants.get_region_and_gff_features()
+        return await DB.queries.helpers.get_region_and_gff_features(IntraHostVariant)
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
@@ -448,7 +449,7 @@ async def get_variants_before_mutations(lineage: str, lineage_system_name: str) 
 @app.get('/mutations:regionAndGffFeature', response_model=List[RegionAndGffFeatureInfo])
 async def get_region_and_gff_features() -> List[RegionAndGffFeatureInfo]:
     try:
-        return await DB.queries.mutations.get_region_and_gff_features()
+        return await DB.queries.helpers.get_region_and_gff_features(Mutation)
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 

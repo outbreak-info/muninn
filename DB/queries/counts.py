@@ -7,6 +7,7 @@ from sqlalchemy.sql.functions import func
 from DB.engine import get_async_session
 from DB.models import Sample, GeoLocation, IntraHostVariant, AminoAcid, Allele, Mutation, IntraHostTranslation, \
     MutationTranslation
+from DB.queries.helpers import get_appropriate_translations_table_and_id
 from parser.parser import parser
 from utils.constants import DateBinOpt, NtOrAa
 
@@ -175,7 +176,7 @@ async def count_samples_by_collection_date(
         out_data[date] = r[2]
     return out_data
 
-
+# todo: not in use?
 async def count_variants_by_simple_date(
     group_by: str,
     date_bin: DateBinOpt,
@@ -192,7 +193,7 @@ async def count_variants_by_simple_date(
         IntraHostVariant
     )
 
-
+# todo: not in use?
 async def count_mutations_by_simple_date(
     group_by: str,
     date_bin: DateBinOpt,
@@ -209,7 +210,7 @@ async def count_mutations_by_simple_date(
         Mutation
     )
 
-
+# todo: this must not be in use, it's wildly out of date.
 async def _count_variants_or_mutations_by_simple_date_bin(
     group_by: str,
     date_bin: DateBinOpt,
@@ -357,6 +358,8 @@ async def _count_variants_or_mutations_by_collection_date(
         case _:
             raise ValueError
 
+    translations_table, translations_join_col = get_appropriate_translations_table_and_id(table)
+
     async with get_async_session() as session:
         res = await session.execute(
             text(
@@ -377,7 +380,7 @@ async def _count_variants_or_mutations_by_collection_date(
                         from samples s
                         left join geo_locations gl on gl.id = s.geo_location_id
                         inner join {table.__tablename__} VM on VM.sample_id = s.id
-                        left join translations t on t.id = VM.translation_id
+                        left join {translations_table} t on t.{translations_join_col} = VM.id
                         left join amino_acids aas on aas.id = t.amino_acid_id
                         left join samples_lineages sl on sl.sample_id = s.id
                         left join lineages l on l.id = sl.lineage_id

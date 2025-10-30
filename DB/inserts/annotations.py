@@ -2,7 +2,7 @@ from typing import Set
 
 from DB.engine import get_async_write_session
 from DB.models import Annotation, AnnotationAminoAcid
-from DB.queries.amino_acid_substitutions import get_aa_ids_for_annotation_effect
+from DB.queries.amino_acids import get_aa_ids_for_annotation_effect
 from utils.errors import DuplicateAnnotationError
 
 

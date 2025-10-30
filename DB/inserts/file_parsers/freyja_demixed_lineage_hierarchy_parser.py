@@ -9,8 +9,8 @@ from DB.inserts.lineage_children import batch_delete_lineage_children, copy_inse
 from DB.inserts.lineage_systems import find_or_insert_lineage_system
 from DB.inserts.lineages import copy_insert_lineages
 from DB.models import LineageSystem
-from DB.queries.lineage_children import get_all_lineages_immediate_children_by_system_as_pl_df
-from DB.queries.lineages import get_all_lineages_by_lineage_system_as_pl_df
+from DB.queries.ingestion_queries import get_all_lineages_immediate_children_by_system_as_pl_df, \
+    get_all_lineages_by_lineage_system_as_pl_df
 from utils.constants import StandardColumnNames, LineageSystemNames
 
 PARENT_NAME = 'parent_name'
