@@ -26,13 +26,13 @@ class CountByDateTests(unittest.TestCase):
 
     def test_count_variants(self):
         res = requests.get('http://localhost:8000/v0/variants:count?group_by=release_date')
-        self.assertTrue(res.ok)
+        self.assertEqual(res.status_code, 501)
 
         res = requests.get('http://localhost:8000/v0/variants:count?group_by=creation_date&date_bin=week')
-        self.assertTrue(res.ok)
+        self.assertEqual(res.status_code, 501)
 
         res = requests.get('http://localhost:8000/v0/variants:count?group_by=creation_date&date_bin=day')
-        self.assertTrue(res.ok)
+        self.assertEqual(res.status_code, 501)
 
         res = requests.get('http://localhost:8000/v0/variants:count?group_by=collection_date')
         self.assertTrue(res.ok)
@@ -45,13 +45,13 @@ class CountByDateTests(unittest.TestCase):
 
     def test_count_mutations(self):
         res = requests.get('http://localhost:8000/v0/mutations:count?group_by=release_date')
-        self.assertTrue(res.ok)
+        self.assertEqual(res.status_code, 501)
 
         res = requests.get('http://localhost:8000/v0/mutations:count?group_by=creation_date&date_bin=week')
-        self.assertTrue(res.ok)
+        self.assertEqual(res.status_code, 501)
 
         res = requests.get('http://localhost:8000/v0/mutations:count?group_by=creation_date&date_bin=day')
-        self.assertTrue(res.ok)
+        self.assertEqual(res.status_code, 501)
 
         res = requests.get('http://localhost:8000/v0/mutations:count?group_by=collection_date')
         self.assertTrue(res.ok)

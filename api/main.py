@@ -293,7 +293,7 @@ async def get_variant_counts(
     """
 
     if group_by in SIMPLE_DATE_FIELDS:
-        return await DB.queries.counts.count_variants_by_simple_date(group_by, date_bin, days, q, change_bin)
+        raise HTTPException(501, detail="This functionality has been removed for lack of use.")
     elif group_by == COLLECTION_DATE:
         return await DB.queries.counts.count_variants_by_collection_date(
             date_bin,
@@ -329,7 +329,7 @@ async def get_mutation_counts(
     max_span_days: int = DEFAULT_MAX_SPAN_DAYS
 ):
     if group_by in SIMPLE_DATE_FIELDS:
-        return await DB.queries.counts.count_mutations_by_simple_date(group_by, date_bin, days, q, change_bin)
+        raise HTTPException(501, detail="This functionality has been removed for lack of use.")
     elif group_by == COLLECTION_DATE:
         return await DB.queries.counts.count_mutations_by_collection_date(
             date_bin,

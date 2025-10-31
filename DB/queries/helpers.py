@@ -37,6 +37,6 @@ def get_appropriate_translations_table_and_id(table: Type[IntraHostVariant] | Ty
     if table is IntraHostVariant or table == TableNames.intra_host_variants:
         return TableNames.intra_host_translations, StandardColumnNames.intra_host_variant_id
     elif table is Mutation or table == TableNames.mutations:
-        return TableNames.mutations_translations, StandardColumnNames.intra_host_variant_id
+        return TableNames.mutations_translations, StandardColumnNames.mutation_id
     else:
         raise ValueError
