@@ -7,7 +7,6 @@ from DB.models import IntraHostVariant, Sample, Allele, AminoAcid, Mutation, Int
 from DB.queries.helpers import get_appropriate_translations_table_and_id
 from api.models import VariantFreqInfo, VariantCountPhenoScoreInfo, MutationCountInfo
 from parser.parser import parser
-from utils.constants import TableNames, StandardColumnNames
 from utils.csv_helpers import parse_change_string
 
 

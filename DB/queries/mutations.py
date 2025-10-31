@@ -1,16 +1,15 @@
-import datetime
 from typing import List
 
 from sqlalchemy import select, text
 from sqlalchemy.orm import contains_eager
 
-import DB.queries.helpers
-import DB.queries.variants_mutations
 from DB.engine import get_async_session
 from DB.models import Mutation, Allele, AminoAcid, Sample, GeoLocation, MutationTranslation
-from api.models import MutationInfo, RegionAndGffFeatureInfo
+from DB.queries.date_count_helpers import get_extract_clause, MID_COLLECTION_DATE_CALCULATION, get_order_by_cause, \
+    get_group_by_clause
+from api.models import MutationInfo
 from parser.parser import parser
-from utils.constants import StandardColumnNames, DateBinOpt, TableNames
+from utils.constants import StandardColumnNames, DateBinOpt, TableNames, COLLECTION_DATE
 
 
 async def get_mutations(query: str) -> List['MutationInfo']:
@@ -62,7 +61,7 @@ async def get_mutations_by_sample(query: str) -> List['MutationInfo']:
 
 
 # TODO: Generalize this for nucleotide mutations
-async def get_aa_mutation_count_by_simple_date_bin(
+async def get_aa_mutation_count_by_collection_date(
     date_bin: DateBinOpt,
     position_aa: int,
     alt_aa: str,
@@ -75,30 +74,17 @@ async def get_aa_mutation_count_by_simple_date_bin(
     if raw_query is not None:
         user_where_clause = f'and ({parser.parse(raw_query)})'
 
-    match date_bin:
-        case DateBinOpt.week | DateBinOpt.month:
-            extract_clause = f'''
-            extract(year from mid_collection_date) as year,
-            extract({date_bin} from mid_collection_date) as chunk
-            '''
-
-            group_and_order_clause = f'''
-            year, chunk
-            order by year, chunk
-            '''
-        case DateBinOpt.day:
-            origin = datetime.date.today()
-            extract_clause = f'''
-            date_bin('{days} days', mid_collection_date, '{origin}') + interval '{days} days' as bin_end,
-            date_bin('{days} days', mid_collection_date, '{origin}') as bin_start
-            '''
-
-            group_and_order_clause = f'''
-            bin_start, bin_end
-            order by bin_start
-            '''
-        case _:
-            raise ValueError
+    extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
+    group_by_clause = get_group_by_clause(
+        date_bin,
+        prefix_cols=[
+            StandardColumnNames.gff_feature,
+            StandardColumnNames.position_aa,
+            StandardColumnNames.alt_aa,
+            StandardColumnNames.lineage_name
+        ]
+    )
+    order_by_clause = get_order_by_cause(date_bin)
 
     async with get_async_session() as session:
         res = await session.execute(
@@ -120,7 +106,7 @@ async def get_aa_mutation_count_by_simple_date_bin(
                     alt_aa,
                     sample_id,
                     lineage_name,
-                    (collection_start_date + ((collection_end_date - collection_start_date) / 2))::date AS mid_collection_date
+                    {MID_COLLECTION_DATE_CALCULATION}
                     from (
                         select 
                             aa.gff_feature, 
@@ -143,7 +129,8 @@ async def get_aa_mutation_count_by_simple_date_bin(
                     )
                     where collection_span <= {max_span_days}
                 )
-                group by gff_feature, ref_aa, position_aa, alt_aa, lineage_name, {group_and_order_clause}
+                {group_by_clause}
+                {order_by_clause}
                 '''
             ),
             {

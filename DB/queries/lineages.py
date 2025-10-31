@@ -1,4 +1,3 @@
-import datetime
 from collections import defaultdict
 from typing import List, Dict
 
@@ -7,10 +6,12 @@ from sqlalchemy.orm import contains_eager
 
 from DB.engine import get_async_session
 from DB.models import LineageSystem, Lineage, Sample, SampleLineage, GeoLocation, Allele, Mutation
+from DB.queries.date_count_helpers import get_extract_clause, get_group_by_clause, get_order_by_cause, \
+    MID_COLLECTION_DATE_CALCULATION
 from api.models import LineageCountInfo, LineageAbundanceInfo, LineageInfo, LineageAbundanceSummaryInfo, \
     MutationProfileInfo
 from parser.parser import parser
-from utils.constants import DateBinOpt, NtOrAa, NUCLEOTIDE_CHARACTERS, TableNames, StandardColumnNames
+from utils.constants import DateBinOpt, NtOrAa, NUCLEOTIDE_CHARACTERS, TableNames, StandardColumnNames, COLLECTION_DATE
 
 
 async def get_all_lineages_by_lineage_system(lineage_system_name: str) -> List[LineageInfo]:
@@ -176,24 +177,12 @@ async def get_abundance_summaries_by_simple_date(
     if raw_query is not None:
         user_where_clause = f'and ({parser.parse(raw_query)})'
 
-    match date_bin:
-        case DateBinOpt.week | DateBinOpt.month:
-            extract_clause = f'''
-               extract(year from {group_by}) as year,
-               extract({date_bin} from {group_by}) as chunk
-               '''
-            group_by_date_cols = 'year, chunk'
-
-        case DateBinOpt.day:
-            origin = datetime.date.today()
-            extract_clause = f'''
-               date_bin('{days} days', {group_by}, '{origin}') + interval '{days} days' as bin_end,
-               date_bin('{days} days', {group_by}, '{origin}') as bin_start
-               '''
-            group_by_date_cols = 'bin_start'
-
-        case _:
-            raise ValueError(f'illegal value for date_bin: {repr(date_bin)}')
+    extract_clause = get_extract_clause(group_by, date_bin, days)
+    group_by_clause = get_group_by_clause(
+        date_bin,
+        [StandardColumnNames.lineage_name, StandardColumnNames.lineage_system_name]
+    )
+    order_by_clause = get_order_by_cause(date_bin)
 
     async with get_async_session() as session:
         res = await session.execute(
@@ -215,8 +204,8 @@ async def get_abundance_summaries_by_simple_date(
                 inner join samples s on s.id = sl.sample_id 
                 left join geo_locations gl on gl.id = s.geo_location_id 
                 where sl.is_consensus_call = false {user_where_clause} 
-                group by {group_by_date_cols}, l.lineage_name, ls.lineage_system_name
-                order by {group_by_date_cols}
+                {group_by_clause}
+                {order_by_clause}
                 '''
             )
         )
@@ -251,24 +240,12 @@ async def get_abundance_summaries_by_collection_date(
     if raw_query is not None:
         user_where_clause = f'and ({parser.parse(raw_query)})'
 
-    match date_bin:
-        case DateBinOpt.week | DateBinOpt.month:
-            extract_clause = f'''
-            extract(year from mid_collection_date) as year,
-            extract({date_bin} from mid_collection_date) as chunk
-            '''
-            group_by_date_cols = 'year, chunk'
-
-        case DateBinOpt.day:
-            origin = datetime.date.today()
-            extract_clause = f'''
-            date_bin('{days} days', mid_collection_date, '{origin}') + interval '{days} days' as bin_end,
-            date_bin('{days} days', mid_collection_date, '{origin}') as bin_start
-            '''
-            group_by_date_cols = 'bin_start'
-
-        case _:
-            raise ValueError(f'illegal value for date_bin: {repr(date_bin)}')
+    extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
+    group_by_clause = get_group_by_clause(
+        date_bin,
+        [StandardColumnNames.lineage_name, StandardColumnNames.lineage_system_name]
+    )
+    order_by_clause = get_order_by_cause(date_bin)
 
     async with get_async_session() as session:
         res = await session.execute(
@@ -287,7 +264,7 @@ async def get_abundance_summaries_by_collection_date(
                 from(
                     select
                     *,
-                    (collection_start_date + ((collection_end_date - collection_start_date) / 2))::date AS mid_collection_date
+                    {MID_COLLECTION_DATE_CALCULATION}
                     from(
                         select 
                         l.lineage_name,
@@ -306,8 +283,8 @@ async def get_abundance_summaries_by_collection_date(
                     )
                     where collection_span <= {max_span_days}
                 )
-                group by {group_by_date_cols}, lineage_name, lineage_system_name
-                order by {group_by_date_cols}
+                {group_by_clause}
+                {order_by_clause}
                 '''
             )
         )

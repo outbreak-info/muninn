@@ -1,14 +1,15 @@
-import datetime
 from typing import List, Type, Dict
 
 from sqlalchemy import select, text, func
 
 from DB.engine import get_async_session
 from DB.models import PhenotypeMetric, IntraHostVariant, Mutation, PhenotypeMetricValues
+from DB.queries.date_count_helpers import get_extract_clause, get_group_by_clause, get_order_by_cause, \
+    MID_COLLECTION_DATE_CALCULATION
 from DB.queries.helpers import get_appropriate_translations_table_and_id
 from api.models import PhenotypeMetricInfo
 from parser.parser import parser
-from utils.constants import DateBinOpt
+from utils.constants import DateBinOpt, COLLECTION_DATE
 
 
 async def get_all_pheno_metrics() -> List[PhenotypeMetricInfo]:
@@ -50,30 +51,9 @@ async def _count_variants_or_mutations_gte_pheno_value_by_collection_date(
     if raw_query is not None:
         user_where_clause = f'and ({parser.parse(raw_query)})'
 
-    match date_bin:
-        case DateBinOpt.week | DateBinOpt.month:
-            extract_clause = f'''
-            extract(year from mid_collection_date) as year,
-            extract({date_bin} from mid_collection_date) as chunk
-            '''
-
-            group_and_order_clause = f'''
-            group by year, chunk
-            order by year, chunk
-            '''
-        case DateBinOpt.day:
-            origin = datetime.date.today()
-            extract_clause = f'''
-            date_bin('{days} days', mid_collection_date, '{origin}') + interval '{days} days' as bin_end,
-            date_bin('{days} days', mid_collection_date, '{origin}') as bin_start
-            '''
-
-            group_and_order_clause = f'''
-            group by bin_start, bin_end
-            order by bin_start
-            '''
-        case _:
-            raise ValueError
+    extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
+    group_by_clause = get_group_by_clause(date_bin)
+    order_by_clause = get_order_by_cause(date_bin)
 
     translations_table, translations_join_id_col = get_appropriate_translations_table_and_id(table)
 
@@ -89,9 +69,9 @@ async def _count_variants_or_mutations_gte_pheno_value_by_collection_date(
                     select 
                     value,
                     aa_id,
-                    (collection_start_date + ((collection_end_date - collection_start_date) / 2))::date AS mid_collection_date
+                    {MID_COLLECTION_DATE_CALCULATION}
                     from (
-                        select 
+                        select s
                         pmv.value as value,
                         aa.id as aa_id,
                         collection_start_date, collection_end_date,
@@ -111,7 +91,8 @@ async def _count_variants_or_mutations_gte_pheno_value_by_collection_date(
                     )
                     where collection_span <= {max_span_days}
                 )
-                {group_and_order_clause}
+                {group_by_clause}
+                {order_by_clause}
                 '''
             )
         )
@@ -218,30 +199,9 @@ async def _pheno_value_for_mutations_or_variants_by_sample_and_collection_date(
     if raw_query is not None:
         user_where_clause = f'and ({parser.parse(raw_query)})'
 
-    match date_bin:
-        case DateBinOpt.week | DateBinOpt.month:
-            extract_clause = f'''
-            extract(year from mid_collection_date) as year,
-            extract({date_bin} from mid_collection_date) as chunk
-            '''
-
-            group_and_order_clause = f'''
-            group by year, chunk
-            order by year, chunk
-            '''
-        case DateBinOpt.day:
-            origin = datetime.date.today()
-            extract_clause = f'''
-            date_bin('{days} days', mid_collection_date, '{origin}') + interval '{days} days' as bin_end,
-            date_bin('{days} days', mid_collection_date, '{origin}') as bin_start
-            '''
-
-            group_and_order_clause = f'''
-            group by bin_start, bin_end
-            order by bin_start
-            '''
-        case _:
-            raise ValueError
+    extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
+    group_by_clause = get_group_by_clause(date_bin)
+    order_by_clause = get_order_by_cause(date_bin)
 
     translations_table, translations_join_col = get_appropriate_translations_table_and_id(table)
 
@@ -261,7 +221,7 @@ async def _pheno_value_for_mutations_or_variants_by_sample_and_collection_date(
                     select 
                     SUM(value) as aggregate_value,
                     count(distinct aa_id) as n_amino_acid_mutations,
-                    (collection_start_date + ((collection_end_date - collection_start_date) / 2))::date AS mid_collection_date
+                    {MID_COLLECTION_DATE_CALCULATION}
                     from (
                         select 
                         pmv.value as value,
@@ -284,7 +244,8 @@ async def _pheno_value_for_mutations_or_variants_by_sample_and_collection_date(
                     where collection_span <= {max_span_days}
                     group by sample_id, collection_start_date, collection_end_date
                 )
-                {group_and_order_clause}
+                {group_by_clause}
+                {order_by_clause}
                 '''
             )
         )
