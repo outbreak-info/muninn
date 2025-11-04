@@ -2,6 +2,8 @@ import asyncio
 import logging
 from pprint import pprint
 
+from DB.inserts.amino_acids import find_equivalent_amino_acids
+from DB.models import AminoAcid
 from DB.queries.amino_acids import get_aa_ids_for_annotation_effect
 from DB.queries.counts import count_variants_by_column, count_mutations_by_column
 from DB.queries.lineages import get_sample_counts_by_lineage, get_abundances, get_abundance_summaries
@@ -62,5 +64,12 @@ logger.setLevel(logging.INFO) # set debug to log results as well
 # r = asyncio.run(get_abundances(None))
 # r = asyncio.run(get_abundance_summaries("lineage_name=H5Nx-A"))
 # r = asyncio.run(get_all_alleles_as_pl_df())
-r = asyncio.run(get_aa_ids_for_annotation_effect('etaoin'))
+# r = asyncio.run(get_aa_ids_for_annotation_effect('etaoin'))
+r = asyncio.run(find_equivalent_amino_acids(AminoAcid(
+    gff_feature='XAJ25415.1',
+    position_aa=140,
+    ref_aa='N',
+    alt_aa='K'
+)))
 pprint(r)
+

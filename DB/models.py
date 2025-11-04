@@ -56,7 +56,6 @@ class Base(DeclarativeBase, AsyncAttrs):
         }
     )
 
-    # todo: I think this might be a terrible idea...
     @classmethod
     def get_check_constraints_for_alembic(cls) -> List[tuple[str, str, str]]:
         checks = []
