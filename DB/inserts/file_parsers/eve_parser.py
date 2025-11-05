@@ -2,7 +2,7 @@ from csv import DictReader
 from enum import Enum
 from typing import Set
 
-from DB.inserts.amino_acids import find_amino_acid
+from DB.inserts.amino_acids import find_amino_acid, find_equivalent_amino_acids
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.phenotype_measurement_results import insert_pheno_measurement_result
 from DB.inserts.phenotype_metrics import find_or_insert_metric
@@ -41,7 +41,7 @@ class EveParser(FileParser):
                     continue
 
                 try:
-                    aas_id = await find_amino_acid(
+                    amino_acid_ids: set[int]  = await find_equivalent_amino_acids(
                         AminoAcid(
                             gff_feature=self.gff_feature,
                             position_aa=position_aa,
@@ -49,6 +49,7 @@ class EveParser(FileParser):
                             ref_aa=ref_aa
                         )
                     )
+
                 except NotFoundError:
                     debug_info['skipped_aas_not_found'] += 1
                     # these aren't coming with nt data, I don't want to create a bunch or orphaned amino subs
@@ -71,16 +72,17 @@ class EveParser(FileParser):
                         )
                         cache_phenotype_metrics[col.name] = metric_id
 
-                    updated = await insert_pheno_measurement_result(
-                        PhenotypeMetricValues(
-                            amino_acid_id=aas_id,
-                            phenotype_metric_id=metric_id,
-                            value=v
-                        ),
-                        upsert=True
-                    )
-                    if updated:
-                        debug_info['count_existing_updated'] += 1
+                    for aa_id in amino_acid_ids:
+                        updated = await insert_pheno_measurement_result(
+                            PhenotypeMetricValues(
+                                amino_acid_id=aa_id,
+                                phenotype_metric_id=metric_id,
+                                value=v
+                            ),
+                            upsert=True
+                        )
+                        if updated:
+                            debug_info['count_existing_updated'] += 1
 
         print(debug_info)
 

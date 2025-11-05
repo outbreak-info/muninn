@@ -18,11 +18,10 @@ from DB.inserts.file_parsers.variants_mutations_combined_parser import VariantsM
 
 def main():
     # define allowed formats, give names and point to parsers
-    # todo: flagged parsers will need overhaul
     formats = {
         'samples_csv': SamplesCsvParser,
         'samples_tsv': SamplesTsvParser,
-        'eve_dms_csv': EveCsvParser, # todo
+        'eve_dms_csv': EveCsvParser,
         'genoflu_lineages': GenofluLineagesParser,
         'ha_dms_tsv': HaRegionDmsTsvParser,
         'ha_dms_csv': HaRegionDmsCsvParser,
