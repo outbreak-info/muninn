@@ -12,7 +12,6 @@ from parser.parser import parser
 from utils.constants import DateBinOpt, COLLECTION_DATE
 
 
-# TODO: Add Effect to DB.models and EffectInfo to api.models
 async def get_all_annotation_effects() -> List[str]:
     async with get_async_session() as session:
         res = await session.execute(

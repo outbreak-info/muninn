@@ -1,8 +1,9 @@
 from sqlalchemy import and_, select
 
-from DB.engine import get_async_write_session, get_async_session
+from DB.engine import get_async_session
 from DB.models import AminoAcid
 from utils.errors import NotFoundError
+
 
 # todo: should this include alt codon??
 async def find_amino_acid(aa: AminoAcid) -> int:
