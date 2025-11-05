@@ -29,7 +29,7 @@ def main():
         'freyja_demixed': FreyjaDemixedParser,
         'variants_mutations_combined_tsv': VariantsMutationsCombinedParser,
         'sc2_samples': SC2SamplesParser,
-        'flumut_tsv': FlumutTsvParser, # todo
+        'flumut_tsv': FlumutTsvParser,
         'dms_tmp_csv': HaRegionDmsCsvParserNewData,
         'freyja_demixed_hierarchy_yaml': FreyjaDemixedLineageHierarchyYamlParser
     }
