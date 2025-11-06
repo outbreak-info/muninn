@@ -38,7 +38,7 @@ async def get_min_max_pheno_metric_value(phenotype_metric_name: str) -> List:
         return [min_val, max_val]
 
 
-async def _count_variants_or_mutations_gte_pheno_value_by_collection_date(
+async def count_variants_or_mutations_gte_pheno_value_by_collection_date(
     date_bin: DateBinOpt,
     phenotype_metric_name: str,
     phenotype_metric_value_threshold: float,
@@ -71,7 +71,7 @@ async def _count_variants_or_mutations_gte_pheno_value_by_collection_date(
                     aa_id,
                     {MID_COLLECTION_DATE_CALCULATION}
                     from (
-                        select s
+                        select
                         pmv.value as value,
                         aa.id as aa_id,
                         collection_start_date, collection_end_date,

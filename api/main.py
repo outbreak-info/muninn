@@ -453,7 +453,7 @@ async def get_region_and_gff_features() -> List[RegionAndGffFeatureInfo]:
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
-# TODO: Generalize this endpoint for other date fields
+
 @app.get('/v0/phenotype_metric_values:countMutationsByCollectionDate', response_model=List[Dict])
 async def get_phenotype_metric_counts(
     phenotype_metric_name: str,
@@ -464,7 +464,7 @@ async def get_phenotype_metric_counts(
     max_span_days: int = DEFAULT_MAX_SPAN_DAYS
 ):
 
-    return await DB.queries.phenotype_metrics._count_variants_or_mutations_gte_pheno_value_by_collection_date(
+    return await DB.queries.phenotype_metrics.count_variants_or_mutations_gte_pheno_value_by_collection_date(
         date_bin,
         phenotype_metric_name,
         phenotype_metric_value_threshold,
@@ -474,7 +474,6 @@ async def get_phenotype_metric_counts(
         Mutation
     )
 
-# TODO: Generalize this endpoint for other date fields
 @app.get('/v0/phenotype_metric_values:countVariantsByCollectionDate', response_model=List[Dict])
 async def get_phenotype_metric_counts(
     phenotype_metric_name: str,
@@ -485,7 +484,7 @@ async def get_phenotype_metric_counts(
     max_span_days: int = DEFAULT_MAX_SPAN_DAYS
 ):
 
-    return await DB.queries.phenotype_metrics._count_variants_or_mutations_gte_pheno_value_by_collection_date(
+    return await DB.queries.phenotype_metrics.count_variants_or_mutations_gte_pheno_value_by_collection_date(
         date_bin,
         phenotype_metric_name,
         phenotype_metric_value_threshold,
