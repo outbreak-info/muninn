@@ -116,7 +116,7 @@ async def get_aa_variant_frequency_by_collection_date(
                             collection_end_date - collection_start_date as collection_span
                         from samples s
                         inner join intra_host_variants ihv on ihv.sample_id = s.id
-                        inner join {TableNames.intra_host_variants} t on t.{StandardColumnNames.intra_host_variant_id} = ihv.id
+                        inner join {TableNames.intra_host_translations} t on t.{StandardColumnNames.intra_host_variant_id} = ihv.id
                         inner join amino_acids aa on aa.id = t.amino_acid_id
                         left join samples_lineages sl on sl.sample_id = s.id
                         left join lineages l on l.id = sl.lineage_id

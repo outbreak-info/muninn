@@ -180,7 +180,7 @@ async def get_variant_counts_by_phenotype_score(
     q: str | None = None
 ):
     """
-    :param region: Results will include only variants in the given region
+    :param region: (GFF feature) Results will include only variants in the given region
     :param metric: Phenotype metric whose values will be included in results
     :param include_refs: if true, include variants where ref aa = alt aa
     :param q: Query against samples. If provided, only samples matching this query will be included in the count
@@ -198,7 +198,7 @@ async def get_mutation_counts_by_phenotype_score(
     q: str | None = None
 ):
     """
-    :param region: Results will include only mutations in the given region
+    :param region: (GFF feature) Results will include only mutations in the given region
     :param metric: Phenotype metric whose values will be included in results
     :param include_refs: if true, include mutations where ref aa = alt aa
     :param q: Query against samples. If provided, only samples matching this query will be included in the count
@@ -417,7 +417,7 @@ async def get_lineage_abundance(
         else:
             return await DB.queries.lineages.get_abundances(q)
 
-@app.get('/v0/lineages:mutationIncidence') #TODO: Create response_model
+@app.get('/v0/lineages:mutationIncidence')
 async def get_mutation_incidence(lineage:str, lineage_system_name: str, change_bin:NtOrAa, prevalence_threshold:float = DEFAULT_PREVALENCE_THRESHOLD, match_reference:bool = False, q: str = None):
     return await DB.queries.lineages.get_mutation_incidence(lineage, lineage_system_name, change_bin, prevalence_threshold, match_reference, q)
 

@@ -81,6 +81,7 @@ async def get_aa_mutation_count_by_collection_date(
             StandardColumnNames.gff_feature,
             StandardColumnNames.position_aa,
             StandardColumnNames.alt_aa,
+            StandardColumnNames.ref_aa,
             StandardColumnNames.lineage_name
         ]
     )
