@@ -5,53 +5,116 @@ DATE=$(date +%Y-%m-%dT%H_%M_%S_%Z)
 LOG="/home/muninn/data/ingest_sc2_$DATE.log"
 echo "begin at $(date)" >> "$LOG"
 
-
-ARCHIVE_FILENAME="$1"
-
-if [[ "$#" -eq 0 ]]; then
-  echo "archive name not provided, using default" >> "$LOG"
-  exit 1
-fi
-
-# bjorn-general outputs
-DATA_DIR='/home/muninn/data'
-BJORN_GENERAL_OUTPUT_ARCHIVE="$DATA_DIR/$ARCHIVE_FILENAME"
-
-# bjorn-general outputs
-ARCHIVE_DEST_DIR="$DATA_DIR/outputs_sc2"
-# kludge
-ARCHIVE_DEST_SUBDIR="$ARCHIVE_DEST_DIR"
-
-SAMPLES_FILE="metadata_sc2.tsv"
-VARIANTS_FILE="variants_sc2.tsv"
-MUTATIONS_FILE="mutations_sc2.tsv"
-
 # Debug output files for ref conflicts
-AMINO_SUB_REF_CONFLICTS_FILE="/tmp/amino_sub_ref_conflicts.csv"
+AMINO_SUB_REF_CONFLICTS_FILE="/tmp/amino_acid_ref_conflicts.csv"
 ALLELE_REF_CONFLICTS_FILE="/tmp/allele_ref_conflicts.csv"
 
-# unpack archive
+DATA_DIR='/home/muninn/data'
+ARCHIVE_DEST_DIR="$DATA_DIR/outputs_sc2"
+ARCHIVE_HASH_FILENAME="$ARCHIVE_DEST_DIR/expanded_archive.md5"
+ARCHIVE_HASH="UNSET"
+
+ARCHIVE_FILENAME="UNSET"
+AUTO=false
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+  --archive_in)
+    ARCHIVE_FILENAME="$2"
+    shift
+    shift
+    ;;
+  --auto)
+    AUTO=true
+    echo "Auto mode: will attempt to locate files within input archive" >> "$LOG"
+    shift
+    ;;
+  esac
+done
+
+# bjorn-general outputs
+BJORN_GENERAL_OUTPUT_ARCHIVE="$DATA_DIR/$ARCHIVE_FILENAME"
+
+
+# check that archive exists
+SKIP_DECOMPRESSION=false
 if [[ ! -f "$BJORN_GENERAL_OUTPUT_ARCHIVE" ]]; then
   echo "bjorn-general outputs archive not found: $BJORN_GENERAL_OUTPUT_ARCHIVE" >> "$LOG"
   exit 1
 fi
 
-
-if [[ -e "$ARCHIVE_DEST_DIR" ]]; then
-  echo "dest dir $ARCHIVE_DEST_DIR already exists, remove it to continue"
-  exit 1
+if [[ -d "$ARCHIVE_DEST_DIR" ]]; then
+  if [[ -f "$ARCHIVE_HASH_FILENAME" ]]; then
+    ARCHIVE_HASH=$(md5sum "$BJORN_GENERAL_OUTPUT_ARCHIVE")
+    if [[ "$ARCHIVE_HASH" = $(cat "$ARCHIVE_HASH_FILENAME") ]]; then
+      echo "It appears this input archive has already been expanded (hashes matched) so skipping decompression" >> "$LOG"
+      SKIP_DECOMPRESSION=true
+    fi
+  fi
+  if [[ "$SKIP_DECOMPRESSION" = false ]]; then
+    rm -r "$ARCHIVE_DEST_DIR"
+  fi
 fi
-tar -xzvf "$BJORN_GENERAL_OUTPUT_ARCHIVE" -C "$DATA_DIR"
 
+if [[ "$SKIP_DECOMPRESSION" = false ]]; then
+
+  if [[ "$BJORN_GENERAL_OUTPUT_ARCHIVE" = *.zip ]]; then
+    unzip -d "$ARCHIVE_DEST_DIR" "$BJORN_GENERAL_OUTPUT_ARCHIVE"
+  elif [[ "$BJORN_GENERAL_OUTPUT_ARCHIVE" = *.tar.gz ]]; then
+    if [[ ! -d  "$ARCHIVE_DEST_DIR" ]]; then
+      mkdir "$ARCHIVE_DEST_DIR"
+    fi
+    tar -xzf "$BJORN_GENERAL_OUTPUT_ARCHIVE" -C "$ARCHIVE_DEST_DIR"
+  else
+    echo "Unknown archive type. $BJORN_GENERAL_OUTPUT_ARCHIVE should be .zip or .tar.gz" >> "$LOG"
+    exit 1
+  fi
+
+  md5sum "$BJORN_GENERAL_OUTPUT_ARCHIVE" > "$ARCHIVE_HASH_FILENAME"
+fi
+
+SAMPLES_FILE="$ARCHIVE_DEST_DIR/metadata_sc2.tsv"
+VARIANTS_FILE="$ARCHIVE_DEST_DIR/variants_sc2.tsv"
+MUTATIONS_FILE="$ARCHIVE_DEST_DIR/mutations_sc2.tsv"
+FREYJA_DEMIXED_DIR="$ARCHIVE_DEST_DIR/demixed"
+
+if [[ $AUTO = true ]]; then
+  # samples metadata
+  TMP_FILE=$(find "$ARCHIVE_DEST_DIR" -type f -name "*metadata*.tsv" | head -1)
+  if [[ -f "$TMP_FILE" ]]; then
+    SAMPLES_FILE="$TMP_FILE"
+    echo "using samples file: $SAMPLES_FILE" >> "$LOG"
+  fi
+
+  # Variants file
+  TMP_FILE=$(find "$ARCHIVE_DEST_DIR" -type f -name "*variants*.tsv" | head -1)
+  if [[ -f "$TMP_FILE" ]]; then
+    VARIANTS_FILE="$TMP_FILE"
+    echo "using variants file: $VARIANTS_FILE" >> "$LOG"
+  fi
+  # Mutations file
+  TMP_FILE=$(find "$ARCHIVE_DEST_DIR" -type f -name "mutations*.tsv" | head -1)
+  if [[ -f "$TMP_FILE" ]]; then
+    MUTATIONS_FILE="$TMP_FILE"
+    echo "using mutations file: $MUTATIONS_FILE" >> "$LOG"
+  fi
+
+  # Demixed dir
+  TMP_DIR=$(find "$ARCHIVE_DEST_DIR" -type d -name "*demix*" | head -1)
+  if [[ -d "$TMP_DIR" ]]; then
+    FREYJA_DEMIXED_DIR="$TMP_DIR"
+    echo "using demixed dir: $FREYJA_DEMIXED_DIR" >> "$LOG"
+  fi
+fi
 
 {
   # ingest bjorn-general outputs
-  python3 -u runinserts.py "$ARCHIVE_DEST_SUBDIR/$SAMPLES_FILE" --format sc2_samples
+  python3 -u runinserts.py "$SAMPLES_FILE" --format sc2_samples
   python3 -u runinserts.py \
-  "$ARCHIVE_DEST_SUBDIR/$VARIANTS_FILE" \
-  "$ARCHIVE_DEST_SUBDIR/$MUTATIONS_FILE" \
+  "$VARIANTS_FILE" \
+  "$MUTATIONS_FILE" \
   --format variants_mutations_combined_tsv
-
+  python3 -u runinserts.py "$FREYJA_DEMIXED_DIR" --format freyja_demixed
 } &>> "$LOG"
 
 # Copying over some debug files

@@ -1,15 +1,13 @@
 from typing import List, Dict
 
-import polars as pl
 from sqlalchemy import select, text, cast, Date, func, Integer
 from sqlalchemy.orm import contains_eager
 
-from DB.engine import get_uri_for_polars, get_async_session
-from DB.models import Sample, Mutation, GeoLocation, Allele, AminoAcid, IntraHostVariant, Translation
+from DB.engine import get_async_session
+from DB.models import Sample, Mutation, GeoLocation, Allele, AminoAcid, IntraHostVariant, MutationTranslation, \
+    IntraHostTranslation
 from api.models import SampleInfo
 from parser.parser import parser
-from utils.constants import StandardColumnNames
-from utils.errors import NotFoundError
 from utils.constants import DateBinOpt
 
 
@@ -55,8 +53,8 @@ async def get_samples_by_mutation(query: str) -> List['SampleInfo']:
             Sample.id.in_(
                 select(Mutation.sample_id)
                 .join(Allele, Allele.id == Mutation.allele_id, isouter=True)
-                .join(Translation, Translation.id == Mutation.translation_id, isouter=True)
-                .join(AminoAcid, AminoAcid.id == Translation.amino_acid_id, isouter=True)
+                .join(MutationTranslation, MutationTranslation.mutation_id== Mutation.id, isouter=True)
+                .join(AminoAcid, AminoAcid.id == MutationTranslation.amino_acid_id, isouter=True)
                 .where(text(user_defined_query))
 
             )
@@ -84,8 +82,8 @@ async def get_samples_by_variant(query: str) -> List['SampleInfo']:
             Sample.id.in_(
                 select(IntraHostVariant.sample_id)
                 .join(Allele, Allele.id == IntraHostVariant.allele_id, isouter=True)
-                .join(Translation, Translation.id == IntraHostVariant.translation_id, isouter=True)
-                .join(AminoAcid, AminoAcid.id == Translation.amino_acid_id, isouter=True)
+                .join(IntraHostTranslation, IntraHostTranslation.intra_host_variant_id == IntraHostVariant.id, isouter=True)
+                .join(AminoAcid, AminoAcid.id == IntraHostTranslation.amino_acid_id, isouter=True)
                 .where(text(user_query))
             )
         )
@@ -95,24 +93,6 @@ async def get_samples_by_variant(query: str) -> List['SampleInfo']:
         samples = await session.scalars(samples_query)
         out_data = [SampleInfo.from_db_object(s) for s in samples.unique()]
     return out_data
-
-
-async def get_samples_accession_and_id_as_pl_df() -> pl.DataFrame:
-    return pl.read_database_uri(
-        query=f'select id, accession from samples;',
-        uri=get_uri_for_polars()
-    ).rename({'id': StandardColumnNames.sample_id})
-
-
-async def get_sample_id_by_accession(accession: str) -> int:
-    async with get_async_session() as session:
-        id_ = await session.scalar(
-            select(Sample.id)
-            .where(Sample.accession == accession)
-        )
-    if id_ is None:
-        raise NotFoundError(f'No sample found for accession: {accession}')
-    return id_
 
 
 async def get_sample_collection_release_lag(max_span_days: int) -> List[Dict]:

@@ -13,6 +13,7 @@ import DB.queries.samples
 import DB.queries.variants
 import DB.queries.variants_mutations
 import DB.queries.annotations
+import DB.queries.helpers
 from DB.models import Mutation, IntraHostVariant
 from api.models import VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
     MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo, \
@@ -179,7 +180,7 @@ async def get_variant_counts_by_phenotype_score(
     q: str | None = None
 ):
     """
-    :param region: Results will include only variants in the given region
+    :param region: (GFF feature) Results will include only variants in the given region
     :param metric: Phenotype metric whose values will be included in results
     :param include_refs: if true, include variants where ref aa = alt aa
     :param q: Query against samples. If provided, only samples matching this query will be included in the count
@@ -197,7 +198,7 @@ async def get_mutation_counts_by_phenotype_score(
     q: str | None = None
 ):
     """
-    :param region: Results will include only mutations in the given region
+    :param region: (GFF feature) Results will include only mutations in the given region
     :param metric: Phenotype metric whose values will be included in results
     :param include_refs: if true, include mutations where ref aa = alt aa
     :param q: Query against samples. If provided, only samples matching this query will be included in the count
@@ -292,7 +293,7 @@ async def get_variant_counts(
     """
 
     if group_by in SIMPLE_DATE_FIELDS:
-        return await DB.queries.counts.count_variants_by_simple_date(group_by, date_bin, days, q, change_bin)
+        raise HTTPException(501, detail="This functionality has been removed for lack of use.")
     elif group_by == COLLECTION_DATE:
         return await DB.queries.counts.count_variants_by_collection_date(
             date_bin,
@@ -311,7 +312,7 @@ async def get_aa_variant_frequency_by_collection_date(
     q: str | None = None,
     max_span_days: int = DEFAULT_MAX_SPAN_DAYS
 ):
-    return await DB.queries.variants.get_aa_variant_frequency_by_simple_date_bin(
+    return await DB.queries.variants.get_aa_variant_frequency_by_collection_date(
         date_bin,
         days,
         max_span_days,
@@ -328,7 +329,7 @@ async def get_mutation_counts(
     max_span_days: int = DEFAULT_MAX_SPAN_DAYS
 ):
     if group_by in SIMPLE_DATE_FIELDS:
-        return await DB.queries.counts.count_mutations_by_simple_date(group_by, date_bin, days, q, change_bin)
+        raise HTTPException(501, detail="This functionality has been removed for lack of use.")
     elif group_by == COLLECTION_DATE:
         return await DB.queries.counts.count_mutations_by_collection_date(
             date_bin,
@@ -350,7 +351,7 @@ async def get_aa_variant_frequency_by_collection_date(
     q: str | None = None,
     max_span_days: int = DEFAULT_MAX_SPAN_DAYS
 ):
-    return await DB.queries.mutations.get_aa_mutation_count_by_simple_date_bin(
+    return await DB.queries.mutations.get_aa_mutation_count_by_collection_date(
         date_bin,
         position_aa,
         alt_aa,
@@ -416,7 +417,7 @@ async def get_lineage_abundance(
         else:
             return await DB.queries.lineages.get_abundances(q)
 
-@app.get('/v0/lineages:mutationIncidence') #TODO: Create response_model
+@app.get('/v0/lineages:mutationIncidence')
 async def get_mutation_incidence(lineage:str, lineage_system_name: str, change_bin:NtOrAa, prevalence_threshold:float = DEFAULT_PREVALENCE_THRESHOLD, match_reference:bool = False, q: str = None):
     return await DB.queries.lineages.get_mutation_incidence(lineage, lineage_system_name, change_bin, prevalence_threshold, match_reference, q)
 
@@ -434,7 +435,7 @@ async def get_variants_before_mutations(lineage: str, lineage_system_name: str) 
 @app.get('/variants:regionAndGffFeature', response_model=List[RegionAndGffFeatureInfo])
 async def get_region_and_gff_features() -> List[RegionAndGffFeatureInfo]:
     try:
-        return await DB.queries.variants.get_region_and_gff_features()
+        return await DB.queries.helpers.get_region_and_gff_features(IntraHostVariant)
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
@@ -448,11 +449,11 @@ async def get_variants_before_mutations(lineage: str, lineage_system_name: str) 
 @app.get('/mutations:regionAndGffFeature', response_model=List[RegionAndGffFeatureInfo])
 async def get_region_and_gff_features() -> List[RegionAndGffFeatureInfo]:
     try:
-        return await DB.queries.mutations.get_region_and_gff_features()
+        return await DB.queries.helpers.get_region_and_gff_features(Mutation)
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
-# TODO: Generalize this endpoint for other date fields
+
 @app.get('/v0/phenotype_metric_values:countMutationsByCollectionDate', response_model=List[Dict])
 async def get_phenotype_metric_counts(
     phenotype_metric_name: str,
@@ -463,7 +464,7 @@ async def get_phenotype_metric_counts(
     max_span_days: int = DEFAULT_MAX_SPAN_DAYS
 ):
 
-    return await DB.queries.phenotype_metrics._count_variants_or_mutations_gte_pheno_value_by_collection_date(
+    return await DB.queries.phenotype_metrics.count_variants_or_mutations_gte_pheno_value_by_collection_date(
         date_bin,
         phenotype_metric_name,
         phenotype_metric_value_threshold,
@@ -473,7 +474,6 @@ async def get_phenotype_metric_counts(
         Mutation
     )
 
-# TODO: Generalize this endpoint for other date fields
 @app.get('/v0/phenotype_metric_values:countVariantsByCollectionDate', response_model=List[Dict])
 async def get_phenotype_metric_counts(
     phenotype_metric_name: str,
@@ -484,7 +484,7 @@ async def get_phenotype_metric_counts(
     max_span_days: int = DEFAULT_MAX_SPAN_DAYS
 ):
 
-    return await DB.queries.phenotype_metrics._count_variants_or_mutations_gte_pheno_value_by_collection_date(
+    return await DB.queries.phenotype_metrics.count_variants_or_mutations_gte_pheno_value_by_collection_date(
         date_bin,
         phenotype_metric_name,
         phenotype_metric_value_threshold,

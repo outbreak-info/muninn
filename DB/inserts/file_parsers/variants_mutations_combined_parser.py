@@ -1,26 +1,16 @@
 import csv
-from typing import List, Set
+from datetime import datetime
+from os import path
+from typing import Set
 
-import polars as pl
+from sqlalchemy.sql.expression import text
 
-from DB.inserts.alleles import copy_insert_alleles
-from DB.inserts.amino_acid_substitutions import copy_insert_aa_subs
+from DB.engine import get_async_write_session, get_async_session
 from DB.inserts.file_parsers.file_parser import FileParser
-from DB.inserts.mutations import copy_insert_mutations, batch_upsert_mutations
-from DB.inserts.translations import copy_insert_translations
-from DB.inserts.variants import batch_upsert_variants, copy_insert_variants
-from DB.queries.alleles import get_all_alleles_as_pl_df
-from DB.queries.amino_acid_substitutions import get_all_amino_acid_subs_as_pl_df
-from DB.queries.mutations import get_all_mutations_as_pl_df
-from DB.queries.samples import get_samples_accession_and_id_as_pl_df
-from DB.queries.translations import get_all_translations_as_pl_df
-from DB.queries.variants import get_all_variants_as_pl_df
-from utils.constants import StandardColumnNames, EXCLUDED_SRAS
-from utils.csv_helpers import clean_up_gff_feature
+from utils.constants import StandardColumnNames, CONTAINER_DATA_DIRECTORY, Env
 
-AMINO_SUB_REF_CONFLICTS_FILE = '/tmp/amino_sub_ref_conflicts.csv'
+AMINO_ACID_REF_CONFLICTS_FILE = '/tmp/amino_acid_ref_conflicts.csv'
 ALLELE_REF_CONFLICTS_FILE = '/tmp/allele_ref_conflicts.csv'
-TRANSLATIONS_REF_CONFLICTS_FILE = '/tmp/translations_ref_conflicts.csv'
 
 
 class VariantsMutationsCombinedParser(FileParser):
@@ -29,567 +19,555 @@ class VariantsMutationsCombinedParser(FileParser):
         self.variants_filename = variants_filename
         self.mutations_filename = mutations_filename
         self.delimiter = '\t'
+
+        # find out where our files are (are we in a container or not?) and get absolute and relative paths
+        self.mutations_filename_relative, self.mutations_filename_local = (
+            self._find_relative_and_local_abs_paths(self.mutations_filename)
+        )
+        self.variants_filename_relative, self.variants_filename_local = (
+            self._find_relative_and_local_abs_paths(self.variants_filename)
+        )
+
         try:
             self._verify_headers()
         except ValueError:
             # Swap arguments and try again
-            self.variants_filename = mutations_filename
-            self.mutations_filename = variants_filename
+            hold = self.variants_filename_local
+            self.variants_filename_local = self.mutations_filename_local
+            self.mutations_filename_local = hold
             self._verify_headers()
+            # if that worked, we also want these swapped
+            hold = self.variants_filename_relative
+            self.variants_filename_relative = self.mutations_filename_relative
+            self.mutations_filename_relative = hold
+
+        # get orders of headers
+        self.variants_header_order = self._get_header_order(
+            self.variants_filename_local,
+            self.variants_column_mapping
+        )
+        self.mutations_header_order = self._get_header_order(
+            self.mutations_filename_local,
+            self.mutations_column_mapping
+        )
 
     async def parse_and_insert(self):
-        debug_info = {
-            'count_alleles_added': 'unset',
-            'count_amino_subs_added': 'unset',
-            'count_translations_added': 'unset',
-            'count_mutations_added': 'unset',
-            'count_preexisting_variants': 'unset',
-            'count_variants_added': 'unset',
-            'count_preexisting_mutations': 'unset',
-        }
+        print(f'{self._get_timestamp()} read mutations')
+        await self._read_mutations_input()
+        print(f'{self._get_timestamp()} read variants')
+        await self._read_variants_input()
+        print(f'{self._get_timestamp()} insert alleles')
+        await self._insert_alleles()
+        print(f'{self._get_timestamp()} allele ref conflicts')
+        await self._write_allele_ref_conflicts()
+        print(f'{self._get_timestamp()} insert amino acids')
+        await self._insert_amino_acids()
+        print(f'{self._get_timestamp()} amino acid ref conflicts')
+        await self._write_amino_acid_ref_conflicts()
+        print(f'{self._get_timestamp()} insert variants')
+        await self._insert_variants()
+        print(f'{self._get_timestamp()} insert mutations')
+        await self._insert_mutations()
+        print(f'{self._get_timestamp()} insert intra host translations')
+        await self._insert_intra_host_translations()
+        print(f'{self._get_timestamp()} insert mutation translations')
+        await self._insert_mutation_translations()
+        print(f'{self._get_timestamp()} clean up tmp tables')
+        await self._clean_up_tmp_tables()
+        print(f'Finished at {self._get_timestamp()}')
 
-        #  1. read vars and muts
-        variants_input: pl.LazyFrame = await self._scan_variants()
-        mutations_input: pl.LazyFrame = await self._scan_mutations()
-
-        #  2. Get accession -> id mapping from db
-        #  3. Filter out vars and muts with accessions missing from db
-        variants_with_samples, mutations_with_samples = await (
-            VariantsMutationsCombinedParser._get_vars_and_muts_for_existing_samples(variants_input, mutations_input)
-        )
-
-        #  4. split out and combine alleles
-        #  5. filter out existing alleles
-        #  6. Insert new alleles via copy
-        debug_info['count_alleles_added'] = await VariantsMutationsCombinedParser._insert_new_alleles(
-            variants_with_samples,
-            mutations_with_samples,
-        )
-        print(f'alleles added: {debug_info}')
-
-        #  7. split out and combine amino acid subs
-        #  8. filter out existing AA subs
-        #  9. insert new aa subs via copy
-        debug_info['count_amino_subs_added'] = await VariantsMutationsCombinedParser._insert_new_amino_acid_subs(
-            variants_with_samples,
-            mutations_with_samples
-        )
-        print(f'amino subs added: {debug_info}')
-
-        # 10. Get new allele / AAS ids and join back into vars and muts
-        # vars and muts now need to include translation ids before they are finished
-        variants_with_nt_aa_ids: pl.LazyFrame
-        mutations_with_nt_aa_ids: pl.LazyFrame
-        variants_with_nt_aa_ids, mutations_with_nt_aa_ids = await (
-            VariantsMutationsCombinedParser
-            ._join_alleles_and_amino_subs_into_vars_and_muts(variants_with_samples, mutations_with_samples)
-        )
-
-        # 11. Split out and insert new translations from vars and muts
-        debug_info['count_translations_added'] = await (
-            VariantsMutationsCombinedParser
-            ._insert_new_translations(variants_with_nt_aa_ids, mutations_with_nt_aa_ids)
-        )
-        print(f'translations added: {debug_info}')
-
-        # 11.5: Combine translation ids back into vars and muts
-        variants_with_all_ids, mutations_with_all_ids = await (
-            VariantsMutationsCombinedParser._join_translation_ids_into_vars_and_muts(
-                variants_with_nt_aa_ids,
-                mutations_with_nt_aa_ids
-            )
-        )
-
-        variants_collected: pl.DataFrame = variants_with_all_ids.collect(engine='streaming')
-        mutations_collected: pl.DataFrame = mutations_with_all_ids.collect(engine='streaming')
-
-        # 12. Separate new and existing mutations.
-        # 12.5: Update existing mutations
-        # 13. insert new mutations via copy
-        existing_mutations: pl.DataFrame = await get_all_mutations_as_pl_df()
-        debug_info['count_mutations_added'] = await (
-            VariantsMutationsCombinedParser._insert_new_mutations(mutations_collected, existing_mutations)
-        )
-        debug_info['count_preexisting_mutations'] = await (
-            VariantsMutationsCombinedParser._update_existing_mutations(mutations_collected, existing_mutations)
-        )
-        print(f'mutations added / updated: {debug_info}')
-
-        # 14. Separate new and existing variants
-        # 15. Insert new variants via copy
-        # 16. Update existing variants (new bulk process for this?)
-        existing_variants = await get_all_variants_as_pl_df()
-        debug_info['count_variants_added'] = await (
-            VariantsMutationsCombinedParser._insert_new_variants(variants_collected, existing_variants)
-        )
-        debug_info['count_preexisting_variants'] = await (
-            VariantsMutationsCombinedParser._update_existing_variants(variants_collected, existing_variants)
-        )
-        print(f'variants added / updated: {debug_info}')
-
-    async def _scan_variants(self):
-        def variants_colname_mapping(cns: List[str]) -> List[str]:
-            mapped_names = []
-            inverted_colname_map = {v: k for k, v in VariantsMutationsCombinedParser.variants_column_mapping.items()}
-            for cn in cns:
-                try:
-                    mapped_names.append(inverted_colname_map[cn])
-                except KeyError:
-                    mapped_names.append(cn)
-            return mapped_names
-
-        variants_input: pl.LazyFrame = (pl.scan_csv(
-            self.variants_filename,
-            with_column_names=variants_colname_mapping,
-            separator=self.delimiter
-        ))
-        return VariantsMutationsCombinedParser._clean_and_unique_variants_and_mutations(variants_input)
-
-    async def _scan_mutations(self):
-        def mutations_colname_mapping(cns: List[str]) -> List[str]:
-            mapped_names = []
-            inverted_colname_map = {v: k for k, v in VariantsMutationsCombinedParser.mutations_column_mapping.items()}
-            for cn in cns:
-                try:
-                    mapped_names.append(inverted_colname_map[cn])
-                except KeyError:
-                    mapped_names.append(cn)
-            return mapped_names
-
-        mutations_input: pl.LazyFrame = pl.scan_csv(
-            self.mutations_filename,
-            with_column_names=mutations_colname_mapping,
-            separator=self.delimiter
-        )
-        return VariantsMutationsCombinedParser._clean_and_unique_variants_and_mutations(mutations_input)
-
-    @staticmethod
-    def _clean_and_unique_variants_and_mutations(raw: pl.LazyFrame) -> pl.LazyFrame:
-        return raw.with_columns(
-            pl.col(StandardColumnNames.ref_nt).str.to_uppercase().alias(StandardColumnNames.ref_nt),
-            pl.col(StandardColumnNames.alt_nt).str.to_uppercase().alias(StandardColumnNames.alt_nt),
-            pl.col(StandardColumnNames.ref_aa).str.to_uppercase().alias(StandardColumnNames.ref_aa),
-            pl.col(StandardColumnNames.alt_aa).str.to_uppercase().alias(StandardColumnNames.alt_aa),
-            pl.col(StandardColumnNames.ref_codon).str.to_uppercase().alias(StandardColumnNames.ref_codon),
-            pl.col(StandardColumnNames.alt_codon).str.to_uppercase().alias(StandardColumnNames.alt_codon),
-            (
-                pl.col(StandardColumnNames.gff_feature)
-                .map_elements(clean_up_gff_feature, return_dtype=pl.String)
-                .alias(StandardColumnNames.gff_feature)
-
-            ),
-            pl.col(StandardColumnNames.position_aa).cast(pl.Int64)
-        ).unique(
-            [
-                StandardColumnNames.accession,
-                StandardColumnNames.region,
-                StandardColumnNames.position_nt,
-                StandardColumnNames.alt_nt
-            ]
-        ).filter(  # remove problematic/redacted SRAs
-            ~pl.col(StandardColumnNames.accession).is_in(EXCLUDED_SRAS) &
-            # filter out deletions with no NT data, formatted as +N
-            pl.col(StandardColumnNames.alt_nt).str.count_matches(r'\+\d+') == 0
-
-        )
-
-    @staticmethod
-    async def _get_vars_and_muts_for_existing_samples(
-        variants_input: pl.LazyFrame,
-        mutations_input: pl.LazyFrame
-    ) -> (pl.LazyFrame, pl.LazyFrame):
-        #  2. Get accession -> id mapping from db
-        existing_samples: pl.DataFrame = await get_samples_accession_and_id_as_pl_df()
-
-        #  3. Filter out vars and muts with accessions missing from db
-        variants_with_samples = variants_input.join(
-            existing_samples.lazy(),
-            on=StandardColumnNames.accession,
-            how='inner'
-        )
-
-        mutations_with_samples = mutations_input.join(
-            existing_samples.lazy(),
-            on=StandardColumnNames.accession,
-            how='inner'
-        )
-
-        return variants_with_samples, mutations_with_samples
-
-    @staticmethod
-    async def _insert_new_alleles(
-        variants_with_samples: pl.LazyFrame,
-        mutations_with_samples: pl.LazyFrame,
-    ) -> str:
-        #  4. split out and combine alleles
-        allele_cols = {
-            StandardColumnNames.region,
-            StandardColumnNames.position_nt,
-            StandardColumnNames.ref_nt,
-            StandardColumnNames.alt_nt,
-        }
-
-        alleles = pl.concat(
-            [
-                variants_with_samples.select(allele_cols),
-                mutations_with_samples.select(allele_cols)
-            ]
-        ).unique(
-            # including ref here to allow checking for conflicts on ref
-            allele_cols
-        )
-
-        #  5. filter out existing alleles
-        existing_alleles: pl.DataFrame = await get_all_alleles_as_pl_df()
-
-        new_alleles = alleles.join(
-            existing_alleles.lazy(),
-            on=[
-                StandardColumnNames.region,
-                StandardColumnNames.position_nt,
-                StandardColumnNames.alt_nt,
-            ],
-            how='anti'
-        ).unique(  # this is required b/c we're including ref in the first unique above.
-            [
-                pl.col(StandardColumnNames.region),
-                pl.col(StandardColumnNames.position_nt),
-                pl.col(StandardColumnNames.alt_nt)
-            ]
-        )
-
-        # Check for ref conflicts
-        ref_conflicts = (pl.concat(
-            [
-                existing_alleles.select(allele_cols).lazy(),
-                alleles
-            ]
-        )
-        .unique()
-        .group_by(
-            pl.col(StandardColumnNames.region),
-            pl.col(StandardColumnNames.position_nt),
-            pl.col(StandardColumnNames.alt_nt)
-        )
-        .len()
-        .filter(pl.col('len') > 1)
-        .select(
-            pl.col(StandardColumnNames.region),
-            pl.col(StandardColumnNames.position_nt),
-            pl.col(StandardColumnNames.alt_nt)
-        )).collect()
-
-        if len(ref_conflicts) > 0:
-            print(
-                f'WARNING: in alleles, found {len(ref_conflicts)} positions with conflicting values for ref_nt. '
-                f'Written to {ALLELE_REF_CONFLICTS_FILE}'
-            )
-            ref_conflicts.write_csv(ALLELE_REF_CONFLICTS_FILE)
-
-        # ref conflicts have already been filtered out of new_alleles above, so we are good to insert
-
-        #  6. Insert new alleles via copy
-        return await copy_insert_alleles(new_alleles.collect())
-
-    @staticmethod
-    async def _insert_new_amino_acid_subs(
-        variants_with_samples: pl.LazyFrame,
-        mutations_with_samples: pl.LazyFrame,
-    ) -> str:
-        #  7. split out and combine amino acid subs
-        amino_sub_cols = {
-            StandardColumnNames.gff_feature,
-            StandardColumnNames.position_aa,
-            StandardColumnNames.ref_aa,
-            StandardColumnNames.alt_aa
-        }
-        amino_subs_v = variants_with_samples.select(amino_sub_cols)
-        amino_subs_m = mutations_with_samples.select(amino_sub_cols)
-
-        amino_subs = pl.concat([amino_subs_v, amino_subs_m]).drop_nulls().unique(
-            {
-                StandardColumnNames.gff_feature,
-                StandardColumnNames.position_aa,
-                StandardColumnNames.alt_aa,
-                StandardColumnNames.ref_aa  # Keep ref here to allow checking for conflicts
-            }
-        )
-
-        #  8. filter out existing AA subs
-        existing_amino_subs = await get_all_amino_acid_subs_as_pl_df()
-        new_amino_subs = amino_subs.join(
-            existing_amino_subs.lazy(),
-            on=[
-                StandardColumnNames.gff_feature,
-                StandardColumnNames.position_aa,
-                StandardColumnNames.alt_aa,
-            ],
-            how='anti'
-        ).unique(  # this is required b/c we're including ref in the first unique above.
-            [
-                pl.col(StandardColumnNames.gff_feature),
-                pl.col(StandardColumnNames.position_aa),
-                pl.col(StandardColumnNames.alt_aa)
-            ]
-        )
-
-        # Check for conflicts on ref_aa
-        ref_conflicts = (pl.concat(
-            [
-                existing_amino_subs.select(
-                    {
-                        StandardColumnNames.gff_feature,
-                        StandardColumnNames.position_aa,
-                        StandardColumnNames.ref_aa,
-                        StandardColumnNames.alt_aa,
-                    }
-                ).lazy(),
-                amino_subs.select(
-                    {
-                        StandardColumnNames.gff_feature,
-                        StandardColumnNames.position_aa,
-                        StandardColumnNames.ref_aa,
-                        StandardColumnNames.alt_aa,
-                    }
+    async def _read_mutations_input(self):
+        async with get_async_write_session() as session:
+            await session.execute(
+                text(
+                    f'''
+                    create table tmp_mutations
+                    (
+                        id          bigserial not null primary key,
+                        accession   text      not null,
+                        region      text      not null,
+                        position_nt int       not null,
+                        ref_nt      text,
+                        alt_nt      text      not null,
+                        gff_feature text,
+                        ref_codon   text,
+                        alt_codon   text,
+                        ref_aa      text,
+                        alt_aa      text,
+                        position_aa int
+                    );
+                '''
                 )
-            ]
-        )
-        .unique()
-        .group_by(
-            pl.col(StandardColumnNames.gff_feature),
-            pl.col(StandardColumnNames.position_aa),
-            pl.col(StandardColumnNames.alt_aa)
-        )
-        .len()
-        .filter(pl.col('len') > 1)
-        .select(
-            pl.col(StandardColumnNames.gff_feature),
-            pl.col(StandardColumnNames.position_aa),
-            pl.col(StandardColumnNames.alt_aa)
-        )).collect()
-
-        if len(ref_conflicts) > 0:
-            print(
-                f'WARNING: in amino acid subs, found {len(ref_conflicts)} positions with conflicting values for ref_aa. '
-                f'Written to {AMINO_SUB_REF_CONFLICTS_FILE}'
             )
-            ref_conflicts.write_csv(AMINO_SUB_REF_CONFLICTS_FILE)
+            await session.execute(
+                text(
+                    f'''
+                    copy tmp_mutations ({", ".join(self.mutations_header_order)})
+                    from '/muninn/data/{self.mutations_filename_relative}' delimiter E'{self.delimiter}' csv header;
+                    '''
+                )
+            )
+            await session.execute(
+                text(
+                    '''
+                    create index idx_tmp_mutations_accession on tmp_mutations (accession);
+                    '''
+                )
+            )
+            await session.execute(
+                text(
+                    '''
+                    delete from tmp_mutations
+                    where accession not in (
+                        select accession
+                        from samples
+                    );
+                    '''
+                )
+            )
+            res = await session.execute(
+                text(
+                    '''
+                    select count(*) from tmp_mutations where ref_nt is null;
+                    '''
+                )
+            )
+            count = res.mappings().one()['count']
+            if count > 0:
+                print(f'Warning: {count} mutations had null ref_nt and will be ignored')
 
-        # ref conflicts have already been filtered out of new_amino_subs above, so we are good to insert
+            await session.execute(
+                text(
+                    '''
+                    delete from tmp_mutations where ref_nt is null;
+                    '''
+                )
+            )
 
-        #  9. insert new aa subs via copy
-        return await copy_insert_aa_subs(new_amino_subs.collect())
+            await session.commit()
+
+    async def _read_variants_input(self):
+        async with get_async_write_session() as session:
+            await session.execute(
+                text(
+                    '''
+                    create table tmp_variants
+                    (
+                        id          bigserial primary key,
+                        region      text  not null,
+                        position_nt int   not null,
+                        ref_nt      text  not null,
+                        alt_nt      text  not null,
+                        ref_dp      int   not null,
+                        ref_rv      int   not null,
+                        ref_qual    float not null,
+                        alt_dp      int   not null,
+                        alt_rv      int   not null,
+                        alt_qual    float not null,
+                        alt_freq    float not null,
+                        total_dp    int   not null,
+                        pval        float not null,
+                        pass_qc     bool  not null,
+                        gff_feature text,
+                        ref_codon   text,
+                        ref_aa      text,
+                        alt_codon   text,
+                        alt_aa      text,
+                        position_aa      int,
+                        accession   text  not null
+                    );
+                    '''
+                )
+            )
+
+            await session.execute(
+                text(
+                    f'''
+                    copy tmp_variants ({', '.join(self.variants_header_order)})
+                    from '/muninn/data/{self.variants_filename_relative}' delimiter E'{self.delimiter}' csv header;
+                    '''
+                )
+            )
+
+            await session.execute(
+                text(
+                    '''
+                    create index idx_tmp_variants_accession on tmp_variants (accession);
+                    '''
+                )
+            )
+
+            await session.execute(
+                text(
+                    '''
+                    delete
+                    from tmp_variants
+                    where accession not in (
+                        select accession
+                        from samples
+                    );
+                    '''
+                )
+            )
+            await session.commit()
 
     @staticmethod
-    async def _join_alleles_and_amino_subs_into_vars_and_muts(
-        variants_with_samples: pl.LazyFrame,
-        mutations_with_samples: pl.LazyFrame
-    ) -> (pl.LazyFrame, pl.LazyFrame):
-        # 10. Get new allele / AAS ids and join back into vars and muts
-        existing_alleles = await get_all_alleles_as_pl_df()
-        existing_amino_subs = await get_all_amino_acid_subs_as_pl_df()
+    async def _insert_alleles():
+        async with get_async_write_session() as session:
+            await session.execute(
+                text(
+                    '''
+                    create table tmp_alleles
+                    (
+                        region      text not null,
+                        position_nt int  not null,
+                        ref_nt      text not null,
+                        alt_nt      text not null
+                    );
+                    '''
+                )
+            )
 
-        variants_with_nt_aa_ids = variants_with_samples.join(
-            existing_alleles.lazy(),
-            on=[
-                StandardColumnNames.region,
-                StandardColumnNames.position_nt,
-                StandardColumnNames.alt_nt
-            ],
-            how='left'
-        ).join(
-            existing_amino_subs.lazy(),
-            on=[
-                StandardColumnNames.gff_feature,
-                StandardColumnNames.position_aa,
-                StandardColumnNames.alt_aa
-            ],
-            how='left'
-        )
+            await session.execute(
+                text(
+                    '''
+                    create unique index uq_tmp_alleles_all on tmp_alleles (region, position_nt, alt_nt, ref_nt);
+                    '''
+                )
+            )
 
-        mutations_with_nt_aa_ids = mutations_with_samples.join(
-            existing_alleles.lazy(),
-            on=[
-                StandardColumnNames.region,
-                StandardColumnNames.position_nt,
-                StandardColumnNames.alt_nt
-            ],
-            how='left'
-        ).join(
-            existing_amino_subs.lazy(),
-            on=[
-                StandardColumnNames.gff_feature,
-                StandardColumnNames.position_aa,
-                StandardColumnNames.alt_aa
-            ],
-            how='left'
-        )
+            await session.execute(
+                text(
+                    '''
+                    insert into tmp_alleles (region, position_nt, ref_nt, alt_nt)
+                    select region, position_nt, ref_nt, alt_nt
+                    from tmp_mutations
+                    on conflict (region, position_nt, alt_nt, ref_nt) do nothing;
+                    '''
+                )
+            )
 
-        return variants_with_nt_aa_ids, mutations_with_nt_aa_ids
+            await session.execute(
+                text(
+                    '''
+                    insert into tmp_alleles (region, position_nt, ref_nt, alt_nt)
+                    select region, position_nt, ref_nt, alt_nt
+                    from tmp_variants
+                    on conflict (region, position_nt, alt_nt, ref_nt) do nothing;
+                    '''
+                )
+            )
+
+            await session.execute(
+                text(
+                    '''
+                    insert into alleles (region, position_nt, ref_nt, alt_nt)
+                    select *
+                    from tmp_alleles
+                    on conflict (region, position_nt, alt_nt) do nothing;
+                    '''
+                )
+            )
+
+            await session.commit()
 
     @staticmethod
-    async def _insert_new_translations(
-        variants_finished: pl.LazyFrame,
-        mutations_finished: pl.LazyFrame
-    ) -> str:
-        # 11. Split out and insert new translations from vars and muts
-        translations_cols = {
-            StandardColumnNames.ref_codon,
-            StandardColumnNames.alt_codon,
-            StandardColumnNames.amino_acid_id
+    async def _write_allele_ref_conflicts():
+        async with get_async_session() as session:
+            res = await session.execute(
+                text(
+                    '''
+                    select combo.region, combo.position_nt, combo.alt_nt, combo.ref_nt, count(*) from
+                    (
+                        select region, position_nt, alt_nt
+                        from (
+                            select region, position_nt, alt_nt, count(*)
+                            from tmp_alleles
+                            group by region, position_nt, alt_nt
+                        ) _
+                        where _.count > 1
+                    ) dups
+                    inner join (
+                        (
+                            select region, position_nt, alt_nt, ref_nt
+                            from tmp_mutations tmut
+                        )
+                        union all
+                        (
+                            select region, position_nt, alt_nt, ref_nt
+                            from tmp_variants tvar
+                        )
+                    ) combo on dups.region = combo.region and dups.position_nt = combo.position_nt and dups.alt_nt = combo.alt_nt
+                    group by combo.region, combo.position_nt, combo.alt_nt, combo.ref_nt ;
+                    '''
+                )
+            )
+        conflicts = res.mappings().all()
+        with open(ALLELE_REF_CONFLICTS_FILE, 'w+') as f:
+            if len(conflicts) > 0:
+                impact = sum([c['count'] for c in conflicts])
+                print(
+                    f'Warning: {len(conflicts)} allele ref conflicts found, '
+                    f'impacting {impact} mutation/variant records. See {ALLELE_REF_CONFLICTS_FILE}'
+                )
+                writer = csv.DictWriter(f, fieldnames=conflicts[0].keys())
+                writer.writeheader()
+                writer.writerows(conflicts)
+            else:
+                print('no conflicts found', file=f)
+
+    @staticmethod
+    async def _insert_amino_acids():
+        async with get_async_write_session() as session:
+            await session.execute(
+                text(
+                    '''
+                    create table tmp_amino_acids
+                    (
+                        gff_feature text not null,
+                        ref_aa      text not null,
+                        alt_aa      text not null,
+                        position_aa      int  not null,
+                        ref_codon text not null,
+                        alt_codon text not null
+                    );
+                    '''
+                )
+            )
+
+            await session.execute(
+                text(
+                    '''
+                    create unique index uq_tmp_amino_acids_all on tmp_amino_acids 
+                    (gff_feature, position_aa, alt_aa, ref_aa, ref_codon, alt_codon);
+                    '''
+                )
+            )
+
+            await session.execute(
+                text(
+                    '''
+                    insert into tmp_amino_acids (gff_feature, ref_aa, alt_aa, position_aa, ref_codon, alt_codon)
+                    select gff_feature, ref_aa, alt_aa, position_aa, ref_codon, alt_codon
+                    from tmp_mutations
+                    where num_nulls(gff_feature, ref_aa, alt_aa, position_aa) = 0
+                    on conflict (gff_feature, ref_aa, alt_aa, position_aa, ref_codon, alt_codon) do nothing;
+                    '''
+                )
+            )
+
+            await session.execute(
+                text(
+                    '''
+                    insert into tmp_amino_acids (gff_feature, ref_aa, alt_aa, position_aa, ref_codon, alt_codon)
+                    select gff_feature, ref_aa, alt_aa, position_aa, ref_codon, alt_codon
+                    from tmp_variants
+                    where num_nulls(gff_feature, ref_aa, alt_aa, position_aa) = 0
+                    on conflict (gff_feature, ref_aa, alt_aa, position_aa, ref_codon, alt_codon) do nothing;
+                    '''
+                )
+            )
+
+            await session.execute(
+                text(
+                    '''
+                    insert into amino_acids (position_aa, ref_aa, alt_aa, gff_feature, ref_codon, alt_codon)
+                    select position_aa, ref_aa, alt_aa, gff_feature, ref_codon, alt_codon
+                    from tmp_amino_acids
+                    on conflict (gff_feature, position_aa, alt_aa, alt_codon) do nothing;
+                    '''
+                )
+            )
+
+            await session.commit()
+
+    @staticmethod
+    async def _write_amino_acid_ref_conflicts():
+        async with get_async_session() as session:
+            res = await session.execute(
+                text(
+                    '''
+                    select  combo.gff_feature, combo.position_aa,  combo.alt_aa,  combo.alt_codon, combo.ref_aa, combo.ref_codon, count(*) from
+                    (
+                        select * from (
+                        select gff_feature, position_aa, alt_aa, alt_codon, count(*)
+                        from tmp_amino_acids
+                        group by gff_feature, position_aa, alt_aa, alt_codon
+                    )_ where _.count > 1
+                    ) dups
+                    inner join (
+                        (
+                            select gff_feature, position_aa, ref_aa, alt_aa, ref_codon, alt_codon
+                            from tmp_mutations tmut
+                        )
+                        union all
+                        (
+                            select gff_feature, position_aa, ref_aa, alt_aa, ref_codon, alt_codon
+                            from tmp_variants tvar
+                        )
+                    ) combo on dups.gff_feature = combo.gff_feature and dups.position_aa = combo.position_aa and dups.alt_aa = combo.alt_aa and dups.alt_codon = combo.alt_codon
+                    group by combo.gff_feature, combo.position_aa, combo.alt_aa, combo.alt_codon, combo.ref_aa, combo.ref_codon
+                    ;
+                    '''
+                )
+            )
+        conflicts = res.mappings().all()
+        with open(AMINO_ACID_REF_CONFLICTS_FILE, 'w+') as f:
+            if len(conflicts) > 0:
+                impact = sum([c['count'] for c in conflicts])
+                print(
+                    f'Warning: {len(conflicts)} amino acid ref conflicts found, '
+                    f'impacting {impact} mutation/variant records. See {AMINO_ACID_REF_CONFLICTS_FILE}'
+                )
+                writer = csv.DictWriter(f, fieldnames=conflicts[0].keys())
+                writer.writeheader()
+                writer.writerows(conflicts)
+            else:
+                print('no conflicts found', file=f)
+
+    @staticmethod
+    async def _insert_mutations():
+        async with get_async_write_session() as session:
+            await session.execute(
+                text(
+                    '''
+                    insert into mutations (sample_id, allele_id)
+                    select distinct s.id, a.id from tmp_mutations tmut
+                    left join alleles a on a.region = tmut.region and a.position_nt = tmut.position_nt and a.alt_nt = tmut.alt_nt
+                    left join samples s on s.accession = tmut.accession
+                    on conflict (sample_id, allele_id) do nothing;
+                    '''
+                )
+            )
+            await session.commit()
+
+    @staticmethod
+    async def _insert_variants():
+        async with get_async_write_session() as session:
+            await session.execute(
+                text(
+                    '''
+                    insert into intra_host_variants (
+                        sample_id, allele_id, ref_dp, alt_dp, alt_freq, ref_rv, alt_rv, ref_qual, alt_qual, total_dp, pval, pass_qc
+                    )
+                    select distinct on (s.id, a.id)
+                        s.id as sample_id,
+                        a.id as allele_id,
+                        tvar.ref_dp,
+                        tvar.alt_dp,
+                        tvar.alt_freq,
+                        tvar.ref_rv,
+                        tvar.alt_rv,
+                        tvar.ref_qual,
+                        tvar.alt_qual,
+                        tvar.total_dp,
+                        tvar.pval,
+                        tvar.pass_qc
+                    from tmp_variants tvar
+                    left join alleles a on a.region = tvar.region and a.position_nt = tvar.position_nt and a.alt_nt = tvar.alt_nt
+                    left join samples s on s.accession = tvar.accession
+                    on conflict (sample_id, allele_id) do update
+                        set ref_dp   = excluded.ref_dp,
+                            alt_dp   = excluded.alt_dp,
+                            alt_freq = excluded.alt_freq,
+                            ref_rv   = excluded.ref_rv,
+                            alt_rv   = excluded.alt_rv,
+                            ref_qual = excluded.ref_qual,
+                            alt_qual = excluded.alt_qual,
+                            total_dp = excluded.total_dp,
+                            pval     = excluded.pval,
+                            pass_qc  = excluded.pass_qc;
+                    '''
+                )
+            )
+            await session.commit()
+
+    @staticmethod
+    async def _insert_mutation_translations():
+        async with get_async_write_session() as session:
+            await session.execute(
+                text(
+                    '''
+                    insert into mutation_translations (mutation_id, amino_acid_id)
+                    select distinct  m.id as mutation_id, aa.id as amino_acid_id from tmp_mutations tmut
+                    left join amino_acids aa on aa.gff_feature = tmut.gff_feature and aa.position_aa = tmut.position_aa and aa.alt_aa = tmut.alt_aa and aa.alt_codon = tmut.alt_codon
+                    left join samples s on s.accession = tmut.accession
+                    left join alleles a on a.region = tmut.region and a.position_nt = tmut.position_nt and a.alt_nt = tmut.alt_nt
+                    left join mutations m on m.sample_id = s.id and m.allele_id = a.id
+                    where num_nulls(tmut.gff_feature, tmut.position_aa, tmut.alt_aa, tmut.ref_aa) = 0
+                    on conflict (mutation_id, amino_acid_id) do nothing;
+                    '''
+                )
+            )
+            await session.commit()
+
+    @staticmethod
+    async def _insert_intra_host_translations():
+        async with get_async_write_session() as session:
+            await session.execute(
+                text(
+                    '''
+                    insert into intra_host_translations (intra_host_variant_id, amino_acid_id)
+                    select distinct ihv.id as intra_host_variant_id, aa.id as amino_acid_id from tmp_variants tvar
+                    left join amino_acids aa on aa.gff_feature = tvar.gff_feature and aa.position_aa = tvar.position_aa and aa.alt_aa = tvar.alt_aa and aa.alt_codon = tvar.alt_codon
+                    left join samples s on s.accession = tvar.accession
+                    left join alleles a on a.region = tvar.region and a.position_nt = tvar.position_nt and a.alt_nt = tvar.alt_nt
+                    left join intra_host_variants ihv on ihv.sample_id = s.id and ihv.allele_id = a.id
+                    where num_nulls(tvar.gff_feature, tvar.position_aa, tvar.alt_aa, tvar.ref_aa) = 0
+                    on conflict (intra_host_variant_id, amino_acid_id) do nothing;
+                    '''
+                )
+            )
+            await session.commit()
+
+    @staticmethod
+    async def _clean_up_tmp_tables():
+        async with get_async_write_session() as session:
+            for t in ['tmp_mutations', 'tmp_variants', 'tmp_alleles', 'tmp_amino_acids']:
+                await session.execute(
+                    text(f'drop table if exists {t};')
+                )
+            await session.commit()
+
+    def _get_header_order(self, filename, column_name_mapping):
+        proper_col_names = {
+            v: k for k, v in column_name_mapping.items()
         }
-
-        translations = pl.concat(
-            [
-                variants_finished.select(translations_cols),
-                mutations_finished.select(translations_cols)
-            ]
-        ).drop_nulls().unique()
-
-        # 11a. Filter to new translations and insert
-        existing_translations = await get_all_translations_as_pl_df()
-        new_translations = translations.join(
-            existing_translations.lazy(),
-            on=[
-                StandardColumnNames.alt_codon,
-                StandardColumnNames.amino_acid_id
-            ],
-            how='anti'
-        ).unique(
-            [
-                pl.col(StandardColumnNames.alt_codon),
-                pl.col(StandardColumnNames.amino_acid_id)
-            ]
-        )
-
-        # check for conflicts on ref codon
-        ref_conflicts = (
-            pl.concat(
-                [
-                    existing_translations.select(
-                        {
-                            StandardColumnNames.ref_codon,
-                            StandardColumnNames.alt_codon,
-                            StandardColumnNames.amino_acid_id
-                        }
-                    ).lazy(),
-                    translations
-                ]
-            )
-            .unique()
-            .group_by(
-                pl.col(StandardColumnNames.amino_acid_id),
-                pl.col(StandardColumnNames.alt_codon)
-            )
-            .len()
-            .filter(pl.col('len') > 1)
-            .select(
-                pl.col(StandardColumnNames.alt_codon, StandardColumnNames.amino_acid_id)
-            )
-            .collect()
-        )
-
-        if len(ref_conflicts) > 0:
-            print(
-                f'WARNING: in translations, found {len(ref_conflicts)} positions with conflicting values for ref_codon. '
-                f'Written to {TRANSLATIONS_REF_CONFLICTS_FILE}'
-            )
-            ref_conflicts.write_csv(TRANSLATIONS_REF_CONFLICTS_FILE)
-
-        return await copy_insert_translations(new_translations.collect())
+        ordered_header = []
+        with open(filename, 'r') as f:
+            header = f.readline().split(self.delimiter)
+            ordered_header = [proper_col_names[h.strip()] for h in header]
+        if len(ordered_header) != len(proper_col_names.keys()):
+            raise ValueError('mutations header bad')
+        return ordered_header
 
     @staticmethod
-    async def _join_translation_ids_into_vars_and_muts(
-        variants_with_nt_aa_ids: pl.LazyFrame,
-        mutations_with_nt_aa_ids: pl.LazyFrame,
-    ) -> (pl.LazyFrame, pl.LazyFrame):
-        # 11.5: Combine translation ids back into vars and muts
-        existing_translations = await get_all_translations_as_pl_df()
+    def _find_relative_and_local_abs_paths(filename: str) -> (str, str):
+        """
+        Find absolute and relative paths for given filename
+        either within container's bound data directory (if running in a container)
+        or within the bound directory on the host machine (if running outside container).
+        Raise ValueError if filename not found in either place.
+        :param filename: input filename
+        :return: (relative path, absolute local path)
+        """
+        if path.isabs(filename):
+            # if we're given an abs path, it must point to one of these locations.
+            for data_dir in [CONTAINER_DATA_DIRECTORY, Env.MUNINN_SERVER_DATA_INPUT_DIR]:
+                if path.commonprefix([filename, data_dir]) == data_dir:
+                    if path.isfile(filename):
+                        return path.relpath(filename, data_dir), filename
+        else:
+            # we have a relative path. try to find the file in each valid dir.
+            for data_dir in [CONTAINER_DATA_DIRECTORY, Env.MUNINN_SERVER_DATA_INPUT_DIR]:
+                putative_abs = path.join(data_dir, filename)
+                if path.isfile(putative_abs):
+                    return filename, putative_abs
 
-        variants_plus_translation_ids = variants_with_nt_aa_ids.join(
-            existing_translations.lazy(),
-            on=[
-                StandardColumnNames.amino_acid_id,
-                StandardColumnNames.alt_codon
-            ],
-            how='left'
+        raise ValueError(
+            f'{filename} not found within {CONTAINER_DATA_DIRECTORY} or {Env.MUNINN_SERVER_DATA_INPUT_DIR}. '
+            f'The file must be in the bound data directory.'
         )
-
-        mutations_plus_translation_ids = mutations_with_nt_aa_ids.join(
-            existing_translations.lazy(),
-            on=[
-                StandardColumnNames.amino_acid_id,
-                StandardColumnNames.alt_codon
-            ],
-            how='left'
-        )
-        return variants_plus_translation_ids, mutations_plus_translation_ids
-
-    @staticmethod
-    async def _insert_new_mutations(mutations_finished: pl.DataFrame, existing_mutations: pl.DataFrame) -> str:
-        # 12. Separate new and existing mutations.
-        new_mutations = mutations_finished.join(
-            existing_mutations,
-            on=[
-                StandardColumnNames.sample_id,
-                StandardColumnNames.allele_id
-            ],
-            how='anti'
-        )
-
-        # 13. insert new mutations via copy
-        return await copy_insert_mutations(new_mutations)
-
-    @staticmethod
-    async def _update_existing_mutations(mutations_collected: pl.DataFrame, existing_mutations: pl.DataFrame) -> int:
-        # 12. Separate new and existing mutations.
-        # 12.5: Update existing mutations
-        updated_mutations: pl.DataFrame = mutations_collected.join(
-            existing_mutations,
-            on=[
-                StandardColumnNames.sample_id,
-                StandardColumnNames.allele_id
-            ],
-            how='inner'
-        )
-        count_preexisting_mutations = len(updated_mutations)
-
-        await batch_upsert_mutations(updated_mutations)
-        return count_preexisting_mutations
-
-    @staticmethod
-    async def _update_existing_variants(variants_finished: pl.DataFrame, existing_variants: pl.DataFrame) -> int:
-        # 14. Separate new and existing variants
-        # this works b/c cols from left keep their original names
-        updated_variants: pl.DataFrame = variants_finished.join(
-            existing_variants,
-            on=[
-                StandardColumnNames.sample_id,
-                StandardColumnNames.allele_id
-            ],
-            how='inner'
-        )
-
-        count_preexisting_variants = len(updated_variants)
-
-        # 16. Update existing variants (new bulk process for this?)
-        await batch_upsert_variants(updated_variants)
-        return count_preexisting_variants
-
-    @staticmethod
-    async def _insert_new_variants(variants_finished: pl.DataFrame, existing_variants: pl.DataFrame) -> str:
-        # 14. Separate new and existing variants
-        new_variants = variants_finished.join(
-            existing_variants,
-            on=[
-                StandardColumnNames.sample_id,
-                StandardColumnNames.allele_id
-            ],
-            how='anti'
-        )
-
-        # 15. Insert new variants via copy
-        return await copy_insert_variants(new_variants)
 
     @classmethod
     def get_required_column_set(cls) -> Set[str]:
@@ -599,17 +577,21 @@ class VariantsMutationsCombinedParser(FileParser):
         }
 
     def _verify_headers(self):
-        with open(self.variants_filename, 'r') as f:
+        with open(self.variants_filename_local, 'r') as f:
             reader = csv.DictReader(f, delimiter=self.delimiter)
-            required_columns = set(VariantsMutationsCombinedParser.variants_column_mapping.values())
+            required_columns = set(self.variants_column_mapping.values())
             if not set(reader.fieldnames) >= required_columns:
                 raise ValueError(f'Missing required fields: {required_columns - set(reader.fieldnames)}')
 
-        with open(self.mutations_filename, 'r') as f:
+        with open(self.mutations_filename_local, 'r') as f:
             reader = csv.DictReader(f, delimiter=self.delimiter)
-            required_columns = set(VariantsMutationsCombinedParser.mutations_column_mapping.values())
+            required_columns = set(self.mutations_column_mapping.values())
             if not set(reader.fieldnames) >= required_columns:
                 raise ValueError(f'Missing required fields: {required_columns - set(reader.fieldnames)}')
+
+    @staticmethod
+    def _get_timestamp():
+        return datetime.now().isoformat(timespec='seconds')
 
     variants_column_mapping = {
         StandardColumnNames.region: 'REGION',

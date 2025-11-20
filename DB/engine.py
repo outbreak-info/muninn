@@ -55,8 +55,7 @@ def create_pg_engine():
 async_write_engine = create_async_engine(
     get_url(async_=True, readonly=False),
     pool_size=POOL_SIZE,
-    max_overflow=MAX_OVERFLOW,
-    connect_args={'server_settings': {'statement_timeout': str(STATEMENT_TIMEOUT_MS)}}
+    max_overflow=MAX_OVERFLOW
 )
 
 async_engine = create_async_engine(

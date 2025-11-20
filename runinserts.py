@@ -2,12 +2,10 @@ import argparse
 import asyncio
 import sys
 from datetime import datetime
-from os import path
 from typing import Any
 
-from DB.inserts.file_parsers.dms_parser_tmp import TmpHaRegionDmsCsvParser
 from DB.inserts.file_parsers.flumut_annotations_parser import FlumutTsvParser
-from DB.inserts.file_parsers.dms_parser import HaRegionDmsTsvParser, HaRegionDmsCsvParser
+from DB.inserts.file_parsers.dms_parser import HaRegionDmsTsvParser, HaRegionDmsCsvParser, HaRegionDmsCsvParserNewData
 from DB.inserts.file_parsers.eve_parser import EveCsvParser
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.file_parsers.freyja_demixed_lineage_hierarchy_parser import FreyjaDemixedLineageHierarchyYamlParser
@@ -31,7 +29,7 @@ def main():
         'variants_mutations_combined_tsv': VariantsMutationsCombinedParser,
         'sc2_samples': SC2SamplesParser,
         'flumut_tsv': FlumutTsvParser,
-        'dms_tmp_csv': TmpHaRegionDmsCsvParser,
+        'dms_tmp_csv': HaRegionDmsCsvParserNewData,
         'freyja_demixed_hierarchy_yaml': FreyjaDemixedLineageHierarchyYamlParser
     }
 
@@ -67,12 +65,6 @@ def main():
         print(f'Invalid format name given: {args.format}')
         argparser.print_help()
         sys.exit(1)
-
-    for f in args.filenames:
-        if not path.exists(f):
-            print(f'Input file or dir not found: {f}')
-            argparser.print_help()
-            sys.exit(1)
 
     file_parser: FileParser = formats[args.format]
     filename: str = args.filenames[0]

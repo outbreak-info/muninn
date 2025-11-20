@@ -32,6 +32,10 @@ services:
         source: ./containers/database/initdb.d
         target: /docker-entrypoint-initdb.d
         read_only: true
+      - type: bind
+        source: ${MUNINN_SERVER_DATA_INPUT_DIR}
+        target: /muninn/data
+        read_only: true
     shm_size: 1g
   server:
     container_name: "${MUNINN_INSTANCE_NAME}_server"
@@ -53,6 +57,7 @@ services:
       MUNINN_DB_HOST: "${MUNINN_DB_HOST}"
       MUNINN_DB_NAME: "${MUNINN_DB_NAME}"
       MUNINN_DB_PORT: "${MUNINN_DB_PORT_FOR_SERVER}"
+      MUNINN_SERVER_DATA_INPUT_DIR: "${MUNINN_SERVER_DATA_INPUT_DIR}"
     command: bash -c "
       sleep 30
       && fastapi run --workers 33 api/main.py

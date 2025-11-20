@@ -3,7 +3,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel
 
-from DB.models import IntraHostVariant, Sample, AminoAcid, Mutation, PhenotypeMetric, Translation, Lineage
+from DB.models import IntraHostVariant, Sample, AminoAcid, Mutation, PhenotypeMetric, MutationTranslation, \
+    IntraHostTranslation
 
 """
 These models define the shapes for data returned by the api.
@@ -22,17 +23,19 @@ class AminoAcidInfo(BaseModel):
     alt_codon: str
 
     @classmethod
-    def from_db_object(cls, dbo: Translation | None) -> Optional['AminoAcidInfo']:
+    def from_db_object(cls, dbo: MutationTranslation | IntraHostTranslation | None) -> Optional['AminoAcidInfo']:
         if dbo is None:
             return None
+        # noinspection PyTypeChecker
+        amino_acid: AminoAcid = dbo.r_amino_acid
         return AminoAcidInfo(
-            id=dbo.id,
-            position_aa=dbo.r_amino_acid.position_aa,
-            ref_aa=dbo.r_amino_acid.ref_aa,
-            alt_aa=dbo.r_amino_acid.alt_aa,
-            gff_feature=dbo.r_amino_acid.gff_feature,
-            ref_codon=dbo.ref_codon,
-            alt_codon=dbo.alt_codon,
+            id=amino_acid.id,
+            position_aa=amino_acid.position_aa,
+            ref_aa=amino_acid.ref_aa,
+            alt_aa=amino_acid.alt_aa,
+            gff_feature=amino_acid.gff_feature,
+            ref_codon=amino_acid.ref_codon,
+            alt_codon=amino_acid.alt_codon,
         )
 
 
@@ -50,7 +53,7 @@ class VariantInfo(BaseModel):
     ref_nt: str
     alt_nt: str
 
-    amino_acid_mutation: Optional['AminoAcidInfo']
+    amino_acid_mutations: List['AminoAcidInfo']
 
     @classmethod
     def from_db_object(cls, dbo: 'IntraHostVariant'):
@@ -65,7 +68,7 @@ class VariantInfo(BaseModel):
             position_nt=dbo.r_allele.position_nt,
             ref_nt=dbo.r_allele.ref_nt,
             alt_nt=dbo.r_allele.alt_nt,
-            amino_acid_mutation=AminoAcidInfo.from_db_object(dbo.r_translation)
+            amino_acid_mutations=[AminoAcidInfo.from_db_object(t) for t in dbo.r_translations]
         )
 
 
@@ -172,7 +175,7 @@ class MutationInfo(BaseModel):
     ref_nt: str
     alt_nt: str
 
-    amino_acid_mutation: Optional[AminoAcidInfo]
+    amino_acid_mutations: List[AminoAcidInfo]
 
     @classmethod
     def from_db_object(cls, dbo: 'Mutation') -> 'MutationInfo':
@@ -184,8 +187,9 @@ class MutationInfo(BaseModel):
             position_nt=dbo.r_allele.position_nt,
             ref_nt=dbo.r_allele.ref_nt,
             alt_nt=dbo.r_allele.alt_nt,
-            amino_acid_mutation=AminoAcidInfo.from_db_object(dbo.r_translation)
+            amino_acid_mutations=[AminoAcidInfo.from_db_object(t) for t in dbo.r_translations]
         )
+
 
 class PhenotypeMetricInfo(BaseModel):
     id: int
@@ -208,11 +212,13 @@ class VariantFreqInfo(BaseModel):
     translation_id: int | None
     amino_sub_id: int | None
 
+
 class MutationCountInfo(BaseModel):
     sample_count: int
     allele_id: int
     translation_id: int | None
     amino_sub_id: int | None
+
 
 class VariantCountPhenoScoreInfo(BaseModel):
     ref_aa: str
@@ -220,6 +226,7 @@ class VariantCountPhenoScoreInfo(BaseModel):
     position_aa: int
     pheno_value: float
     count: int
+
 
 class LineageCountInfo(BaseModel):
     count: int
@@ -234,11 +241,13 @@ class LineageInfo(BaseModel):
     lineage_system_id: int
     lineage_system_name: str
 
+
 class LineageAbundanceInfo(BaseModel):
     lineage_info: 'LineageInfo'
     sample_id: int
     accession: str
     abundance: float
+
 
 class LineageAbundanceSummaryInfo(BaseModel):
     lineage_name: str
@@ -250,6 +259,7 @@ class LineageAbundanceSummaryInfo(BaseModel):
     abundance_q3: float
     abundance_max: float
 
+
 class VariantMutationLagInfo(BaseModel):
     variants_start_date: date
     mutations_start_date: date
@@ -258,9 +268,11 @@ class VariantMutationLagInfo(BaseModel):
     pos: int
     alt: str
 
+
 class RegionAndGffFeatureInfo(BaseModel):
     gff_feature: str
     region: str
+
 
 class MutationProfileInfo(BaseModel):
     ref_nt: str
