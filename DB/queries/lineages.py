@@ -333,7 +333,8 @@ async def get_averaged_abundances_by_location(
                 join total_prevalences tp
                     on lp.year = tp.year
                     and lp.chunk = tp.chunk
-                {user_where_clause};
+                {user_where_clause}
+                order by lp.year, lp.chunk, lp.lineage_name;
                 '''
             )
         )
