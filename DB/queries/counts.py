@@ -1,13 +1,16 @@
-import datetime
 from typing import Type, List, Any, Dict
 
 from sqlalchemy import text, select, Result
 from sqlalchemy.sql.functions import func
 
 from DB.engine import get_async_session
-from DB.models import Sample, GeoLocation, IntraHostVariant, AminoAcid, Allele, Mutation, Translation
+from DB.models import Sample, GeoLocation, IntraHostVariant, AminoAcid, Allele, Mutation, IntraHostTranslation, \
+    MutationTranslation
+from DB.queries.date_count_helpers import get_extract_clause, get_group_by_clause, get_order_by_cause, \
+    MID_COLLECTION_DATE_CALCULATION
+from DB.queries.helpers import get_appropriate_translations_table_and_id
 from parser.parser import parser
-from utils.constants import DateBinOpt, NtOrAa
+from utils.constants import DateBinOpt, NtOrAa, StandardColumnNames, COLLECTION_DATE
 
 
 async def count_samples_by_column(by_col: str):
@@ -26,10 +29,10 @@ async def count_samples_by_column(by_col: str):
 async def count_variants_by_column(by_col: str):
     async with get_async_session() as session:
         res = await session.execute(
-            select(IntraHostVariant, Allele, Translation, AminoAcid)
+            select(IntraHostVariant, Allele, IntraHostTranslation, AminoAcid)
             .join(Allele, Allele.id == IntraHostVariant.allele_id, isouter=True)
-            .join(Translation, Translation.id == IntraHostVariant.translation_id, isouter=True)
-            .join(AminoAcid, AminoAcid.id == Translation.amino_acid_id, isouter=True)
+            .join(IntraHostTranslation, IntraHostTranslation.intra_host_variant_id == IntraHostVariant.id, isouter=True)
+            .join(AminoAcid, AminoAcid.id == IntraHostTranslation.amino_acid_id, isouter=True)
             .with_only_columns(text(by_col), func.count().label('count1'))
             .group_by(text(by_col))
             .order_by(text('count1 desc'))
@@ -40,10 +43,10 @@ async def count_variants_by_column(by_col: str):
 async def count_mutations_by_column(by_col: str):
     async with get_async_session() as session:
         res = await session.execute(
-            select(Mutation, Allele, Translation, AminoAcid)
+            select(Mutation, Allele, MutationTranslation, AminoAcid)
             .join(Allele, Allele.id == Mutation.allele_id, isouter=True)
-            .join(Translation, Translation.id == Mutation.translation_id, isouter=True)
-            .join(AminoAcid, AminoAcid.id == Translation.amino_acid_id, isouter=True)
+            .join(MutationTranslation, MutationTranslation.mutation_id == Mutation.id, isouter=True)
+            .join(AminoAcid, AminoAcid.id == MutationTranslation.amino_acid_id, isouter=True)
             .with_only_columns(text(by_col), func.count().label('count1'))
             .group_by(text(by_col))
             .order_by(text('count1 desc'))
@@ -65,24 +68,9 @@ async def count_samples_by_simple_date(
     if raw_query is not None:
         where_clause = f'where {parser.parse(raw_query)}'
 
-    match date_bin:
-        case DateBinOpt.week | DateBinOpt.month:
-            extract_clause = f'''
-            extract(year from {group_by}) as year,
-            extract({date_bin} from {group_by}) as chunk
-            '''
-            group_by_date_cols = 'year, chunk'
-
-        case DateBinOpt.day:
-            origin = datetime.date.today()
-            extract_clause = f'''
-            date_bin('{days} days', {group_by}, '{origin}') + interval '{days} days' as bin_end,
-            date_bin('{days} days', {group_by}, '{origin}') as bin_start
-            '''
-            group_by_date_cols = 'bin_start'
-
-        case _:
-            raise ValueError(f'illegal value for date_bin: {repr(date_bin)}')
+    extract_clause = get_extract_clause(group_by, date_bin, days)
+    group_by_clause = get_group_by_clause(date_bin)
+    order_by_clause = get_order_by_cause(date_bin)
 
     async with get_async_session() as session:
         res = await session.execute(
@@ -94,8 +82,8 @@ async def count_samples_by_simple_date(
                 from samples s
                 left join geo_locations gl on gl.id = s.geo_location_id
                 {where_clause}
-                group by {group_by_date_cols} 
-                order by {group_by_date_cols}
+                {group_by_clause} 
+                {order_by_clause}
                 '''
             )
         )
@@ -117,32 +105,9 @@ async def count_samples_by_collection_date(
     if raw_query is not None:
         where_clause = f'where {parser.parse(raw_query)}'
 
-    match date_bin:
-        case DateBinOpt.week | DateBinOpt.month:
-            extract_clause = f'''
-            extract(year from mid_collection_date) as year,  
-            extract({date_bin} from mid_collection_date) as chunk
-            '''
-
-            group_and_order_clause = f'''
-            group by year, chunk
-            order by year, chunk
-            '''
-
-        case DateBinOpt.day:
-            origin = datetime.date.today()
-            extract_clause = f'''
-            date_bin('{days} days', mid_collection_date, '{origin}') + interval '{days} days' as bin_end,
-            date_bin('{days} days', mid_collection_date, '{origin}') as bin_start
-            '''
-
-            group_and_order_clause = f'''
-            group by bin_start, bin_end
-            order by bin_start
-            '''
-
-        case _:
-            raise NotImplementedError
+    extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
+    group_by_clause = get_group_by_clause(date_bin)
+    order_by_clause = get_order_by_cause(date_bin)
 
     async with get_async_session() as session:
         res = await session.execute(
@@ -153,7 +118,7 @@ async def count_samples_by_collection_date(
                     count(*)
                 from (
                     select 
-                    (collection_start_date + ((collection_end_date - collection_start_date) / 2))::date AS mid_collection_date
+                    {MID_COLLECTION_DATE_CALCULATION}
                     from (
                         select
                         *,
@@ -164,7 +129,8 @@ async def count_samples_by_collection_date(
                     )
                     where collection_span <= {max_span_days}
                 )
-               {group_and_order_clause}
+               {group_by_clause}
+               {order_by_clause}
                 '''
             )
         )
@@ -172,113 +138,6 @@ async def count_samples_by_collection_date(
     for r in res:
         date = date_bin.format_iso_chunk(r[0], r[1])
         out_data[date] = r[2]
-    return out_data
-
-
-async def count_variants_by_simple_date(
-    group_by: str,
-    date_bin: DateBinOpt,
-    days: int,
-    raw_query: str | None,
-    change_bin: NtOrAa
-):
-    return await _count_variants_or_mutations_by_simple_date_bin(
-        group_by,
-        date_bin,
-        days,
-        raw_query,
-        change_bin,
-        IntraHostVariant
-    )
-
-
-async def count_mutations_by_simple_date(
-    group_by: str,
-    date_bin: DateBinOpt,
-    days: int,
-    raw_query: str | None,
-    change_bin: NtOrAa
-):
-    return await _count_variants_or_mutations_by_simple_date_bin(
-        group_by,
-        date_bin,
-        days,
-        raw_query,
-        change_bin,
-        Mutation
-    )
-
-
-async def _count_variants_or_mutations_by_simple_date_bin(
-    group_by: str,
-    date_bin: DateBinOpt,
-    days: int,
-    raw_query: str | None,
-    change_bin: NtOrAa,
-    table: Type['IntraHostVariant'] | Type['Mutation']
-):
-    where_clause = ''
-    if raw_query is not None:
-        where_clause = f'where {parser.parse(raw_query)}'
-
-    change_fields = f'ref_{change_bin}, position_{change_bin}, alt_{change_bin}'
-
-    match date_bin:
-        case DateBinOpt.week | DateBinOpt.month:
-            extract_clause = f'''
-                   extract(year from {group_by}) as year,
-                   extract({date_bin} from {group_by}) as chunk
-                   '''
-            group_by_date_cols = 'year, chunk'
-
-        case DateBinOpt.day:
-            origin = datetime.date.today()
-            extract_clause = f'''
-                   date_bin('{days} days', {group_by}, '{origin}') + interval '{days} days' as bin_end,
-                   date_bin('{days} days', {group_by}, '{origin}') as bin_start
-                   '''
-            group_by_date_cols = 'bin_start'
-
-        case _:
-            raise ValueError(f'illegal value for date_bin: {repr(date_bin)}')
-
-    async with get_async_session() as session:
-        res = await session.execute(
-            text(
-                f'''
-                select 
-                {extract_clause},
-                count(*),
-                region,
-                {change_fields}
-                from (
-                    select region, {change_fields}, {group_by} 
-                    from samples s
-                    inner join {table.__tablename__} VM on VM.sample_id = s.id
-                    inner join alleles a on a.id = VM.allele_id
-                    left join translations t on t.allele_id = a.id
-                    left join amino_acid_substitutions aas on aas.id = t.amino_acid_substitution_id
-                    {where_clause}
-                )
-                group by region, {change_fields}, {group_by_date_cols}
-                '''
-            )
-        )
-
-    out_data = dict()
-    for r in res:
-        date = date_bin.format_iso_chunk(r[0], r[1])
-        count = r[2]
-        region = r[3]
-        ref = r[4]
-        pos = r[5]
-        alt = r[6]
-        change_name = f'{region}:{ref}{pos}{alt}'
-
-        try:
-            out_data[date][change_name] = count
-        except KeyError:
-            out_data[date] = {change_name: count}
     return out_data
 
 
@@ -331,30 +190,14 @@ async def _count_variants_or_mutations_by_collection_date(
     if raw_query is not None:
         user_where_clause = f'and ({parser.parse(raw_query)})'
 
-    match date_bin:
-        case DateBinOpt.week | DateBinOpt.month:
-            extract_clause = f'''
-            extract(year from mid_collection_date) as year,
-            extract({date_bin} from mid_collection_date) as chunk
-            '''
+    extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
+    group_by_clause = get_group_by_clause(
+        date_bin,
+        [StandardColumnNames.gff_feature, f'ref_{change_bin}', f'position_{change_bin}', f'alt_{change_bin}']
+    )
+    order_by_clause = get_order_by_cause(date_bin)
 
-            group_and_order_clause = f'''
-            group by year, chunk, gff_feature, {change_fields}
-            order by year, chunk
-            '''
-        case DateBinOpt.day:
-            origin = datetime.date.today()
-            extract_clause = f'''
-            date_bin('{days} days', mid_collection_date, '{origin}') + interval '{days} days' as bin_end,
-            date_bin('{days} days', mid_collection_date, '{origin}') as bin_start
-            '''
-
-            group_and_order_clause = f'''
-            group by bin_start, bin_end, gff_feature, {change_fields}
-            order by bin_start
-            '''
-        case _:
-            raise ValueError
+    translations_table, translations_join_col = get_appropriate_translations_table_and_id(table)
 
     async with get_async_session() as session:
         res = await session.execute(
@@ -367,7 +210,7 @@ async def _count_variants_or_mutations_by_collection_date(
                 from(
                     select 
                     *,
-                    (collection_start_date + ((collection_end_date - collection_start_date) / 2))::date AS mid_collection_date
+                    {MID_COLLECTION_DATE_CALCULATION}
                     from (
                         select 
                         gff_feature, {change_fields},
@@ -376,7 +219,7 @@ async def _count_variants_or_mutations_by_collection_date(
                         from samples s
                         left join geo_locations gl on gl.id = s.geo_location_id
                         inner join {table.__tablename__} VM on VM.sample_id = s.id
-                        left join translations t on t.id = VM.translation_id
+                        left join {translations_table} t on t.{translations_join_col} = VM.id
                         left join amino_acids aas on aas.id = t.amino_acid_id
                         left join samples_lineages sl on sl.sample_id = s.id
                         left join lineages l on l.id = sl.lineage_id
@@ -385,7 +228,8 @@ async def _count_variants_or_mutations_by_collection_date(
                     )
                     where collection_span <= {max_span_days}
                 )
-                {group_and_order_clause}
+                {group_by_clause}
+                {order_by_clause}
                 '''
             )
         )
@@ -416,30 +260,12 @@ async def count_lineages_by_simple_date(
     if raw_query is not None:
         where_clause = f'where {parser.parse(raw_query)}'
 
-    match date_bin:
-        case DateBinOpt.week | DateBinOpt.month:
-            extract_clause = f'''
-                extract(year from {group_by}) as year,
-                extract({date_bin} from {group_by}) as chunk
-                '''
-
-            group_and_order_clause = f'''
-                group by year, chunk, lineage_name, lineage_system_name
-                order by year, chunk
-                '''
-        case DateBinOpt.day:
-            origin = datetime.date.today()
-            extract_clause = f'''
-                date_bin('{days} days', {group_by}, '{origin}') + interval '{days} days' as bin_end,
-                date_bin('{days} days', {group_by}, '{origin}') as bin_start
-                '''
-
-            group_and_order_clause = f'''
-                group by bin_start, bin_end, lineage_name, lineage_system_name
-                order by bin_start
-                '''
-        case _:
-            raise ValueError
+    extract_clause = get_extract_clause(group_by, date_bin, days)
+    group_by_clause = get_group_by_clause(
+        date_bin,
+        [StandardColumnNames.lineage_name, StandardColumnNames.lineage_system_name]
+    )
+    order_by_clause = get_order_by_cause(date_bin)
 
     async with get_async_session() as session:
         res = await session.execute(
@@ -461,7 +287,8 @@ async def count_lineages_by_simple_date(
                         inner join samples s on s.id = sl.sample_id
                         {where_clause}
                 )
-                {group_and_order_clause}
+                {group_by_clause}
+                {order_by_clause}
                 '''
             )
         )
@@ -493,26 +320,12 @@ async def count_lineages_by_collection_date(
     if raw_query is not None:
         user_where_clause = f'where {parser.parse(raw_query)}'
 
-    match date_bin:
-        case DateBinOpt.week | DateBinOpt.month:
-            extract_clause = f'''
-            extract(year from mid_collection_date) as year,
-            extract({date_bin} from mid_collection_date) as chunk
-            '''
-
-            date_cols_to_group_by = f'year, chunk'
-
-        case DateBinOpt.day:
-            origin = datetime.date.today()
-            extract_clause = f'''
-            date_bin('{days} days', mid_collection_date, '{origin}') + interval '{days} days' as bin_end,
-            date_bin('{days} days', mid_collection_date, '{origin}') as bin_start
-            '''
-
-            date_cols_to_group_by = 'bin_start'
-
-        case _:
-            raise ValueError
+    extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
+    group_by_clause = get_group_by_clause(
+        date_bin,
+        [StandardColumnNames.lineage_name, StandardColumnNames.lineage_system_name]
+    )
+    order_by_clause = get_order_by_cause(date_bin)
 
     async with get_async_session() as session:
         res = await session.execute(
@@ -526,7 +339,7 @@ async def count_lineages_by_collection_date(
                 from (
                     select
                     *,
-                    (collection_start_date + ((collection_end_date - collection_start_date) / 2))::date AS mid_collection_date
+                    {MID_COLLECTION_DATE_CALCULATION}
                     from (
                         select
                         lineage_name,
@@ -542,8 +355,8 @@ async def count_lineages_by_collection_date(
                     )
                     where collection_span <= {max_span_days}
                 )
-                group by {date_cols_to_group_by}, lineage_name, lineage_system_name
-                order by {date_cols_to_group_by}
+               {group_by_clause}
+               {order_by_clause}
                 '''
             )
         )

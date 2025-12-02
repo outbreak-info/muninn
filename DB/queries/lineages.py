@@ -1,4 +1,4 @@
-import datetime
+from collections import defaultdict
 from typing import List, Dict
 
 from sqlalchemy import select, func, distinct, text, and_
@@ -6,11 +6,13 @@ from sqlalchemy.orm import contains_eager
 
 from DB.engine import get_async_session
 from DB.models import LineageSystem, Lineage, Sample, SampleLineage, GeoLocation, Allele, Mutation
+from DB.queries.date_count_helpers import get_extract_clause, get_group_by_clause, get_order_by_cause, \
+    MID_COLLECTION_DATE_CALCULATION
 from api.models import LineageCountInfo, LineageAbundanceInfo, LineageInfo, LineageAbundanceSummaryInfo, \
     MutationProfileInfo, AverageLineageAbundanceInfo
 from parser.parser import parser
-from utils.constants import DateBinOpt, NtOrAa, NUCLEOTIDE_CHARACTERS
-from collections import defaultdict
+from utils.constants import DateBinOpt, NtOrAa, NUCLEOTIDE_CHARACTERS, TableNames, StandardColumnNames, COLLECTION_DATE
+
 
 async def get_all_lineages_by_lineage_system(lineage_system_name: str) -> List[LineageInfo]:
     async with get_async_session() as session:
@@ -26,6 +28,7 @@ async def get_all_lineages_by_lineage_system(lineage_system_name: str) -> List[L
         )
         out_data = [LineageInfo(**row) for row in res.mappings().all()]
     return out_data
+
 
 async def get_sample_counts_by_lineage(samples_raw_query: str | None) -> List[LineageCountInfo]:
     lineage_count_query = (
@@ -174,24 +177,12 @@ async def get_abundance_summaries_by_simple_date(
     if raw_query is not None:
         user_where_clause = f'and ({parser.parse(raw_query)})'
 
-    match date_bin:
-        case DateBinOpt.week | DateBinOpt.month:
-            extract_clause = f'''
-               extract(year from {group_by}) as year,
-               extract({date_bin} from {group_by}) as chunk
-               '''
-            group_by_date_cols = 'year, chunk'
-
-        case DateBinOpt.day:
-            origin = datetime.date.today()
-            extract_clause = f'''
-               date_bin('{days} days', {group_by}, '{origin}') + interval '{days} days' as bin_end,
-               date_bin('{days} days', {group_by}, '{origin}') as bin_start
-               '''
-            group_by_date_cols = 'bin_start'
-
-        case _:
-            raise ValueError(f'illegal value for date_bin: {repr(date_bin)}')
+    extract_clause = get_extract_clause(group_by, date_bin, days)
+    group_by_clause = get_group_by_clause(
+        date_bin,
+        [StandardColumnNames.lineage_name, StandardColumnNames.lineage_system_name]
+    )
+    order_by_clause = get_order_by_cause(date_bin)
 
     async with get_async_session() as session:
         res = await session.execute(
@@ -213,8 +204,8 @@ async def get_abundance_summaries_by_simple_date(
                 inner join samples s on s.id = sl.sample_id 
                 left join geo_locations gl on gl.id = s.geo_location_id 
                 where sl.is_consensus_call = false {user_where_clause} 
-                group by {group_by_date_cols}, l.lineage_name, ls.lineage_system_name
-                order by {group_by_date_cols}
+                {group_by_clause}
+                {order_by_clause}
                 '''
             )
         )
@@ -379,24 +370,12 @@ async def get_abundance_summaries_by_collection_date(
     if raw_query is not None:
         user_where_clause = f'and ({parser.parse(raw_query)})'
 
-    match date_bin:
-        case DateBinOpt.week | DateBinOpt.month:
-            extract_clause = f'''
-            extract(year from mid_collection_date) as year,
-            extract({date_bin} from mid_collection_date) as chunk
-            '''
-            group_by_date_cols = 'year, chunk'
-
-        case DateBinOpt.day:
-            origin = datetime.date.today()
-            extract_clause = f'''
-            date_bin('{days} days', mid_collection_date, '{origin}') + interval '{days} days' as bin_end,
-            date_bin('{days} days', mid_collection_date, '{origin}') as bin_start
-            '''
-            group_by_date_cols = 'bin_start'
-
-        case _:
-            raise ValueError(f'illegal value for date_bin: {repr(date_bin)}')
+    extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
+    group_by_clause = get_group_by_clause(
+        date_bin,
+        [StandardColumnNames.lineage_name, StandardColumnNames.lineage_system_name]
+    )
+    order_by_clause = get_order_by_cause(date_bin)
 
     async with get_async_session() as session:
         res = await session.execute(
@@ -415,7 +394,7 @@ async def get_abundance_summaries_by_collection_date(
                 from(
                     select
                     *,
-                    (collection_start_date + ((collection_end_date - collection_start_date) / 2))::date AS mid_collection_date
+                    {MID_COLLECTION_DATE_CALCULATION}
                     from(
                         select 
                         l.lineage_name,
@@ -434,8 +413,8 @@ async def get_abundance_summaries_by_collection_date(
                     )
                     where collection_span <= {max_span_days}
                 )
-                group by {group_by_date_cols}, lineage_name, lineage_system_name
-                order by {group_by_date_cols}
+                {group_by_clause}
+                {order_by_clause}
                 '''
             )
         )
@@ -458,6 +437,7 @@ async def get_abundance_summaries_by_collection_date(
             out_data[date] = [info]
     return out_data
 
+
 async def get_mutation_incidence(
     lineage: str,
     lineage_system_name: str,
@@ -466,7 +446,6 @@ async def get_mutation_incidence(
     match_reference: bool,
     raw_query: str | None
 ):
-
     user_where_clause = ''
     if raw_query is not None:
         user_where_clause = f'and ({parser.parse(raw_query)})'
@@ -504,7 +483,6 @@ async def get_mutation_incidence(
             if match_reference:
                 not_reference = ''
 
-            #TODO: Profile this SQL query
             res = await session.execute(
                 text(
                     f'''
@@ -533,7 +511,7 @@ async def get_mutation_incidence(
                     SELECT DISTINCT m.sample_id,
                                     t.amino_acid_id
                     FROM   mutations    m
-                    JOIN   translations t ON t.id = m.translation_id
+                    JOIN   {TableNames.mutations_translations} t ON t.{StandardColumnNames.mutation_id} = m.id
                     ) SELECT ref_aa, position_aa, alt_aa, gff_feature, count(*) as mutation_count, count(*) / {sample_count} as mutation_prevalence
                     from sample_subset
                     inner join sample_aa ON sample_aa.sample_id = sample_subset.id
@@ -548,9 +526,11 @@ async def get_mutation_incidence(
     out = defaultdict(list)
     for ref, pos, alt, region_or_gff, count, prevalence in res:
         out[region_or_gff].append({"ref": ref, "alt": alt, "pos": pos, "count": count, "prevalence": prevalence})
-    return {'sample_count': sample_count,'mutation_counts':out}
+    return {'sample_count': sample_count, 'mutation_counts': out}
 
-async def get_mutation_profile(lineage: str, lineage_system_name: str, samples_raw_query: str | None) -> List['MutationProfileInfo']:
+
+async def get_mutation_profile(lineage: str, lineage_system_name: str, samples_raw_query: str | None) -> List[
+    'MutationProfileInfo']:
     samples_query = parser.parse(samples_raw_query) if samples_raw_query else None
     query = (
         select(
@@ -566,7 +546,7 @@ async def get_mutation_profile(lineage: str, lineage_system_name: str, samples_r
         .join(Lineage, SampleLineage.lineage_id == Lineage.id)
         .join(LineageSystem, Lineage.lineage_system_id == LineageSystem.id)
         .where(
-LineageSystem.lineage_system_name == lineage_system_name,
+            LineageSystem.lineage_system_name == lineage_system_name,
             Lineage.lineage_name == lineage,
             Allele.alt_nt.in_(NUCLEOTIDE_CHARACTERS),
             Allele.ref_nt.in_(NUCLEOTIDE_CHARACTERS)
@@ -586,4 +566,3 @@ LineageSystem.lineage_system_name == lineage_system_name,
         results = await session.execute(query)
         out_data = [MutationProfileInfo(**row) for row in results.mappings().all()]
     return out_data
-

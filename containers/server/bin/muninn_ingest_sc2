@@ -6,7 +6,7 @@ LOG="/home/muninn/data/ingest_sc2_$DATE.log"
 echo "begin at $(date)" >> "$LOG"
 
 # Debug output files for ref conflicts
-AMINO_SUB_REF_CONFLICTS_FILE="/tmp/amino_sub_ref_conflicts.csv"
+AMINO_SUB_REF_CONFLICTS_FILE="/tmp/amino_acid_ref_conflicts.csv"
 ALLELE_REF_CONFLICTS_FILE="/tmp/allele_ref_conflicts.csv"
 
 DATA_DIR='/home/muninn/data'

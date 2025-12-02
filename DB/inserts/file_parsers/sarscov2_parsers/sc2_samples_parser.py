@@ -7,9 +7,8 @@ import polars as pl
 
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.geo_locations import find_or_insert_geo_location
-from DB.inserts.samples import copy_insert_samples, batch_upsert_samples
+from DB.inserts.samples import copy_insert_samples, batch_upsert_samples, get_samples_accession_and_id_as_pl_df
 from DB.models import GeoLocation
-from DB.queries.samples import get_samples_accession_and_id_as_pl_df
 from utils.constants import StandardColumnNames, COLLECTION_DATE, GEO_LOCATION
 from utils.dates_and_times import parse_collection_start_and_end
 

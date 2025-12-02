@@ -4,9 +4,10 @@ import polars as pl
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
-from DB.engine import get_async_write_session, get_asyncpg_connection
+from DB.engine import get_async_write_session, get_asyncpg_connection, get_async_session, get_uri_for_polars
 from DB.models import Sample
 from utils.constants import ASYNCPG_MAX_QUERY_ARGS, StandardColumnNames, ConstraintNames
+from utils.errors import NotFoundError
 
 
 async def find_or_insert_sample(s: Sample, upsert: bool = False) -> (int, bool):
@@ -117,3 +118,21 @@ async def batch_upsert_samples(samples: pl.DataFrame):
                 )
             )
             await session.commit()
+
+
+async def get_sample_id_by_accession(accession: str) -> int:
+    async with get_async_session() as session:
+        id_ = await session.scalar(
+            select(Sample.id)
+            .where(Sample.accession == accession)
+        )
+    if id_ is None:
+        raise NotFoundError(f'No sample found for accession: {accession}')
+    return id_
+
+
+async def get_samples_accession_and_id_as_pl_df() -> pl.DataFrame:
+    return pl.read_database_uri(
+        query=f'select id, accession from samples;',
+        uri=get_uri_for_polars()
+    ).rename({'id': StandardColumnNames.sample_id})

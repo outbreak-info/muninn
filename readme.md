@@ -200,4 +200,32 @@ a query to use an ambiguous column name.
 As far as I know, the only columns affected by this are ids which we are unlikely to want to use in queries anyway, so
 fixing this will not be a priority unless a use-case arises.
 
+## Lineage Hierarchy
+
+The lineage hierarchy system allows us to store relationships between lineages in our database.
+The `lineages_immedidate_children` table stores direct parent/child relationships. 
+The parent and child must be from the same lineage system. 
+Indirect relationships are accessed via a view: `lineages_deep_children`. 
+This view is a recursive query against `lineages_immediate_children`, whose result is a table of all direct and indirect relationships between lineages.
+
+For example, if we have the following entries in `lineages_immediate_children`:
+```
+parent  child
+A       A.1
+A.1     A.1.1
+A.1     A.1.2
+```
+then `lineages_deep_children` will contain the following:
+```
+parent  child
+A       A.1
+A.1     A.1.1
+A.1     A.1.2
+A       A.1.1
+A       A.1.2
+```
+(Lineage names are used here for simplicity. In the actual implementation, only IDs are used.)
+Lineages are allowed to form a DAG, and a `BEFORE INSERT` trigger prevents any cycle-producing entries from being added to `lineages_immediate_children`.
+
+
 Have fun!

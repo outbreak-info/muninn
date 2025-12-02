@@ -14,6 +14,7 @@ class Env:
     MUNINN_DB_PORT = os.environ['MUNINN_DB_PORT']
     MUNINN_DB_HOST = os.environ['MUNINN_DB_HOST']
     MUNINN_DB_NAME = os.environ['MUNINN_DB_NAME']
+    MUNINN_SERVER_DATA_INPUT_DIR = os.environ['MUNINN_SERVER_DATA_INPUT_DIR']
 
 
 CHANGE_PATTERN = r'^([\w-]+):([a-zA-Z])(\d+)([a-zA-Z\-+]+)'
@@ -32,7 +33,7 @@ ASYNCPG_MAX_QUERY_ARGS = 32767
 NUCLEOTIDE_CHARACTERS = ['A', 'C', 'G', 'T']
 # https://en.wikipedia.org/wiki/Nucleic_acid_notation
 NUCLEOTIDE_CHARACTERS_AMBIGUOUS = ['A', 'C', 'G', 'T', 'M', 'R', 'W', 'S', 'Y', 'K', 'B', 'D', 'H', 'V', 'N']
-
+CONTAINER_DATA_DIRECTORY = '/home/muninn/data'
 
 class PhenotypeMetricAssayTypes:
     DMS = 'DMS'
@@ -94,12 +95,15 @@ class TableNames:
     lineage_systems = 'lineage_systems'
     lineages = 'lineages'
     samples_lineages = 'samples_lineages'
-    translations = 'translations'
     papers = 'papers'
     effects = 'effects'
     annotations = 'annotations'
     annotations_papers = 'annotations_papers'
     annotations_amino_acids = 'annotations_amino_acids'
+    lineages_immediate_children = 'lineages_immediate_children'
+    lineages_deep_children = 'lineages_deep_children' # actually a view.
+    mutations_translations = 'mutation_translations'
+    intra_host_translations = 'intra_host_translations'
 
 
 class StandardColumnNames:
@@ -109,7 +113,6 @@ class StandardColumnNames:
     amino_acid_id = 'amino_acid_id'
     intra_host_variant_id = 'intra_host_variant_id'
     mutation_id = 'mutation_id'
-    translation_id = 'translation_id'
     phenotype_metric_id = 'phenotype_metric_id'
     lineage_system_id = 'lineage_system_id'
     lineage_id = 'lineage_id'
@@ -209,6 +212,9 @@ class StandardColumnNames:
     is_consensus_call = 'is_consensus_call'
     abundance = 'abundance'
 
+    # lineage hierarchy
+    parent_id = 'parent_id'
+    child_id = 'child_id'
 
 class StandardPhenoMetricNames:
     species_sera_escape = 'species_sera_escape'
@@ -226,6 +232,11 @@ class ConstraintNames:
     uq_samples_accession = 'uq_samples_accession'
     uq_mutations_sample_allele_pair = 'uq_mutations_sample_allele_pair'
 
+class MiscDbNames:
+    check_cyclic_lineage = 'check_cyclic_lineage'
+    check_cyclic_lineage_trigger = 'check_cyclic_lineage_trigger'
+    check_cross_system_lineage = 'check_cross_system_lineage'
+    check_cross_system_lineage_trigger = 'check_cross_system_lineage_trigger'
 
 # Problematic redacted SRAs
 EXCLUDED_SRAS = {

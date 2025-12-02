@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase, relationship
 
-from utils.constants import ConstraintNames, TableNames, StandardColumnNames
+from utils.constants import ConstraintNames, TableNames, StandardColumnNames, MiscDbNames
 
 #########################################################################################
 # NOTE:
@@ -45,17 +45,17 @@ class Base(DeclarativeBase, AsyncAttrs):
     metadata = MetaData(
         # This will automatically name constraints, but it's still best to name them manually
         # It's possible to get conflicting names from this convention
+        # note: constraint names (like all pg identifiers) are limited to 63 bytes
         naming_convention={
             "ix": "ix_%(column_0_label)s",
             "uq": "uq_%(table_name)s_%(column_0_name)s",
             # you always have to name check constraints, they just get a prefix
-            "ck": "ck_%(table_name)s_`%(constraint_name)s`",
+            "ck": "ck_%(table_name)s_%(constraint_name)s",
             "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
             "pk": "pk_%(table_name)s"
         }
     )
 
-    # todo: I think this might be a terrible idea...
     @classmethod
     def get_check_constraints_for_alembic(cls) -> List[tuple[str, str, str]]:
         checks = []
@@ -121,8 +121,6 @@ class Sample(Base):
 
     serotype: Mapped[str] = mapped_column(sa.Text, nullable=True)
 
-    # from geo_loc_name
-    # todo: we are currently ignoring the continent and country fields
     geo_location_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.geo_locations}.id'), nullable=True)
 
     consent_level: Mapped[str] = mapped_column(sa.Text, nullable=False)
@@ -213,8 +211,6 @@ class Allele(Base):
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
     region: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    # todo: the ihv files have a much longer region string, what do with that?
-    # HA|PP755589.1|A/cattle/Texas/24-008749-003/2024(H5N1)
     position_nt: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
     ref_nt: Mapped[str] = mapped_column(sa.Text, nullable=False)
     alt_nt: Mapped[str] = mapped_column(sa.Text, nullable=False)
@@ -246,52 +242,30 @@ class AminoAcid(Base):
     ref_aa: Mapped[str] = mapped_column(sa.Text, nullable=False)
     alt_aa: Mapped[str] = mapped_column(sa.Text, nullable=False)
     gff_feature: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    ref_codon: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    alt_codon: Mapped[str] = mapped_column(sa.Text, nullable=False)
 
     __table_args__ = tuple(
         [
             CheckConstraint(f"{StandardColumnNames.gff_feature} <> ''", name='gff_feature_not_empty'),
             CheckConstraint(f"{StandardColumnNames.ref_aa} <> ''", name='ref_aa_not_empty'),
             CheckConstraint(f"{StandardColumnNames.alt_aa} <> ''", name='alt_aa_not_empty'),
+            CheckConstraint(f"{StandardColumnNames.alt_codon} <> ''", name='alt_codon_not_empty'),
+            CheckConstraint(f"{StandardColumnNames.ref_codon} <> ''", name='ref_codon_not_empty'),
             UniqueConstraint(
                 StandardColumnNames.position_aa,
                 StandardColumnNames.alt_aa,
                 StandardColumnNames.gff_feature,
-                postgresql_nulls_not_distinct=True,
-                name='uq_amino_acid_substitutions_aa_values'
+                StandardColumnNames.alt_codon,
+                name=f'uq_{__tablename__}_gff_feature_position_alt_aa_alt_codon'
             )
         ]
     )
 
-    r_translations: Mapped[List['Translation']] = relationship(back_populates='r_amino_acid')
+    r_mutation_translations: Mapped[List['MutationTranslation']] = relationship(back_populates='r_amino_acid')
+    r_intra_host_translations: Mapped[List['IntraHostTranslation']] = relationship(back_populates='r_amino_acid')
     r_pheno_metric_values: Mapped[List['PhenotypeMetricValues']] = relationship(back_populates='r_amino_acid')
     r_annotations_amino_acids: Mapped[List['AnnotationAminoAcid']] = relationship(back_populates='r_amino_acid')
-
-
-class Translation(Base):
-    __tablename__ = TableNames.translations
-
-    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
-
-    amino_acid_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.amino_acids}.id'), nullable=False)
-
-    ref_codon: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    alt_codon: Mapped[str] = mapped_column(sa.Text, nullable=False)
-
-    __table_args__ = tuple(
-        [
-            UniqueConstraint(
-                StandardColumnNames.amino_acid_id,
-                StandardColumnNames.alt_codon,
-                name='uq_translations_amino_acid_id_alt_codon'
-            ),
-            CheckConstraint(f"{StandardColumnNames.alt_codon} <> ''", name='alt_codon_not_empty'),
-            CheckConstraint(f"{StandardColumnNames.ref_codon} <> ''", name='ref_codon_not_empty')
-        ]
-    )
-
-    r_mutations: Mapped[List['Mutation']] = relationship(back_populates='r_translation')
-    r_variants: Mapped[List['IntraHostVariant']] = relationship(back_populates='r_translation')
-    r_amino_acid: Mapped['AminoAcid'] = relationship(back_populates='r_translations')
 
 
 class Mutation(Base):
@@ -301,12 +275,6 @@ class Mutation(Base):
 
     sample_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.samples}.id'), nullable=False)
     allele_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.alleles}.id'), nullable=False, index=True)
-
-    translation_id: Mapped[int] = mapped_column(
-        sa.ForeignKey(f'{TableNames.translations}.id'),
-        nullable=True,
-        index=True
-    )
 
     __table_args__ = tuple(
         [
@@ -320,7 +288,7 @@ class Mutation(Base):
 
     r_sample: Mapped['Sample'] = relationship(back_populates='r_mutations')
     r_allele: Mapped['Allele'] = relationship(back_populates='r_mutations')
-    r_translation: Mapped['Translation'] = relationship(back_populates='r_mutations')
+    r_translations: Mapped[List['MutationTranslation']] = relationship(back_populates='r_mutation')
 
 
 class IntraHostVariant(Base):
@@ -330,12 +298,6 @@ class IntraHostVariant(Base):
 
     sample_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.samples}.id'), nullable=False)
     allele_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.alleles}.id'), nullable=False, index=True)
-
-    translation_id: Mapped[int] = mapped_column(
-        sa.ForeignKey(f'{TableNames.translations}.id'),
-        nullable=True,
-        index=True
-    )
 
     ref_dp: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
     alt_dp: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
@@ -360,7 +322,7 @@ class IntraHostVariant(Base):
 
     r_sample: Mapped['Sample'] = relationship(back_populates='r_variants')
     r_allele: Mapped['Allele'] = relationship(back_populates='r_variants')
-    r_translation: Mapped['Translation'] = relationship(back_populates='r_variants')
+    r_translations: Mapped[List['IntraHostTranslation']] = relationship(back_populates='r_variant')
 
     def copy_from(self, other: 'IntraHostVariant'):
         if not (other.sample_id, other.allele_id) == (self.sample_id, self.allele_id):
@@ -376,6 +338,57 @@ class IntraHostVariant(Base):
         self.total_dp = other.total_dp
         self.pval = other.pval
         self.pass_qc = other.pass_qc
+
+
+class MutationTranslation(Base):
+    __tablename__ = TableNames.mutations_translations
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+
+    mutation_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.mutations}.id'), nullable=False)
+    amino_acid_id: Mapped[int] = mapped_column(
+        sa.ForeignKey(f'{TableNames.amino_acids}.id'),
+        nullable=False,
+        index=True
+    )
+
+    __table_args__ = tuple(
+        [
+            UniqueConstraint(
+                StandardColumnNames.mutation_id,
+                StandardColumnNames.amino_acid_id,
+                name=f'uq_{__tablename__}_mutation_amino_acid_pair'
+            )
+        ]
+    )
+    r_mutation: Mapped['Mutation'] = relationship(back_populates='r_translations')
+    r_amino_acid: Mapped['AminoAcid'] = relationship(back_populates='r_mutation_translations')
+
+
+class IntraHostTranslation(Base):
+    __tablename__ = TableNames.intra_host_translations
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+
+    intra_host_variant_id: Mapped[int] = mapped_column(
+        sa.ForeignKey(f'{TableNames.intra_host_variants}.id'),
+        nullable=False
+    )
+    amino_acid_id: Mapped[int] = mapped_column(
+        sa.ForeignKey(f'{TableNames.amino_acids}.id'),
+        nullable=False,
+        index=True
+    )
+
+    __table_args__ = tuple(
+        [
+            UniqueConstraint(
+                StandardColumnNames.intra_host_variant_id,
+                StandardColumnNames.amino_acid_id,
+                name=f'uq_{__tablename__}_variant_amino_acid_pair'
+            )
+        ]
+    )
+    r_variant: Mapped['IntraHostVariant'] = relationship(back_populates='r_translations')
+    r_amino_acid: Mapped['AminoAcid'] = relationship(back_populates='r_intra_host_translations')
 
 
 class GeoLocation(Base):
@@ -415,11 +428,11 @@ class PhenotypeMetric(Base):
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
     name: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    # todo: change name to avoid conflict with samples
     assay_type: Mapped[str] = mapped_column(sa.Text, nullable=False)
 
     __table_args__ = tuple(
         [
-            # todo: could this soften to allow uq name x assay_type?
             UniqueConstraint(StandardColumnNames.name, name='uq_phenotype_metrics_name'),
             CheckConstraint(f"{StandardColumnNames.name} <> ''", name='name_not_empty'),
             CheckConstraint(f"{StandardColumnNames.assay_type} <> ''", name='assay_type_not_empty')
@@ -523,6 +536,27 @@ class SampleLineage(Base):
     r_sample: Mapped['Sample'] = relationship(back_populates='r_sample_lineages')
 
 
+class LineageImmediateChild(Base):
+    __tablename__ = TableNames.lineages_immediate_children
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+
+    parent_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.lineages}.id'))
+    child_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.lineages}.id'))
+
+    __table_args__ = tuple(
+        [
+            UniqueConstraint(
+                StandardColumnNames.parent_id,
+                StandardColumnNames.child_id,
+                name=f'uq_{TableNames.lineages_immediate_children}_parent_child'
+            ),
+            CheckConstraint(
+                f'{StandardColumnNames.parent_id} <> {StandardColumnNames.child_id}',
+                name='no_self_parenthood'
+            )
+        ]
+    )
+
 class Paper(Base):
     __tablename__ = TableNames.papers
 
@@ -619,3 +653,116 @@ class AnnotationAminoAcid(Base):
 
     r_annotation: Mapped['Annotation'] = relationship(back_populates='r_annotations_amino_acids')
     r_amino_acid: Mapped['AminoAcid'] = relationship(back_populates='r_annotations_amino_acids')
+
+
+class SqlSnippets:
+    create_view_lineages_deep_children = f'''
+    create or replace view {TableNames.lineages_deep_children} as
+    with recursive deep_children(parent_id, child_id) as (
+        select lic.{StandardColumnNames.parent_id},
+               lic.{StandardColumnNames.child_id}
+        from {TableNames.lineages_immediate_children} lic
+        union all
+        select dc.parent_id,
+               lic.{StandardColumnNames.child_id}
+        from deep_children dc
+        inner join {TableNames.lineages_immediate_children} lic on dc.child_id = lic.{StandardColumnNames.parent_id}
+    )
+    select {StandardColumnNames.parent_id}, {StandardColumnNames.child_id}
+    from deep_children;
+    '''
+
+    drop_view_lineages_deep_children = f'drop view if exists {TableNames.lineages_deep_children};'
+
+    create_function_check_cyclic_lineage = f'''
+    create or replace function {MiscDbNames.check_cyclic_lineage}()
+        returns trigger as
+    $$
+    declare
+        num_rows integer;
+    begin
+        select count(*)
+        into num_rows
+        from {TableNames.lineages_deep_children}
+        where 
+            {StandardColumnNames.child_id} = new.{StandardColumnNames.parent_id} 
+            and {StandardColumnNames.parent_id} = new.{StandardColumnNames.child_id};
+        if num_rows > 0 then
+            raise exception 'cyclic lineage hierarchy';
+        end if;
+        return new;
+    end;
+    $$
+        language plpgsql;
+    '''
+
+    drop_function_check_cyclic_lineage = f'drop function if exists {MiscDbNames.check_cyclic_lineage};'
+
+    create_trigger_check_cyclic_lineage = f'''
+    do
+    $$
+        begin
+            if not exists (
+                select *
+                from information_schema.triggers
+                where event_object_table = '{TableNames.lineages_immediate_children}'
+                  and trigger_name = '{MiscDbNames.check_cyclic_lineage_trigger}'
+            )
+            then
+                create trigger {MiscDbNames.check_cyclic_lineage_trigger}
+                    before insert or update
+                    on {TableNames.lineages_immediate_children}
+                    for each row
+                execute procedure {MiscDbNames.check_cyclic_lineage}();
+            end if;
+        end;
+    $$;
+    '''
+
+    drop_trigger_check_cyclic_lineage = f'drop trigger if exists {MiscDbNames.check_cyclic_lineage_trigger} on {TableNames.lineages_immediate_children};'
+
+
+    create_function_check_cross_system_lineage = f'''
+    create or replace function {MiscDbNames.check_cross_system_lineage}()
+        returns trigger as
+    $$
+    declare
+        num_systems int;
+    begin
+        select count(distinct({StandardColumnNames.lineage_system_id}))
+        into num_systems
+        from {TableNames.lineages} l
+        where l.id = new.{StandardColumnNames.parent_id} or l.id = new.{StandardColumnNames.child_id};
+        if num_systems > 1 then
+            raise exception 'parent and child are from different lineage systems';
+        end if;
+        return new;
+    end;
+    $$
+        language plpgsql;
+    '''
+
+    drop_function_check_cross_system_lineage = f'drop function if exists {MiscDbNames.check_cross_system_lineage};'
+
+    create_trigger_check_cross_system_lineage = f'''
+    do
+    $$
+        begin
+            if not exists (
+                select *
+                from information_schema.triggers
+                where event_object_table = '{TableNames.lineages_immediate_children}'
+                  and trigger_name = '{MiscDbNames.check_cross_system_lineage_trigger}'
+            )
+            then
+                create trigger {MiscDbNames.check_cross_system_lineage_trigger}
+                    before insert or update
+                    on {TableNames.lineages_immediate_children}
+                    for each row
+                execute procedure {MiscDbNames.check_cross_system_lineage}();
+            end if;
+        end;
+    $$;
+    '''
+
+    drop_trigger_check_cross_system_lineage = f'drop trigger if exists {MiscDbNames.check_cross_system_lineage_trigger} on {TableNames.lineages_immediate_children};'

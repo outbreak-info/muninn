@@ -1,19 +1,18 @@
 import csv
-from csv import DictReader
 from enum import Enum
 from typing import Set, List
+
 import polars as pl
 
+from DB.inserts.amino_acids import find_equivalent_amino_acids
 from DB.inserts.annotations import insert_annotation
 from DB.inserts.annotations_papers import find_or_insert_annotation_paper
 from DB.inserts.effects import find_or_insert_effect
 from DB.inserts.file_parsers.file_parser import FileParser
-
 from DB.inserts.papers import find_or_insert_paper
 from DB.models import AminoAcid, Effect, Paper, Annotation, AnnotationPaper
-from DB.queries.amino_acid_substitutions import find_aa_sub
 from utils.constants import DefaultGffFeaturesByRegion
-from utils.csv_helpers import parse_change_string, get_value
+from utils.csv_helpers import parse_change_string
 from utils.errors import NotFoundError, DuplicateAnnotationError
 
 # this is intended to parse the output of the following query:
@@ -65,7 +64,7 @@ class FlumutParser(FileParser):
         annotations_input = pl.scan_csv(
             self.filename,
             separator=self.delimiter,
-            with_column_names= lambda names : [ColNameMapping(n).name for n in names]
+            with_column_names=lambda names: [ColNameMapping(n).name for n in names]
         ).collect()
 
         # Each entry in this df will correspond to one row in the annotations table
@@ -86,7 +85,7 @@ class FlumutParser(FileParser):
             )
 
             # get the amino acid data
-            amino_acid_ids: List[int] = []
+            amino_acid_ids: set[int] = set()
             try:
                 for aa_change in one_annotation.select(pl.col(ColNameMapping.aa_change.name)).rows():
                     protein, ref, position, alt = parse_change_string(aa_change[0])
@@ -96,8 +95,8 @@ class FlumutParser(FileParser):
                     if gff_feature == DefaultGffFeaturesByRegion.HA:
                         position += 16
 
-                    amino_acid_ids.append(
-                        await find_aa_sub(
+                    amino_acid_ids = amino_acid_ids.union(
+                        await find_equivalent_amino_acids(
                             AminoAcid(
                                 gff_feature=gff_feature,
                                 position_aa=position,
