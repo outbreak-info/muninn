@@ -7,7 +7,7 @@ from sqlalchemy.sql.expression import text
 
 from DB.engine import get_async_write_session, get_async_session
 from DB.inserts.file_parsers.file_parser import FileParser
-from utils.constants import StandardColumnNames, CONTAINER_DATA_DIRECTORY, Env
+from utils.constants import StandardColumnNames, CONTAINER_DATA_DIRECTORY, Env, TableNames
 
 AMINO_ACID_REF_CONFLICTS_FILE = '/tmp/amino_acid_ref_conflicts.csv'
 ALLELE_REF_CONFLICTS_FILE = '/tmp/allele_ref_conflicts.csv'
@@ -56,6 +56,14 @@ class VariantsMutationsCombinedParser(FileParser):
         await self._read_mutations_input()
         print(f'{self._get_timestamp()} read variants')
         await self._read_variants_input()
+
+        try:
+            await self._check_count_variants_mutations()
+        except ValueError as e:
+            await self._clean_up_tmp_tables()
+            raise e
+
+
         print(f'{self._get_timestamp()} insert alleles')
         await self._insert_alleles()
         print(f'{self._get_timestamp()} allele ref conflicts')
@@ -75,6 +83,7 @@ class VariantsMutationsCombinedParser(FileParser):
         print(f'{self._get_timestamp()} clean up tmp tables')
         await self._clean_up_tmp_tables()
         print(f'Finished at {self._get_timestamp()}')
+        await self._print_summary_counts()
 
     async def _read_mutations_input(self):
         async with get_async_write_session() as session:
@@ -210,6 +219,24 @@ class VariantsMutationsCombinedParser(FileParser):
                 )
             )
             await session.commit()
+
+    @staticmethod
+    async def _check_count_variants_mutations():
+        async with get_async_session() as session:
+            res = await session.execute(
+                text(
+                    '''
+                    select exists (select * from tmp_mutations) or exists (select * from tmp_variants) as has_data;
+                    '''
+                )
+            )
+            has_data = res.mappings().one()['has_data']
+            if not has_data:
+                raise ValueError(
+                    'Error: neither tmp_variants nor tmp_mutations contains any rows, and thus no data can be inserted. '
+                    'Possible causes: '
+                    'Are samples present? Do sample accessions match across files?'
+                )
 
     @staticmethod
     async def _insert_alleles():
@@ -519,6 +546,44 @@ class VariantsMutationsCombinedParser(FileParser):
                 )
             )
             await session.commit()
+
+    @staticmethod
+    async def _print_summary_counts():
+        print('Gathering row counts on effected tables. Note that counts on large tables will be approximate...')
+        large_tables = [
+            TableNames.intra_host_variants,
+            TableNames.mutations,
+            TableNames.intra_host_translations,
+            TableNames.mutations_translations
+        ]
+        small_tables = [
+            TableNames.samples,
+            TableNames.alleles,
+            TableNames.amino_acids,
+
+        ]
+        async with get_async_session() as session:
+            for table in large_tables:
+                res = await session.execute(
+                    text(
+                        f'''
+                        select reltuples as count from pg_class where relname = '{table}';
+                        '''
+                    )
+                )
+                count = res.mappings().one()['count']
+                print(f'\t{table}: {count}')
+
+            for table in small_tables:
+                res = await session.execute(
+                    text(
+                        f'''
+                        select count(*) from {table};
+                        '''
+                    )
+                )
+                count = res.mappings().one()['count']
+                print(f'\t{table}: {count}')
 
     @staticmethod
     async def _clean_up_tmp_tables():
