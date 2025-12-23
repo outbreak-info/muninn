@@ -69,10 +69,12 @@ def main():
     file_parser: FileParser = formats[args.format]
     filename: str = args.filenames[0]
     filename2: str | None = None
-    if issubclass(file_parser, VariantsMutationsCombinedParser):
-        filename2 = args.filenames[1]
-    elif len(args.filenames) > 1:
-        raise ValueError('Multiple filenames provided, but this format takes only one.')
+
+    if len(args.filenames) > 1:
+        if issubclass(file_parser, VariantsMutationsCombinedParser):
+            filename2 = args.filenames[1]
+        else:
+            raise ValueError('Multiple filenames provided, but this format takes only one.')
 
     # run inserts method
     start_time = datetime.now()

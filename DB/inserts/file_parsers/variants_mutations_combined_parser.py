@@ -15,15 +15,22 @@ ALLELE_REF_CONFLICTS_FILE = '/tmp/allele_ref_conflicts.csv'
 
 class VariantsMutationsCombinedParser(FileParser):
 
-    def __init__(self, variants_filename: str, mutations_filename: str):
+    def __init__(self, variants_filename: str, mutations_filename: str | None = None):
         self.variants_filename = variants_filename
         self.mutations_filename = mutations_filename
         self.delimiter = '\t'
 
+        # Even if we actually are going to skip variants, we won't do the swap until later
+        # since mutations is the second file it's the one that'll be missing
+        self.skip_variants = False
+        self.skip_mutations = self.mutations_filename is None
+
         # find out where our files are (are we in a container or not?) and get absolute and relative paths
-        self.mutations_filename_relative, self.mutations_filename_local = (
-            self._find_relative_and_local_abs_paths(self.mutations_filename)
-        )
+        self.mutations_filename_relative, self.mutations_filename_local = (None, None)
+        if not self.skip_mutations:
+            self.mutations_filename_relative, self.mutations_filename_local = (
+                self._find_relative_and_local_abs_paths(self.mutations_filename)
+            )
         self.variants_filename_relative, self.variants_filename_local = (
             self._find_relative_and_local_abs_paths(self.variants_filename)
         )
@@ -35,21 +42,34 @@ class VariantsMutationsCombinedParser(FileParser):
             hold = self.variants_filename_local
             self.variants_filename_local = self.mutations_filename_local
             self.mutations_filename_local = hold
+
+            hold = self.skip_variants
+            self.skip_variants = self.skip_mutations
+            self.skip_mutations = hold
+
             self._verify_headers()
+
             # if that worked, we also want these swapped
             hold = self.variants_filename_relative
             self.variants_filename_relative = self.mutations_filename_relative
             self.mutations_filename_relative = hold
 
         # get orders of headers
-        self.variants_header_order = self._get_header_order(
-            self.variants_filename_local,
-            self.variants_column_mapping
-        )
-        self.mutations_header_order = self._get_header_order(
-            self.mutations_filename_local,
-            self.mutations_column_mapping
-        )
+        if not self.skip_variants:
+            self.variants_header_order = self._get_header_order(
+                self.variants_filename_local,
+                self.variants_column_mapping
+            )
+        if not self.skip_mutations:
+            self.mutations_header_order = self._get_header_order(
+                self.mutations_filename_local,
+                self.mutations_column_mapping
+            )
+
+        if self.skip_variants:
+            print('No variants file provided, skipping...')
+        if self.skip_mutations:
+            print('No mutations file provided, skipping...')
 
     async def parse_and_insert(self):
         print(f'{self._get_timestamp()} read mutations')
@@ -62,7 +82,6 @@ class VariantsMutationsCombinedParser(FileParser):
         except ValueError as e:
             await self._clean_up_tmp_tables()
             raise e
-
 
         print(f'{self._get_timestamp()} insert alleles')
         await self._insert_alleles()
@@ -108,14 +127,16 @@ class VariantsMutationsCombinedParser(FileParser):
                 '''
                 )
             )
-            await session.execute(
-                text(
-                    f'''
-                    copy tmp_mutations ({", ".join(self.mutations_header_order)})
-                    from '/muninn/data/{self.mutations_filename_relative}' delimiter E'{self.delimiter}' csv header;
-                    '''
+            if not self.skip_mutations:
+                await session.execute(
+                    text(
+                        f'''
+                        copy tmp_mutations ({", ".join(self.mutations_header_order)})
+                        from '/muninn/data/{self.mutations_filename_relative}' delimiter E'{self.delimiter}' csv header;
+                        '''
+                    )
                 )
-            )
+
             await session.execute(
                 text(
                     '''
@@ -189,14 +210,15 @@ class VariantsMutationsCombinedParser(FileParser):
                 )
             )
 
-            await session.execute(
-                text(
-                    f'''
-                    copy tmp_variants ({', '.join(self.variants_header_order)})
-                    from '/muninn/data/{self.variants_filename_relative}' delimiter E'{self.delimiter}' csv header;
-                    '''
+            if not self.skip_variants:
+                await session.execute(
+                    text(
+                        f'''
+                        copy tmp_variants ({', '.join(self.variants_header_order)})
+                        from '/muninn/data/{self.variants_filename_relative}' delimiter E'{self.delimiter}' csv header;
+                        '''
+                    )
                 )
-            )
 
             await session.execute(
                 text(
@@ -642,17 +664,19 @@ class VariantsMutationsCombinedParser(FileParser):
         }
 
     def _verify_headers(self):
-        with open(self.variants_filename_local, 'r') as f:
-            reader = csv.DictReader(f, delimiter=self.delimiter)
-            required_columns = set(self.variants_column_mapping.values())
-            if not set(reader.fieldnames) >= required_columns:
-                raise ValueError(f'Missing required fields: {required_columns - set(reader.fieldnames)}')
+        if not self.skip_variants:
+            with open(self.variants_filename_local, 'r') as f:
+                reader = csv.DictReader(f, delimiter=self.delimiter)
+                required_columns = set(self.variants_column_mapping.values())
+                if not set(reader.fieldnames) >= required_columns:
+                    raise ValueError(f'Missing required fields: {required_columns - set(reader.fieldnames)}')
 
-        with open(self.mutations_filename_local, 'r') as f:
-            reader = csv.DictReader(f, delimiter=self.delimiter)
-            required_columns = set(self.mutations_column_mapping.values())
-            if not set(reader.fieldnames) >= required_columns:
-                raise ValueError(f'Missing required fields: {required_columns - set(reader.fieldnames)}')
+        if not self.skip_mutations:
+            with open(self.mutations_filename_local, 'r') as f:
+                reader = csv.DictReader(f, delimiter=self.delimiter)
+                required_columns = set(self.mutations_column_mapping.values())
+                if not set(reader.fieldnames) >= required_columns:
+                    raise ValueError(f'Missing required fields: {required_columns - set(reader.fieldnames)}')
 
     @staticmethod
     def _get_timestamp():
