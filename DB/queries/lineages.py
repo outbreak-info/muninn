@@ -281,6 +281,7 @@ async def get_averaged_abundances_by_location(
                         s.collection_end_date,
                         sl.abundance,
                         s.ww_catchment_population,
+                        s.ww_viral_load,
                         sl.abundance * s.ww_catchment_population as pop_weighted_prevalence,
                         (
                             s.collection_start_date +
@@ -298,7 +299,8 @@ async def get_averaged_abundances_by_location(
                         {extract_clause},
                         {group_by_geo_level},
                         sum(pop_weighted_prevalence) as total_prevalence,
-                        count(*) as sample_count
+                        count(*) as sample_count,
+                        avg(ww_viral_load) as avg_ww_viral_load,
                     from base_data
                     group by {group_by_date_cols}, {group_by_geo_level}
                 ),
@@ -319,6 +321,7 @@ async def get_averaged_abundances_by_location(
                     lp.lineage_name as lineage_name,
                     {lp_group_by},
                     lp.sample_count,
+                    tp.avg_ww_viral_load,
                     lp.lineage_prevalence / tp.total_prevalence as mean_lineage_prevalence
                 from lineage_prevalences lp
                 join total_prevalences tp
