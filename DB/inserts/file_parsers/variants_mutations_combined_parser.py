@@ -2,6 +2,7 @@ import csv
 from datetime import datetime
 from os import path
 from typing import Set
+import polars as pl
 
 from sqlalchemy.sql.expression import text
 
@@ -12,16 +13,6 @@ from utils.constants import StandardColumnNames, CONTAINER_DATA_DIRECTORY, Env
 AMINO_ACID_REF_CONFLICTS_FILE = '/tmp/amino_acid_ref_conflicts.csv'
 ALLELE_REF_CONFLICTS_FILE = '/tmp/allele_ref_conflicts.csv'
 
-
-# rm
-def probe_lazy(df: pl.LazyFrame, name: str, stream: bool = False) -> None:
-    return
-    engine = 'in-memory'
-    if stream:
-        engine = 'streaming'
-    df.show_graph(
-        output_path=f'/tmp/{name}.png', show=False, engine=engine, plan_stage="physical"
-    )
 
 
 class VariantsMutationsCombinedParser(FileParser):
