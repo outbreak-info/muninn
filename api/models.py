@@ -250,12 +250,15 @@ class LineageAbundanceInfo(BaseModel):
 
 class AverageLineageAbundanceInfo(BaseModel):
     year: int
-    chunk: int
+    week: int
     epiweek: int
+    week_start: date
+    week_end: date
     lineage_name: str
-    state: str | None
     census_region: str
+    state: str
     sample_count: int
+    mean_viral_load: float
     mean_lineage_prevalence: float
 
 class LineageAbundanceSummaryInfo(BaseModel):
