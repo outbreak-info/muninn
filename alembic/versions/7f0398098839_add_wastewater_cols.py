@@ -1,7 +1,7 @@
 """add_wastewater_cols
 
 Revision ID: 7f0398098839
-Revises: 541c861117dd
+Revises: bee0f349ae96
 Create Date: 2025-07-22 15:53:12.706106
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '7f0398098839'
-down_revision: Union[str, None] = '541c861117dd'
+down_revision: Union[str, None] = 'bee0f349ae96'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
