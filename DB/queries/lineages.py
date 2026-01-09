@@ -300,7 +300,7 @@ async def get_averaged_abundances_by_location(
                         {group_by_geo_level},
                         sum(pop_weighted_prevalence) as total_prevalence,
                         count(*) as sample_count,
-                        avg(ww_viral_load) as avg_ww_viral_load,
+                        avg(ww_viral_load) as avg_ww_viral_load
                     from base_data
                     group by {group_by_date_cols}, {group_by_geo_level}
                 ),
