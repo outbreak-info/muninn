@@ -238,9 +238,7 @@ async def get_averaged_abundances_by_location(
     user_where_clause = ''
     if raw_query is not None:
         user_where_clause = f'where ({parser.parse(raw_query)})' \
-            .replace('state', 'lp.state') \
-            .replace('census_region', 'lp.census_region') \
-            .replace("epiweek", "concat(lp.year, lpad(lp.chunk::text, 2, '0'))::int")
+            .replace('state', 'admin1_name')
 
     match date_bin:
         case DateBinOpt.week | DateBinOpt.month:
@@ -321,25 +319,30 @@ async def get_averaged_abundances_by_location(
                         count(*) as sample_count
                     from base_data
                     group by year, week, week_start, week_end, admin1_name, census_region, lineage_name
+                ),
+                result_data as (
+                    select
+                        lp.year,
+                        lp.week,
+                        (lp.year || LPAD(lp.week::text, 2, '0'))::int as epiweek,
+                        lp.week_start,
+                        lp.week_end,
+                        lp.lineage_name as lineage,
+                        lp.census_region,
+                        lp.admin1_name,
+                        lp.sample_count,
+                        tp.mean_viral_load,
+                        lp.lineage_prevalence / tp.total_prevalence as mean_lineage_prevalence
+                    from lineage_prevalences lp
+                    join total_prevalences tp
+                        on lp.year = tp.year
+                    and lp.week = tp.week
+                    and lp.week_start = tp.week_start
+                    and lp.week_end = tp.week_end
                 )
-                select
-                    lp.year,
-                    lp.week,
-                    (lp.year || LPAD(lp.week::text, 2, '0'))::int as epiweek,
-                    lp.week_start,
-                    lp.week_end,
-                    lp.lineage_name as lineage,
-                    lp.census_region,
-                    lp.admin1_name,
-                    lp.sample_count,
-                    tp.mean_viral_load,
-                    lp.lineage_prevalence / tp.total_prevalence as mean_lineage_prevalence
-                from lineage_prevalences lp
-                join total_prevalences tp
-                    on lp.year = tp.year
-                and lp.week = tp.week
-                and lp.week_start = tp.week_start
-                and lp.week_end = tp.week_end;
+                select *
+                from result_data
+                {user_where_clause};
                 '''
             )
         )
