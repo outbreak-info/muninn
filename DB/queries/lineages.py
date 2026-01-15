@@ -302,7 +302,8 @@ async def get_averaged_abundances_by_location(
                         census_region,
                         sum(pop_weighted_prevalence) as total_prevalence,
                         count(*) as sample_count,
-                        avg(ww_viral_load) as mean_viral_load
+                        avg(ww_viral_load) as mean_viral_load,
+                        avg(ww_catchment_population) as mean_catchment_size
                     from base_data
                     group by year, week, week_start, week_end, admin1_name, census_region
                 ),
@@ -332,6 +333,7 @@ async def get_averaged_abundances_by_location(
                         lp.admin1_name,
                         lp.sample_count,
                         tp.mean_viral_load,
+                        tp.mean_catchment_size,
                         lp.lineage_prevalence / tp.total_prevalence as mean_lineage_prevalence
                     from lineage_prevalences lp
                     join total_prevalences tp
@@ -339,6 +341,8 @@ async def get_averaged_abundances_by_location(
                     and lp.week = tp.week
                     and lp.week_start = tp.week_start
                     and lp.week_end = tp.week_end
+                    and lp.admin1_name = tp.admin1_name
+                    and lp.census_region = tp.census_region
                 )
                 select *
                 from result_data
@@ -361,7 +365,8 @@ async def get_averaged_abundances_by_location(
                 state=r[7],
                 sample_count=r[8],
                 mean_viral_load=r[9],
-                mean_lineage_prevalence=r[10]
+                mean_catchment_size=r[10],
+                mean_lineage_prevalence=r[11]
             )
             out_data.append(info)
     # elif geo_bin == 'census_region':

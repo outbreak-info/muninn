@@ -117,6 +117,12 @@ class SampleInfo(BaseModel):
     geo_admin2_name: str | None
     geo_admin3_name: str | None
 
+    # wastewater-specific columns
+    ww_viral_load: float | None
+    ww_catchment_population: int | None
+    ww_site_id: str | None
+    ww_collected_by: str | None
+
     @classmethod
     def from_db_object(cls, dbo: 'Sample') -> 'SampleInfo':
         return SampleInfo(
@@ -160,7 +166,11 @@ class SampleInfo(BaseModel):
             geo_country_name=dbo.r_geo_location.country_name,
             geo_admin1_name=dbo.r_geo_location.admin1_name,
             geo_admin2_name=dbo.r_geo_location.admin2_name,
-            geo_admin3_name=dbo.r_geo_location.admin3_name
+            geo_admin3_name=dbo.r_geo_location.admin3_name,
+            ww_viral_load=dbo.ww_viral_load,
+            ww_catchment_population=dbo.ww_catchment_population,
+            ww_site_id=dbo.ww_site_id,
+            ww_collected_by=dbo.ww_collected_by,
         )
 
 
@@ -259,6 +269,7 @@ class AverageLineageAbundanceInfo(BaseModel):
     state: str
     sample_count: int
     mean_viral_load: float
+    mean_catchment_size: float
     mean_lineage_prevalence: float
 
 class LineageAbundanceSummaryInfo(BaseModel):
