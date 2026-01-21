@@ -265,6 +265,7 @@ class LineageAbundanceWithSampleInfo(BaseModel):
     lineage_name: str
     abundance: float
     ww_viral_load: float
+    ww_catchment_population: int
     collection_date: date
 
 # wastewater-specific

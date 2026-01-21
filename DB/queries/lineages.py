@@ -249,6 +249,7 @@ async def get_abundances_by_submitter(
                     l.lineage_name,
                     sl.abundance,
                     s.ww_viral_load,
+                    s.ww_catchment_population,
                     s.collection_start_date
                 from samples_lineages sl
                 inner join lineages l on l.id = sl.lineage_id
@@ -267,7 +268,8 @@ async def get_abundances_by_submitter(
             lineage_name=r[2],
             abundance=r[3],
             ww_viral_load=r[4],
-            collection_date=r[5]
+            ww_catchment_population=r[5],
+            collection_date=r[6]
         )
         out_data.append(info)
     return out_data
