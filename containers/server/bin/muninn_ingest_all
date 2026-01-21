@@ -68,6 +68,7 @@ MUTATIONS_FILE="$ARCHIVE_DEST_SUBDIR/mutations/mutations.tsv"
 # look in Bjorn general, default to external
 GENOFLU_FILE="genoflu_results.tsv"
 HA_DMS_FILE="$DATA_DIR/dms_HA.tsv"
+PB2_DMS_FILE="$DATA_DIR/dms_PB2.csv"
 
 # If in auto mode, find bjorn-general input files
 if [[ $AUTO = true ]]; then
@@ -96,8 +97,14 @@ if [[ $AUTO = true ]]; then
     HA_DMS_FILE="$TMP_FILE"
     echo "using HA DMS file: $HA_DMS_FILE" >> "$LOG"
   fi
+  # PB2 DMS File
+  TMP_FILE=$(find "$ARCHIVE_DEST_DIR" -type f -name "dms_PB2*.csv" | head -1)
+  if [[ -f "$TMP_FILE" ]]; then
+      PB2_DMS_FILE="$TMP_FILE"
+    echo "using PB2 DMS file: $PB2_DMS_FILE" >> "$LOG" fi
+  fi
 
-  TMP_FILE=$(find "$ARCHIVE_DEST_DIR" -type f -name "*genoflu_results*.tsv" | head -1)
+ TMP_FILE=$(find "$ARCHIVE_DEST_DIR" -type f -name "*genoflu_results*.tsv" | head -1)
   if [[ -f "$TMP_FILE" ]]; then
     GENOFLU_FILE="$TMP_FILE"
     echo "using genoflu results file: $GENOFLU_FILE" >> "$LOG"
@@ -123,6 +130,7 @@ ALLELE_REF_CONFLICTS_FILE="/tmp/allele_ref_conflicts.csv"
   --format variants_mutations_combined_tsv
   python3 -u runinserts.py "$HA_DMS_FILE" --format ha_dms_tsv
   python3 -u runinserts.py "$GENOFLU_FILE" --format genoflu_lineages
+  python3 -u runinserts.py "$PB2_DMS_FILE"  --format pb2_dms_csv
 
   # ingest random other outputs
   python3 -u runinserts.py "$DATA_DIR/$EVE_FILE" --format eve_dms_csv

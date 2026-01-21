@@ -42,6 +42,7 @@ class PhenotypeMetricAssayTypes:
 
 class DefaultGffFeaturesByRegion:
     HA = 'XAJ25415.1'
+    PB2 = 'XAJ25426.1'
 
 
 class LineageSystemNames:
