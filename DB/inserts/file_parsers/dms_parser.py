@@ -178,6 +178,7 @@ class HaRegionDmsCsvParserNewData(DmsFileParser):
         StandardPhenoMetricNames.entry_in_sa26_and_sa23_293t_cells: 'entry in SA26 and SA23 293T cells',
     }
 
+
 class Pb2RegionDmsCsvParser(DmsFileParser):
     """Parser for DMS data for Influenza PB2 region"""
     def __init__(self, filename: str):

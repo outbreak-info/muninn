@@ -130,7 +130,7 @@ ALLELE_REF_CONFLICTS_FILE="/tmp/allele_ref_conflicts.csv"
   --format variants_mutations_combined_tsv
   python3 -u runinserts.py "$HA_DMS_FILE" --format ha_dms_tsv
   python3 -u runinserts.py "$GENOFLU_FILE" --format genoflu_lineages
-  python3 -u runinserts.py "$PB2_DMS_FILE"  --format pb2_dms_csv
+  python3 -u runinserts.py "$PB2_DMS_FILE" --format pb2_dms_csv
 
   # ingest random other outputs
   python3 -u runinserts.py "$DATA_DIR/$EVE_FILE" --format eve_dms_csv
