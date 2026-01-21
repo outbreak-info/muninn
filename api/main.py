@@ -15,7 +15,7 @@ import DB.queries.variants_mutations
 import DB.queries.annotations
 import DB.queries.helpers
 from DB.models import Mutation, IntraHostVariant
-from api.models import VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
+from api.models import LineageAbundanceWithSampleInfo, VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
     MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo, \
     LineageInfo, VariantMutationLagInfo, RegionAndGffFeatureInfo, MutationProfileInfo, AverageLineageAbundanceInfo
 from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, SIMPLE_DATE_FIELDS, NtOrAa, \
@@ -228,12 +228,31 @@ async def get_lineage_abundance_info(q: str | None = None):
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
+# wastewater-specific
 @app.get('/lineages/abundances/average_abundances', response_model=List[AverageLineageAbundanceInfo])
 async def get_average_lineage_abundance(q: str | None = None):
+    """
+    :param q: A query to be run against samples. If provided, only samples matching the query will be included in the results
+    """
     date_bin = DateBinOpt.week
     geo_bin = "state"
     try:
         return await DB.queries.lineages.get_averaged_abundances_by_location(date_bin, geo_bin, q)
+    except ParsingError as e:
+        raise HTTPException(status_code=400, detail=e.message)
+
+# wastewater-specific
+@app.get('/lineages/abundances/by/submitter', response_model=List[LineageAbundanceWithSampleInfo])
+async def get_lineage_abundances_by_submitter(
+    submitter: str,
+    q: str | None = None,
+):
+    """
+    :param submitter: The submitter of the samples to get abundances for
+    :param q: A query to be run against samples. If provided, only samples matching the query will be included in the results
+    """
+    try:
+        return await DB.queries.lineages.get_abundances_by_submitter(submitter, q)
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 

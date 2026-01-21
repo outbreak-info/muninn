@@ -9,7 +9,7 @@ from DB.models import LineageSystem, Lineage, Sample, SampleLineage, GeoLocation
 from DB.queries.date_count_helpers import get_extract_clause, get_group_by_clause, get_order_by_cause, \
     MID_COLLECTION_DATE_CALCULATION
 from api.models import LineageCountInfo, LineageAbundanceInfo, LineageInfo, LineageAbundanceSummaryInfo, \
-    MutationProfileInfo, AverageLineageAbundanceInfo
+    MutationProfileInfo, AverageLineageAbundanceInfo, LineageAbundanceWithSampleInfo
 from parser.parser import parser
 from utils.constants import DateBinOpt, NtOrAa, NUCLEOTIDE_CHARACTERS, TableNames, StandardColumnNames, COLLECTION_DATE
 
@@ -229,12 +229,55 @@ async def get_abundance_summaries_by_simple_date(
             out_data[date] = [info]
     return out_data
 
+# wastewater-specific
+async def get_abundances_by_submitter(
+    submitter: str,
+    raw_query: str | None,
+) -> List[LineageAbundanceWithSampleInfo]:
+    user_where_clause = ''
+    if raw_query is not None:
+        parsed_query = parser.parse(raw_query) .replace('collection_date', 's.collection_start_date')
+        user_where_clause = f'and ({parsed_query})'
 
+    async with get_async_session() as session:
+        res = await session.execute(
+            text(
+                f'''
+                select
+                    s.accession,
+                    s.ww_collected_by,
+                    l.lineage_name,
+                    sl.abundance,
+                    s.ww_viral_load,
+                    s.collection_start_date
+                from samples_lineages sl
+                inner join lineages l on l.id = sl.lineage_id
+                inner join samples s on s.id = sl.sample_id
+                where s.ww_collected_by = '{submitter}'
+                {user_where_clause}
+                '''
+            )
+        )
+
+    out_data = list()
+    for r in res:
+        info = LineageAbundanceWithSampleInfo(
+            accession=r[0],
+            ww_collected_by=r[1],
+            lineage_name=r[2],
+            abundance=r[3],
+            ww_viral_load=r[4],
+            collection_date=r[5]
+        )
+        out_data.append(info)
+    return out_data
+
+# wastewater-specific
 async def get_averaged_abundances_by_location(
     date_bin: DateBinOpt,
     geo_bin: str,
     raw_query: str,
-) -> Dict[str, List[LineageAbundanceInfo]]:
+) -> List[AverageLineageAbundanceInfo]:
     user_where_clause = ''
     if raw_query is not None:
         user_where_clause = f'where ({parser.parse(raw_query)})' \
