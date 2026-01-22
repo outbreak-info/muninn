@@ -194,5 +194,5 @@ class Pb2RegionDmsCsvParser(DmsFileParser):
     }
 
     data_column_name_map = {
-        'mutdiffsel': 'mutdiffsel'
+        StandardPhenoMetricNames.mutdiffsel: 'mutdiffsel'
     }
