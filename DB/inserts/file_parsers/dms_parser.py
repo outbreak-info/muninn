@@ -177,3 +177,22 @@ class HaRegionDmsCsvParserNewData(DmsFileParser):
         'sa26_usage_increase_new': 'SA26 usage increase',
         StandardPhenoMetricNames.entry_in_sa26_and_sa23_293t_cells: 'entry in SA26 and SA23 293T cells',
     }
+
+
+class Pb2RegionDmsCsvParser(DmsFileParser):
+    """Parser for DMS data for Influenza PB2 region"""
+    def __init__(self, filename: str):
+        super().__init__(filename, ',', DefaultGffFeaturesByRegion.PB2)
+
+    async def parse_and_insert(self):
+        await super().parse_and_insert()
+
+    required_column_name_map = {
+        StandardColumnNames.position_aa: 'site',
+        StandardColumnNames.ref_aa: 'wildtype',
+        StandardColumnNames.alt_aa: 'mutation',
+    }
+
+    data_column_name_map = {
+        StandardPhenoMetricNames.mutdiffsel: 'mutdiffsel'
+    }
