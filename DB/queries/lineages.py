@@ -229,14 +229,20 @@ async def get_abundance_summaries_by_simple_date(
             out_data[date] = [info]
     return out_data
 
-# wastewater-specific
-async def get_abundances_by_submitter(
-    submitter: str,
+    # wastewater-specific
+async def get_lineage_abundances_by_metadata(
     raw_query: str | None,
 ) -> List[LineageAbundanceWithSampleInfo]:
-    user_where_clause = ''
     if raw_query is not None:
-        parsed_query = parser.parse(raw_query) .replace('collection_date', 's.collection_start_date')
+        parsed_query = parser.parse(raw_query)
+        # Replace field references to use proper table aliases
+        parsed_query = parsed_query \
+            .replace("collection_start_date", "s.collection_start_date") \
+            .replace("collection_end_date", "s.collection_end_date") \
+            .replace("ww_site_id", "s.ww_site_id") \
+            .replace("ww_collected_by", "s.ww_collected_by") \
+            .replace("ww_viral_load", "s.ww_viral_load") \
+            .replace("ww_catchment_population", "s.ww_catchment_population")
         user_where_clause = f'and ({parsed_query})'
 
     async with get_async_session() as session:
@@ -246,6 +252,7 @@ async def get_abundances_by_submitter(
                 select
                     s.accession,
                     s.ww_collected_by,
+                    s.ww_site_id,
                     l.lineage_name,
                     sl.abundance,
                     s.ww_viral_load,
@@ -254,7 +261,6 @@ async def get_abundances_by_submitter(
                 from samples_lineages sl
                 inner join lineages l on l.id = sl.lineage_id
                 inner join samples s on s.id = sl.sample_id
-                where s.ww_collected_by = '{submitter}'
                 {user_where_clause}
                 '''
             )
@@ -265,11 +271,12 @@ async def get_abundances_by_submitter(
         info = LineageAbundanceWithSampleInfo(
             accession=r[0],
             ww_collected_by=r[1],
-            lineage_name=r[2],
-            abundance=r[3],
-            ww_viral_load=r[4],
-            ww_catchment_population=r[5],
-            collection_date=r[6]
+            ww_site_id=r[2],
+            lineage_name=r[3],
+            abundance=r[4],
+            ww_viral_load=r[5],
+            ww_catchment_population=r[6],
+            collection_start_date=r[7]
         )
         out_data.append(info)
     return out_data

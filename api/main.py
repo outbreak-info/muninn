@@ -242,19 +242,18 @@ async def get_average_lineage_abundance(q: str | None = None):
         raise HTTPException(status_code=400, detail=e.message)
 
 # wastewater-specific
-@app.get('/lineages/abundances/by/submitter', response_model=List[LineageAbundanceWithSampleInfo])
-async def get_lineage_abundances_by_submitter(
-    submitter: str,
+@app.get('/lineages/abundances/by/metadata', response_model=List[LineageAbundanceWithSampleInfo])
+async def get_lineage_abundances_by_metadata(
     q: str | None = None,
 ):
     """
-    :param submitter: The submitter of the samples to get abundances for
     :param q: A query to be run against samples. If provided, only samples matching the query will be included in the results
     """
     try:
-        return await DB.queries.lineages.get_abundances_by_submitter(submitter, q)
+        return await DB.queries.lineages.get_lineage_abundances_by_metadata(q)
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
+
 
 @app.get('/lineages/abundances/summary_stats', response_model=List[LineageAbundanceSummaryInfo])
 async def get_lineage_abundance_summary_stats(q: str | None = None):

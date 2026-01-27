@@ -262,11 +262,12 @@ class LineageAbundanceInfo(BaseModel):
 class LineageAbundanceWithSampleInfo(BaseModel):
     accession: str
     ww_collected_by: str
+    ww_site_id: str
     lineage_name: str
     abundance: float
     ww_viral_load: float
     ww_catchment_population: int
-    collection_date: date
+    collection_start_date: date
 
 # wastewater-specific
 class AverageLineageAbundanceInfo(BaseModel):
