@@ -27,14 +27,18 @@ class SC2SamplesParser(FileParser):
             .rename({old: new for new, old in column_name_map.items()})
             .select(set(column_name_map.keys()))
             .drop_nulls([pl.col(COLLECTION_DATE)])
-            .cast(
-                {
-                    StandardColumnNames.release_date: pl.Datetime,
-                    StandardColumnNames.creation_date: pl.Datetime
-                }
-            )
+            # .cast(
+            #     {
+            #         StandardColumnNames.release_date: pl.Datetime,
+            #         StandardColumnNames.creation_date: pl.Datetime
+            #     }
+            # )
             .with_columns(  # This column has some missing values that must be filled
-                pl.col(StandardColumnNames.bio_project).fill_null('NA')
+                pl.lit("NA").alias(StandardColumnNames.bio_project),
+                pl.lit("NA").alias(StandardColumnNames.organism),
+                pl.lit("1970-01-01T00:00:00Z").str.to_datetime(time_zone="UTC").alias(StandardColumnNames.release_date),
+                pl.lit("1970-01-01T00:00:00Z").str.to_datetime(time_zone="UTC").alias(StandardColumnNames.creation_date),
+                pl.lit(-1).cast(pl.Int64).alias(StandardColumnNames.bases)
             )
         )
         # unique by accession? No, leave it out for now to force errors on conflict.
@@ -163,43 +167,17 @@ class SC2SamplesParser(FileParser):
 """
 metadata
     fields used
-        Accession
-        Bioprojects
-        Biosample
-        Collection_Date
-        Geographic_Location
-        Host_OrganismName
-        Isolate_Name
-        Isolate_Source
-        Length
-        ReleaseDate
-        UpdateDate
-        Virus_OrganismName
-    fields unused
-        Geographic_Region
-        Host_TaxID
-        Nucleotide_SequenceHash
-        PurposeOfSampling
-        SraAccessions
-        Submitter_Country
-        USA_State
-        Virus_PangolinClassification
-        Virus_TaxId
+        ID
+        host
+        collection_date
+        location
 """
 
 column_name_map = {
-    StandardColumnNames.accession: 'Accession',
-    StandardColumnNames.bio_project: 'Bioprojects',
-    StandardColumnNames.bio_sample: 'Biosample',
-    StandardColumnNames.host: 'Host_OrganismName',
-    StandardColumnNames.isolate: 'Isolate_Name',
-    StandardColumnNames.organism: 'Virus_OrganismName',
-    StandardColumnNames.isolation_source: 'Isolate_Source',
-    COLLECTION_DATE: 'Collection_Date',
-    StandardColumnNames.release_date: 'ReleaseDate',
-    StandardColumnNames.creation_date: 'UpdateDate',  # todo: check on this mapping
-    GEO_LOCATION: 'Geographic_Location',
-    StandardColumnNames.bases: 'Length'
+    StandardColumnNames.accession: 'ID',
+    StandardColumnNames.host: 'host',
+    COLLECTION_DATE: 'collection_date',
+    GEO_LOCATION: 'location'
 }
 
 fields_not_present_not_null = {
@@ -229,5 +207,12 @@ fields_not_present_nullable = {
     StandardColumnNames.retraction_detected_date,
     StandardColumnNames.serotype,
     StandardColumnNames.avg_spot_length,
-
+    StandardColumnNames.bio_project,
+    StandardColumnNames.bio_sample,
+    StandardColumnNames.isolate,
+    StandardColumnNames.organism,
+    StandardColumnNames.isolation_source,
+    StandardColumnNames.release_date,
+    StandardColumnNames.creation_date,
+    StandardColumnNames.bases
 }

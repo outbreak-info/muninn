@@ -5,12 +5,13 @@ from datetime import datetime
 from typing import Any
 
 from DB.inserts.file_parsers.flumut_annotations_parser import FlumutTsvParser
-from DB.inserts.file_parsers.dms_parser import HaRegionDmsTsvParser, HaRegionDmsCsvParser, HaRegionDmsCsvParserNewData, Pb2RegionDmsCsvParser
+from DB.inserts.file_parsers.dms_parser import HaRegionDmsTsvParser, HaRegionDmsCsvParser, HaRegionDmsCsvParserNewData
 from DB.inserts.file_parsers.eve_parser import EveCsvParser
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.file_parsers.freyja_demixed_lineage_hierarchy_parser import FreyjaDemixedLineageHierarchyYamlParser
 from DB.inserts.file_parsers.freyja_demixed_parser import FreyjaDemixedParser
 from DB.inserts.file_parsers.genoflu_lineages_parser import GenofluLineagesParser
+from DB.inserts.file_parsers.sc2_lineages_parser import SC2LineagesParser
 from DB.inserts.file_parsers.samples_parser import SamplesCsvParser, SamplesTsvParser
 from DB.inserts.file_parsers.sarscov2_parsers.sc2_samples_parser import SC2SamplesParser
 from DB.inserts.file_parsers.variants_mutations_combined_parser import VariantsMutationsCombinedParser
@@ -23,15 +24,15 @@ def main():
         'samples_tsv': SamplesTsvParser,
         'eve_dms_csv': EveCsvParser,
         'genoflu_lineages': GenofluLineagesParser,
+        'sc2_lineages': SC2LineagesParser,
         'ha_dms_tsv': HaRegionDmsTsvParser,
         'ha_dms_csv': HaRegionDmsCsvParser,
-        'pb2_dms_csv': Pb2RegionDmsCsvParser,
         'freyja_demixed': FreyjaDemixedParser,
         'variants_mutations_combined_tsv': VariantsMutationsCombinedParser,
         'sc2_samples': SC2SamplesParser,
         'flumut_tsv': FlumutTsvParser,
         'dms_tmp_csv': HaRegionDmsCsvParserNewData,
-        'freyja_demixed_hierarchy_yaml': FreyjaDemixedLineageHierarchyYamlParser
+        'freyja_demixed_hierarchy_yaml': FreyjaDemixedLineageHierarchyYamlParser,
     }
 
     ## Parse and verify args ##
