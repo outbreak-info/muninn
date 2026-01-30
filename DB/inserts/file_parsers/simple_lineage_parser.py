@@ -1,7 +1,6 @@
 import csv
 import re
 from csv import DictReader
-from enum import Enum
 from typing import Set
 
 from sqlalchemy.exc import IntegrityError
@@ -12,20 +11,17 @@ from DB.inserts.lineages import find_or_insert_lineage
 from DB.inserts.samples import get_sample_id_by_accession
 from DB.inserts.samples_lineages import insert_sample_lineage
 from DB.models import LineageSystem, Lineage, SampleLineage
+from utils.constants import StandardColumnNames, StandardLineageSystemNames
 from utils.csv_helpers import get_value
 from utils.errors import NotFoundError
 
 
-# this is a trial for a different way of setting up the parser / ingestion files.
-# using class methods for everything feels like I'm working against the grain.
-# I think that using objects will make it a bit easier.
-# it'll allow me to have more setup logic and make it more natural to reuse the classes on multiple input files.
+class SimpleLineageParser(FileParser):
 
-class GenofluLineagesParser(FileParser):
-    lineage_system_name = 'usda_genoflu'
-
-    def __init__(self, filename: str):
+    def __init__(self, filename: str, delimiter: str, lineage_system_name: str):
         self.filename = filename
+        self.lineage_system_name = lineage_system_name
+        self.delimiter = delimiter
 
     async def parse_and_insert(self):
         debug_info = {
@@ -41,7 +37,7 @@ class GenofluLineagesParser(FileParser):
         # we only use a single lineage system, so just store it
         lineage_system_id = await find_or_insert_lineage_system(
             LineageSystem(
-                lineage_system_name=GenofluLineagesParser.lineage_system_name
+                lineage_system_name=self.lineage_system_name
             )
         )
 
@@ -49,13 +45,13 @@ class GenofluLineagesParser(FileParser):
         cache_lineage_ids = dict()
 
         with open(self.filename, 'r') as f:
-            reader = csv.DictReader(f, delimiter='\t')
+            reader = csv.DictReader(f, delimiter=self.delimiter)
             self._verify_header(reader)
 
             for row in reader:
                 try:
-                    sample_accession = get_value(row, ColNameMapping.sample_accession.value)
-                    genotype = get_value(row, ColNameMapping.genotype.value)
+                    sample_accession = get_value(row, self.column_name_map[StandardColumnNames.accession])
+                    genotype = get_value(row, self.column_name_map[StandardColumnNames.lineage_name])
                 except ValueError:
                     debug_info['skipped_malformed'] += 1
                     continue
@@ -101,7 +97,6 @@ class GenofluLineagesParser(FileParser):
 
                 accessions_seen.add(sample_accession)
 
-        # todo: logging
         print(debug_info)
 
     @classmethod
@@ -113,12 +108,36 @@ class GenofluLineagesParser(FileParser):
 
     @classmethod
     def get_required_column_set(cls) -> Set[str]:
-        return {cn.value for cn in {
-            ColNameMapping.sample_accession,
-            ColNameMapping.genotype
-        }}
+        return {v for v in cls.column_name_map.values()}
+
+    column_name_map = {
+        StandardColumnNames.lineage_name: StandardColumnNames.lineage_name,
+        StandardColumnNames.accession: StandardColumnNames.accession
+    }
 
 
-class ColNameMapping(Enum):
-    sample_accession = 'sample'
-    genotype = 'Genotype'
+class GenofluLineageParser(SimpleLineageParser):
+    def __init__(self, filename: str):
+        super().__init__(filename, '\t', StandardLineageSystemNames.genoflu)
+
+    async def parse_and_insert(self):
+        await super().parse_and_insert()
+
+    column_name_map = {
+        StandardColumnNames.lineage_name: 'Genotype',
+        StandardColumnNames.accession: 'sample'
+    }
+
+
+class Sc2LineageParser(SimpleLineageParser):
+    def __init__(self, filename: str):
+        # todo: a real name for sc2 lineage system
+        super().__init__(filename, ',', 'placeholder_name')
+
+    async def parse_and_insert(self):
+        await super().parse_and_insert()
+
+    column_name_map = {
+        StandardColumnNames.accession: 'taxon',
+        StandardColumnNames.lineage_name: 'lineage'
+    }

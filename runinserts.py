@@ -10,8 +10,8 @@ from DB.inserts.file_parsers.eve_parser import EveCsvParser
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.file_parsers.freyja_demixed_lineage_hierarchy_parser import FreyjaDemixedLineageHierarchyYamlParser
 from DB.inserts.file_parsers.freyja_demixed_parser import FreyjaDemixedParser
-from DB.inserts.file_parsers.genoflu_lineages_parser import GenofluLineagesParser
-from DB.inserts.file_parsers.sc2_lineages_parser import SC2LineagesParser
+from DB.inserts.file_parsers.simple_lineage_parser import GenofluLineageParser
+from DB.inserts.file_parsers.simple_lineage_parser import Sc2LineageParser
 from DB.inserts.file_parsers.samples_parser import SamplesCsvParser, SamplesTsvParser
 from DB.inserts.file_parsers.sarscov2_parsers.sc2_samples_parser import SC2SamplesParser
 from DB.inserts.file_parsers.variants_mutations_combined_parser import VariantsMutationsCombinedParser
@@ -23,8 +23,8 @@ def main():
         'samples_csv': SamplesCsvParser,
         'samples_tsv': SamplesTsvParser,
         'eve_dms_csv': EveCsvParser,
-        'genoflu_lineages': GenofluLineagesParser,
-        'sc2_lineages': SC2LineagesParser,
+        'genoflu_lineages': GenofluLineageParser,
+        'sc2_lineages': Sc2LineageParser,
         'ha_dms_tsv': HaRegionDmsTsvParser,
         'ha_dms_csv': HaRegionDmsCsvParser,
         'freyja_demixed': FreyjaDemixedParser,
