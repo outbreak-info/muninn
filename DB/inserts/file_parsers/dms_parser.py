@@ -142,8 +142,6 @@ class DmsFileParser(FileParser):
         StandardColumnNames.gff_feature: 'GFF_FEATURE',
     }
     data_column_name_map = {
-        'delta_bind': 'delta_bind',
-        'delta_expr': 'delta_expr',
         StandardPhenoMetricNames.species_sera_escape: 'species_sera_escape',
         StandardPhenoMetricNames.entry_in_293t_cells: 'entry_in_293t_cells',
         StandardPhenoMetricNames.stability: 'stability',
@@ -181,3 +179,15 @@ class HaRegionDmsCsvParserNewData(DmsFileParser):
         'sa26_usage_increase_new': 'SA26 usage increase',
         StandardPhenoMetricNames.entry_in_sa26_and_sa23_293t_cells: 'entry in SA26 and SA23 293T cells',
     }
+
+class Sc2DmsTsvParser(DmsFileParser):
+    def __init__(self, filename: str):
+        super().__init__(filename, '\t', "")
+
+    async def parse_and_insert(self):
+        await super().parse_and_insert()
+
+    data_column_name_map = {
+        'delta_bind': 'delta_bind',
+        'delta_expr': 'delta_expr',
+    }  

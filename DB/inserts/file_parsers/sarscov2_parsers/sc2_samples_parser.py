@@ -27,12 +27,6 @@ class SC2SamplesParser(FileParser):
             .rename({old: new for new, old in column_name_map.items()})
             .select(set(column_name_map.keys()))
             .drop_nulls([pl.col(COLLECTION_DATE)])
-            # .cast(
-            #     {
-            #         StandardColumnNames.release_date: pl.Datetime,
-            #         StandardColumnNames.creation_date: pl.Datetime
-            #     }
-            # )
             .with_columns(  # This column has some missing values that must be filled
                 pl.lit("NA").alias(StandardColumnNames.bio_project),
                 pl.lit("NA").alias(StandardColumnNames.organism),

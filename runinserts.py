@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any
 
 from DB.inserts.file_parsers.flumut_annotations_parser import FlumutTsvParser
-from DB.inserts.file_parsers.dms_parser import HaRegionDmsTsvParser, HaRegionDmsCsvParser, HaRegionDmsCsvParserNewData
+from DB.inserts.file_parsers.dms_parser import HaRegionDmsTsvParser, HaRegionDmsCsvParser, HaRegionDmsCsvParserNewData, Sc2DmsTsvParser
 from DB.inserts.file_parsers.eve_parser import EveCsvParser
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.file_parsers.freyja_demixed_lineage_hierarchy_parser import FreyjaDemixedLineageHierarchyYamlParser
@@ -27,6 +27,7 @@ def main():
         'sc2_lineages': Sc2LineageParser,
         'ha_dms_tsv': HaRegionDmsTsvParser,
         'ha_dms_csv': HaRegionDmsCsvParser,
+        'sc2_dms_tsv': Sc2DmsTsvParser,
         'freyja_demixed': FreyjaDemixedParser,
         'variants_mutations_combined_tsv': VariantsMutationsCombinedParser,
         'sc2_samples': SC2SamplesParser,
