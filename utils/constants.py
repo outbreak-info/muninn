@@ -225,6 +225,7 @@ class StandardPhenoMetricNames:
 
 class StandardLineageSystemNames:
     genoflu = 'usda_genoflu'
+    sc2 = 'PANGO'
 
 class ConstraintNames:
     uq_intra_host_variants_sample_allele_pair = 'uq_intra_host_variants_sample_allele_pair'

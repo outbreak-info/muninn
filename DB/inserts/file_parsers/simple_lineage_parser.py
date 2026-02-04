@@ -131,7 +131,7 @@ class GenofluLineageParser(SimpleLineageParser):
 
 class Sc2LineageParser(SimpleLineageParser):
     def __init__(self, filename: str):
-        super().__init__(filename, ',', 'PANGO')
+        super().__init__(filename, ',', StandardLineageSystemNames.sc2)
 
     async def parse_and_insert(self):
         await super().parse_and_insert()
