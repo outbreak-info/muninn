@@ -142,7 +142,7 @@ fi
   python3 -u runinserts.py "$FREYJA_DEMIXED_DIR" --format freyja_demixed
   python3 -u runinserts.py "$LINEAGE_FILE" --format sc2_lineages
   python3 -u runinserts.py "$DMS_FILE" --format sc2_dms_tsv
-  python3 -u runinserts.py "$EVE_FILE" --format eve_dms_csv
+  python3 -u runinserts.py "$EVE_FILE" --format sc2_eve_dms_csv
 } &>> "$LOG"
 
 # Copying over some debug files

@@ -5,15 +5,17 @@ from datetime import datetime
 from typing import Any
 
 from DB.inserts.file_parsers.flumut_annotations_parser import FlumutTsvParser
-from DB.inserts.file_parsers.dms_parser import HaRegionDmsTsvParser, HaRegionDmsCsvParser, HaRegionDmsCsvParserNewData, Sc2DmsTsvParser
+from DB.inserts.file_parsers.dms_parser import HaRegionDmsTsvParser, HaRegionDmsCsvParser, HaRegionDmsCsvParserNewData
 from DB.inserts.file_parsers.eve_parser import EveCsvParser
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.file_parsers.freyja_demixed_lineage_hierarchy_parser import FreyjaDemixedLineageHierarchyYamlParser
 from DB.inserts.file_parsers.freyja_demixed_parser import FreyjaDemixedParser
-from DB.inserts.file_parsers.simple_lineage_parser import GenofluLineageParser
-from DB.inserts.file_parsers.simple_lineage_parser import Sc2LineageParser
+from DB.inserts.file_parsers.simple_lineage_parser import GenofluLineageParser, Sc2LineageParser
 from DB.inserts.file_parsers.samples_parser import SamplesCsvParser, SamplesTsvParser
 from DB.inserts.file_parsers.sarscov2_parsers.sc2_samples_parser import SC2SamplesParser
+from DB.inserts.file_parsers.sarscov2_parsers.dms_parser import Sc2DmsTsvParser
+from DB.inserts.file_parsers.sarscov2_parsers.eve_parser import Sc2EveCsvParser
+
 from DB.inserts.file_parsers.variants_mutations_combined_parser import VariantsMutationsCombinedParser
 
 
@@ -23,6 +25,7 @@ def main():
         'samples_csv': SamplesCsvParser,
         'samples_tsv': SamplesTsvParser,
         'eve_dms_csv': EveCsvParser,
+        'sc2_eve_dms_csv': Sc2EveCsvParser,
         'genoflu_lineages': GenofluLineageParser,
         'sc2_lineages': Sc2LineageParser,
         'ha_dms_tsv': HaRegionDmsTsvParser,

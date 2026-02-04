@@ -35,6 +35,7 @@ class EveParser(FileParser):
                     position_aa = get_value(row, ColNameMapping.position_aa.value, transform=int_from_decimal_str)
                     ref_aa = get_value(row, ColNameMapping.ref_aa.value)
                     alt_aa = get_value(row, ColNameMapping.alt_aa.value)
+                    gff_feature = get_value(row, ColNameMapping.gff_feature.value)
                 except ValueError:
                     # If any of these are missing we have to skip the record
                     debug_info['skipped_aas_info_missing'] += 1
@@ -43,7 +44,7 @@ class EveParser(FileParser):
                 try:
                     amino_acid_ids: set[int]  = await find_equivalent_amino_acids(
                         AminoAcid(
-                            gff_feature=self.gff_feature,
+                            gff_feature=gff_feature,
                             position_aa=position_aa,
                             alt_aa=alt_aa,
                             ref_aa=ref_aa
@@ -95,7 +96,7 @@ class EveParser(FileParser):
 
     @classmethod
     def _get_data_cols(cls):
-        return {ColNameMapping.evescape, ColNameMapping.evescape_sigmoid}
+        return {ColNameMapping.evescape}
 
     @classmethod
     def get_required_column_set(cls) -> Set[str]:
@@ -103,6 +104,7 @@ class EveParser(FileParser):
             ColNameMapping.position_aa,
             ColNameMapping.ref_aa,
             ColNameMapping.alt_aa,
+            ColNameMapping.gff_feature,
         }}
         for dc in cls._get_data_cols():
             cols.add(dc.value)
@@ -111,12 +113,12 @@ class EveParser(FileParser):
 
 class ColNameMapping(Enum):
     position_aa = 'i'
-    ref_aa = 'wildtype'
-    alt_aa = 'mutant'
+    ref_aa = 'wt'
+    alt_aa = 'mut'
     evescape = 'evescape'
-    evescape_sigmoid = 'evescape_sigmoid'
+    gff_feature = 'GFF_FEATURE'
 
 
-class EveCsvParser(EveParser):
+class Sc2EveCsvParser(EveParser):
     def __init__(self, filename: str):
-        super().__init__(filename, ',', DefaultGffFeaturesByRegion.HA)
+        super().__init__(filename, ',', '')
