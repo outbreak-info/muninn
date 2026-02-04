@@ -77,6 +77,7 @@ SAMPLES_FILE="$ARCHIVE_DEST_DIR/metadata_sc2.tsv"
 VARIANTS_FILE="$ARCHIVE_DEST_DIR/variants_sc2.tsv"
 MUTATIONS_FILE="$ARCHIVE_DEST_DIR/mutations_sc2.tsv"
 FREYJA_DEMIXED_DIR="$ARCHIVE_DEST_DIR/demixed"
+FREYJA_DEMIXED_LINEAGE_HIERARCHY_FILE="$ARCHIVE_DEST_DIR/lineages.yml"
 
 if [[ $AUTO = true ]]; then
   # samples metadata
@@ -115,6 +116,7 @@ fi
   "$MUTATIONS_FILE" \
   --format variants_mutations_combined_tsv
   python3 -u runinserts.py "$FREYJA_DEMIXED_DIR" --format freyja_demixed
+  python3 -u runinserts.py "$FREYJA_DEMIXED_LINEAGE_HIERARCHY_FILE" --format freyja_demixed_hierarchy_yaml
 } &>> "$LOG"
 
 # Copying over some debug files
