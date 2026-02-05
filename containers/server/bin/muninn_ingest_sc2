@@ -134,7 +134,7 @@ fi
 
 {
   # ingest bjorn-general outputs
-  python3 -u runinserts.py "$SAMPLES_FILE" --format sc2_samples
+  python3 -u runinserts.py "$SAMPLES_FILE" --format sc2_sd_samples
   python3 -u runinserts.py \
   "$VARIANTS_FILE" \
   "$MUTATIONS_FILE" \
