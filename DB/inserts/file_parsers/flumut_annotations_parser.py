@@ -14,13 +14,15 @@ from DB.models import AminoAcid, Effect, Paper, Annotation, AnnotationPaper
 from utils.constants import DefaultGffFeaturesByRegion
 from utils.csv_helpers import parse_change_string
 from utils.errors import NotFoundError, DuplicateAnnotationError
+from utils.ha_numbering import convert_mature_h5_to_sequential
 
 # this is intended to parse the output of the following query:
 # select mm.mutation_name,
 #        me.effect_name,
 #        p.title,
 #        p.authors,
-#        p.year
+#        p.year,
+#        mk.id as marker_id
 # from markers_effects me
 # inner join papers p on p.id = me.paper_id
 # inner join markers mk on mk.id = me.marker_id
@@ -93,7 +95,7 @@ class FlumutParser(FileParser):
 
                     # adjust position for HA
                     if gff_feature == DefaultGffFeaturesByRegion.HA:
-                        position += 16
+                        position = convert_mature_h5_to_sequential(position)
 
                     amino_acid_ids = amino_acid_ids.union(
                         await find_equivalent_amino_acids(
