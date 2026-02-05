@@ -76,10 +76,13 @@ fi
 SAMPLES_FILE="$ARCHIVE_DEST_DIR/metadata_sc2.tsv"
 VARIANTS_FILE="$ARCHIVE_DEST_DIR/variants_sc2.tsv"
 MUTATIONS_FILE="$ARCHIVE_DEST_DIR/mutations_sc2.tsv"
+LINEAGE_FILE="$ARCHIVE_DEST_DIR/lineage_sc2.tsv"
+DMS_FILE="$ARCHIVE_DEST_DIR/dms_sc2.tsv"
+EVE_FILE="$ARCHIVE_DEST_DIR/eve_sc2.tsv"
 FREYJA_DEMIXED_DIR="$ARCHIVE_DEST_DIR/demixed"
 
 if [[ $AUTO = true ]]; then
-  # samples metadata
+  # Samples metadata
   TMP_FILE=$(find "$ARCHIVE_DEST_DIR" -type f -name "*metadata*.tsv" | head -1)
   if [[ -f "$TMP_FILE" ]]; then
     SAMPLES_FILE="$TMP_FILE"
@@ -105,16 +108,41 @@ if [[ $AUTO = true ]]; then
     FREYJA_DEMIXED_DIR="$TMP_DIR"
     echo "using demixed dir: $FREYJA_DEMIXED_DIR" >> "$LOG"
   fi
+
+  # Lineage file
+  TMP_FILE=$(find "$ARCHIVE_DEST_DIR" -type f -name "*lineage*.csv" | head -1)
+  if [[ -f "$TMP_FILE" ]]; then
+    LINEAGE_FILE="$TMP_FILE"
+    echo "using lineage file: $LINEAGE_FILE" >> "$LOG"
+  fi
+
+  # DMS file
+  TMP_FILE=$(find "$ARCHIVE_DEST_DIR" -type f -name "*dms*.tsv" | head -1)
+  if [[ -f "$TMP_FILE" ]]; then
+    DMS_FILE="$TMP_FILE"
+    echo "using DMS file: $DMS_FILE" >> "$LOG"
+  fi
+
+  # EVEsacpe file
+  TMP_FILE=$(find "$ARCHIVE_DEST_DIR" -type f -name "*evescape*.csv" | head -1)
+  if [[ -f "$TMP_FILE" ]]; then
+    EVE_FILE="$TMP_FILE"
+    echo "using EVEscape file: $EVE_FILE" >> "$LOG"
+  fi
 fi
+
 
 {
   # ingest bjorn-general outputs
-  python3 -u runinserts.py "$SAMPLES_FILE" --format sc2_samples
+  python3 -u runinserts.py "$SAMPLES_FILE" --format sc2_sd_samples
   python3 -u runinserts.py \
   "$VARIANTS_FILE" \
   "$MUTATIONS_FILE" \
   --format variants_mutations_combined_tsv
   python3 -u runinserts.py "$FREYJA_DEMIXED_DIR" --format freyja_demixed
+  python3 -u runinserts.py "$LINEAGE_FILE" --format sc2_lineages
+  python3 -u runinserts.py "$DMS_FILE" --format sc2_dms_tsv
+  python3 -u runinserts.py "$EVE_FILE" --format sc2_eve_dms_csv
 } &>> "$LOG"
 
 # Copying over some debug files
