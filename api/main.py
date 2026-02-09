@@ -10,6 +10,7 @@ import DB.queries.mutations
 import DB.queries.phenotype_metrics
 import DB.queries.prevalence
 import DB.queries.samples
+import DB.queries.wastewater
 import DB.queries.variants
 import DB.queries.variants_mutations
 import DB.queries.annotations
@@ -270,13 +271,13 @@ async def get_lineage_abundances_by_metadata(
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
-@app.get('/wastewater/samples/latest/sample', response_model=List[SampleInfo])
-async def get_latest_collection_date(q: str | None = None):
+@app.get('/wastewater/samples/latest', response_model=List[SampleInfo])
+async def get_latest_sample(q: str | None = None):
     """
     :param q: A query to be run against samples.
     """
     try:
-        return await DB.queries.samples.get_latest_collection_date(q)
+        return await DB.queries.samples.get_latest_sample(q)
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
