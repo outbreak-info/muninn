@@ -228,8 +228,7 @@ async def get_lineage_abundance_info(q: str | None = None):
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
-# wastewater-specific
-@app.get('/lineages/abundances/average_abundances', response_model=List[AverageLineageAbundanceInfo])
+@app.get('/wastewater/lineages/abundances/average_abundances', response_model=List[AverageLineageAbundanceInfo])
 async def get_average_lineage_abundance(q: str | None = None):
     """
     :param q: A query to be run against lineages and samples.
@@ -241,8 +240,7 @@ async def get_average_lineage_abundance(q: str | None = None):
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
-# wastewater-specific
-@app.get('/lineages/abundances/average_parent_abundances', response_model=List[AverageLineageAbundanceInfo])
+@app.get('/wastewater/lineages/abundances/average_parent_abundances', response_model=List[AverageLineageAbundanceInfo])
 async def get_average_parent_lineage_abundance(
     parent_lineage_name: str,
     date_bin: DateBinOpt = DateBinOpt.week,
@@ -260,8 +258,7 @@ async def get_average_parent_lineage_abundance(
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
-# wastewater-specific
-@app.get('/lineages/abundances/by/metadata', response_model=List[LineageAbundanceWithSampleInfo])
+@app.get('/wastewater/lineages/abundances/by/sample', response_model=List[LineageAbundanceWithSampleInfo])
 async def get_lineage_abundances_by_metadata(
     q: str | None = None,
 ):
@@ -273,6 +270,15 @@ async def get_lineage_abundances_by_metadata(
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
+@app.get('/wastewater/samples/latest/sample', response_model=List[SampleInfo])
+async def get_latest_collection_date(q: str | None = None):
+    """
+    :param q: A query to be run against samples.
+    """
+    try:
+        return await DB.queries.samples.get_latest_collection_date(q)
+    except ParsingError as e:
+        raise HTTPException(status_code=400, detail=e.message)
 
 @app.get('/lineages/abundances/summary_stats', response_model=List[LineageAbundanceSummaryInfo])
 async def get_lineage_abundance_summary_stats(q: str | None = None):
