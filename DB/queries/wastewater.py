@@ -210,7 +210,7 @@ async def get_averaged_parent_abundances_by_location(
                 week_end=r[4],  
                 lineage_name=r[5],
                 census_region=r[6],
-                admin1_name=r[7],
+                geo_admin1_name=r[7],
                 sample_count=r[8],
                 mean_viral_load=r[9],
                 mean_catchment_size=r[10],
@@ -365,7 +365,7 @@ async def get_averaged_lineage_abundances_by_location(
                 week_end=r[4],  
                 lineage_name=r[5],
                 census_region=r[6],
-                admin1_name=r[7],
+                geo_admin1_name=r[7],
                 sample_count=r[8],
                 mean_viral_load=r[9],
                 mean_catchment_size=r[10],
@@ -396,7 +396,7 @@ async def get_latest_sample(query: str | None) -> List[SampleInfo]:
     user_defined_query = None
     if query is not None:
         user_defined_query = parser.parse(query) \
-            .replace('state', 'geo_locations.admin1_name')
+            .replace('admin1_name', 'geo_locations.admin1_name')
     
     date_subquery = (
         select(

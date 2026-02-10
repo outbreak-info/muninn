@@ -9,7 +9,7 @@ from DB.models import LineageSystem, Lineage, Sample, SampleLineage, GeoLocation
 from DB.queries.date_count_helpers import get_extract_clause, get_group_by_clause, get_order_by_cause, \
     MID_COLLECTION_DATE_CALCULATION
 from api.models import LineageCountInfo, LineageAbundanceInfo, LineageInfo, LineageAbundanceSummaryInfo, \
-    MutationProfileInfo, AverageLineageAbundanceInfo, LineageAbundanceWithSampleInfo
+    MutationProfileInfo
 from parser.parser import parser
 from utils.constants import DateBinOpt, NtOrAa, NUCLEOTIDE_CHARACTERS, TableNames, StandardColumnNames, COLLECTION_DATE
 

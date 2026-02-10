@@ -237,7 +237,7 @@ async def get_average_lineage_abundance(q: str | None = None):
     date_bin = DateBinOpt.week
     geo_bin = "state"
     try:
-        return await DB.queries.lineages.get_averaged_lineage_abundances_by_location(date_bin, geo_bin, q)
+        return await DB.queries.wastewater.get_averaged_lineage_abundances_by_location(date_bin, geo_bin, q)
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
@@ -255,7 +255,7 @@ async def get_average_parent_lineage_abundance(
     :param q: A query to be run against lineages and samples.
     """
     try:
-        return await DB.queries.lineages.get_averaged_parent_abundances_by_location(parent_lineage_name, date_bin, geo_bin, q)
+        return await DB.queries.wastewater.get_averaged_parent_abundances_by_location(parent_lineage_name, date_bin, geo_bin, q)
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
@@ -267,7 +267,7 @@ async def get_lineage_abundances_by_metadata(
     :param q: A query to be run against samples and lineages.
     """
     try:
-        return await DB.queries.lineages.get_lineage_abundances_by_metadata(q)
+        return await DB.queries.wastewater.get_lineage_abundances_by_metadata(q)
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
@@ -277,7 +277,7 @@ async def get_latest_sample(q: str | None = None):
     :param q: A query to be run against samples.
     """
     try:
-        return await DB.queries.samples.get_latest_sample(q)
+        return await DB.queries.wastewater.get_latest_sample(q)
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
