@@ -1,3 +1,4 @@
+import calendar
 import datetime
 import re
 from datetime import date
@@ -46,7 +47,7 @@ def parse_collection_start_and_end(datestr: str) -> tuple[date, date]:
     month = 12
     if len(end_parts) >= 2:
         month = int(end_parts[1])
-    day = 31
+    day = calendar.monthrange(year, month)[1]
     if len(end_parts) == 3:
         day = int(end_parts[2])
     if len(end_parts) > 3:
@@ -70,6 +71,7 @@ def format_iso_week(year: int, week: int):
 
 def format_iso_month(year: int, month: int):
     return f'{year}-{str(month).rjust(2, "0")}'
+
 
 def format_iso_interval(start: datetime.datetime, end: datetime.datetime):
     return f'{start}/{end}'
