@@ -32,7 +32,7 @@ def parse_collection_start_and_end(datestr: str) -> tuple[date, date]:
     if len(start_parts) == 3:
         day = int(start_parts[2])
     if len(start_parts) > 3:
-        raise
+        raise ValueError(f'Unable to parse: {datestr}')
 
     d0 = date(year, month, day)
 
@@ -51,7 +51,7 @@ def parse_collection_start_and_end(datestr: str) -> tuple[date, date]:
     if len(end_parts) == 3:
         day = int(end_parts[2])
     if len(end_parts) > 3:
-        raise
+        raise ValueError(f'Unable to parse: {datestr}')
 
     d1 = date(year, month, day)
 
