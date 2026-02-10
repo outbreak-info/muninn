@@ -122,6 +122,7 @@ class SampleInfo(BaseModel):
     ww_catchment_population: int | None
     ww_site_id: str | None
     ww_collected_by: str | None
+    epiweek: int | None
 
     @classmethod
     def from_db_object(cls, dbo: 'Sample') -> 'SampleInfo':
@@ -171,6 +172,7 @@ class SampleInfo(BaseModel):
             ww_catchment_population=dbo.ww_catchment_population,
             ww_site_id=dbo.ww_site_id,
             ww_collected_by=dbo.ww_collected_by,
+            epiweek=None,  # Computed field, set to None by default
         )
 
 
@@ -278,7 +280,7 @@ class AverageLineageAbundanceInfo(BaseModel):
     week_end: date
     lineage_name: str
     census_region: str
-    state: str
+    geo_admin1_name: str
     sample_count: int
     mean_viral_load: float
     mean_catchment_size: float
