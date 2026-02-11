@@ -230,32 +230,24 @@ async def get_lineage_abundance_info(q: str | None = None):
         raise HTTPException(status_code=400, detail=e.message)
 
 @app.get('/wastewater/lineages/abundances/average_abundances', response_model=List[AverageLineageAbundanceInfo])
-async def get_average_lineage_abundance(q: str | None = None):
-    """
-    :param q: A query to be run against lineages and samples.
-    """
-    date_bin = DateBinOpt.week
-    geo_bin = "state"
-    try:
-        return await DB.queries.wastewater.get_averaged_lineage_abundances_by_location(date_bin, geo_bin, q)
-    except ParsingError as e:
-        raise HTTPException(status_code=400, detail=e.message)
-
-@app.get('/wastewater/lineages/abundances/average_parent_abundances', response_model=List[AverageLineageAbundanceInfo])
-async def get_average_parent_lineage_abundance(
-    parent_lineage_name: str,
+async def get_average_lineage_abundance(
+    lineage: str | None = None,
     date_bin: DateBinOpt = DateBinOpt.week,
     geo_bin: str = "state",
     q: str | None = None
 ):
     """
-    :param parent_lineage_name: The name of the parent lineage to get abundances for.
+    Get average lineage abundances by location.
+    
+    :param lineage: Optional lineage name. If it ends with '*', returns abundances for 
+                    the parent lineage and all its children aggregated together.
+                    If not provided or doesn't end with '*', returns abundances for all lineages.
     :param date_bin: The date bin to group by.
     :param geo_bin: The geographic bin to group by.
     :param q: A query to be run against lineages and samples.
     """
     try:
-        return await DB.queries.wastewater.get_averaged_parent_abundances_by_location(parent_lineage_name, date_bin, geo_bin, q)
+        return await DB.queries.wastewater.get_averaged_lineage_abundances_by_location(date_bin, geo_bin, q, lineage)
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
