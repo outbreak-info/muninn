@@ -106,6 +106,13 @@ if [[ $AUTO = true ]]; then
     FREYJA_DEMIXED_DIR="$TMP_DIR"
     echo "using demixed dir: $FREYJA_DEMIXED_DIR" >> "$LOG"
   fi
+
+  # Lineage hierarchy file
+  TMP_FILE=$(find "$ARCHIVE_DEST_DIR" -type f -name "*lineages*.yml" | head -1)
+  if [[ -f "$TMP_FILE" ]]; then
+    FREYJA_DEMIXED_LINEAGE_HIERARCHY_FILE="$TMP_FILE"
+    echo "using lineage hierarchy file: $FREYJA_DEMIXED_LINEAGE_HIERARCHY_FILE" >> "$LOG"
+  fi
 fi
 
 {
