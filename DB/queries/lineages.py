@@ -229,7 +229,6 @@ async def get_abundance_summaries_by_simple_date(
             out_data[date] = [info]
     return out_data
 
-
 async def get_abundance_summaries_by_collection_date(
     date_bin: DateBinOpt,
     days: int,

@@ -39,6 +39,14 @@ def int_from_decimal_str(s: str) -> int:
 
 
 def clean_up_gff_feature(gff_feature: str) -> str:
+    """
+    Strip extra stuff off of gff features
+    HA:cds-XAJ25415.1  -->  XAJ25415.1
+    cds-XAJ25415.1     -->  XAJ25415.1
+    HA:XAJ25415.1      -->  XAJ25415.1
+    :param gff_feature: gff feature that may have region and "cds" attached
+    :return: just gff feature name with nothing else.
+    """
     out = gff_feature
     if ':' in gff_feature:
         out = gff_feature.split(':')[1]
