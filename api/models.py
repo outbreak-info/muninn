@@ -263,11 +263,12 @@ class LineageAbundanceInfo(BaseModel):
 # wastewater-specific
 class LineageAbundanceWithSampleInfo(BaseModel):
     accession: str
+    admin1_name: str
     ww_collected_by: str
     ww_site_id: str
     lineage_name: str
     abundance: float
-    ww_viral_load: float
+    ww_viral_load: float | None
     ww_catchment_population: int
     collection_start_date: date
 
@@ -282,7 +283,7 @@ class AverageLineageAbundanceInfo(BaseModel):
     census_region: str
     geo_admin1_name: str
     sample_count: int
-    mean_viral_load: float
+    mean_viral_load: float | None
     mean_catchment_size: float
     mean_lineage_prevalence: float
 

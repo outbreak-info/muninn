@@ -21,8 +21,11 @@ async def get_lineage_abundances_by_metadata(
             .replace("ww_site_id", "s.ww_site_id") \
             .replace("ww_collected_by", "s.ww_collected_by") \
             .replace("ww_viral_load", "s.ww_viral_load") \
-            .replace("ww_catchment_population", "s.ww_catchment_population")
+            .replace("ww_catchment_population", "s.ww_catchment_population") \
+            .replace("admin1_name", "gl.admin1_name")
         user_where_clause = f'and ({parsed_query})'
+    else:
+        user_where_clause = ''
 
     async with get_async_session() as session:
         res = await session.execute(
@@ -30,6 +33,7 @@ async def get_lineage_abundances_by_metadata(
                 f'''
                 select
                     s.accession,
+                    gl.admin1_name,
                     s.ww_collected_by,
                     s.ww_site_id,
                     l.lineage_name,
@@ -40,6 +44,7 @@ async def get_lineage_abundances_by_metadata(
                 from samples_lineages sl
                 inner join lineages l on l.id = sl.lineage_id
                 inner join samples s on s.id = sl.sample_id
+                inner join geo_locations gl on gl.id = s.geo_location_id
                 {user_where_clause}
                 '''
             )
@@ -49,13 +54,14 @@ async def get_lineage_abundances_by_metadata(
     for r in res:
         info = LineageAbundanceWithSampleInfo(
             accession=r[0],
-            ww_collected_by=r[1],
-            ww_site_id=r[2],
-            lineage_name=r[3],
-            abundance=r[4],
-            ww_viral_load=r[5],
-            ww_catchment_population=r[6],
-            collection_start_date=r[7]
+            admin1_name=r[1],
+            ww_collected_by=r[2],
+            ww_site_id=r[3],
+            lineage_name=r[4],
+            abundance=r[5],
+            ww_viral_load=r[6],
+            ww_catchment_population=r[7],
+            collection_start_date=r[8],
         )
         out_data.append(info)
     return out_data
