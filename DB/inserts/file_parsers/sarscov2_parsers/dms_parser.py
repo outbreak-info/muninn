@@ -6,8 +6,7 @@ from DB.inserts.phenotype_measurement_results import insert_pheno_measurement_re
 from DB.inserts.phenotype_metrics import find_or_insert_metric
 from DB.models import AminoAcid, PhenotypeMetric, PhenotypeMetricValues
 from DB.inserts.amino_acids import find_equivalent_amino_acids
-from utils.constants import PhenotypeMetricAssayTypes, DefaultGffFeaturesByRegion, StandardColumnNames, \
-    StandardPhenoMetricNames
+from utils.constants import PhenotypeMetricAssayTypes, StandardColumnNames
 from utils.csv_helpers import get_value, clean_up_gff_feature
 from utils.errors import NotFoundError
 
@@ -29,9 +28,9 @@ class DmsFileParser(FileParser):
         }
         # format: metric_name -> id
         cache_metric_ids = dict()
-        # format: (position_aa, ref_aa, alt_aa) -> {amino acid ids} set
+        # format: (position_aa, ref_aa, alt_aa, gff_feature) -> {amino acid ids} set
         cache_amino_sub_ids = dict()
-        # format: (position_aa, ref_aa, alt_aa)
+        # format: (position_aa, ref_aa, alt_aa, gff_feature)
         cache_amino_subs_not_found = set()
         with open(self.filename, 'r') as f:
             reader = DictReader(f, delimiter=self.delimiter)
@@ -47,31 +46,32 @@ class DmsFileParser(FileParser):
                     )
                     ref_aa = get_value(row, self.required_column_name_map[StandardColumnNames.ref_aa])
                     alt_aa = get_value(row, self.required_column_name_map[StandardColumnNames.alt_aa])
+                    gff_feature = get_value(row, self.required_column_name_map[StandardColumnNames.gff_feature])
                 except ValueError:
                     debug_info['skipped_aas_info_missing'] += 1
                     continue
 
-                if (position_aa, ref_aa, alt_aa) in cache_amino_subs_not_found:
+                if (position_aa, ref_aa, alt_aa, gff_feature) in cache_amino_subs_not_found:
                     debug_info['skipped_aas_not_found'] += 1
                     continue
                 try:
-                    amino_acid_ids = cache_amino_sub_ids[(position_aa, ref_aa, alt_aa)]
+                    amino_acid_ids = cache_amino_sub_ids[(position_aa, ref_aa, alt_aa, gff_feature)]
                 except KeyError:
                     try:
                         amino_acid_ids = await find_equivalent_amino_acids(
                             AminoAcid(
-                                gff_feature=self.gff_feature,
+                                gff_feature=gff_feature,
                                 position_aa=position_aa,
                                 alt_aa=alt_aa,
                                 ref_aa=ref_aa
                             )
                         )
-                        cache_amino_sub_ids[(position_aa, ref_aa, alt_aa)] = amino_acid_ids
+                        cache_amino_sub_ids[(position_aa, ref_aa, alt_aa, gff_feature)] = amino_acid_ids
                     except NotFoundError:
                         # if the aas doesn't already exist, skip the record.
                         # we don't want to create orphaned aas entries just for the dms data
                         debug_info['skipped_aas_not_found'] += 1
-                        cache_amino_subs_not_found.add((position_aa, ref_aa, alt_aa))
+                        cache_amino_subs_not_found.add((position_aa, ref_aa, alt_aa, gff_feature))
                         continue
 
                 for canonical_name, input_name in present_data_cols.items():
@@ -135,64 +135,20 @@ class DmsFileParser(FileParser):
 
     # these can be overridden as required in subclasses
     required_column_name_map = {
-        StandardColumnNames.position_aa: 'sequential_site',
+        StandardColumnNames.position_aa: 'position',
         StandardColumnNames.ref_aa: 'wildtype',
         StandardColumnNames.alt_aa: 'mutant',
-    }
-    data_column_name_map = {
-        StandardPhenoMetricNames.species_sera_escape: 'species sera escape',
-        StandardPhenoMetricNames.entry_in_293t_cells: 'entry in 293T cells',
-        StandardPhenoMetricNames.stability: 'stability',
-        StandardPhenoMetricNames.sa26_usage_increase: 'SA26 usage increase',
-        StandardPhenoMetricNames.mature_h5_site: 'mature_H5_site',
-        StandardPhenoMetricNames.ferret_sera_escape: 'ferret sera escape',
-        StandardPhenoMetricNames.mouse_sera_escape: 'mouse sera escape',
+        StandardColumnNames.gff_feature: 'GFF_FEATURE',
     }
 
-
-class HaRegionDmsTsvParser(DmsFileParser):
+class Sc2DmsTsvParser(DmsFileParser):
     def __init__(self, filename: str):
-        super().__init__(filename, '\t', DefaultGffFeaturesByRegion.HA)
-
-    async def parse_and_insert(self):
-        await super().parse_and_insert()
-
-
-class HaRegionDmsCsvParser(DmsFileParser):
-    def __init__(self, filename: str):
-        super().__init__(filename, ',', DefaultGffFeaturesByRegion.HA)
-
-    async def parse_and_insert(self):
-        await super().parse_and_insert()
-
-
-class HaRegionDmsCsvParserNewData(DmsFileParser):
-    def __init__(self, filename: str):
-        super().__init__(filename, ',', DefaultGffFeaturesByRegion.HA)
+        super().__init__(filename, '\t', '')
 
     async def parse_and_insert(self):
         await super().parse_and_insert()
 
     data_column_name_map = {
-        'sa26_usage_increase_new': 'SA26 usage increase',
-        StandardPhenoMetricNames.entry_in_sa26_and_sa23_293t_cells: 'entry in SA26 and SA23 293T cells',
-    }
-
-
-class Pb2RegionDmsCsvParser(DmsFileParser):
-    """Parser for DMS data for Influenza PB2 region"""
-    def __init__(self, filename: str):
-        super().__init__(filename, ',', DefaultGffFeaturesByRegion.PB2)
-
-    async def parse_and_insert(self):
-        await super().parse_and_insert()
-
-    required_column_name_map = {
-        StandardColumnNames.position_aa: 'site',
-        StandardColumnNames.ref_aa: 'wildtype',
-        StandardColumnNames.alt_aa: 'mutation',
-    }
-
-    data_column_name_map = {
-        StandardPhenoMetricNames.mutdiffsel: 'mutdiffsel'
-    }
+        'delta_bind': 'delta_bind',
+        'delta_expr': 'delta_expr',
+    }  

@@ -21,7 +21,7 @@ Database system to store mutation and variant data for avian influenza.
    
     export MUNINN_SERVER_PORT="8000"
     
-    # this will be mounted to the server container as /flu/data
+    # this will be mounted to the server container as /home/muninn/data
     export MUNINN_SERVER_DATA_INPUT_DIR="/dev/null"
     
     # this controls which config file is applied to postgres
@@ -30,7 +30,7 @@ Database system to store mutation and variant data for avian influenza.
     # this will be used as a prefix to the container names
     export MUNINN_INSTANCE_NAME="flu_db"
     ```
-    - Change the value for `MUNINN_DB_SERVER_DATA_INPUT_DIR` to allow the server to read input data from a host directory.
+    - Change the value for `MUNINN_SERVER_DATA_INPUT_DIR` to allow the server to read input data from a host directory.
     - If the server and DB are running on the same host, they will talk through the docker network. 
     In that case, `MUNINN_DB_PORT_FOR_SERVER` should be 5432, regardless of the value of `MUNINN_DB_PORT`, 
     and `MUNINN_DB_HOST` should be `"postgres"`, which is the name of the database service within docker.
@@ -42,14 +42,14 @@ Database system to store mutation and variant data for avian influenza.
     4. Use `docker logs flu_db_server` to see server logs.
 4. Update the database schema: `docker exec -d flu_db_server muninn_schema_update`
 5. Load or update data:  `docker exec -d flu_db_server muninn_ingest_all --auto --archive_in <name of archive>`
-    1. Input data must be placed in `MUNINN_DB_SERVER_DATA_INPUT_DIR` on the host machine, in either `.zip` or `.tar.gz` format.
+    1. Input data must be placed in `MUNINN_SERVER_DATA_INPUT_DIR` on the host machine, in either `.zip` or `.tar.gz` format.
            For details read ingestion script: `containers/server/bin/muninn_ingest_all`
     2. This process will take 15-45 minutes to finish, but existing records will be updated in-place, and the webserver
        will remain available.
     3. For information on logs see Troubleshooting Information > Webserver
     4. The `--auto` flag is optional, but this mode avoids the need to adhere to specific file and dir names within the input archive.
-6. Load or update test data: `docker exec -d flu_db_server muninn_ingest_playset ${MUNINN_DB_SERVER_DATA_INPUT_DIR}/<archive name>`
-    1. Input data must be placed in `MUNINN_DB_SERVER_DATA_INPUT_DIR` on the host machine.
+6. Load or update test data: `docker exec -d flu_db_server muninn_ingest_playset ${MUNINN_SERVER_DATA_INPUT_DIR}/<archive name>`
+    1. Input data must be placed in `MUNINN_SERVER_DATA_INPUT_DIR` on the host machine.
        For details read ingestion script: `containers/server/bin/muninn_ingest_playset`
     2. This process will take a few minutes and data will persist in a docker volume. Please see `docker-compose.yml` for details.
     3. For information on logs see Troubleshooting Information > Webserver

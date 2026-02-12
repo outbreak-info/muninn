@@ -65,7 +65,7 @@ class SamplesParser(FileParser):
                         ColNameMapping.collection_date.value,
                         allow_none=False
                     )
-                    if collection_date != 'missing':
+                    if collection_date not in {'', 'missing'}:
                         collection_start_date, collection_end_date = parse_collection_start_and_end(collection_date)
 
                     # parse retraction date

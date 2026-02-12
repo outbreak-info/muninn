@@ -42,6 +42,7 @@ class PhenotypeMetricAssayTypes:
 
 class DefaultGffFeaturesByRegion:
     HA = 'XAJ25415.1'
+    PB2 = 'XAJ25426.1'
 
 
 class LineageSystemNames:
@@ -225,7 +226,11 @@ class StandardPhenoMetricNames:
     ferret_sera_escape = 'ferret_sera_escape'
     mouse_sera_escape = 'mouse_sera_escape'
     entry_in_sa26_and_sa23_293t_cells = 'entry_in_sa26_and_sa23_293t_cells'
+    mutdiffsel = 'mutdiffsel'
 
+class StandardLineageSystemNames:
+    genoflu = 'usda_genoflu'
+    sc2 = 'PANGO'
 
 class ConstraintNames:
     uq_intra_host_variants_sample_allele_pair = 'uq_intra_host_variants_sample_allele_pair'
