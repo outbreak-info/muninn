@@ -54,6 +54,8 @@ class VariantsMutationsCombinedParser(FileParser):
         )
 
     async def parse_and_insert(self):
+        print(f'{self._get_timestamp()} clean up tmp tables (from previous run if any)')
+        await self._clean_up_tmp_tables()
         print(f'{self._get_timestamp()} read mutations')
         await self._read_mutations_input()
         print(f'{self._get_timestamp()} read variants')
