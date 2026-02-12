@@ -93,15 +93,17 @@ async def get_averaged_lineage_abundances_by_location(
         
 
     match geo_bin:
-        case 'state':
+        case 'admin1_name':
             group_by_geo_level = 'admin1_name, census_region'
             lp_group_by = 'lp.admin1_name, lp.census_region'
+            lp_join_on = 'and lp.admin1_name = tp.admin1_name and lp.census_region = tp.census_region'
 
         case 'census_region':
             group_by_geo_level =  'census_region'
             lp_group_by = 'lp.census_region'
             if user_where_clause.contains('admin1_name'):
-                raise ValueError('state cannot be used in the raw_query when geo_bin is "census_region"')
+                raise ValueError('admin1_name cannot be used in the raw_query when geo_bin is "census_region"')
+            lp_join_on = 'and lp.census_region = tp.census_region'
         case _:
             raise ValueError(f'illegal value for geo_bin: {repr(geo_bin)}')
     
@@ -166,7 +168,7 @@ async def get_averaged_lineage_abundances_by_location(
                     avg(ww_viral_load) as mean_viral_load,
                     avg(ww_catchment_population) as mean_catchment_size
                 from all_base_data
-                group by year, week, week_start, week_end, admin1_name, census_region
+                group by year, week, week_start, week_end, {group_by_geo_level}
             ),
             lineage_prevalences as (
                 select
@@ -180,7 +182,7 @@ async def get_averaged_lineage_abundances_by_location(
                     sum(pop_weighted_prevalence) as lineage_prevalence,
                     count(*) as sample_count
                 from filtered_base_data
-                group by year, week, week_start, week_end, admin1_name, census_region
+                group by year, week, week_start, week_end, {lp_group_by}
             ),
             result_data as (
                 select
@@ -202,8 +204,7 @@ async def get_averaged_lineage_abundances_by_location(
                     and lp.week = tp.week
                     and lp.week_start = tp.week_start
                     and lp.week_end = tp.week_end
-                    and lp.admin1_name = tp.admin1_name
-                    and lp.census_region = tp.census_region
+                    {lp_join_on}
             )
             select *
             from result_data
@@ -248,7 +249,7 @@ async def get_averaged_lineage_abundances_by_location(
                     avg(ww_viral_load) as mean_viral_load,
                     avg(ww_catchment_population) as mean_catchment_size
                 from base_data
-                group by year, week, week_start, week_end, admin1_name, census_region
+                group by year, week, week_start, week_end, {group_by_geo_level}
             ),
             lineage_prevalences as (
                 select
@@ -262,7 +263,7 @@ async def get_averaged_lineage_abundances_by_location(
                     sum(pop_weighted_prevalence) as lineage_prevalence,
                     count(*) as sample_count
                 from base_data
-                group by year, week, week_start, week_end, admin1_name, census_region, lineage_name
+                group by year, week, week_start, week_end, {lp_group_by}, lineage_name
             ),
             result_data as (
                 select
@@ -284,8 +285,7 @@ async def get_averaged_lineage_abundances_by_location(
                 and lp.week = tp.week
                 and lp.week_start = tp.week_start
                 and lp.week_end = tp.week_end
-                and lp.admin1_name = tp.admin1_name
-                and lp.census_region = tp.census_region
+                {lp_join_on}
             )
             select *
             from result_data
@@ -296,7 +296,7 @@ async def get_averaged_lineage_abundances_by_location(
         res = await session.execute(text(query))
 
     out_data = list()
-    if geo_bin == 'state':
+    if geo_bin == 'admin1_name':
         for r in res:
             info = AverageLineageAbundanceInfo(
                 year=r[0],
@@ -313,21 +313,21 @@ async def get_averaged_lineage_abundances_by_location(
                 mean_lineage_prevalence=r[11]
             )
             out_data.append(info)
-    # elif geo_bin == 'census_region':
-    #     for r in res:
-    #         info = AverageLineageAbundanceInfo(
-    #             year=r[0],
-    #             chunk=r[1],
-    #             epiweek=r[2],
-    #             week_start=r[3],
-    #             week_end=r[4],
-    #             lineage_name=r[5],
-    #             state=None,
-    #             census_region=r[6],
-    #             sample_count=r[7],
-    #             mean_lineage_prevalence=r[8]
-    #         )
-    #         out_data.append(info)
+    elif geo_bin == 'census_region':
+        for r in res:
+            info = AverageLineageAbundanceInfo(
+                year=r[0],
+                chunk=r[1],
+                epiweek=r[2],
+                week_start=r[3],
+                week_end=r[4],
+                lineage_name=r[5],
+                state=None,
+                census_region=r[6],
+                sample_count=r[7],
+                mean_lineage_prevalence=r[8]
+            )
+            out_data.append(info)
  
     return out_data
 

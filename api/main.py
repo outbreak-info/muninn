@@ -233,7 +233,7 @@ async def get_lineage_abundance_info(q: str | None = None):
 async def get_average_lineage_abundance(
     lineage: str | None = None,
     date_bin: DateBinOpt = DateBinOpt.week,
-    geo_bin: str = "state",
+    geo_bin: str = "admin1_name",
     q: str | None = None
 ):
     """
