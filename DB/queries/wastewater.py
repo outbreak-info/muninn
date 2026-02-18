@@ -79,14 +79,6 @@ async def get_averaged_lineage_abundances_by_location(
     if raw_query is not None:
         user_where_clause = f'where ({parser.parse(raw_query)})'
 
-        print(f'user_where_clause: {user_where_clause}')
-        if 'epiweek' in user_where_clause:
-            # find epiweek string, replace with year, chunk
-            epiweek_str = re.search(r'epiweek\s*=\s*(\d+)', user_where_clause).group(1)
-            year = int(epiweek_str[0:4])
-            chunk = int(epiweek_str[4:6])
-            user_where_clause = user_where_clause.replace(f'epiweek = {epiweek_str}', f'year = {year} and chunk = {chunk}')
-
     is_wildcard = lineage_name is not None and lineage_name.endswith('*')
     parent_lineage_name = lineage_name.rstrip('*') if is_wildcard else None
 
@@ -107,9 +99,7 @@ async def get_averaged_lineage_abundances_by_location(
         case _:
             raise ValueError(f'illegal value for geo_bin: {repr(geo_bin)}')
     
-    # Build the query based on whether we're filtering by parent lineage (wildcard)
     if is_wildcard:
-        # Use parent lineage logic with lineage_filter CTE
         query = f'''
             with lineage_filter as (
                 select l.id as lineage_id
@@ -186,6 +176,7 @@ async def get_averaged_lineage_abundances_by_location(
                 select
                     lp.year,
                     lp.chunk,
+                    (lp.year || LPAD(lp.chunk::text, 2, '0'))::int as epiweek,
                     lp.week_start,
                     lp.week_end,
                     lp.lineage_name as lineage,
@@ -264,6 +255,7 @@ async def get_averaged_lineage_abundances_by_location(
                 select
                     lp.year,
                     lp.chunk,
+                    (lp.year || LPAD(lp.chunk::text, 2, '0'))::int as epiweek,
                     lp.week_start,
                     lp.week_end,
                     lp.lineage_name as lineage,
@@ -296,16 +288,16 @@ async def get_averaged_lineage_abundances_by_location(
             info = AverageLineageAbundanceInfo(
                 year=r[0],
                 chunk=r[1],
-                epiweek=epiweek,
-                week_start=r[2],
-                week_end=r[3],  
-                lineage_name=r[4],
-                census_region=r[5],
-                geo_admin1_name=r[6],
-                sample_count=r[7],
-                mean_viral_load=r[8],
-                mean_catchment_size=r[9],
-                mean_lineage_prevalence=r[10]
+                epiweek=r[2],
+                week_start=r[3],
+                week_end=r[4],  
+                lineage_name=r[5],
+                census_region=r[6],
+                geo_admin1_name=r[7],
+                sample_count=r[8],
+                mean_viral_load=r[9],
+                mean_catchment_size=r[10],
+                mean_lineage_prevalence=r[11]
             )
             out_data.append(info)
     elif geo_bin == 'census_region':
@@ -314,16 +306,16 @@ async def get_averaged_lineage_abundances_by_location(
             info = AverageLineageAbundanceInfo(
                 year=r[0],
                 chunk=r[1],
-                epiweek=epiweek,
-                week_start=r[2],
-                week_end=r[3],
-                lineage_name=r[4],
-                census_region=r[5],
+                epiweek=r[2],
+                week_start=r[3],
+                week_end=r[4],
+                lineage_name=r[5],
+                census_region=r[6],
                 geo_admin1_name=None,
-                sample_count=r[6],
-                mean_viral_load=r[7],
-                mean_catchment_size=r[8],
-                mean_lineage_prevalence=r[9]
+                sample_count=r[7],
+                mean_viral_load=r[8],
+                mean_catchment_size=r[9],
+                mean_lineage_prevalence=r[10]
             )
             out_data.append(info)
  
