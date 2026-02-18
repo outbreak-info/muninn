@@ -2,7 +2,6 @@ import csv
 from datetime import datetime
 from os import path
 from typing import Set
-import polars as pl
 
 from sqlalchemy.sql.expression import text
 
@@ -53,8 +52,6 @@ class VariantsMutationsCombinedParser(FileParser):
         )
 
     async def parse_and_insert(self):
-        print(f'{self._get_timestamp()} clean up tmp tables (from previous run if any)')
-        await self._clean_up_tmp_tables()
         print(f'{self._get_timestamp()} read mutations')
         await self._read_mutations_input()
         print(f'{self._get_timestamp()} read variants')
@@ -633,130 +630,3 @@ class VariantsMutationsCombinedParser(FileParser):
         StandardColumnNames.alt_aa: 'alt_aa',
         StandardColumnNames.position_aa: 'pos_aa',
     }
-
-
-class VariantsMutationsCombinedChunkedParser(VariantsMutationsCombinedParser):
-    CHUNK_SIZE = 50_000
-
-    async def parse_and_insert(self):
-        debug_info = {
-            'alleles_added': 'unset',
-            'timestamp_alleles_added': 'unset',
-            'amino_acids_added': 'unset',
-            'timestamp_amino_acids_added': 'unset',
-            'translations_added': 'unset',
-            'timestamp_translations_added': 'unset',
-            'variant_chunk_timestamps': [],
-            'mutation_chunk_timestamps': [],
-            'variant_chunk_sizes': [],
-            'mutation_chunk_sizes': []
-        }
-        # 1) read and cleanup the variants and mutations as before
-        variants: pl.LazyFrame = await self._scan_variants()
-        mutations: pl.LazyFrame = await self._scan_mutations()
-
-        # 2) Get all the samples + accessions out of the DB
-        existing_samples: pl.DataFrame = await get_samples_accession_and_id_as_pl_df()
-
-        # 2.1) Filter to existing samples as before
-        variants, mutations = await VariantsMutationsCombinedParser._get_vars_and_muts_for_existing_samples(
-            variants,
-            mutations,
-            existing_samples
-        )
-
-        # 3) Do alleles as before
-        debug_info['alleles_added'] = await VariantsMutationsCombinedParser._insert_new_alleles(
-            variants,
-            mutations
-        )
-        debug_info['timestamp_alleles_added'] = datetime.now().isoformat()
-        print(f'alleles added: {debug_info}')
-
-        # 4) do aminos as before
-        debug_info['amino_acids_added'] = await VariantsMutationsCombinedParser._insert_new_amino_acids(
-            variants,
-            mutations
-        )
-        debug_info['timestamp_amino_acids_added'] = datetime.now().isoformat()
-        print(f'amino acids added: {debug_info}')
-
-        # 5) Lazy-join alleles and amino acids back into vars and muts
-        variants, mutations = await (
-            VariantsMutationsCombinedParser
-            ._join_alleles_and_amino_subs_into_vars_and_muts(variants, mutations)
-        )
-
-        # 6) do translations as before
-        debug_info['translations_added'] = await VariantsMutationsCombinedParser._insert_new_translations(
-            variants,
-            mutations
-        )
-        debug_info['timestamp_translations_added'] = datetime.now().isoformat()
-        print(f'translations added: {debug_info}')
-
-        # 7) Lazy-join translations back into the variants and mutations frames
-        variants, mutations = await(
-            VariantsMutationsCombinedParser._join_translation_ids_into_vars_and_muts(variants, mutations)
-        )
-
-        # 8) Iterate through sample accessions in chunks, and process connected variants and mutations.
-        # 8.1) Get chunk of samples, and for each chunk...
-        n_samples = existing_samples.select(pl.len()).item()
-        print(
-            f'variants and mutations will be processed in '
-            f'{ceil(n_samples / VariantsMutationsCombinedChunkedParser.CHUNK_SIZE)} chunks'
-        )
-        chunk_start = 0
-        while chunk_start < n_samples:
-            chunk_sample_ids = (
-                existing_samples
-                .slice(chunk_start, VariantsMutationsCombinedChunkedParser.CHUNK_SIZE)
-                .select(pl.col(StandardColumnNames.sample_id))
-            )
-            chunk_start += VariantsMutationsCombinedChunkedParser.CHUNK_SIZE
-
-            # 8.2) Filter to connected variants
-            # 8.3) Upsert variants
-            debug_info['variant_chunk_sizes'].append(
-                await VariantsMutationsCombinedChunkedParser._upsert_variants_chunk(variants, chunk_sample_ids)
-            )
-            debug_info['variant_chunk_timestamps'].append(datetime.now().isoformat())
-
-            # 8.4) Filter to connected mutations
-            # 8.5) upsert mutations
-            debug_info['mutation_chunk_sizes'].append(
-                await VariantsMutationsCombinedChunkedParser._upsert_mutations_chunk(mutations, chunk_sample_ids)
-            )
-            debug_info['mutation_chunk_timestamps'].append(datetime.now().isoformat())
-            print(f'Chunk finished: {debug_info}')
-
-    @staticmethod
-    async def _upsert_variants_chunk(variants: pl.LazyFrame, chunk_sample_ids: pl.DataFrame) -> int:
-        # 8.2) Filter to connected variants
-        chunk_variants: pl.DataFrame = (
-            variants.join(
-                chunk_sample_ids.lazy(),
-                on=pl.col(StandardColumnNames.sample_id),
-                how='inner'
-            )
-        ).collect(engine='streaming')
-
-        # 8.3) Upsert variants
-        await batch_upsert_variants(chunk_variants)
-        return chunk_variants.select(pl.len()).item()
-
-    @staticmethod
-    async def _upsert_mutations_chunk(mutations: pl.LazyFrame, chunk_sample_ids: pl.DataFrame) -> int:
-        # 8.4) Filter to connected mutations
-        chunk_mutations: pl.DataFrame = (
-            mutations.join(
-                chunk_sample_ids.lazy(),
-                on=pl.col(StandardColumnNames.sample_id),
-                how='inner'
-            )
-        ).collect(engine='streaming')
-
-        # 8.5) Upsert mutations
-        await batch_upsert_mutations(chunk_mutations)
-        return chunk_mutations.select(pl.len()).item()
