@@ -14,7 +14,6 @@ AMINO_ACID_REF_CONFLICTS_FILE = '/tmp/amino_acid_ref_conflicts.csv'
 ALLELE_REF_CONFLICTS_FILE = '/tmp/allele_ref_conflicts.csv'
 
 
-
 class VariantsMutationsCombinedParser(FileParser):
 
     def __init__(self, variants_filename: str, mutations_filename: str):
