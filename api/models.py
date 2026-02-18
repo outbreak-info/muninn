@@ -171,7 +171,6 @@ class SampleInfo(BaseModel):
             ww_catchment_population=dbo.ww_catchment_population,
             ww_site_id=dbo.ww_site_id,
             ww_collected_by=dbo.ww_collected_by,
-            epiweek=None,  # Computed field, set to None by default
         )
 
 

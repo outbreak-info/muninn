@@ -326,8 +326,7 @@ async def get_latest_sample(query: str | None) -> List[SampleInfo]:
     # Parse and map field names to actual database columns
     user_defined_query = None
     if query is not None:
-        user_defined_query = parser.parse(query) \
-            .replace('admin1_name', 'geo_locations.admin1_name')
+        user_defined_query = parser.parse(query)
     
     date_subquery = (
         select(
@@ -354,12 +353,6 @@ async def get_latest_sample(query: str | None) -> List[SampleInfo]:
         samples = await session.scalars(samples_query)
         out_data = []
         for s in samples:
-            epiweek = None
-            if s.collection_start_date:
-                year = s.collection_start_date.isocalendar()[0]
-                week = s.collection_start_date.isocalendar()[1]
-                epiweek = int(f"{year}{week:02d}")
-            
-            sample_info = SampleInfo.from_db_object(s).model_copy(update={"epiweek": epiweek})
+            sample_info = SampleInfo.from_db_object(s)
             out_data.append(sample_info)
     return out_data
