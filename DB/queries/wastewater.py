@@ -1,13 +1,16 @@
 from typing import List
+import re
 
 from sqlalchemy import select, func, text
 from sqlalchemy.orm import contains_eager
 
 from DB.engine import get_async_session
 from DB.models import Sample, GeoLocation
-from DB.queries.date_count_helpers import DateBinOpt
+from DB.queries.date_count_helpers import DateBinOpt, get_extract_clause, get_group_by_clause
 from api.models import LineageAbundanceWithSampleInfo, AverageLineageAbundanceInfo, SampleInfo
 from parser.parser import parser
+
+from utils.constants import COLLECTION_DATE
 
 async def get_lineage_abundances_by_metadata(
     raw_query: str | None,
@@ -67,43 +70,40 @@ async def get_lineage_abundances_by_metadata(
     return out_data
 
 async def get_averaged_lineage_abundances_by_location(
-    date_bin: DateBinOpt,
     geo_bin: str,
     raw_query: str,
+    max_span_days: int,
     lineage_name: str | None = None,
 ) -> List[AverageLineageAbundanceInfo]:
     user_where_clause = ''
     if raw_query is not None:
         user_where_clause = f'where ({parser.parse(raw_query)})'
 
-    # Check if lineage_name ends with asterisk (wildcard for parent+children)
+        print(f'user_where_clause: {user_where_clause}')
+        if 'epiweek' in user_where_clause:
+            # find epiweek string, replace with year, chunk
+            epiweek_str = re.search(r'epiweek\s*=\s*(\d+)', user_where_clause).group(1)
+            year = int(epiweek_str[0:4])
+            chunk = int(epiweek_str[4:6])
+            user_where_clause = user_where_clause.replace(f'epiweek = {epiweek_str}', f'year = {year} and chunk = {chunk}')
+
     is_wildcard = lineage_name is not None and lineage_name.endswith('*')
     parent_lineage_name = lineage_name.rstrip('*') if is_wildcard else None
 
-    match date_bin:
-        case DateBinOpt.week | DateBinOpt.month:
-            extract_clause = f'''
-                extract(year from mid_collection_date) as year,
-                extract({date_bin} from mid_collection_date) as chunk
-               '''
-            group_by_date_cols = 'year, chunk'
-    
-        case _:
-            raise ValueError(f'illegal value for date_bin: {repr(date_bin)}')
-        
+    extract_clause = get_extract_clause(COLLECTION_DATE, DateBinOpt.week, 7)
 
     match geo_bin:
         case 'admin1_name':
-            group_by_geo_level = 'admin1_name, census_region'
-            lp_group_by = 'lp.admin1_name, lp.census_region'
+            group_by_clause = get_group_by_clause(DateBinOpt.week, extra_cols=['week_start', 'week_end', 'admin1_name', 'census_region'])
+
             lp_join_on = 'and lp.admin1_name = tp.admin1_name and lp.census_region = tp.census_region'
 
         case 'census_region':
-            group_by_geo_level =  'census_region'
-            lp_group_by = 'lp.census_region'
+            group_by_clause = get_group_by_clause(DateBinOpt.week, extra_cols=['week_start', 'week_end', 'census_region'])
+            lp_join_on = 'and lp.census_region = tp.census_region'
+
             if user_where_clause.contains('admin1_name'):
                 raise ValueError('admin1_name cannot be used in the raw_query when geo_bin is "census_region"')
-            lp_join_on = 'and lp.census_region = tp.census_region'
         case _:
             raise ValueError(f'illegal value for geo_bin: {repr(geo_bin)}')
     
@@ -144,7 +144,7 @@ async def get_averaged_lineage_abundances_by_location(
                 inner join lineage_systems ls on ls.id = l.lineage_system_id
                 inner join samples s on s.id = sl.sample_id
                 left join geo_locations gl on gl.id = s.geo_location_id
-                where (s.collection_end_date - s.collection_start_date) <= 30
+                where (s.collection_end_date - s.collection_start_date) <= {max_span_days}
             ),
             filtered_base_data as (
                 select *
@@ -157,8 +157,7 @@ async def get_averaged_lineage_abundances_by_location(
             ),
             total_prevalences as (
                 select
-                    extract(year from mid_collection_date) as year,
-                    extract(week from mid_collection_date) as week,
+                    {extract_clause},
                     date_trunc('week', mid_collection_date)::date as week_start,
                     (date_trunc('week', mid_collection_date) + interval '6 days')::date as week_end,
                     admin1_name,
@@ -168,12 +167,11 @@ async def get_averaged_lineage_abundances_by_location(
                     avg(ww_viral_load) as mean_viral_load,
                     avg(ww_catchment_population) as mean_catchment_size
                 from all_base_data
-                group by year, week, week_start, week_end, {group_by_geo_level}
+                {group_by_clause}
             ),
             lineage_prevalences as (
                 select
-                    extract(year from mid_collection_date) as year,
-                    extract(week from mid_collection_date) as week,
+                    {extract_clause},
                     date_trunc('week', mid_collection_date)::date as week_start,
                     (date_trunc('week', mid_collection_date) + interval '6 days')::date as week_end,
                     admin1_name,
@@ -182,13 +180,12 @@ async def get_averaged_lineage_abundances_by_location(
                     sum(pop_weighted_prevalence) as lineage_prevalence,
                     count(*) as sample_count
                 from filtered_base_data
-                group by year, week, week_start, week_end, {lp_group_by}
+                {group_by_clause + ', lineage_name'}
             ),
             result_data as (
                 select
                     lp.year,
-                    lp.week,
-                    (lp.year || LPAD(lp.week::text, 2, '0'))::int as epiweek,
+                    lp.chunk,
                     lp.week_start,
                     lp.week_end,
                     lp.lineage_name as lineage,
@@ -201,7 +198,7 @@ async def get_averaged_lineage_abundances_by_location(
                 from lineage_prevalences lp
                 join total_prevalences tp
                     on lp.year = tp.year
-                    and lp.week = tp.week
+                    and lp.chunk = tp.chunk
                     and lp.week_start = tp.week_start
                     and lp.week_end = tp.week_end
                     {lp_join_on}
@@ -234,12 +231,11 @@ async def get_averaged_lineage_abundances_by_location(
                 inner join lineage_systems ls on ls.id = l.lineage_system_id
                 inner join samples s on s.id = sl.sample_id
                 left join geo_locations gl on gl.id = s.geo_location_id
-                where (s.collection_end_date - s.collection_start_date) <= 30
+                where (s.collection_end_date - s.collection_start_date) <= {max_span_days}
             ),
             total_prevalences as (
                 select
-                    extract(year from mid_collection_date) as year,
-                    extract(week from mid_collection_date) as week,
+                    {extract_clause},
                     date_trunc('week', mid_collection_date)::date as week_start,
                     (date_trunc('week', mid_collection_date) + interval '6 days')::date as week_end,
                     admin1_name,
@@ -249,12 +245,11 @@ async def get_averaged_lineage_abundances_by_location(
                     avg(ww_viral_load) as mean_viral_load,
                     avg(ww_catchment_population) as mean_catchment_size
                 from base_data
-                group by year, week, week_start, week_end, {group_by_geo_level}
+                {group_by_clause}
             ),
             lineage_prevalences as (
                 select
-                    extract(year from mid_collection_date) as year,
-                    extract(week from mid_collection_date) as week,
+                    {extract_clause},
                     date_trunc('week', mid_collection_date)::date as week_start,
                     (date_trunc('week', mid_collection_date) + interval '6 days')::date as week_end,
                     admin1_name,
@@ -263,13 +258,12 @@ async def get_averaged_lineage_abundances_by_location(
                     sum(pop_weighted_prevalence) as lineage_prevalence,
                     count(*) as sample_count
                 from base_data
-                group by year, week, week_start, week_end, {lp_group_by}, lineage_name
+                {group_by_clause + ', lineage_name'}
             ),
             result_data as (
                 select
                     lp.year,
-                    lp.week,
-                    (lp.year || LPAD(lp.week::text, 2, '0'))::int as epiweek,
+                    lp.chunk,
                     lp.week_start,
                     lp.week_end,
                     lp.lineage_name as lineage,
@@ -282,7 +276,7 @@ async def get_averaged_lineage_abundances_by_location(
                 from lineage_prevalences lp
                 join total_prevalences tp
                     on lp.year = tp.year
-                and lp.week = tp.week
+                and lp.chunk = tp.chunk
                 and lp.week_start = tp.week_start
                 and lp.week_end = tp.week_end
                 {lp_join_on}
@@ -298,34 +292,38 @@ async def get_averaged_lineage_abundances_by_location(
     out_data = list()
     if geo_bin == 'admin1_name':
         for r in res:
+            epiweek = int(f"{int(r[0])}{int(r[1]):02d}")
             info = AverageLineageAbundanceInfo(
                 year=r[0],
-                week=r[1],
-                epiweek=r[2],
-                week_start=r[3],
-                week_end=r[4],  
-                lineage_name=r[5],
-                census_region=r[6],
-                geo_admin1_name=r[7],
-                sample_count=r[8],
-                mean_viral_load=r[9],
-                mean_catchment_size=r[10],
-                mean_lineage_prevalence=r[11]
+                chunk=r[1],
+                epiweek=epiweek,
+                week_start=r[2],
+                week_end=r[3],  
+                lineage_name=r[4],
+                census_region=r[5],
+                geo_admin1_name=r[6],
+                sample_count=r[7],
+                mean_viral_load=r[8],
+                mean_catchment_size=r[9],
+                mean_lineage_prevalence=r[10]
             )
             out_data.append(info)
     elif geo_bin == 'census_region':
         for r in res:
+            epiweek = int(f"{int(r[0])}{int(r[1]):02d}")
             info = AverageLineageAbundanceInfo(
                 year=r[0],
                 chunk=r[1],
-                epiweek=r[2],
-                week_start=r[3],
-                week_end=r[4],
-                lineage_name=r[5],
-                state=None,
-                census_region=r[6],
-                sample_count=r[7],
-                mean_lineage_prevalence=r[8]
+                epiweek=epiweek,
+                week_start=r[2],
+                week_end=r[3],
+                lineage_name=r[4],
+                census_region=r[5],
+                geo_admin1_name=None,
+                sample_count=r[6],
+                mean_viral_load=r[7],
+                mean_catchment_size=r[8],
+                mean_lineage_prevalence=r[9]
             )
             out_data.append(info)
  

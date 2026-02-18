@@ -122,7 +122,6 @@ class SampleInfo(BaseModel):
     ww_catchment_population: int | None
     ww_site_id: str | None
     ww_collected_by: str | None
-    epiweek: int | None
 
     @classmethod
     def from_db_object(cls, dbo: 'Sample') -> 'SampleInfo':
@@ -275,7 +274,7 @@ class LineageAbundanceWithSampleInfo(BaseModel):
 # wastewater-specific
 class AverageLineageAbundanceInfo(BaseModel):
     year: int
-    week: int
+    chunk: int
     epiweek: int
     week_start: date
     week_end: date
