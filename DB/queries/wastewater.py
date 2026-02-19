@@ -12,20 +12,11 @@ from parser.parser import parser
 
 from utils.constants import COLLECTION_DATE
 
-async def get_lineage_abundances_by_metadata(
+async def get_lineage_abundances_by_sample(
     raw_query: str | None,
 ) -> List[LineageAbundanceWithSampleInfo]:
     if raw_query is not None:
         parsed_query = parser.parse(raw_query)
-        # Replace field references to use proper table aliases
-        parsed_query = parsed_query \
-            .replace("collection_start_date", "s.collection_start_date") \
-            .replace("collection_end_date", "s.collection_end_date") \
-            .replace("ww_site_id", "s.ww_site_id") \
-            .replace("ww_collected_by", "s.ww_collected_by") \
-            .replace("ww_viral_load", "s.ww_viral_load") \
-            .replace("ww_catchment_population", "s.ww_catchment_population") \
-            .replace("admin1_name", "gl.admin1_name")
         user_where_clause = f'and ({parsed_query})'
     else:
         user_where_clause = ''

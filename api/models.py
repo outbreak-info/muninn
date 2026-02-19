@@ -262,7 +262,7 @@ class LineageAbundanceInfo(BaseModel):
 class LineageAbundanceWithSampleInfo(BaseModel):
     accession: str
     admin1_name: str
-    ww_collected_by: str
+    ww_collected_by: str | None
     ww_site_id: str
     lineage_name: str
     abundance: float
