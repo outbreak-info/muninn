@@ -127,10 +127,6 @@ class FreyjaDemixedLineageHierarchyYamlParser(FileParser):
         for l in hierarchy_input:
             if 'parent' in l.keys():
                 relationships.append(make_pc_entry(l['parent'], l['name']))
-            if 'recombinant_parents' in l.keys():
-                rps = l['recombinant_parents'].split(',')
-                for rp in rps:
-                    relationships.append(make_pc_entry(rp, l['name']))
 
         return pl.DataFrame(relationships)
 

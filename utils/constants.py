@@ -158,6 +158,11 @@ class StandardColumnNames:
     datastore_filetype = 'datastore_filetype'
     datastore_region = 'datastore_region'
     datastore_provider = 'datastore_provider'
+    ww_viral_load = 'ww_viral_load'
+    ww_catchment_population = 'ww_catchment_population'
+    ww_site_id = 'ww_site_id'
+    ww_collected_by = 'ww_collected_by'
+    census_region = 'census_region'
 
     # alleles
     position_nt = 'position_nt'

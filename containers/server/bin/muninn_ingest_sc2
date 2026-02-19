@@ -80,6 +80,7 @@ LINEAGE_FILE="$ARCHIVE_DEST_DIR/lineage_sc2.tsv"
 DMS_FILE="$ARCHIVE_DEST_DIR/dms_sc2.tsv"
 EVE_FILE="$ARCHIVE_DEST_DIR/eve_sc2.tsv"
 FREYJA_DEMIXED_DIR="$ARCHIVE_DEST_DIR/demixed"
+FREYJA_DEMIXED_LINEAGE_HIERARCHY_FILE="$ARCHIVE_DEST_DIR/lineages.yml"
 
 if [[ $AUTO = true ]]; then
   # Samples metadata
@@ -109,6 +110,11 @@ if [[ $AUTO = true ]]; then
     echo "using demixed dir: $FREYJA_DEMIXED_DIR" >> "$LOG"
   fi
 
+  # Lineage hierarchy file
+  TMP_FILE=$(find "$ARCHIVE_DEST_DIR" -type f -name "*lineages*.yml" | head -1)
+  if [[ -f "$TMP_FILE" ]]; then
+    FREYJA_DEMIXED_LINEAGE_HIERARCHY_FILE="$TMP_FILE"
+    echo "using lineage hierarchy file: $FREYJA_DEMIXED_LINEAGE_HIERARCHY_FILE" >> "$LOG"
   # Lineage file
   TMP_FILE=$(find "$ARCHIVE_DEST_DIR" -type f -name "*lineage*.csv" | head -1)
   if [[ -f "$TMP_FILE" ]]; then
@@ -140,6 +146,7 @@ fi
   "$MUTATIONS_FILE" \
   --format variants_mutations_combined_tsv
   python3 -u runinserts.py "$FREYJA_DEMIXED_DIR" --format freyja_demixed
+  python3 -u runinserts.py "$FREYJA_DEMIXED_LINEAGE_HIERARCHY_FILE" --format freyja_demixed_hierarchy_yaml
   python3 -u runinserts.py "$LINEAGE_FILE" --format sc2_lineages
   python3 -u runinserts.py "$DMS_FILE" --format sc2_dms_tsv
   python3 -u runinserts.py "$EVE_FILE" --format sc2_eve_dms_csv
