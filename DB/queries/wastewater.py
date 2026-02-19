@@ -104,14 +104,14 @@ async def get_averaged_lineage_abundances_by_location(
             with lineage_filter as (
                 select l.id as lineage_id
                 from lineages l
-                where l.lineage_name = '{parent_lineage_name}'
+                where l.lineage_name = :parent_lineage_name
 
                 union
 
                 select ldc.child_id as lineage_id
                 from lineages l
                 inner join lineages_deep_children ldc on ldc.parent_id = l.id
-                where l.lineage_name = '{parent_lineage_name}'
+                where l.lineage_name = :parent_lineage_name
             ),
             all_base_data as (
                 select
@@ -166,7 +166,7 @@ async def get_averaged_lineage_abundances_by_location(
                     (date_trunc('week', mid_collection_date) + interval '6 days')::date as week_end,
                     admin1_name,
                     census_region,
-                    '{parent_lineage_name}' as lineage_name,
+                    :parent_lineage_name as lineage_name,
                     sum(pop_weighted_prevalence) as lineage_prevalence,
                     count(*) as sample_count
                 from filtered_base_data
@@ -279,12 +279,15 @@ async def get_averaged_lineage_abundances_by_location(
         '''
         
     async with get_async_session() as session:
-        res = await session.execute(text(query))
+        if is_wildcard:
+            params = {'parent_lineage_name': parent_lineage_name}
+            res = await session.execute(text(query), params)
+        else:
+            res = await session.execute(text(query))
 
     out_data = list()
     if geo_bin == 'admin1_name':
         for r in res:
-            epiweek = int(f"{int(r[0])}{int(r[1]):02d}")
             info = AverageLineageAbundanceInfo(
                 year=r[0],
                 chunk=r[1],
@@ -302,7 +305,6 @@ async def get_averaged_lineage_abundances_by_location(
             out_data.append(info)
     elif geo_bin == 'census_region':
         for r in res:
-            epiweek = int(f"{int(r[0])}{int(r[1]):02d}")
             info = AverageLineageAbundanceInfo(
                 year=r[0],
                 chunk=r[1],
