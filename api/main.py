@@ -229,8 +229,8 @@ async def get_lineage_abundance_info(q: str | None = None):
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
-@app.get('/wastewater/lineages/abundances/average_abundances', response_model=List[AverageLineageAbundanceInfo])
-async def get_average_lineage_abundance(
+@app.get('/v0/wastewater/lineages:averageAbundancesByLocation', response_model=List[AverageLineageAbundanceInfo])
+async def get_average_lineage_abundances_by_location(
     lineage: str | None = None,
     geo_bin: str = "admin1_name",
     q: str | None = None,
@@ -251,19 +251,19 @@ async def get_average_lineage_abundance(
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
-@app.get('/wastewater/lineages/abundances/by/sample', response_model=List[LineageAbundanceWithSampleInfo])
-async def get_lineage_abundances_by_metadata(
+@app.get('/v0/wastewater/lineages:abundancesBySample', response_model=List[LineageAbundanceWithSampleInfo])
+async def get_lineage_abundances_by_sample(
     q: str | None = None,
 ):
     """
     :param q: A query to be run against samples and lineages.
     """
     try:
-        return await DB.queries.wastewater.get_lineage_abundances_by_metadata(q)
+        return await DB.queries.wastewater.get_lineage_abundances_by_sample(q)
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
-@app.get('/wastewater/samples/latest', response_model=List[SampleInfo])
+@app.get('/v0/wastewater/latestSample', response_model=List[SampleInfo])
 async def get_latest_sample(q: str | None = None):
     """
     :param q: A query to be run against samples.
