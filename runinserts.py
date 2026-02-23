@@ -35,7 +35,6 @@ def main():
         'sc2_dms_tsv': Sc2DmsTsvParser,
         'freyja_demixed': FreyjaDemixedParser,
         'variants_mutations_combined_tsv': VariantsMutationsCombinedParser,
-        'variants_mutations_combined_chunked_tsv': VariantsMutationsCombinedChunkedParser,
         'sc2_samples': SC2SamplesParser,
         'sc2_sd_samples': SC2SDSamplesParser,
         'flumut_tsv': FlumutTsvParser,
