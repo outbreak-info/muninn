@@ -1,5 +1,5 @@
 from typing import List
-import re
+from datetime import date
 
 from sqlalchemy import select, func, text
 from sqlalchemy.orm import contains_eager
@@ -65,6 +65,8 @@ async def get_averaged_lineage_abundances_by_location(
     raw_query: str,
     max_span_days: int,
     lineage_name: str | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
 ) -> List[AverageLineageAbundanceInfo]:
     user_where_clause = ''
     if raw_query is not None:
@@ -72,6 +74,14 @@ async def get_averaged_lineage_abundances_by_location(
 
     is_wildcard = lineage_name is not None and lineage_name.endswith('*')
     parent_lineage_name = lineage_name.rstrip('*') if is_wildcard else None
+
+    # Filter base_data CTE by date
+    date_filter = ''
+    params: dict = {}
+    if start_date is not None and end_date is not None:
+        date_filter = '''and s.collection_start_date >= :start_date and s.collection_start_date <= :end_date'''
+        params['start_date'] = start_date
+        params['end_date'] = end_date
 
     extract_clause = get_extract_clause(COLLECTION_DATE, DateBinOpt.week, 7)
 
@@ -84,12 +94,18 @@ async def get_averaged_lineage_abundances_by_location(
             group_by_clause = get_group_by_clause(DateBinOpt.week, extra_cols=['week_start', 'week_end', 'census_region'])
             lp_join_on = 'and lp.census_region = tp.census_region'
 
-            if user_where_clause.contains('admin1_name'):
+            if 'admin1_name' in user_where_clause:
                 raise ValueError('admin1_name cannot be used in the raw_query when geo_bin is "census_region"')
         case _:
             raise ValueError(f'illegal value for geo_bin: {repr(geo_bin)}')
     
+    lineage_where = ''
+    if lineage_name is not None and not is_wildcard:
+        lineage_where = 'where lineage_name = :lineage_name'
+        params['lineage_name'] = lineage_name
+
     if is_wildcard:
+        params['parent_lineage_name'] = parent_lineage_name
         query = f'''
             with lineage_filter as (
                 select l.id as lineage_id
@@ -125,15 +141,26 @@ async def get_averaged_lineage_abundances_by_location(
                 inner join samples s on s.id = sl.sample_id
                 left join geo_locations gl on gl.id = s.geo_location_id
                 where (s.collection_end_date - s.collection_start_date) <= {max_span_days}
+                {date_filter}
             ),
-            filtered_base_data as (
-                select *
-                from all_base_data
-                where lineage_name in (
-                    select l.lineage_name
-                    from lineages l
-                    where l.id in (select lineage_id from lineage_filter)
-                )
+            lineage_base_data as (
+                select
+                    gl.admin1_name,
+                    s.census_region as census_region,
+                    sl.abundance,
+                    s.ww_catchment_population,
+                    s.ww_viral_load,
+                    sl.abundance * s.ww_catchment_population as pop_weighted_prevalence,
+                    (
+                        s.collection_start_date +
+                        ((s.collection_end_date - s.collection_start_date) / 2)
+                    )::date as mid_collection_date
+                from lineage_filter lf
+                inner join samples_lineages sl on sl.lineage_id = lf.lineage_id
+                inner join samples s on s.id = sl.sample_id
+                left join geo_locations gl on gl.id = s.geo_location_id
+                where (s.collection_end_date - s.collection_start_date) <= {max_span_days}
+                {date_filter}
             ),
             total_prevalences as (
                 select
@@ -159,7 +186,7 @@ async def get_averaged_lineage_abundances_by_location(
                     :parent_lineage_name as lineage_name,
                     sum(pop_weighted_prevalence) as lineage_prevalence,
                     count(*) as sample_count
-                from filtered_base_data
+                from lineage_base_data
                 {group_by_clause}
             ),
             result_data as (
@@ -213,6 +240,7 @@ async def get_averaged_lineage_abundances_by_location(
                 inner join samples s on s.id = sl.sample_id
                 left join geo_locations gl on gl.id = s.geo_location_id
                 where (s.collection_end_date - s.collection_start_date) <= {max_span_days}
+                {date_filter}
             ),
             total_prevalences as (
                 select
@@ -239,6 +267,7 @@ async def get_averaged_lineage_abundances_by_location(
                     sum(pop_weighted_prevalence) as lineage_prevalence,
                     count(*) as sample_count
                 from base_data
+                {lineage_where}
                 {group_by_clause + ', lineage_name'}
             ),
             result_data as (
@@ -269,11 +298,7 @@ async def get_averaged_lineage_abundances_by_location(
         '''
         
     async with get_async_session() as session:
-        if is_wildcard:
-            params = {'parent_lineage_name': parent_lineage_name}
-            res = await session.execute(text(query), params)
-        else:
-            res = await session.execute(text(query))
+        res = await session.execute(text(query), params if params else {})
 
     out_data = list()
     if geo_bin == 'admin1_name':
