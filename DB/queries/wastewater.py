@@ -78,7 +78,6 @@ async def get_averaged_lineage_abundances_by_location(
     match geo_bin:
         case 'admin1_name':
             group_by_clause = get_group_by_clause(DateBinOpt.week, extra_cols=['week_start', 'week_end', 'admin1_name', 'census_region'])
-
             lp_join_on = 'and lp.admin1_name = tp.admin1_name and lp.census_region = tp.census_region'
 
         case 'census_region':
@@ -161,7 +160,7 @@ async def get_averaged_lineage_abundances_by_location(
                     sum(pop_weighted_prevalence) as lineage_prevalence,
                     count(*) as sample_count
                 from filtered_base_data
-                {group_by_clause + ', lineage_name'}
+                {group_by_clause}
             ),
             result_data as (
                 select
