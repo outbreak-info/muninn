@@ -279,7 +279,7 @@ class AverageLineageAbundanceInfo(BaseModel):
     week_end: date
     lineage_name: str
     census_region: str
-    geo_admin1_name: str
+    geo_admin1_name: str | None
     sample_count: int
     mean_viral_load: float | None
     mean_catchment_size: float
