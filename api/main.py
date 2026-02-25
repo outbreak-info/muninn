@@ -232,28 +232,24 @@ async def get_lineage_abundance_info(q: str | None = None):
 
 @app.get('/v0/wastewater/lineages:averageAbundancesByLocation', response_model=List[AverageLineageAbundanceInfo])
 async def get_average_lineage_abundances_by_location(
-    lineage: str | None = None,
-    geo_bin: str = "admin1_name",
     q: str | None = None,
+    geo_bin: str = "admin1_name",
     max_span_days: int = DEFAULT_MAX_SPAN_DAYS,
-    start_date: date | None = None,
-    end_date: date | None = None,
+    lineage: str | None = None
 ):
     """
     Get average lineage abundances by location.
     
+    :param q: A query to be run against lineages and samples.
+    :param geo_bin: The geographic bin to group by.
     :param lineage: Optional lineage name. If it ends with '*', returns abundances for 
                     the parent lineage and all its children aggregated together.
                     If not provided or doesn't end with '*', returns abundances for all lineages.
-    :param geo_bin: The geographic bin to group by.
-    :param q: A query to be run against lineages and samples.
     :param max_span_days: The maximum span between collection start and end dates.
-    :param start_date: Optional start date.
-    :param end_date: Optional end date. Use with start_date.
     """
     try:
         return await DB.queries.wastewater.get_averaged_lineage_abundances_by_location(
-            geo_bin, q, max_span_days, lineage, start_date, end_date
+            q, geo_bin, max_span_days, lineage
         )
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
