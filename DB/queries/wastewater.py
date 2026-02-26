@@ -1,5 +1,4 @@
 from typing import List
-from datetime import date
 
 from sqlalchemy import select, func, text
 from sqlalchemy.orm import contains_eager
@@ -9,6 +8,7 @@ from DB.models import Sample, GeoLocation
 from api.models import LineageAbundanceWithSampleInfo, AverageLineageAbundanceInfo, SampleInfo
 from parser.parser import parser
 from utils.constants import DEFAULT_MAX_SPAN_DAYS
+
 async def get_lineage_abundances_by_sample(
     raw_query: str | None,
 ) -> List[LineageAbundanceWithSampleInfo]:
