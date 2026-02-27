@@ -101,14 +101,9 @@ class SamplesParser(FileParser):
                             ColNameMapping.bio_sample_accession.value,
                             allow_none=True
                         ),
-                        bytes=get_value(row, ColNameMapping.bytes_.value, transform=int, allow_none=True),
                         center_name=get_value(row, ColNameMapping.center_name.value, allow_none=True),
                         collection_start_date=collection_start_date,
                         collection_end_date=collection_end_date,
-                        consent_level=get_value(row, ColNameMapping.consent_level.value, allow_none=True),
-                        datastore_filetype=get_value(row, ColNameMapping.datastore_filetype.value, allow_none=True),
-                        datastore_provider=get_value(row, ColNameMapping.datastore_provider.value, allow_none=True),
-                        datastore_region=get_value(row, ColNameMapping.datastore_region.value, allow_none=True),
                         experiment=get_value(row, ColNameMapping.experiment.value, allow_none=True),
                         host=get_value(row, ColNameMapping.host.value, allow_none=True),
                         instrument=get_value(row, ColNameMapping.instrument.value, allow_none=True),
@@ -152,7 +147,6 @@ class SamplesParser(FileParser):
                     if preexisting:
                         debug_info['count_preexisting'] += 1
                 except ValueError:
-                    # todo: logging
                     debug_info['skipped_malformed'] += 1
 
         print(debug_info)
@@ -173,13 +167,8 @@ class SamplesParser(FileParser):
             ColNameMapping.bio_project,
             ColNameMapping.bio_sample,
             ColNameMapping.bio_sample_model,
-            ColNameMapping.bytes_,
             ColNameMapping.center_name,
             ColNameMapping.collection_date,
-            ColNameMapping.consent_level,
-            ColNameMapping.datastore_filetype,
-            ColNameMapping.datastore_provider,
-            ColNameMapping.datastore_region,
             ColNameMapping.experiment,
             ColNameMapping.geo_loc_name,
             ColNameMapping.host,
@@ -212,13 +201,8 @@ class ColNameMapping(Enum):
     bio_project = 'BioProject'
     bio_sample = 'BioSample'
     bio_sample_model = 'BioSampleModel'
-    bytes_ = 'Bytes'
     center_name = 'Center Name'
     collection_date = 'Collection_Date'
-    consent_level = 'Consent'
-    datastore_filetype = 'DATASTORE filetype'
-    datastore_provider = 'DATASTORE provider'
-    datastore_region = 'DATASTORE region'
     experiment = 'Experiment'
     geo_loc_name_country = 'geo_loc_name_country'
     geo_loc_name = 'geo_loc_name'
