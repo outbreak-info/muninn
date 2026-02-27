@@ -1,4 +1,5 @@
 from typing import List, Annotated, Dict
+from datetime import date
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,14 +11,15 @@ import DB.queries.mutations
 import DB.queries.phenotype_metrics
 import DB.queries.prevalence
 import DB.queries.samples
+import DB.queries.wastewater
 import DB.queries.variants
 import DB.queries.variants_mutations
 import DB.queries.annotations
 import DB.queries.helpers
 from DB.models import Mutation, IntraHostVariant
-from api.models import VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
+from api.models import LineageAbundanceWithSampleInfo, VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
     MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo, \
-    LineageInfo, VariantMutationLagInfo, RegionAndGffFeatureInfo, MutationProfileInfo
+    LineageInfo, VariantMutationLagInfo, RegionAndGffFeatureInfo, MutationProfileInfo, AverageLineageAbundanceInfo
 from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, SIMPLE_DATE_FIELDS, NtOrAa, \
     DEFAULT_MAX_SPAN_DAYS, COLLECTION_DATE, DEFAULT_DAYS, COMMA_SEP_WORDLIKE_PATTERN, LINEAGE, DEFAULT_PREVALENCE_THRESHOLD
 from utils.errors import ParsingError
@@ -228,6 +230,51 @@ async def get_lineage_abundance_info(q: str | None = None):
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
+@app.get('/v0/wastewater/lineages:averageAbundancesByLocation', response_model=List[AverageLineageAbundanceInfo])
+async def get_average_lineage_abundances_by_location(
+    q: str | None = None,
+    geo_bin: str = "admin1_name",
+    max_span_days: int = DEFAULT_MAX_SPAN_DAYS,
+    lineage: str | None = None
+):
+    """
+    Get average lineage abundances by location.
+    
+    :param q: A query to be run against lineages and samples.
+    :param geo_bin: The geographic bin to group by.
+    :param lineage: Optional lineage name. If it ends with '*', returns abundances for 
+                    the parent lineage and all its children aggregated together.
+                    If not provided or doesn't end with '*', returns abundances for all lineages.
+    :param max_span_days: The maximum span between collection start and end dates.
+    """
+    try:
+        return await DB.queries.wastewater.get_averaged_lineage_abundances_by_location(
+            q, geo_bin, max_span_days, lineage
+        )
+    except ParsingError as e:
+        raise HTTPException(status_code=400, detail=e.message)
+
+@app.get('/v0/wastewater/lineages:abundancesBySample', response_model=List[LineageAbundanceWithSampleInfo])
+async def get_lineage_abundances_by_sample(
+    q: str | None = None,
+):
+    """
+    :param q: A query to be run against samples and lineages.
+    """
+    try:
+        return await DB.queries.wastewater.get_lineage_abundances_by_sample(q)
+    except ParsingError as e:
+        raise HTTPException(status_code=400, detail=e.message)
+
+@app.get('/v0/wastewater/latestSample', response_model=List[SampleInfo])
+async def get_latest_sample(q: str | None = None):
+    """
+    :param q: A query to be run against samples.
+    """
+    try:
+        return await DB.queries.wastewater.get_latest_sample(q)
+    except ParsingError as e:
+        raise HTTPException(status_code=400, detail=e.message)
 
 @app.get('/lineages/abundances/summary_stats', response_model=List[LineageAbundanceSummaryInfo])
 async def get_lineage_abundance_summary_stats(q: str | None = None):

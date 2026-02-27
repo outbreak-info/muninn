@@ -117,6 +117,12 @@ class SampleInfo(BaseModel):
     geo_admin2_name: str | None
     geo_admin3_name: str | None
 
+    # wastewater-specific columns
+    ww_viral_load: float | None
+    ww_catchment_population: int | None
+    ww_site_id: str | None
+    ww_collected_by: str | None
+
     @classmethod
     def from_db_object(cls, dbo: 'Sample') -> 'SampleInfo':
         return SampleInfo(
@@ -160,7 +166,11 @@ class SampleInfo(BaseModel):
             geo_country_name=dbo.r_geo_location.country_name,
             geo_admin1_name=dbo.r_geo_location.admin1_name,
             geo_admin2_name=dbo.r_geo_location.admin2_name,
-            geo_admin3_name=dbo.r_geo_location.admin3_name
+            geo_admin3_name=dbo.r_geo_location.admin3_name,
+            ww_viral_load=dbo.ww_viral_load,
+            ww_catchment_population=dbo.ww_catchment_population,
+            ww_site_id=dbo.ww_site_id,
+            ww_collected_by=dbo.ww_collected_by,
         )
 
 
@@ -248,6 +258,32 @@ class LineageAbundanceInfo(BaseModel):
     accession: str
     abundance: float
 
+# wastewater-specific
+class LineageAbundanceWithSampleInfo(BaseModel):
+    accession: str
+    admin1_name: str
+    ww_collected_by: str | None
+    ww_site_id: str
+    lineage_name: str
+    abundance: float
+    ww_viral_load: float | None
+    ww_catchment_population: int
+    collection_start_date: date
+
+# wastewater-specific
+class AverageLineageAbundanceInfo(BaseModel):
+    year: int
+    chunk: int
+    epiweek: int
+    week_start: date
+    week_end: date
+    lineage_name: str
+    census_region: str
+    geo_admin1_name: str | None
+    sample_count: int
+    mean_viral_load: float | None
+    mean_catchment_size: float
+    mean_lineage_prevalence: float
 
 class LineageAbundanceSummaryInfo(BaseModel):
     lineage_name: str
