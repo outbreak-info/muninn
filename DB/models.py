@@ -105,9 +105,6 @@ class Sample(Base):
     release_date: Mapped[datetime] = mapped_column(sa.TIMESTAMP(timezone=True), nullable=True)
     creation_date: Mapped[datetime] = mapped_column(sa.TIMESTAMP(timezone=True), nullable=True)
 
-    # todo: What is this? all = 1 in the file I have
-    version: Mapped[str] = mapped_column(sa.Text, nullable=True)
-
     sample_name: Mapped[str] = mapped_column(sa.Text, nullable=True)
     sra_study: Mapped[str] = mapped_column(sa.Text, nullable=True)
 
@@ -115,16 +112,9 @@ class Sample(Base):
 
     geo_location_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.geo_locations}.id'), nullable=True)
 
-    consent_level: Mapped[str] = mapped_column(sa.Text, nullable=True)
     assay_type: Mapped[str] = mapped_column(sa.Text, nullable=True)
     avg_spot_length: Mapped[float] = mapped_column(sa.Double, nullable=True)
     bases: Mapped[int] = mapped_column(sa.BigInteger, nullable=True)
-    bytes: Mapped[int] = mapped_column(sa.BigInteger, nullable=True)
-
-    # todo: I think these could maybe be factored out and stored differently?
-    datastore_filetype: Mapped[str] = mapped_column(sa.Text, nullable=True)
-    datastore_region: Mapped[str] = mapped_column(sa.Text, nullable=True)
-    datastore_provider: Mapped[str] = mapped_column(sa.Text, nullable=True)
 
     # wastewater-specific columns
     ww_viral_load: Mapped[float] = mapped_column(sa.Double, nullable=True)
@@ -183,19 +173,13 @@ class Sample(Base):
         self.release_date = other.release_date
         self.creation_date = other.creation_date
         self.isolate = other.isolate
-        self.version = other.version
         self.sample_name = other.sample_name
         self.sra_study = other.sra_study
         self.serotype = other.serotype
         self.geo_location_id = other.geo_location_id
-        self.consent_level = other.consent_level
         self.assay_type = other.assay_type
         self.avg_spot_length = other.avg_spot_length
         self.bases = other.bases
-        self.bytes = other.bytes
-        self.datastore_filetype = other.datastore_filetype
-        self.datastore_region = other.datastore_region
-        self.datastore_provider = other.datastore_provider
 
 
 class Allele(Base):
@@ -550,6 +534,7 @@ class LineageImmediateChild(Base):
         ]
     )
 
+
 class Paper(Base):
     __tablename__ = TableNames.papers
 
@@ -713,7 +698,6 @@ class SqlSnippets:
     '''
 
     drop_trigger_check_cyclic_lineage = f'drop trigger if exists {MiscDbNames.check_cyclic_lineage_trigger} on {TableNames.lineages_immediate_children};'
-
 
     create_function_check_cross_system_lineage = f'''
     create or replace function {MiscDbNames.check_cross_system_lineage}()
