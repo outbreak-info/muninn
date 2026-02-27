@@ -27,25 +27,14 @@ class SC2SamplesParser(FileParser):
             .rename({old: new for new, old in column_name_map.items()})
             .select(set(column_name_map.keys()))
             .drop_nulls([pl.col(COLLECTION_DATE)])
-            .with_columns(  # These columns are not used in the data, but are required by the schema
-                pl.col(StandardColumnNames.bio_project).fill_null('NA'),
-                pl.col(StandardColumnNames.release_date).str.to_datetime(format="%Y-%m-%d", strict=False),
-                pl.col(StandardColumnNames.creation_date).str.to_datetime(format="%Y-%m-%d", strict=False),
-            )
         )
         # unique by accession? No, leave it out for now to force errors on conflict.
-
-        # Add in not-null columns with placeholder values
-        samples_padded = (
-            samples_input
-            .join(SC2SamplesParser._get_placeholder_value_map(), how='cross')
-        )
 
         geo_locations = await SC2SamplesParser._insert_geo_locations(samples_input)
         existing_samples = await get_samples_accession_and_id_as_pl_df()
 
         samples_finished: pl.DataFrame = (
-            samples_padded
+            samples_input
             .join(geo_locations.lazy(), on=pl.col(GEO_LOCATION), how='left')
             .drop(pl.col(GEO_LOCATION))
             .with_columns(
@@ -137,13 +126,6 @@ class SC2SamplesParser(FileParser):
         )
         await batch_upsert_samples(updated_samples)
 
-    @staticmethod
-    def _get_placeholder_value_map() -> pl.LazyFrame:
-        placeholders: Dict[str, Any] = {cn: 'NA' for cn in fields_not_present_not_null}
-        placeholders[StandardColumnNames.bytes] = -1
-        placeholders[StandardColumnNames.is_retracted] = False
-        return pl.LazyFrame(placeholders)
-
     def _verify_header(self):
         with open(self.filename, 'r') as f:
             reader = csv.DictReader(f, delimiter=self.delimiter)
@@ -154,34 +136,6 @@ class SC2SamplesParser(FileParser):
     @classmethod
     def get_required_column_set(cls) -> Set[str]:
         return set(column_name_map.keys())
-
-
-"""
-metadata
-    fields used
-        Accession
-        Bioprojects
-        Biosample
-        Collection_Date
-        Geographic_Location
-        Host_OrganismName
-        Isolate_Name
-        Isolate_Source
-        Length
-        ReleaseDate
-        UpdateDate
-        Virus_OrganismName
-    fields unused
-        Geographic_Region
-        Host_TaxID
-        Nucleotide_SequenceHash
-        PurposeOfSampling
-        SraAccessions
-        Submitter_Country
-        USA_State
-        Virus_PangolinClassification
-        Virus_TaxId
-"""
 
 column_name_map = {
     StandardColumnNames.accession: 'Accession',
@@ -201,34 +155,4 @@ column_name_map = {
     StandardColumnNames.ww_catchment_population : 'population',
     StandardColumnNames.ww_site_id: 'site_id',
     StandardColumnNames.ww_collected_by: 'collected_by',
-}
-
-fields_not_present_not_null = {
-    StandardColumnNames.bio_sample_model,
-    StandardColumnNames.center_name,
-    StandardColumnNames.experiment,
-    StandardColumnNames.instrument,
-    StandardColumnNames.platform,
-    StandardColumnNames.library_source,
-    StandardColumnNames.library_selection,
-    StandardColumnNames.library_name,
-    StandardColumnNames.library_layout,
-    StandardColumnNames.is_retracted,  # bool
-    StandardColumnNames.version,
-    StandardColumnNames.sample_name,
-    StandardColumnNames.sra_study,
-    StandardColumnNames.consent_level,
-    StandardColumnNames.assay_type,
-    StandardColumnNames.bytes,  # int
-    StandardColumnNames.datastore_filetype,
-    StandardColumnNames.datastore_provider,
-    StandardColumnNames.datastore_region
-}
-
-fields_not_present_nullable = {
-    StandardColumnNames.bio_sample_accession,
-    StandardColumnNames.retraction_detected_date,
-    StandardColumnNames.serotype,
-    StandardColumnNames.avg_spot_length,
-
 }
