@@ -86,7 +86,6 @@ class Sample(Base):
     platform: Mapped[str] = mapped_column(sa.Text, nullable=True)
     isolate: Mapped[str] = mapped_column(sa.Text, nullable=True)
 
-    # todo: factor these out?
     library_name: Mapped[str] = mapped_column(sa.Text, nullable=True)
     library_layout: Mapped[str] = mapped_column(sa.Text, nullable=True)
     library_selection: Mapped[str] = mapped_column(sa.Text, nullable=True)
@@ -104,6 +103,8 @@ class Sample(Base):
 
     release_date: Mapped[datetime] = mapped_column(sa.TIMESTAMP(timezone=True), nullable=True)
     creation_date: Mapped[datetime] = mapped_column(sa.TIMESTAMP(timezone=True), nullable=True)
+
+    version: Mapped[str] = mapped_column(sa.Text, nullable=True)
 
     sample_name: Mapped[str] = mapped_column(sa.Text, nullable=True)
     sra_study: Mapped[str] = mapped_column(sa.Text, nullable=True)
@@ -173,6 +174,7 @@ class Sample(Base):
         self.release_date = other.release_date
         self.creation_date = other.creation_date
         self.isolate = other.isolate
+        self.version = other.version
         self.sample_name = other.sample_name
         self.sra_study = other.sra_study
         self.serotype = other.serotype

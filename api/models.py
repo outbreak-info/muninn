@@ -75,38 +75,33 @@ class VariantInfo(BaseModel):
 class SampleInfo(BaseModel):
     id: int
     accession: str
-    consent_level: str
-    bio_project: str
+    bio_project: str | None
     bio_sample: str | None
     bio_sample_accession: str | None
-    bio_sample_model: str
-    center_name: str
-    experiment: str
+    bio_sample_model: str | None
+    center_name: str | None
+    experiment: str | None
     host: str | None
-    instrument: str
-    platform: str
+    instrument: str | None
+    platform: str | None
     isolate: str | None
-    library_name: str
-    library_layout: str
-    library_selection: str
-    library_source: str
+    library_name: str | None
+    library_layout: str | None
+    library_selection: str | None
+    library_source: str | None
     organism: str
     is_retracted: bool
     retraction_detected_date: datetime | None
     isolation_source: str | None
     release_date: datetime
     creation_date: datetime
-    version: str
-    sample_name: str
-    sra_study: str
+    version: str | None
+    sample_name: str | None
+    sra_study: str | None
     serotype: str | None
-    assay_type: str
+    assay_type: str | None
     avg_spot_length: float | None
-    bases: int
-    bytes: int
-    datastore_filetype: str
-    datastore_region: str
-    datastore_provider: str
+    bases: int | None
     collection_start_date: date | None
     collection_end_date: date | None
     geo_location_id: int | None
@@ -128,7 +123,6 @@ class SampleInfo(BaseModel):
         return SampleInfo(
             id=dbo.id,
             accession=dbo.accession,
-            consent_level=dbo.consent_level,
             bio_project=dbo.bio_project,
             bio_sample=dbo.bio_sample,
             bio_sample_accession=dbo.bio_sample_accession,
@@ -156,10 +150,6 @@ class SampleInfo(BaseModel):
             assay_type=dbo.assay_type,
             avg_spot_length=dbo.avg_spot_length,
             bases=dbo.bases,
-            bytes=dbo.bytes,
-            datastore_filetype=dbo.datastore_filetype,
-            datastore_region=dbo.datastore_region,
-            datastore_provider=dbo.datastore_provider,
             collection_start_date=dbo.collection_start_date,
             collection_end_date=dbo.collection_end_date,
             geo_location_id=dbo.geo_location_id,
@@ -244,7 +234,6 @@ class LineageCountInfo(BaseModel):
     lineage: str | None
 
 
-# todo: do I want to drop the ids?
 class LineageInfo(BaseModel):
     lineage_id: int
     lineage_name: str
@@ -258,6 +247,7 @@ class LineageAbundanceInfo(BaseModel):
     accession: str
     abundance: float
 
+
 # wastewater-specific
 class LineageAbundanceWithSampleInfo(BaseModel):
     accession: str
@@ -269,6 +259,7 @@ class LineageAbundanceWithSampleInfo(BaseModel):
     ww_viral_load: float | None
     ww_catchment_population: int
     collection_start_date: date
+
 
 # wastewater-specific
 class AverageLineageAbundanceInfo(BaseModel):
@@ -284,6 +275,7 @@ class AverageLineageAbundanceInfo(BaseModel):
     mean_viral_load: float | None
     mean_catchment_size: float
     mean_lineage_prevalence: float
+
 
 class LineageAbundanceSummaryInfo(BaseModel):
     lineage_name: str
