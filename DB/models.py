@@ -72,67 +72,50 @@ class Sample(Base):
     __tablename__ = TableNames.samples
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
-    # todo: change name to be specific about which accession this is
     accession: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    bio_project: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    bio_project: Mapped[str] = mapped_column(sa.Text, nullable=True)
     bio_sample: Mapped[str] = mapped_column(sa.Text, nullable=True)
     bio_sample_accession: Mapped[str] = mapped_column(sa.Text, nullable=True)
-    bio_sample_model: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    center_name: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    experiment: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    bio_sample_model: Mapped[str] = mapped_column(sa.Text, nullable=True)
+    center_name: Mapped[str] = mapped_column(sa.Text, nullable=True)
+    experiment: Mapped[str] = mapped_column(sa.Text, nullable=True)
 
-    # todo: host should benefit from some normalization
-    # we've got various spellings of common names, plus some binomials and genus sp.
     host: Mapped[str] = mapped_column(sa.Text, nullable=True)
 
-    instrument: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    platform: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    instrument: Mapped[str] = mapped_column(sa.Text, nullable=True)
+    platform: Mapped[str] = mapped_column(sa.Text, nullable=True)
     isolate: Mapped[str] = mapped_column(sa.Text, nullable=True)
 
-    # todo: factor these out?
-    library_name: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    library_layout: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    library_selection: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    library_source: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    # todo: right now, this is all 'Influenza A virus'
+    library_name: Mapped[str] = mapped_column(sa.Text, nullable=True)
+    library_layout: Mapped[str] = mapped_column(sa.Text, nullable=True)
+    library_selection: Mapped[str] = mapped_column(sa.Text, nullable=True)
+    library_source: Mapped[str] = mapped_column(sa.Text, nullable=True)
     organism: Mapped[str] = mapped_column(sa.Text, nullable=False)
 
     is_retracted: Mapped[bool] = mapped_column(sa.Boolean, nullable=False)
-    # todo: this needs to come with its tz data attached (it's utc)
     retraction_detected_date: Mapped[datetime] = mapped_column(sa.TIMESTAMP(timezone=True), nullable=True)
 
-    # todo: should have some normalization
     isolation_source: Mapped[str] = mapped_column(sa.Text, nullable=True)
 
     # split out from collection date
     collection_start_date: Mapped[date] = mapped_column(sa.Date, nullable=True)
     collection_end_date: Mapped[date] = mapped_column(sa.Date, nullable=True)
 
-    # these date fields aren't as messy
-    # todo: release date should come with tz info
-    release_date: Mapped[datetime] = mapped_column(sa.TIMESTAMP(timezone=True), nullable=False)
-    creation_date: Mapped[datetime] = mapped_column(sa.TIMESTAMP(timezone=True), nullable=False)
+    release_date: Mapped[datetime] = mapped_column(sa.TIMESTAMP(timezone=True), nullable=True)
+    creation_date: Mapped[datetime] = mapped_column(sa.TIMESTAMP(timezone=True), nullable=True)
 
-    # todo: What is this? all = 1 in the file I have
-    version: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    version: Mapped[str] = mapped_column(sa.Text, nullable=True)
 
-    sample_name: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    sra_study: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    sample_name: Mapped[str] = mapped_column(sa.Text, nullable=True)
+    sra_study: Mapped[str] = mapped_column(sa.Text, nullable=True)
 
     serotype: Mapped[str] = mapped_column(sa.Text, nullable=True)
 
     geo_location_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.geo_locations}.id'), nullable=True)
 
-    consent_level: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    assay_type: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    assay_type: Mapped[str] = mapped_column(sa.Text, nullable=True)
     avg_spot_length: Mapped[float] = mapped_column(sa.Double, nullable=True)
-    bases: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
-    bytes: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
-
-    # todo: I think these could maybe be factored out and stored differently?
-    datastore_filetype: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    datastore_region: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    datastore_provider: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    bases: Mapped[int] = mapped_column(sa.BigInteger, nullable=True)
 
     # wastewater-specific columns
     ww_viral_load: Mapped[float] = mapped_column(sa.Double, nullable=True)
@@ -196,14 +179,9 @@ class Sample(Base):
         self.sra_study = other.sra_study
         self.serotype = other.serotype
         self.geo_location_id = other.geo_location_id
-        self.consent_level = other.consent_level
         self.assay_type = other.assay_type
         self.avg_spot_length = other.avg_spot_length
         self.bases = other.bases
-        self.bytes = other.bytes
-        self.datastore_filetype = other.datastore_filetype
-        self.datastore_region = other.datastore_region
-        self.datastore_provider = other.datastore_provider
 
 
 class Allele(Base):
@@ -558,6 +536,7 @@ class LineageImmediateChild(Base):
         ]
     )
 
+
 class Paper(Base):
     __tablename__ = TableNames.papers
 
@@ -721,7 +700,6 @@ class SqlSnippets:
     '''
 
     drop_trigger_check_cyclic_lineage = f'drop trigger if exists {MiscDbNames.check_cyclic_lineage_trigger} on {TableNames.lineages_immediate_children};'
-
 
     create_function_check_cross_system_lineage = f'''
     create or replace function {MiscDbNames.check_cross_system_lineage}()

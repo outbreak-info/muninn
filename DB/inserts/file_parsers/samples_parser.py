@@ -24,6 +24,7 @@ class SamplesParser(FileParser):
         debug_info = {
             'skipped_malformed': 0,
             'count_preexisting': 0,
+            'malformed_collection_dates': set()
         }
 
         # (country, admin1, admin2, admin3) -> id
@@ -63,10 +64,13 @@ class SamplesParser(FileParser):
                     collection_date = get_value(
                         row,
                         ColNameMapping.collection_date.value,
-                        allow_none=False
+                        allow_none=True
                     )
-                    if collection_date not in {'', 'missing'}:
-                        collection_start_date, collection_end_date = parse_collection_start_and_end(collection_date)
+                    if collection_date is not None:
+                        try:
+                            collection_start_date, collection_end_date = parse_collection_start_and_end(collection_date)
+                        except ValueError | TypeError:
+                            debug_info['malformed_collection_dates'].add(collection_date)
 
                     # parse retraction date
                     retraction_detected_date = get_value(
@@ -81,15 +85,15 @@ class SamplesParser(FileParser):
                     sample = Sample(
                         geo_location_id=geo_location_id,
                         accession=accession,
-                        assay_type=get_value(row, ColNameMapping.assay_type.value),
+                        assay_type=get_value(row, ColNameMapping.assay_type.value, allow_none=True),
                         avg_spot_length=get_value(
                             row,
                             ColNameMapping.avg_spot_length.value,
                             allow_none=True,
                             transform=float
                         ),
-                        bases=get_value(row, ColNameMapping.bases.value, transform=int),
-                        bio_project=get_value(row, ColNameMapping.bio_project.value),
+                        bases=get_value(row, ColNameMapping.bases.value, transform=int, allow_none=True),
+                        bio_project=get_value(row, ColNameMapping.bio_project.value, allow_none=True),
                         bio_sample=get_value(row, ColNameMapping.bio_sample.value, allow_none=True),
                         bio_sample_model=get_value(row, ColNameMapping.bio_sample_model.value),
                         bio_sample_accession=get_value(
@@ -97,27 +101,22 @@ class SamplesParser(FileParser):
                             ColNameMapping.bio_sample_accession.value,
                             allow_none=True
                         ),
-                        bytes=get_value(row, ColNameMapping.bytes_.value, transform=int),
-                        center_name=get_value(row, ColNameMapping.center_name.value),
+                        center_name=get_value(row, ColNameMapping.center_name.value, allow_none=True),
                         collection_start_date=collection_start_date,
                         collection_end_date=collection_end_date,
-                        consent_level=get_value(row, ColNameMapping.consent_level.value),
-                        datastore_filetype=get_value(row, ColNameMapping.datastore_filetype.value),
-                        datastore_provider=get_value(row, ColNameMapping.datastore_provider.value),
-                        datastore_region=get_value(row, ColNameMapping.datastore_region.value),
-                        experiment=get_value(row, ColNameMapping.experiment.value),
+                        experiment=get_value(row, ColNameMapping.experiment.value, allow_none=True),
                         host=get_value(row, ColNameMapping.host.value, allow_none=True),
-                        instrument=get_value(row, ColNameMapping.instrument.value),
+                        instrument=get_value(row, ColNameMapping.instrument.value, allow_none=True),
                         isolate=get_value(row, ColNameMapping.isolate.value, allow_none=True),
-                        library_name=get_value(row, ColNameMapping.library_name.value),
-                        library_layout=get_value(row, ColNameMapping.library_layout.value),
-                        library_selection=get_value(row, ColNameMapping.library_selection.value),
-                        library_source=get_value(row, ColNameMapping.library_source.value),
+                        library_name=get_value(row, ColNameMapping.library_name.value, allow_none=True),
+                        library_layout=get_value(row, ColNameMapping.library_layout.value, allow_none=True),
+                        library_selection=get_value(row, ColNameMapping.library_selection.value, allow_none=True),
+                        library_source=get_value(row, ColNameMapping.library_source.value, allow_none=True),
                         organism=get_value(row, ColNameMapping.organism.value),
-                        platform=get_value(row, ColNameMapping.platform.value),
-                        version=get_value(row, ColNameMapping.version.value),
-                        sample_name=get_value(row, ColNameMapping.sample_name.value),
-                        sra_study=get_value(row, ColNameMapping.sra_study.value),
+                        platform=get_value(row, ColNameMapping.platform.value, allow_none=True),
+                        version=get_value(row, ColNameMapping.version.value, allow_none=True),
+                        sample_name=get_value(row, ColNameMapping.sample_name.value, allow_none=True),
+                        sra_study=get_value(row, ColNameMapping.sra_study.value, allow_none=True),
                         serotype=get_value(row, ColNameMapping.serotype.value, allow_none=True),
                         isolation_source=get_value(
                             row,
@@ -133,12 +132,14 @@ class SamplesParser(FileParser):
                         release_date=get_value(
                             row,
                             ColNameMapping.release_date.value,
-                            transform=dateutil.parser.isoparse
+                            transform=dateutil.parser.isoparse,
+                            allow_none=True
                         ),
                         creation_date=get_value(
                             row,
                             ColNameMapping.creation_date.value,
-                            transform=dateutil.parser.isoparse
+                            transform=dateutil.parser.isoparse,
+                            allow_none=True
                         ),
                     )
 
@@ -146,7 +147,6 @@ class SamplesParser(FileParser):
                     if preexisting:
                         debug_info['count_preexisting'] += 1
                 except ValueError:
-                    # todo: logging
                     debug_info['skipped_malformed'] += 1
 
         print(debug_info)
@@ -167,13 +167,8 @@ class SamplesParser(FileParser):
             ColNameMapping.bio_project,
             ColNameMapping.bio_sample,
             ColNameMapping.bio_sample_model,
-            ColNameMapping.bytes_,
             ColNameMapping.center_name,
             ColNameMapping.collection_date,
-            ColNameMapping.consent_level,
-            ColNameMapping.datastore_filetype,
-            ColNameMapping.datastore_provider,
-            ColNameMapping.datastore_region,
             ColNameMapping.experiment,
             ColNameMapping.geo_loc_name,
             ColNameMapping.host,
@@ -206,13 +201,8 @@ class ColNameMapping(Enum):
     bio_project = 'BioProject'
     bio_sample = 'BioSample'
     bio_sample_model = 'BioSampleModel'
-    bytes_ = 'Bytes'
     center_name = 'Center Name'
     collection_date = 'Collection_Date'
-    consent_level = 'Consent'
-    datastore_filetype = 'DATASTORE filetype'
-    datastore_provider = 'DATASTORE provider'
-    datastore_region = 'DATASTORE region'
     experiment = 'Experiment'
     geo_loc_name_country = 'geo_loc_name_country'
     geo_loc_name = 'geo_loc_name'

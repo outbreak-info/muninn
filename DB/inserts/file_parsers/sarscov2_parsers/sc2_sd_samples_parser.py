@@ -1,7 +1,7 @@
 import csv
 import time
 from time import perf_counter
-from typing import Set, Any, Dict
+from typing import Set
 
 import polars as pl
 
@@ -28,26 +28,16 @@ class SC2SDSamplesParser(FileParser):
             .select(set(column_name_map.keys()))
             .drop_nulls([pl.col(COLLECTION_DATE)])
             .with_columns(  # This column has some missing values that must be filled
-                pl.lit("NA").alias(StandardColumnNames.bio_project),
                 pl.lit("NA").alias(StandardColumnNames.organism),
-                pl.lit("1970-01-01T00:00:00Z").str.to_datetime(time_zone="UTC").alias(StandardColumnNames.release_date),
-                pl.lit("1970-01-01T00:00:00Z").str.to_datetime(time_zone="UTC").alias(StandardColumnNames.creation_date),
-                pl.lit(-1).cast(pl.Int64).alias(StandardColumnNames.bases)
             )
         )
         # unique by accession? No, leave it out for now to force errors on conflict.
-
-        # Add in not-null columns with placeholder values
-        samples_padded = (
-            samples_input
-            .join(SC2SDSamplesParser._get_placeholder_value_map(), how='cross')
-        )
 
         geo_locations = await SC2SDSamplesParser._insert_geo_locations(samples_input)
         existing_samples = await get_samples_accession_and_id_as_pl_df()
 
         samples_finished: pl.DataFrame = (
-            samples_padded
+            samples_input
             .join(geo_locations.lazy(), on=pl.col(GEO_LOCATION), how='left')
             .drop(pl.col(GEO_LOCATION))
             .with_columns(
@@ -139,13 +129,6 @@ class SC2SDSamplesParser(FileParser):
         )
         await batch_upsert_samples(updated_samples)
 
-    @staticmethod
-    def _get_placeholder_value_map() -> pl.LazyFrame:
-        placeholders: Dict[str, Any] = {cn: 'NA' for cn in fields_not_present_not_null}
-        placeholders[StandardColumnNames.bytes] = -1
-        placeholders[StandardColumnNames.is_retracted] = False
-        return pl.LazyFrame(placeholders)
-
     def _verify_header(self):
         with open(self.filename, 'r') as f:
             reader = csv.DictReader(f, delimiter=self.delimiter)
@@ -158,55 +141,9 @@ class SC2SDSamplesParser(FileParser):
         return set(column_name_map.keys())
 
 
-"""
-metadata
-    fields used
-        ID
-        host
-        collection_date
-        location
-"""
-
 column_name_map = {
     StandardColumnNames.accession: 'ID',
     StandardColumnNames.host: 'host',
     COLLECTION_DATE: 'collection_date',
     GEO_LOCATION: 'location'
-}
-
-fields_not_present_not_null = {
-    StandardColumnNames.bio_sample_model,
-    StandardColumnNames.center_name,
-    StandardColumnNames.experiment,
-    StandardColumnNames.instrument,
-    StandardColumnNames.platform,
-    StandardColumnNames.library_source,
-    StandardColumnNames.library_selection,
-    StandardColumnNames.library_name,
-    StandardColumnNames.library_layout,
-    StandardColumnNames.is_retracted,  # bool
-    StandardColumnNames.version,
-    StandardColumnNames.sample_name,
-    StandardColumnNames.sra_study,
-    StandardColumnNames.consent_level,
-    StandardColumnNames.assay_type,
-    StandardColumnNames.bytes,  # int
-    StandardColumnNames.datastore_filetype,
-    StandardColumnNames.datastore_provider,
-    StandardColumnNames.datastore_region
-}
-
-fields_not_present_nullable = {
-    StandardColumnNames.bio_sample_accession,
-    StandardColumnNames.retraction_detected_date,
-    StandardColumnNames.serotype,
-    StandardColumnNames.avg_spot_length,
-    StandardColumnNames.bio_project,
-    StandardColumnNames.bio_sample,
-    StandardColumnNames.isolate,
-    StandardColumnNames.organism,
-    StandardColumnNames.isolation_source,
-    StandardColumnNames.release_date,
-    StandardColumnNames.creation_date,
-    StandardColumnNames.bases
 }
