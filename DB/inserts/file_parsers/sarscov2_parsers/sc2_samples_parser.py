@@ -27,6 +27,7 @@ class SC2SamplesParser(FileParser):
             .rename({old: new for new, old in column_name_map.items()})
             .select(set(column_name_map.keys()))
             .drop_nulls([pl.col(COLLECTION_DATE)])
+            .with_columns(pl.lit(False).alias(StandardColumnNames.is_retracted))
         )
         # unique by accession? No, leave it out for now to force errors on conflict.
 
@@ -146,8 +147,6 @@ column_name_map = {
     StandardColumnNames.organism: 'Virus_OrganismName',
     StandardColumnNames.isolation_source: 'Isolate_Source',
     COLLECTION_DATE: 'Collection_Date',
-    StandardColumnNames.release_date: 'ReleaseDate',
-    StandardColumnNames.creation_date: 'UpdateDate',  # todo: check on this mapping
     GEO_LOCATION: 'Geographic_Location',
     StandardColumnNames.census_region: 'census_region',
     StandardColumnNames.bases: 'Length',
