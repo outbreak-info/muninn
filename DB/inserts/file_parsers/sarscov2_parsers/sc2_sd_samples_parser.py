@@ -29,6 +29,7 @@ class SC2SDSamplesParser(FileParser):
             .drop_nulls([pl.col(COLLECTION_DATE)])
             .with_columns(  # This column has some missing values that must be filled
                 pl.lit("NA").alias(StandardColumnNames.organism),
+                pl.lit(False).alias(StandardColumnNames.is_retracted)
             )
         )
         # unique by accession? No, leave it out for now to force errors on conflict.
