@@ -200,8 +200,8 @@ class PhenotypeMetricInfo(BaseModel):
     def from_db_object(cls, dbo: 'PhenotypeMetric') -> 'PhenotypeMetricInfo':
         return PhenotypeMetricInfo(
             id=dbo.id,
-            name=dbo.name,
-            assay_type=dbo.assay_type
+            name=dbo.phenotype_metric_name,
+            assay_type=dbo.phenotype_metric_assay_type
         )
 
 

@@ -86,8 +86,8 @@ class DmsFileParser(FileParser):
                     except KeyError:
                         metric_id = await find_or_insert_metric(
                             PhenotypeMetric(
-                                name=canonical_name,
-                                assay_type=PhenotypeMetricAssayTypes.DMS
+                                phenotype_metric_name=canonical_name,
+                                phenotype_metric_assay_type=PhenotypeMetricAssayTypes.DMS
                             )
                         )
                         cache_metric_ids[canonical_name] = metric_id

@@ -192,7 +192,8 @@ class StandardColumnNames:
     admin3_name = 'admin3_name'
 
     # phenotype metrics
-    name = 'name'
+    phenotype_metric_name = 'phenotype_metric_name'
+    phenotype_metric_assay_type = 'phenotype_metric_assay_type'
 
     # papers
     authors = 'authors'

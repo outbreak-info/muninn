@@ -406,15 +406,14 @@ class PhenotypeMetric(Base):
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
-    name: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    # todo: change name to avoid conflict with samples
-    assay_type: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    phenotype_metric_name: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    phenotype_metric_assay_type: Mapped[str] = mapped_column(sa.Text, nullable=False)
 
     __table_args__ = tuple(
         [
-            UniqueConstraint(StandardColumnNames.name, name='uq_phenotype_metrics_name'),
-            CheckConstraint(f"{StandardColumnNames.name} <> ''", name='name_not_empty'),
-            CheckConstraint(f"{StandardColumnNames.assay_type} <> ''", name='assay_type_not_empty')
+            UniqueConstraint(StandardColumnNames.phenotype_metric_name, name='uq_phenotype_metrics_name'),
+            CheckConstraint(f"{StandardColumnNames.phenotype_metric_name} <> ''", name='name_not_empty'),
+            CheckConstraint(f"{StandardColumnNames.phenotype_metric_assay_type} <> ''", name='assay_type_not_empty')
         ]
     )
 

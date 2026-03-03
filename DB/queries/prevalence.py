@@ -7,6 +7,7 @@ from DB.models import IntraHostVariant, Sample, Allele, AminoAcid, Mutation, Int
 from DB.queries.helpers import get_appropriate_translations_table_and_id
 from api.models import VariantFreqInfo, VariantCountPhenoScoreInfo, MutationCountInfo
 from parser.parser import parser
+from utils.constants import StandardColumnNames
 from utils.csv_helpers import parse_change_string
 
 
@@ -164,7 +165,9 @@ async def _get_pheno_values_and_counts(
                 left join phenotype_metric_values pmv on pmv.amino_acid_id = aas.id
                 left join phenotype_metrics pm on pm.id = pmv.phenotype_metric_id
                 left join geo_locations gl on gl.id = s.geo_location_id
-                where aas.gff_feature = :region and pm.name = :pm_name {no_refs_filter}
+                where aas.gff_feature = :region 
+                and pm.{StandardColumnNames.phenotype_metric_name} = :pm_name 
+                {no_refs_filter}
                 {samples_query_addin}
                 group by aas.ref_aa, aas.position_aa, aas.alt_aa, pmv.value
                 order by count desc;
