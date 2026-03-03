@@ -132,7 +132,6 @@ async def get_count_x_by_y(x: str, y: str):
             case _:
                 raise HTTPException(status_code=400, detail='counts are available for: samples, variants, mutations')
     except ProgrammingError as e:
-        # todo: logging
         short_message = str(e).split('\n')[0]
         raise HTTPException(status_code=400, detail=short_message)
 
