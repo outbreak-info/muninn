@@ -114,8 +114,6 @@ class FreyjaDemixedLineageHierarchyYamlParser(FileParser):
         relationships_added = await copy_insert_lineage_children(new_relationships)
         print(f'New relationships added: {relationships_added}')
 
-        print(relationships)  # rm
-
     def extract_relationships(self):
         def make_pc_entry(parent_name: str, child_name: str) -> dict:
             return {PARENT_NAME: parent_name, CHILD_NAME: child_name}

@@ -50,36 +50,12 @@ async def copy_insert_samples(samples: pl.DataFrame) -> str:
 
 async def batch_upsert_samples(samples: pl.DataFrame):
     update_columns = [
-        StandardColumnNames.bio_project,
-        StandardColumnNames.bio_sample_model,
-        StandardColumnNames.center_name,
-        StandardColumnNames.experiment,
-        StandardColumnNames.host,
-        StandardColumnNames.instrument,
-        StandardColumnNames.platform,
-        StandardColumnNames.isolate,
-        StandardColumnNames.library_name,
-        StandardColumnNames.library_layout,
-        StandardColumnNames.library_selection,
-        StandardColumnNames.library_source,
         StandardColumnNames.organism,
         StandardColumnNames.is_retracted,
-        StandardColumnNames.isolation_source,
         StandardColumnNames.collection_start_date,
         StandardColumnNames.collection_end_date,
-        StandardColumnNames.release_date,
-        StandardColumnNames.creation_date,
-        StandardColumnNames.version,
-        StandardColumnNames.sample_name,
-        StandardColumnNames.sra_study,
-        StandardColumnNames.geo_location_id,
-        StandardColumnNames.consent_level,
-        StandardColumnNames.assay_type,
-        StandardColumnNames.bases,
-        StandardColumnNames.bytes,
-        StandardColumnNames.datastore_filetype,
-        StandardColumnNames.datastore_region,
-        StandardColumnNames.datastore_provider,
+        StandardColumnNames.host,
+        StandardColumnNames.geo_location_id
     ]
     # this is just the columns expected to be null in the SC2 data
     # if there are errors because another col is showing up as null, it may need to be added
@@ -88,6 +64,25 @@ async def batch_upsert_samples(samples: pl.DataFrame):
         StandardColumnNames.retraction_detected_date,
         StandardColumnNames.serotype,
         StandardColumnNames.avg_spot_length,
+        StandardColumnNames.bio_project,
+        StandardColumnNames.bio_sample_model,
+        StandardColumnNames.center_name,
+        StandardColumnNames.experiment,
+        StandardColumnNames.instrument,
+        StandardColumnNames.platform,
+        StandardColumnNames.isolate,
+        StandardColumnNames.library_name,
+        StandardColumnNames.library_layout,
+        StandardColumnNames.library_selection,
+        StandardColumnNames.library_source,
+        StandardColumnNames.isolation_source,
+        StandardColumnNames.release_date,
+        StandardColumnNames.creation_date,
+        StandardColumnNames.version,
+        StandardColumnNames.sample_name,
+        StandardColumnNames.sra_study,
+        StandardColumnNames.assay_type,
+        StandardColumnNames.bases
     ]
     for colname in nullable_columns:
         if colname in samples.columns:

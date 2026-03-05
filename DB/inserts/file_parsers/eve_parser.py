@@ -66,8 +66,8 @@ class EveParser(FileParser):
                     except KeyError:
                         metric_id = await find_or_insert_metric(
                             PhenotypeMetric(
-                                name=col.name,
-                                assay_type=PhenotypeMetricAssayTypes.EVE
+                                phenotype_metric_name=col.name,
+                                phenotype_metric_assay_type=PhenotypeMetricAssayTypes.EVE
                             )
                         )
                         cache_phenotype_metrics[col.name] = metric_id

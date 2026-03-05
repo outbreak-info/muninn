@@ -150,14 +150,9 @@ class StandardColumnNames:
     sra_study = 'sra_study'
     serotype = 'serotype'
     geo_location_id = 'geo_location_id'
-    consent_level = 'consent_level'
     assay_type = 'assay_type'
     avg_spot_length = 'avg_spot_length'
     bases = 'bases'
-    bytes = 'bytes'
-    datastore_filetype = 'datastore_filetype'
-    datastore_region = 'datastore_region'
-    datastore_provider = 'datastore_provider'
     ww_viral_load = 'ww_viral_load'
     ww_catchment_population = 'ww_catchment_population'
     ww_site_id = 'ww_site_id'
@@ -197,7 +192,8 @@ class StandardColumnNames:
     admin3_name = 'admin3_name'
 
     # phenotype metrics
-    name = 'name'
+    phenotype_metric_name = 'phenotype_metric_name'
+    phenotype_metric_assay_type = 'phenotype_metric_assay_type'
 
     # papers
     authors = 'authors'

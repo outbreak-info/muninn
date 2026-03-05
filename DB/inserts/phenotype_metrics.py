@@ -10,7 +10,7 @@ async def find_or_insert_metric(pm: PhenotypeMetric) -> int:
             select(PhenotypeMetric.id)
             .where(
                 # they are uq by name, so this is enough
-                PhenotypeMetric.name == pm.name
+                PhenotypeMetric.phenotype_metric_name == pm.phenotype_metric_name
             )
         )
         if id_ is None:

@@ -132,7 +132,6 @@ async def get_count_x_by_y(x: str, y: str):
             case _:
                 raise HTTPException(status_code=400, detail='counts are available for: samples, variants, mutations')
     except ProgrammingError as e:
-        # todo: logging
         short_message = str(e).split('\n')[0]
         raise HTTPException(status_code=400, detail=short_message)
 
@@ -584,7 +583,7 @@ async def get_phenotype_metric_value_by_variant_quantile(phenotype_metric_name: 
     return await DB.queries.phenotype_metrics.get_phenotype_metric_value_by_variant_quantile(phenotype_metric_name, quantile)
 
 @app.get('/v0/phenotype_metric_values:getMinAndMaxValues', response_model=List)
-async def get_phenotype_metric_value_by_variant_quantile(phenotype_metric_name: str) -> List:
+async def get_phenotype_metric_value_min_and_max(phenotype_metric_name: str) -> List:
     return await DB.queries.phenotype_metrics.get_min_max_pheno_metric_value(phenotype_metric_name)
 
 @app.get('/v0/annotations:byMutationsAndCollectionDate', response_model=List[Dict])
