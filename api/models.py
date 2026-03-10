@@ -93,8 +93,8 @@ class SampleInfo(BaseModel):
     is_retracted: bool
     retraction_detected_date: datetime | None
     isolation_source: str | None
-    release_date: datetime
-    creation_date: datetime
+    release_date: datetime | None
+    creation_date: datetime | None
     version: str | None
     sample_name: str | None
     sra_study: str | None

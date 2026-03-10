@@ -115,6 +115,8 @@ if [[ $AUTO = true ]]; then
   if [[ -f "$TMP_FILE" ]]; then
     FREYJA_DEMIXED_LINEAGE_HIERARCHY_FILE="$TMP_FILE"
     echo "using lineage hierarchy file: $FREYJA_DEMIXED_LINEAGE_HIERARCHY_FILE" >> "$LOG"
+  fi
+
   # Lineage file
   TMP_FILE=$(find "$ARCHIVE_DEST_DIR" -type f -name "*lineage*.csv" | head -1)
   if [[ -f "$TMP_FILE" ]]; then
