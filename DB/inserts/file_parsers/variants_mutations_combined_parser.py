@@ -15,10 +15,11 @@ ALLELE_REF_CONFLICTS_FILE = '/tmp/allele_ref_conflicts.csv'
 
 class VariantsMutationsCombinedParser(FileParser):
 
-    def __init__(self, variants_filename: str, mutations_filename: str):
+    def __init__(self, variants_filename: str, mutations_filename: str, bigmode: bool = False):
         self.variants_filename = variants_filename
         self.mutations_filename = mutations_filename
         self.delimiter = '\t'
+        self.bigmode = bigmode
 
         # find out where our files are (are we in a container or not?) and get absolute and relative paths
         self.mutations_filename_relative, self.mutations_filename_local = (
@@ -630,3 +631,45 @@ class VariantsMutationsCombinedParser(FileParser):
         StandardColumnNames.alt_aa: 'alt_aa',
         StandardColumnNames.position_aa: 'pos_aa',
     }
+
+
+class VariantsMutationsCombinedParserBig(VariantsMutationsCombinedParser):
+    def __init__(self, variants_filename: str, mutations_filename: str):
+        super().__init__(variants_filename, mutations_filename)
+        self.tmp_wal_size_mb = 1024 * 2
+        self.tmp_checkpoint_timeout_s = 3600
+
+    async def parse_and_insert(self):
+        await self._increase_wal_size()
+        await super().parse_and_insert()
+        await self._reset_wal_size()
+
+    async def _increase_wal_size(self):
+        async with get_async_write_session() as session:
+            connection = await session.connection()
+            await connection.execute(text('COMMIT'))
+            await connection.execute(
+                text(f'alter system set max_wal_size = {self.tmp_wal_size_mb}')
+            )
+            await connection.execute(
+                text(f'alter system set checkpoint_timeout = {self.tmp_checkpoint_timeout_s}')
+            )
+            await connection.execute(
+                text('select * from pg_reload_conf()')
+            )
+
+
+    @staticmethod
+    async def _reset_wal_size():
+        async with get_async_write_session() as session:
+            connection = await session.connection()
+            await connection.execute(text('COMMIT'))
+            await connection.execute(
+                text('alter system reset max_wal_size')
+            )
+            await connection.execute(
+                text('alter system reset checkpoint_timeout')
+            )
+            await connection.execute(
+                text('select * from pg_reload_conf()')
+            )

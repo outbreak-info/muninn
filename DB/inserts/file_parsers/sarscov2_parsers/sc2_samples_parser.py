@@ -138,6 +138,7 @@ class SC2SamplesParser(FileParser):
     def get_required_column_set(cls) -> Set[str]:
         return set(column_name_map.keys())
 
+# todo: shimmed for testing
 column_name_map = {
     StandardColumnNames.accession: 'Accession',
     StandardColumnNames.bio_project: 'Bioprojects',
@@ -148,10 +149,10 @@ column_name_map = {
     StandardColumnNames.isolation_source: 'Isolate_Source',
     COLLECTION_DATE: 'Collection_Date',
     GEO_LOCATION: 'Geographic_Location',
-    StandardColumnNames.census_region: 'census_region',
     StandardColumnNames.bases: 'Length',
-    StandardColumnNames.ww_viral_load: 'viral_load',
-    StandardColumnNames.ww_catchment_population : 'population',
-    StandardColumnNames.ww_site_id: 'site_id',
-    StandardColumnNames.ww_collected_by: 'collected_by',
+    # StandardColumnNames.census_region: 'census_region',
+    # StandardColumnNames.ww_viral_load: 'viral_load',
+    # StandardColumnNames.ww_catchment_population : 'population',
+    # StandardColumnNames.ww_site_id: 'site_id',
+    # StandardColumnNames.ww_collected_by: 'collected_by',
 }

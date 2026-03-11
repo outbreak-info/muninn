@@ -17,7 +17,8 @@ from DB.inserts.file_parsers.sarscov2_parsers.eve_parser import Sc2EveCsvParser
 from DB.inserts.file_parsers.sarscov2_parsers.sc2_samples_parser import SC2SamplesParser
 from DB.inserts.file_parsers.sarscov2_parsers.sc2_sd_samples_parser import SC2SDSamplesParser
 from DB.inserts.file_parsers.simple_lineage_parser import GenofluLineageParser, Sc2LineageParser
-from DB.inserts.file_parsers.variants_mutations_combined_parser import VariantsMutationsCombinedParser
+from DB.inserts.file_parsers.variants_mutations_combined_parser import VariantsMutationsCombinedParser, \
+    VariantsMutationsCombinedParserBig
 
 
 def main():
@@ -35,6 +36,7 @@ def main():
         'sc2_dms_tsv': Sc2DmsTsvParser,
         'freyja_demixed': FreyjaDemixedParser,
         'variants_mutations_combined_tsv': VariantsMutationsCombinedParser,
+        'variants_mutations_combined_big_tsv': VariantsMutationsCombinedParserBig,
         'sc2_samples': SC2SamplesParser,
         'sc2_sd_samples': SC2SDSamplesParser,
         'flumut_tsv': FlumutTsvParser,
