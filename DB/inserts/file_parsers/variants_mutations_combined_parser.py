@@ -15,11 +15,10 @@ ALLELE_REF_CONFLICTS_FILE = '/tmp/allele_ref_conflicts.csv'
 
 class VariantsMutationsCombinedParser(FileParser):
 
-    def __init__(self, variants_filename: str, mutations_filename: str, bigmode: bool = False):
+    def __init__(self, variants_filename: str, mutations_filename: str):
         self.variants_filename = variants_filename
         self.mutations_filename = mutations_filename
         self.delimiter = '\t'
-        self.bigmode = bigmode
 
         # find out where our files are (are we in a container or not?) and get absolute and relative paths
         self.mutations_filename_relative, self.mutations_filename_local = (
@@ -82,7 +81,7 @@ class VariantsMutationsCombinedParser(FileParser):
             await session.execute(
                 text(
                     f'''
-                    create table tmp_mutations
+                    create unlogged table tmp_mutations
                     (
                         id          bigserial not null primary key,
                         accession   text      not null,
@@ -218,7 +217,7 @@ class VariantsMutationsCombinedParser(FileParser):
             await session.execute(
                 text(
                     '''
-                    create table tmp_alleles
+                    create unlogged table tmp_alleles
                     (
                         region      text not null,
                         position_nt int  not null,
@@ -323,7 +322,7 @@ class VariantsMutationsCombinedParser(FileParser):
             await session.execute(
                 text(
                     '''
-                    create table tmp_amino_acids
+                    create unlogged table tmp_amino_acids
                     (
                         gff_feature text not null,
                         ref_aa      text not null,
@@ -432,11 +431,38 @@ class VariantsMutationsCombinedParser(FileParser):
             await session.execute(
                 text(
                     '''
-                    insert into mutations (sample_id, allele_id)
-                    select distinct s.id, a.id from tmp_mutations tmut
-                    left join alleles a on a.region = tmut.region and a.position_nt = tmut.position_nt and a.alt_nt = tmut.alt_nt
-                    left join samples s on s.accession = tmut.accession
-                    on conflict (sample_id, allele_id) do nothing;
+                    create unlogged table tmp_mutations_staging
+                    as
+                    select s.id as sample_id, a.id as allele_id
+                    from tmp_mutations tmut
+                    inner join alleles a on a.region = tmut.region and a.position_nt = tmut.position_nt and a.alt_nt = tmut.alt_nt
+                    inner join samples s on s.accession = tmut.accession;
+                    '''
+                )
+            )
+
+            await session.execute(
+                text(
+                    '''
+                    delete
+                    from tmp_mutations_staging
+                    where (sample_id, allele_id) in
+                          (
+                              select sample_id, allele_id
+                              from mutations
+                          );
+                    '''
+                )
+            )
+
+            await session.execute(
+                text(
+                    '''
+                    insert into mutations (
+                        sample_id, allele_id
+                    )
+                    select sample_id, allele_id from tmp_mutations_staging
+                    group by sample_id, allele_id;
                     '''
                 )
             )
@@ -524,7 +550,7 @@ class VariantsMutationsCombinedParser(FileParser):
     @staticmethod
     async def _clean_up_tmp_tables():
         async with get_async_write_session() as session:
-            for t in ['tmp_mutations', 'tmp_variants', 'tmp_alleles', 'tmp_amino_acids']:
+            for t in ['tmp_mutations', 'tmp_variants', 'tmp_alleles', 'tmp_amino_acids', 'tmp_mutations_staging']:
                 await session.execute(
                     text(f'drop table if exists {t};')
                 )
@@ -636,7 +662,7 @@ class VariantsMutationsCombinedParser(FileParser):
 class VariantsMutationsCombinedParserBig(VariantsMutationsCombinedParser):
     def __init__(self, variants_filename: str, mutations_filename: str):
         super().__init__(variants_filename, mutations_filename)
-        self.tmp_wal_size_mb = 1024 * 20
+        self.tmp_wal_size_mb = 1024 * 200
         self.tmp_checkpoint_timeout_s = 3600
 
     async def parse_and_insert(self):
