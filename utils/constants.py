@@ -232,6 +232,11 @@ class ConstraintNames:
     uq_intra_host_variants_sample_allele_pair = 'uq_intra_host_variants_sample_allele_pair'
     uq_samples_accession = 'uq_samples_accession'
     uq_mutations_sample_allele_pair = 'uq_mutations_sample_allele_pair'
+    fk_mutations_sample_id_samples = 'fk_mutations_sample_id_samples'
+    fk_mutations_allele_id_alleles = 'fk_mutations_sample_id_samples'
+
+class IndexNames:
+    ix_mutations_allele_id = 'ix_mutations_allele_id'
 
 class MiscDbNames:
     check_cyclic_lineage = 'check_cyclic_lineage'

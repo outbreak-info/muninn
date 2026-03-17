@@ -7,7 +7,7 @@ from sqlalchemy.sql.expression import text
 
 from DB.engine import get_async_write_session, get_async_session
 from DB.inserts.file_parsers.file_parser import FileParser
-from utils.constants import StandardColumnNames, CONTAINER_DATA_DIRECTORY, Env, ConstraintNames
+from utils.constants import StandardColumnNames, CONTAINER_DATA_DIRECTORY, Env, ConstraintNames, IndexNames
 
 AMINO_ACID_REF_CONFLICTS_FILE = '/tmp/amino_acid_ref_conflicts.csv'
 ALLELE_REF_CONFLICTS_FILE = '/tmp/allele_ref_conflicts.csv'
@@ -474,16 +474,13 @@ class VariantsMutationsCombinedParser(FileParser):
             text(f'alter table mutations drop constraint {ConstraintNames.uq_mutations_sample_allele_pair};')
         )
         await session.execute(
-            # todo: index name
-            text('drop index ix_mutations_allele_id;')
+            text(f'drop index {IndexNames.ix_mutations_allele_id};')
         )
         await session.execute(
-            # todo: constraint name
-            text('alter table mutations drop constraint fk_mutations_allele_id_alleles;')
+            text(f'alter table mutations drop constraint {ConstraintNames.fk_mutations_sample_id_samples};')
         )
         await session.execute(
-            # todo: constraint name
-            text('alter table mutations drop constraint fk_mutations_sample_id_samples;')
+            text(f'alter table mutations drop constraint {ConstraintNames.fk_mutations_allele_id_alleles};')
         )
 
     @staticmethod
@@ -497,20 +494,17 @@ class VariantsMutationsCombinedParser(FileParser):
             )
         )
         await session.execute(
-            # todo: index name
-            text('create index ix_mutations_allele_id on mutations (allele_id);')
+            text(f'create index {IndexNames.ix_mutations_allele_id} on mutations (allele_id);')
         )
         await session.execute(
-            # todo: constraint name
             text(
-                'alter table mutations add constraint fk_mutations_allele_id_alleles foreign key (allele_id) references alleles (id);'
-                )
+                f'alter table mutations add constraint {ConstraintNames.fk_mutations_allele_id_alleles} foreign key (allele_id) references alleles (id);'
+            )
         )
         await session.execute(
-            # todo: constraint name
             text(
-                'alter table mutations add constraint fk_mutations_sample_id_samples foreign key (sample_id) references samples (id)'
-                )
+                f'alter table mutations add constraint {ConstraintNames.fk_mutations_sample_id_samples} foreign key (sample_id) references samples (id)'
+            )
         )
 
     @staticmethod
