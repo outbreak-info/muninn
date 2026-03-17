@@ -13,7 +13,7 @@ from utils.constants import StandardColumnNames, COLLECTION_DATE, GEO_LOCATION
 from utils.dates_and_times import parse_collection_start_and_end
 
 
-class SC2SamplesParser(FileParser):
+class SC2WastewaterSamplesParser(FileParser):
     def __init__(self, filename: str):
         self.filename = filename
         self.delimiter = '\t'
@@ -31,7 +31,7 @@ class SC2SamplesParser(FileParser):
         )
         # unique by accession? No, leave it out for now to force errors on conflict.
 
-        geo_locations = await SC2SamplesParser._insert_geo_locations(samples_input)
+        geo_locations = await SC2WastewaterSamplesParser._insert_geo_locations(samples_input)
         existing_samples = await get_samples_accession_and_id_as_pl_df()
 
         samples_finished: pl.DataFrame = (
@@ -54,8 +54,8 @@ class SC2SamplesParser(FileParser):
         )
         setup_elapsed = perf_counter() - start
         print(f'samples: starting db ops. setup took {round(setup_elapsed, 2)}s')
-        await SC2SamplesParser._insert_new_samples(samples_finished, existing_samples)
-        await SC2SamplesParser._update_existing_samples(samples_finished, existing_samples)
+        await SC2WastewaterSamplesParser._insert_new_samples(samples_finished, existing_samples)
+        await SC2WastewaterSamplesParser._update_existing_samples(samples_finished, existing_samples)
 
     @staticmethod
     async def _insert_geo_locations(samples_input: pl.LazyFrame) -> pl.DataFrame:
