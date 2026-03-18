@@ -233,7 +233,7 @@ class ConstraintNames:
     uq_samples_accession = 'uq_samples_accession'
     uq_mutations_sample_allele_pair = 'uq_mutations_sample_allele_pair'
     fk_mutations_sample_id_samples = 'fk_mutations_sample_id_samples'
-    fk_mutations_allele_id_alleles = 'fk_mutations_sample_id_samples'
+    fk_mutations_allele_id_alleles = 'fk_mutations_allele_id_alleles'
 
 class IndexNames:
     ix_mutations_allele_id = 'ix_mutations_allele_id'
