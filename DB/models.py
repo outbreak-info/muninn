@@ -202,10 +202,10 @@ class Allele(Base):
                 StandardColumnNames.position_nt,
                 StandardColumnNames.alt_nt,
                 postgresql_nulls_not_distinct=True,
-                name='uq_alleles_nt_values'
+                name=ConstraintNames.uq_alleles_nt_values,
             ),
-            CheckConstraint(f"{StandardColumnNames.alt_nt} <> ''", name='ck_alleles_alt_nt_not_empty'),
-            CheckConstraint(f"{StandardColumnNames.ref_nt} <> ''", name='ck_alleles_ref_nt_not_empty')
+            CheckConstraint(f"{StandardColumnNames.alt_nt} <> ''", name=ConstraintNames.ck_alleles_alt_nt_not_empty),
+            CheckConstraint(f"{StandardColumnNames.ref_nt} <> ''", name=ConstraintNames.ck_alleles_ref_nt_not_empty)
         ]
     )
 
@@ -227,17 +227,32 @@ class AminoAcid(Base):
 
     __table_args__ = tuple(
         [
-            CheckConstraint(f"{StandardColumnNames.gff_feature} <> ''", name='ck_amino_acids_gff_feature_not_empty'),
-            CheckConstraint(f"{StandardColumnNames.ref_aa} <> ''", name='ck_amino_acids_ref_aa_not_empty'),
-            CheckConstraint(f"{StandardColumnNames.alt_aa} <> ''", name='ck_amino_acids_alt_aa_not_empty'),
-            CheckConstraint(f"{StandardColumnNames.alt_codon} <> ''", name='ck_amino_acids_alt_codon_not_empty'),
-            CheckConstraint(f"{StandardColumnNames.ref_codon} <> ''", name='ck_amino_acids_ref_codon_not_empty'),
+            CheckConstraint(
+                f"{StandardColumnNames.gff_feature} <> ''",
+                name=ConstraintNames.ck_amino_acids_gff_feature_not_empty
+            ),
+            CheckConstraint(
+                f"{StandardColumnNames.ref_aa} <> ''",
+                name=ConstraintNames.ck_amino_acids_ref_aa_not_empty
+            ),
+            CheckConstraint(
+                f"{StandardColumnNames.alt_aa} <> ''",
+                name=ConstraintNames.ck_amino_acids_alt_aa_not_empty
+            ),
+            CheckConstraint(
+                f"{StandardColumnNames.alt_codon} <> ''",
+                name=ConstraintNames.ck_amino_acids_alt_codon_not_empty
+            ),
+            CheckConstraint(
+                f"{StandardColumnNames.ref_codon} <> ''",
+                name=ConstraintNames.ck_amino_acids_ref_codon_not_empty
+            ),
             UniqueConstraint(
                 StandardColumnNames.position_aa,
                 StandardColumnNames.alt_aa,
                 StandardColumnNames.gff_feature,
                 StandardColumnNames.alt_codon,
-                name=f'uq_{__tablename__}_gff_feature_position_alt_aa_alt_codon'
+                name=ConstraintNames.uq_amino_acids_gff_feature_position_alt_aa_alt_codon
             )
         ]
     )
@@ -283,8 +298,14 @@ class IntraHostVariant(Base):
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
-    sample_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.samples}.id'), nullable=False)
-    allele_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.alleles}.id'), nullable=False, index=True)
+    sample_id: Mapped[int] = mapped_column(
+        sa.ForeignKey(f'{TableNames.samples}.id', name=ConstraintNames.fk_intra_host_variants_sample_id_samples),
+        nullable=False
+    )
+    allele_id: Mapped[int] = mapped_column(
+        sa.ForeignKey(f'{TableNames.alleles}.id', name=ConstraintNames.fk_intra_host_variants_allele_id_alleles),
+        nullable=False
+    )
 
     ref_dp: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
     alt_dp: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
@@ -303,8 +324,10 @@ class IntraHostVariant(Base):
                 StandardColumnNames.sample_id,
                 StandardColumnNames.allele_id,
                 name=ConstraintNames.uq_intra_host_variants_sample_allele_pair
-            )
+            ),
+            Index(IndexNames.ix_intra_host_variants_allele_id, allele_id)
         ]
+
     )
 
     r_sample: Mapped['Sample'] = relationship(back_populates='r_variants')
@@ -328,14 +351,22 @@ class IntraHostVariant(Base):
 
 
 class MutationTranslation(Base):
-    __tablename__ = TableNames.mutations_translations
+    __tablename__ = TableNames.mutation_translations
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
-    mutation_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.mutations}.id'), nullable=False)
+    mutation_id: Mapped[int] = mapped_column(
+        sa.ForeignKey(
+            f'{TableNames.mutations}.id',
+            name=ConstraintNames.fk_mutation_translations_mutation_id_mutations
+        ),
+        nullable=False
+    )
     amino_acid_id: Mapped[int] = mapped_column(
-        sa.ForeignKey(f'{TableNames.amino_acids}.id'),
-        nullable=False,
-        index=True
+        sa.ForeignKey(
+            f'{TableNames.amino_acids}.id',
+            name=ConstraintNames.fk_mutation_translations_amino_acid_id_amino_acids
+        ),
+        nullable=False
     )
 
     __table_args__ = tuple(
@@ -343,8 +374,9 @@ class MutationTranslation(Base):
             UniqueConstraint(
                 StandardColumnNames.mutation_id,
                 StandardColumnNames.amino_acid_id,
-                name=f'uq_{__tablename__}_mutation_amino_acid_pair'
-            )
+                name=ConstraintNames.uq_mutation_translations_mutation_amino_acid_pair
+            ),
+            Index(IndexNames.ix_mutation_translations_amino_acid_id, amino_acid_id)
         ]
     )
     r_mutation: Mapped['Mutation'] = relationship(back_populates='r_translations')
@@ -356,13 +388,18 @@ class IntraHostTranslation(Base):
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
     intra_host_variant_id: Mapped[int] = mapped_column(
-        sa.ForeignKey(f'{TableNames.intra_host_variants}.id'),
+        sa.ForeignKey(
+            f'{TableNames.intra_host_variants}.id',
+            name=ConstraintNames.fk_intra_host_translations_intra_host_variant_id
+        ),
         nullable=False
     )
     amino_acid_id: Mapped[int] = mapped_column(
-        sa.ForeignKey(f'{TableNames.amino_acids}.id'),
-        nullable=False,
-        index=True
+        sa.ForeignKey(
+            f'{TableNames.amino_acids}.id',
+            name=ConstraintNames.fk_intra_host_translations_amino_acid_id_amino_acids
+        ),
+        nullable=False
     )
 
     __table_args__ = tuple(
@@ -371,7 +408,8 @@ class IntraHostTranslation(Base):
                 StandardColumnNames.intra_host_variant_id,
                 StandardColumnNames.amino_acid_id,
                 name=f'uq_{__tablename__}_variant_amino_acid_pair'
-            )
+            ),
+            Index(IndexNames.ix_intra_host_translations_amino_acid_id, amino_acid_id)
         ]
     )
     r_variant: Mapped['IntraHostVariant'] = relationship(back_populates='r_translations')

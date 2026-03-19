@@ -380,7 +380,7 @@ async def get_mutation_incidence(
                     SELECT DISTINCT m.sample_id,
                                     t.amino_acid_id
                     FROM   mutations    m
-                    JOIN   {TableNames.mutations_translations} t ON t.{StandardColumnNames.mutation_id} = m.id
+                    JOIN   {TableNames.mutation_translations} t ON t.{StandardColumnNames.mutation_id} = m.id
                     ) SELECT ref_aa, position_aa, alt_aa, gff_feature, count(*) as mutation_count, count(*) / {sample_count} as mutation_prevalence
                     from sample_subset
                     inner join sample_aa ON sample_aa.sample_id = sample_subset.id

@@ -11,6 +11,7 @@ from alembic import op
 import sqlalchemy as sa
 
 import DB.models
+from utils.constants import ConstraintNames
 
 # revision identifiers, used by Alembic.
 revision: str = 'bee0f349ae96'
@@ -234,7 +235,7 @@ def upgrade() -> None:
     sa.Column('intra_host_variant_id', sa.BigInteger(), nullable=False),
     sa.Column('amino_acid_id', sa.BigInteger(), nullable=False),
     sa.ForeignKeyConstraint(['amino_acid_id'], ['amino_acids.id'], name=op.f('fk_intra_host_translations_amino_acid_id_amino_acids')),
-    sa.ForeignKeyConstraint(['intra_host_variant_id'], ['intra_host_variants.id'], name=op.f('fk_intra_host_translations_intra_host_variant_id_intra_host_variants')),
+    sa.ForeignKeyConstraint(['intra_host_variant_id'], ['intra_host_variants.id'], name=op.f(ConstraintNames.fk_intra_host_translations_intra_host_variant_id)),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_intra_host_translations')),
     sa.UniqueConstraint('intra_host_variant_id', 'amino_acid_id', name='uq_intra_host_translations_variant_amino_acid_pair')
     )

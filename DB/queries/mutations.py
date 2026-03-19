@@ -121,7 +121,7 @@ async def get_aa_mutation_count_by_collection_date(
                             collection_end_date - collection_start_date as collection_span
                         from samples s
                         inner join mutations m on m.sample_id = s.id
-                        inner join {TableNames.mutations_translations} t on t.{StandardColumnNames.mutation_id} = m.id
+                        inner join {TableNames.mutation_translations} t on t.{StandardColumnNames.mutation_id} = m.id
                         inner join amino_acids aa on aa.id = t.amino_acid_id
                         inner join samples_lineages sl on sl.sample_id = s.id
                         inner join lineages l on l.id = sl.lineage_id
