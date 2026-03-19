@@ -4,11 +4,11 @@ from typing import List
 import sqlalchemy as sa
 from sqlalchemy import UniqueConstraint, CheckConstraint, MetaData
 from sqlalchemy.ext.asyncio import AsyncAttrs
-from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase, relationship
 from sqlalchemy.sql.schema import Index
 
 from utils.constants import ConstraintNames, TableNames, StandardColumnNames, MiscDbNames, IndexNames
+
 
 #########################################################################################
 # NOTE:
@@ -26,21 +26,9 @@ from utils.constants import ConstraintNames, TableNames, StandardColumnNames, Mi
 # Also, don't use unique=True, it will create an unnamed constraint
 #########################################################################################
 
-# This is magic and I don't understand it at all.
-# From https://stackoverflow.com/a/77475375
-UniqueConstraint.argument_for("postgresql", 'nulls_not_distinct', None)
-
-
-@compiles(UniqueConstraint, "postgresql")
-def compile_create_uc(create, compiler, **kw):
-    """Add NULLS NOT DISTINCT if its in args."""
-    stmt = compiler.visit_unique_constraint(create, **kw)
-    postgresql_opts = create.dialect_options["postgresql"]
-
-    if postgresql_opts.get("nulls_not_distinct"):
-        return stmt.rstrip().replace("UNIQUE (", "UNIQUE NULLS NOT DISTINCT (")
-    return stmt
-
+# Leaving this note in case it's needed again
+# this SO post explains how to add a missing dialect-specific feature to sqlalchemy
+# https://stackoverflow.com/a/77475375
 
 class Base(DeclarativeBase, AsyncAttrs):
     metadata = MetaData(
@@ -203,6 +191,7 @@ class Allele(Base):
                 StandardColumnNames.alt_nt,
                 postgresql_nulls_not_distinct=True,
                 name=ConstraintNames.uq_alleles_nt_values,
+                postgresql_include=['id']
             ),
             CheckConstraint(f"{StandardColumnNames.alt_nt} <> ''", name=ConstraintNames.ck_alleles_alt_nt_not_empty),
             CheckConstraint(f"{StandardColumnNames.ref_nt} <> ''", name=ConstraintNames.ck_alleles_ref_nt_not_empty)
@@ -252,7 +241,8 @@ class AminoAcid(Base):
                 StandardColumnNames.alt_aa,
                 StandardColumnNames.gff_feature,
                 StandardColumnNames.alt_codon,
-                name=ConstraintNames.uq_amino_acids_gff_feature_position_alt_aa_alt_codon
+                name=ConstraintNames.uq_amino_acids_gff_feature_position_alt_aa_alt_codon,
+                postgresql_include=['id']
             )
         ]
     )

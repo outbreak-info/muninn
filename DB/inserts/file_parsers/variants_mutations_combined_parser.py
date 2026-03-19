@@ -71,6 +71,7 @@ class VariantsMutationsCombinedParser(FileParser):
         print(f'{self._get_timestamp()} insert intra host translations')
         await self._insert_intra_host_translations()
         print(f'{self._get_timestamp()} insert mutation translations')
+        await self._stage_mutation_translations()
         await self._insert_mutation_translations()
         print(f'{self._get_timestamp()} clean up tmp tables')
         await self._clean_up_tmp_tables()
@@ -508,19 +509,75 @@ class VariantsMutationsCombinedParser(FileParser):
             await session.commit()
 
     @staticmethod
+    async def _stage_mutation_translations():
+        async with get_async_write_session() as session:
+            # create a partial index on tmp_mutations to help with distinct in the next step
+            await session.execute(
+                text(
+                    f'''
+                    create index ix_tmp_mutations_sample_allele_amino_acid
+                    on tmp_mutations (accession, gff_feature, position_aa, alt_aa, alt_codon, region, position_nt, alt_nt)
+                    where gff_feature is not null
+                        and position_aa is not null
+                        and alt_aa is not null
+                        and ref_aa is not null;
+                    '''
+                )
+            )
+
+            # create staging table
+            await session.execute(
+                text(
+                    f'''
+                    create unlogged table tmp_mutation_translations_staging as (
+                        with base as (
+                            select distinct on (accession, gff_feature, position_aa, alt_aa, alt_codon, region, position_nt, alt_nt) *
+                            from tmp_mutations tmut
+                            where tmut.gff_feature is not null
+                              and tmut.position_aa is not null
+                              and tmut.alt_aa is not null
+                              and tmut.ref_aa is not null
+                        )
+                        select m.id as mutation_id, aa.id as amino_acid_id
+                        from base tmut
+                        left join amino_acids aa
+                                  on aa.gff_feature = tmut.gff_feature
+                                      and aa.position_aa = tmut.position_aa
+                                      and aa.alt_aa = tmut.alt_aa
+                                      and aa.alt_codon = tmut.alt_codon
+                        left join samples s on s.accession = tmut.accession
+                        left join alleles a on a.region = tmut.region and a.position_nt = tmut.position_nt and a.alt_nt = tmut.alt_nt
+                        left join mutations m on m.sample_id = s.id and m.allele_id = a.id
+                    );
+                    '''
+                )
+            )
+
+            # delete existing records from staging
+            await session.execute(
+                text(
+                    f'''
+                    delete
+                    from tmp_mutation_translations_staging
+                    where (mutation_id, amino_acid_id) in
+                          (
+                              select mutation_id, amino_acid_id
+                              from mutation_translations
+                          );
+                    '''
+                )
+            )
+
+            await session.commit()
+
+    @staticmethod
     async def _insert_mutation_translations():
         async with get_async_write_session() as session:
             await session.execute(
                 text(
                     '''
                     insert into mutation_translations (mutation_id, amino_acid_id)
-                    select distinct  m.id as mutation_id, aa.id as amino_acid_id from tmp_mutations tmut
-                    left join amino_acids aa on aa.gff_feature = tmut.gff_feature and aa.position_aa = tmut.position_aa and aa.alt_aa = tmut.alt_aa and aa.alt_codon = tmut.alt_codon
-                    left join samples s on s.accession = tmut.accession
-                    left join alleles a on a.region = tmut.region and a.position_nt = tmut.position_nt and a.alt_nt = tmut.alt_nt
-                    left join mutations m on m.sample_id = s.id and m.allele_id = a.id
-                    where num_nulls(tmut.gff_feature, tmut.position_aa, tmut.alt_aa, tmut.ref_aa) = 0
-                    on conflict (mutation_id, amino_acid_id) do nothing;
+                    select mutation_id, amino_acid_id from tmp_mutation_translations_staging;
                     '''
                 )
             )
@@ -547,8 +604,16 @@ class VariantsMutationsCombinedParser(FileParser):
 
     @staticmethod
     async def _clean_up_tmp_tables():
+        temp_tables = [
+            'tmp_mutations',
+            'tmp_variants',
+            'tmp_alleles',
+            'tmp_amino_acids',
+            'tmp_mutations_staging',
+            'tmp_mutation_translations_staging'
+        ]
         async with get_async_write_session() as session:
-            for t in ['tmp_mutations', 'tmp_variants', 'tmp_alleles', 'tmp_amino_acids', 'tmp_mutations_staging']:
+            for t in temp_tables:
                 await session.execute(
                     text(f'drop table if exists {t};')
                 )
@@ -656,6 +721,7 @@ class VariantsMutationsCombinedParser(FileParser):
         StandardColumnNames.position_aa: 'pos_aa',
     }
 
+
 class VariantsMutationsCombinedParserBig(VariantsMutationsCombinedParser):
     def __init__(self, variants_filename: str, mutations_filename: str):
         super().__init__(variants_filename, mutations_filename)
@@ -667,21 +733,18 @@ class VariantsMutationsCombinedParserBig(VariantsMutationsCombinedParser):
 
         print(f'{self._get_timestamp()} read mutations')
         await self._read_mutations_input()
+
         print(f'{self._get_timestamp()} read variants')
         await self._read_variants_input()
 
         print(f'{self._get_timestamp()} insert alleles')
-        await self._drop_alleles_indexes()
         await self._insert_alleles()
-        await self._restore_alleles_indexes()
 
         print(f'{self._get_timestamp()} allele ref conflicts')
         await self._write_allele_ref_conflicts()
 
         print(f'{self._get_timestamp()} insert amino acids')
-        await self._drop_amino_acids_indexes()
         await self._insert_amino_acids()
-        await self._restore_amino_acids_indexes()
 
         print(f'{self._get_timestamp()} amino acid ref conflicts')
         await self._write_amino_acid_ref_conflicts()
@@ -696,10 +759,16 @@ class VariantsMutationsCombinedParserBig(VariantsMutationsCombinedParser):
 
         print(f'{self._get_timestamp()} insert intra host translations')
         await self._insert_intra_host_translations()
+
         print(f'{self._get_timestamp()} insert mutation translations')
+        await self._stage_mutation_translations()
+        await self._drop_mutation_translations_indexes()
         await self._insert_mutation_translations()
+        await self._restore_mutation_translations_indexes()
+
         print(f'{self._get_timestamp()} clean up tmp tables')
         await self._clean_up_tmp_tables()
+
         print(f'Finished at {self._get_timestamp()}')
         await self._reset_wal_size()
 
@@ -733,154 +802,170 @@ class VariantsMutationsCombinedParserBig(VariantsMutationsCombinedParser):
             )
 
     @staticmethod
-    async def _drop_alleles_indexes(session):
-        await session.execute(
-            text(f'alter table {TableNames.alleles} drop constraint {ConstraintNames.uq_alleles_nt_values};')
-        )
-
-    @staticmethod
-    async def _restore_alleles_indexes(session):
-        await session.execute(
-            text(
-                f'''
-                alter table {TableNames.alleles}
-                add constraint {ConstraintNames.uq_alleles_nt_values}
-                unique ({StandardColumnNames.region}, {StandardColumnNames.position_nt}, {StandardColumnNames.alt_nt});
-                '''
+    async def _drop_alleles_indexes():
+        async with get_async_write_session() as session:
+            await session.execute(
+                text(f'alter table {TableNames.alleles} drop constraint {ConstraintNames.uq_alleles_nt_values};')
             )
-        )
+        await session.commit()
 
     @staticmethod
-    async def _drop_amino_acids_indexes(session):
-        await session.execute(
-            text(
-                f'''
-                alter table {TableNames.amino_acids} 
-                drop constraint {ConstraintNames.uq_amino_acids_gff_feature_position_alt_aa_alt_codon};
-                '''
+    async def _restore_alleles_indexes():
+        async with get_async_write_session() as session:
+            await session.execute(
+                text(
+                    f'''
+                    alter table {TableNames.alleles}
+                    add constraint {ConstraintNames.uq_alleles_nt_values}
+                    unique ({StandardColumnNames.region}, {StandardColumnNames.position_nt}, {StandardColumnNames.alt_nt})
+                    include (id);
+                    '''
+                )
             )
-        )
+            await session.commit()
 
     @staticmethod
-    async def _restore_amino_acids_indexes(session):
-        await session.execute(
-            text(
-                f'''
-                alter table {TableNames.amino_acids}
-                add constraint {ConstraintNames.uq_amino_acids_gff_feature_position_alt_aa_alt_codon}
-                unique (
-                    {StandardColumnNames.position_aa},
-                    {StandardColumnNames.alt_aa}, 
-                    {StandardColumnNames.gff_feature},
-                    {StandardColumnNames.alt_codon}
-                );
-                '''
+    async def _drop_amino_acids_indexes():
+        async with get_async_write_session() as session:
+            await session.execute(
+                text(
+                    f'''
+                    alter table {TableNames.amino_acids} 
+                    drop constraint {ConstraintNames.uq_amino_acids_gff_feature_position_alt_aa_alt_codon};
+                    '''
+                )
             )
-        )
+            await session.commit()
 
     @staticmethod
-    async def _drop_mutations_indexes(session):
+    async def _restore_amino_acids_indexes():
+        async with get_async_write_session() as session:
+            await session.execute(
+                text(
+                    f'''
+                    alter table {TableNames.amino_acids}
+                    add constraint {ConstraintNames.uq_amino_acids_gff_feature_position_alt_aa_alt_codon}
+                    unique (
+                        {StandardColumnNames.position_aa},
+                        {StandardColumnNames.alt_aa}, 
+                        {StandardColumnNames.gff_feature},
+                        {StandardColumnNames.alt_codon}
+                    )
+                    include (id);
+                    '''
+                )
+            )
+            await session.commit()
+
+    @staticmethod
+    async def _drop_mutations_indexes():
         constraint_names = [
             ConstraintNames.uq_mutations_sample_allele_pair,
             ConstraintNames.fk_mutations_sample_id_samples,
             ConstraintNames.fk_mutations_allele_id_alleles
         ]
-        for conname in constraint_names:
+        async with get_async_write_session() as session:
+            for conname in constraint_names:
+                await session.execute(
+                    text(f'alter table {TableNames.mutations} drop constraint {conname};')
+                )
             await session.execute(
-                text(f'alter table {TableNames.mutations} drop constraint {conname};')
+                text(f'drop index {IndexNames.ix_mutations_allele_id};')
             )
-        await session.execute(
-            text(f'drop index {IndexNames.ix_mutations_allele_id};')
-        )
+            await session.commit()
 
     @staticmethod
-    async def _restore_mutations_indexes(session):
-        await session.execute(
-            text(
-                f'''
-                alter table {TableNames.mutations} 
-                add constraint {ConstraintNames.uq_mutations_sample_allele_pair} 
-                unique ({StandardColumnNames.sample_id}, {StandardColumnNames.allele_id});
-                '''
+    async def _restore_mutations_indexes():
+        async with get_async_write_session() as session:
+            await session.execute(
+                text(
+                    f'''
+                    alter table {TableNames.mutations} 
+                    add constraint {ConstraintNames.uq_mutations_sample_allele_pair} 
+                    unique ({StandardColumnNames.sample_id}, {StandardColumnNames.allele_id});
+                    '''
+                )
             )
-        )
-        await session.execute(
-            text(
-                f'''create index {IndexNames.ix_mutations_allele_id} 
-                on {TableNames.mutations} ({StandardColumnNames.allele_id});
-                '''
+            await session.execute(
+                text(
+                    f'''create index {IndexNames.ix_mutations_allele_id} 
+                    on {TableNames.mutations} ({StandardColumnNames.allele_id});
+                    '''
+                )
             )
-        )
-        await session.execute(
-            text(
-                f'''
-                alter table {TableNames.mutations} 
-                add constraint {ConstraintNames.fk_mutations_allele_id_alleles} 
-                foreign key ({StandardColumnNames.allele_id}) references {TableNames.alleles} (id);
-                '''
+            await session.execute(
+                text(
+                    f'''
+                    alter table {TableNames.mutations} 
+                    add constraint {ConstraintNames.fk_mutations_allele_id_alleles} 
+                    foreign key ({StandardColumnNames.allele_id}) references {TableNames.alleles} (id);
+                    '''
+                )
             )
-        )
-        await session.execute(
-            text(
-                f'''
-                alter table {TableNames.mutations} 
-                add constraint {ConstraintNames.fk_mutations_sample_id_samples} 
-                foreign key ({StandardColumnNames.sample_id}) references {TableNames.samples} (id);
-                '''
+            await session.execute(
+                text(
+                    f'''
+                    alter table {TableNames.mutations} 
+                    add constraint {ConstraintNames.fk_mutations_sample_id_samples} 
+                    foreign key ({StandardColumnNames.sample_id}) references {TableNames.samples} (id);
+                    '''
+                )
             )
-        )
+            await session.commit()
 
     @staticmethod
-    async def _drop_mutation_translations_indexes(session):
+    async def _drop_mutation_translations_indexes():
         constraint_names = [
             ConstraintNames.uq_mutation_translations_mutation_amino_acid_pair,
             ConstraintNames.fk_mutation_translations_mutation_id_mutations,
             ConstraintNames.fk_mutation_translations_amino_acid_id_amino_acids
         ]
-        for conname in constraint_names:
+        async with get_async_write_session() as session:
+            for conname in constraint_names:
+                await session.execute(
+                    text(f'alter table {TableNames.mutation_translations} drop constraint {conname};')
+                )
             await session.execute(
-                text(f'alter table {TableNames.mutation_translations} drop constraint {conname};')
+                text(f'drop index {IndexNames.ix_mutation_translations_amino_acid_id};')
             )
-        await session.execute(
-            text(f'drop index {IndexNames.ix_mutation_translations_amino_acid_id};')
-        )
+            await session.commit()
 
     @staticmethod
-    async def _restore_mutation_translations_indexes(session):
-        await session.execute(
-            text(
-                f'''
-                alter table {TableNames.mutation_translations} 
-                add constraint {ConstraintNames.uq_mutation_translations_mutation_amino_acid_pair} 
-                unique ({StandardColumnNames.mutation_id}, {StandardColumnNames.amino_acid_id});
-                '''
+    async def _restore_mutation_translations_indexes():
+        async with get_async_write_session() as session:
+            await session.execute(
+                text(
+                    f'''
+                    alter table {TableNames.mutation_translations} 
+                    add constraint {ConstraintNames.uq_mutation_translations_mutation_amino_acid_pair} 
+                    unique ({StandardColumnNames.mutation_id}, {StandardColumnNames.amino_acid_id});
+                    '''
+                )
             )
-        )
-        await session.execute(
-            text(
-                f'''
-                create index {IndexNames.ix_mutation_translations_amino_acid_id} 
-                on {TableNames.mutation_translations} ({StandardColumnNames.allele_id});
-                '''
+            await session.execute(
+                text(
+                    f'''
+                    create index {IndexNames.ix_mutation_translations_amino_acid_id} 
+                    on {TableNames.mutation_translations} ({StandardColumnNames.amino_acid_id});
+                    '''
+                )
             )
-        )
-        await session.execute(
-            text(
-                f'''
-                alter table {TableNames.mutation_translations} 
-                add constraint {ConstraintNames.fk_mutation_translations_amino_acid_id_amino_acids} 
-                foreign key ({StandardColumnNames.amino_acid_id}) references {TableNames.amino_acids} (id);
-                '''
+            await session.execute(
+                text(
+                    f'''
+                    alter table {TableNames.mutation_translations} 
+                    add constraint {ConstraintNames.fk_mutation_translations_amino_acid_id_amino_acids} 
+                    foreign key ({StandardColumnNames.amino_acid_id}) references {TableNames.amino_acids} (id);
+                    '''
+                )
             )
-        )
-        await session.execute(
-            text(
-                f'''
-                alter table {TableNames.mutation_translations} 
-                add constraint {ConstraintNames.fk_mutation_translations_mutation_id_mutations} 
-                foreign key ({StandardColumnNames.mutation_id}) references {TableNames.mutations} (id);
-                '''
+            await session.execute(
+                text(
+                    f'''
+                    alter table {TableNames.mutation_translations} 
+                    add constraint {ConstraintNames.fk_mutation_translations_mutation_id_mutations} 
+                    foreign key ({StandardColumnNames.mutation_id}) references {TableNames.mutations} (id);
+                    '''
+                )
             )
-        )
-
-
+            await session.commit()
