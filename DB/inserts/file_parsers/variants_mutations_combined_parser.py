@@ -67,6 +67,7 @@ class VariantsMutationsCombinedParser(FileParser):
         print(f'{self._get_timestamp()} insert variants')
         await self._insert_variants()
         print(f'{self._get_timestamp()} insert mutations')
+        await self._stage_mutations()
         await self._insert_mutations()
         print(f'{self._get_timestamp()} insert intra host translations')
         await self._insert_intra_host_translations()
@@ -423,8 +424,8 @@ class VariantsMutationsCombinedParser(FileParser):
             else:
                 print('no conflicts found', file=f)
 
-    @classmethod
-    async def _insert_mutations(cls):
+    @staticmethod
+    async def _stage_mutations():
         async with get_async_write_session() as session:
             await session.execute(
                 text(
@@ -454,6 +455,9 @@ class VariantsMutationsCombinedParser(FileParser):
             await session.execute(
                 text('create index idx_mutations_staging on tmp_mutations_staging (sample_id, allele_id);')
             )
+    @staticmethod
+    async def _insert_mutations():
+        async with get_async_write_session() as session:
             await session.execute(
                 text(
                     '''
@@ -753,6 +757,7 @@ class VariantsMutationsCombinedParserBig(VariantsMutationsCombinedParser):
         await self._insert_variants()
 
         print(f'{self._get_timestamp()} insert mutations')
+        await self._stage_mutations()
         await self._drop_mutations_indexes()
         await self._insert_mutations()
         await self._restore_mutations_indexes()
