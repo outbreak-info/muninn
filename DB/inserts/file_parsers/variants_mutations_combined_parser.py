@@ -98,69 +98,50 @@ class VariantsMutationsCombinedParser(FileParser):
         async with get_async_write_session() as session:
             await session.execute(
                 text(
-                    f'''
-                    create unlogged table tmp_mutations
-                    (
-                        id          bigserial not null primary key,
-                        accession   text      not null,
-                        region      text      not null,
-                        position_nt int       not null,
-                        ref_nt      text,
-                        alt_nt      text      not null,
-                        gff_feature text,
-                        ref_codon   text,
-                        alt_codon   text,
-                        ref_aa      text,
-                        alt_aa      text,
-                        position_aa int
-                    );
-                '''
+                    f'create unlogged table tmp_mutations\n'
+                    f'(\n'
+                    f'    accession   text      not null,\n'
+                    f'    region      text      not null,\n'
+                    f'    position_nt int       not null,\n'
+                    f'    ref_nt      text,\n'
+                    f'    alt_nt      text      not null,\n'
+                    f'    gff_feature text,\n'
+                    f'    ref_codon   text,\n'
+                    f'    alt_codon   text,\n'
+                    f'    ref_aa      text,\n'
+                    f'    alt_aa      text,\n'
+                    f'    position_aa int\n'
+                    f');'
                 )
             )
             await session.execute(
                 text(
-                    f'''
-                    copy tmp_mutations ({", ".join(self.mutations_header_order)})
-                    from '/muninn/data/{self.mutations_filename_relative}' delimiter E'{self.delimiter}' csv header;
-                    '''
+                    f"copy tmp_mutations ({', '.join(self.mutations_header_order)})\n"
+                    f"from '/muninn/data/{self.mutations_filename_relative}' delimiter E'{self.delimiter}' csv header;"
                 )
             )
+
             await session.execute(
                 text(
-                    '''
-                    create index idx_tmp_mutations_accession on tmp_mutations (accession);
-                    '''
-                )
-            )
-            await session.execute(
-                text(
-                    '''
-                    delete from tmp_mutations
-                    where accession not in (
-                        select accession
-                        from samples
-                    );
-                    '''
+                    'delete from tmp_mutations\n'
+                    'where accession not in (\n'
+                    '    select accession\n'
+                    '    from samples\n'
+                    ');'
                 )
             )
             res = await session.execute(
-                text(
-                    '''
-                    select count(*) from tmp_mutations where ref_nt is null;
-                    '''
-                )
+                text('select count(*) from tmp_mutations where ref_nt is null; ')
             )
             count = res.mappings().one()['count']
             if count > 0:
                 print(f'Warning: {count} mutations had null ref_nt and will be ignored')
 
             await session.execute(
-                text(
-                    '''
-                    delete from tmp_mutations where ref_nt is null;
-                    '''
-                )
+                text('delete from tmp_mutations where ref_nt is null;')
             )
+
+            await session.execute(text('create index ix_tmp_mutations_accession on tmp_mutations (accession);'))
 
             await session.commit()
 
