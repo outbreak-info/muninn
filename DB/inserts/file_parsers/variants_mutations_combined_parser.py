@@ -56,10 +56,12 @@ class VariantsMutationsCombinedParser(FileParser):
         await self._read_mutations_input()
         print(f'{self._get_timestamp()} read variants')
         await self._read_variants_input()
-        print(f'{self._get_timestamp()} insert alleles')
-        await self._insert_alleles()
+        print(f'{self._get_timestamp()} stage alleles')
+        await self._stage_alleles()
         print(f'{self._get_timestamp()} allele ref conflicts')
         await self._write_allele_ref_conflicts()
+        print(f'{self._get_timestamp()} insert alleles')
+        await self._insert_alleles()
         print(f'{self._get_timestamp()} insert amino acids')
         await self._insert_amino_acids()
         print(f'{self._get_timestamp()} amino acid ref conflicts')
@@ -211,7 +213,7 @@ class VariantsMutationsCombinedParser(FileParser):
             await session.commit()
 
     @staticmethod
-    async def _insert_alleles():
+    async def _stage_alleles():
         async with get_async_write_session() as session:
             await session.execute(
                 text(
@@ -228,43 +230,73 @@ class VariantsMutationsCombinedParser(FileParser):
             )
 
             await session.execute(
+                text('create index ix_tmp_mutations_nt_values on tmp_mutations (region, position_nt, ref_nt, alt_nt);')
+            )
+            await session.execute(
+                text('create index ix_tmp_variants_nt_values on tmp_variants (region, position_nt, ref_nt, alt_nt);')
+            )
+
+            # get allele values from mutations
+            await session.execute(
                 text(
-                    '''
-                    create unique index uq_tmp_alleles_all on tmp_alleles (region, position_nt, alt_nt, ref_nt);
-                    '''
+                    'insert into tmp_alleles (\n'
+                    '    region, position_nt, ref_nt, alt_nt\n'
+                    ')\n'
+                    'select region, position_nt, ref_nt, alt_nt\n'
+                    'from tmp_mutations\n'
+                    'group by region, position_nt, ref_nt, alt_nt;'
+                )
+            )
+            # get allele values from variants
+            # Skipping over entries already in tmp_alleles
+            # use tmp_mutations instead to take advantage of its index
+            await session.execute(
+                text(
+                    'insert into tmp_alleles (\n'
+                    '    region, position_nt, ref_nt, alt_nt\n'
+                    ')\n'
+                    'select region, position_nt, ref_nt, alt_nt\n'
+                    'from tmp_variants\n'
+                    'where (region, position_nt, ref_nt, alt_nt) not in (\n'
+                    '    select region, position_nt, ref_nt, alt_nt\n'
+                    '    from tmp_mutations\n'
+                    ')\n'
+                    'group by region, position_nt, ref_nt, alt_nt;'
                 )
             )
 
             await session.execute(
+                text('create index ix_tmp_alleles on tmp_alleles (region, position_nt, alt_nt, ref_nt);')
+            )
+
+            # delete existing alleles from tmp_alleles
+            await session.execute(
                 text(
-                    '''
-                    insert into tmp_alleles (region, position_nt, ref_nt, alt_nt)
-                    select region, position_nt, ref_nt, alt_nt
-                    from tmp_mutations
-                    on conflict (region, position_nt, alt_nt, ref_nt) do nothing;
-                    '''
+                    'delete\n'
+                    'from tmp_alleles\n'
+                    'where (region, position_nt, alt_nt)\n'
+                    '          in (\n'
+                    '          select region, position_nt, alt_nt\n'
+                    '          from alleles\n'
+                    '      );'
                 )
             )
 
-            await session.execute(
-                text(
-                    '''
-                    insert into tmp_alleles (region, position_nt, ref_nt, alt_nt)
-                    select region, position_nt, ref_nt, alt_nt
-                    from tmp_variants
-                    on conflict (region, position_nt, alt_nt, ref_nt) do nothing;
-                    '''
-                )
-            )
+            await session.commit()
 
+    @staticmethod
+    async def _insert_alleles():
+        async with get_async_write_session() as session:
+            # insert into alleles
+            # todo: this way of handling ref conflicts is hacky
             await session.execute(
                 text(
-                    '''
-                    insert into alleles (region, position_nt, ref_nt, alt_nt)
-                    select *
-                    from tmp_alleles
-                    on conflict (region, position_nt, alt_nt) do nothing;
-                    '''
+                    'insert into alleles (\n'
+                    '    region, position_nt, alt_nt, ref_nt\n'
+                    ')\n'
+                    'select region, position_nt, alt_nt, min(ref_nt)\n'
+                    'from tmp_alleles\n'
+                    'group by region, position_nt, alt_nt;'
                 )
             )
 
@@ -455,6 +487,8 @@ class VariantsMutationsCombinedParser(FileParser):
             await session.execute(
                 text('create index idx_mutations_staging on tmp_mutations_staging (sample_id, allele_id);')
             )
+            await session.commit()
+
     @staticmethod
     async def _insert_mutations():
         async with get_async_write_session() as session:
