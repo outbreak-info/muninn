@@ -960,7 +960,7 @@ class VariantsMutationsCombinedParser(FileParser):
 class VariantsMutationsCombinedParserBig(VariantsMutationsCombinedParser):
     def __init__(self, variants_filename: str, mutations_filename: str):
         super().__init__([variants_filename, mutations_filename])
-        self.tmp_wal_size_mb = 1024 * 200
+        self.tmp_wal_size_mb = 1024 * 20
         self.tmp_checkpoint_timeout_s = 3600
 
     async def parse_and_insert(self):
