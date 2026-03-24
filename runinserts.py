@@ -79,10 +79,7 @@ def main():
 
     file_parser: FileParser = formats[args.format]
     filename: str = args.filenames[0]
-    filename2: str | None = None
-    if issubclass(file_parser, VariantsMutationsCombinedParser):
-        filename2 = args.filenames[1]
-    elif len(args.filenames) > 1:
+    if not issubclass(file_parser, VariantsMutationsCombinedParser) and len(args.filenames) > 1:
         raise ValueError('Multiple filenames provided, but this format takes only one.')
 
     # run inserts method
@@ -90,7 +87,7 @@ def main():
     print(f'{filename} {args.format} start at {start_time}')
     if issubclass(file_parser, FileParser):
         if issubclass(file_parser, VariantsMutationsCombinedParser):
-            parser = file_parser(filename, filename2)
+            parser = file_parser(args.filenames)
         else:
             parser = file_parser(filename)
         asyncio.run(parser.parse_and_insert())

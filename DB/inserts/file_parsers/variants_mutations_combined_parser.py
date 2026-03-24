@@ -1,7 +1,8 @@
 import csv
 from datetime import datetime
 from os import path
-from typing import Set
+from typing import Set, List
+from enum import Enum
 
 from sqlalchemy.sql.expression import text
 
@@ -13,43 +14,19 @@ AMINO_ACID_REF_CONFLICTS_FILE = '/tmp/amino_acid_ref_conflicts.csv'
 ALLELE_REF_CONFLICTS_FILE = '/tmp/allele_ref_conflicts.csv'
 
 
+class RecordType(Enum):
+    mutations = 1
+    variants = 2
+
+
 class VariantsMutationsCombinedParser(FileParser):
 
-    def __init__(self, variants_filename: str, mutations_filename: str):
-        self.variants_filename = variants_filename
-        self.mutations_filename = mutations_filename
+    def __init__(self, filenames: List[str]):
         self.delimiter = '\t'
-
-        # find out where our files are (are we in a container or not?) and get absolute and relative paths
-        self.mutations_filename_relative, self.mutations_filename_local = (
-            self._find_relative_and_local_abs_paths(self.mutations_filename)
-        )
-        self.variants_filename_relative, self.variants_filename_local = (
-            self._find_relative_and_local_abs_paths(self.variants_filename)
-        )
-
-        try:
-            self._verify_headers()
-        except ValueError:
-            # Swap arguments and try again
-            hold = self.variants_filename_local
-            self.variants_filename_local = self.mutations_filename_local
-            self.mutations_filename_local = hold
-            self._verify_headers()
-            # if that worked, we also want these swapped
-            hold = self.variants_filename_relative
-            self.variants_filename_relative = self.mutations_filename_relative
-            self.mutations_filename_relative = hold
-
-        # get orders of headers
-        self.variants_header_order = self._get_header_order(
-            self.variants_filename_local,
-            self.variants_column_mapping
-        )
-        self.mutations_header_order = self._get_header_order(
-            self.mutations_filename_local,
-            self.mutations_column_mapping
-        )
+        # All validation now handled in the InputFile class
+        self.input_files = [
+            VariantsMutationsCombinedParser.InputFile(name, delimiter=self.delimiter) for name in filenames
+        ]
 
     async def parse_and_insert(self):
         print(f'{self._get_timestamp()} read mutations')
@@ -71,7 +48,6 @@ class VariantsMutationsCombinedParser(FileParser):
         await self._drop_amino_acids_indexes()
         await self._insert_amino_acids()
         await self._restore_amino_acids_indexes()
-
 
         print(f'{self._get_timestamp()} insert variants')
         await self._insert_variants()
@@ -116,12 +92,14 @@ class VariantsMutationsCombinedParser(FileParser):
                     f');'
                 )
             )
-            await session.execute(
-                text(
-                    f"copy tmp_mutations ({', '.join(self.mutations_header_order)})\n"
-                    f"from '/muninn/data/{self.mutations_filename_relative}' delimiter E'{self.delimiter}' csv header;"
-                )
-            )
+            for file in self.input_files:
+                if file.record_type == RecordType.mutations:
+                    await session.execute(
+                        text(
+                            f"copy tmp_mutations ({', '.join(file.header_order)})\n"
+                            f"from '/muninn/data/{file.relative_name}' delimiter E'{file.delimiter}' csv header;"
+                        )
+                    )
 
             await session.execute(
                 text(
@@ -180,14 +158,16 @@ class VariantsMutationsCombinedParser(FileParser):
                     '''
                 )
             )
-            await session.execute(
-                text(
-                    f'''
-                    copy tmp_variants ({', '.join(self.variants_header_order)})
-                    from '/muninn/data/{self.variants_filename_relative}' delimiter E'{self.delimiter}' csv header;
-                    '''
-                )
-            )
+            for file in self.input_files:
+                if file.record_type == RecordType.variants:
+                    await session.execute(
+                        text(
+                            f'''
+                            copy tmp_variants ({', '.join(file.header_order)})
+                            from '/muninn/data/{file.relative_name}' delimiter E'{file.delimiter}' csv header;
+                            '''
+                        )
+                    )
             await session.execute(
                 text(
                     '''
@@ -742,19 +722,6 @@ class VariantsMutationsCombinedParser(FileParser):
             f'mutations: {", ".join(VariantsMutationsCombinedParser.mutations_column_mapping.values())}'
         }
 
-    def _verify_headers(self):
-        with open(self.variants_filename_local, 'r') as f:
-            reader = csv.DictReader(f, delimiter=self.delimiter)
-            required_columns = set(self.variants_column_mapping.values())
-            if not set(reader.fieldnames) >= required_columns:
-                raise ValueError(f'Missing required fields: {required_columns - set(reader.fieldnames)}')
-
-        with open(self.mutations_filename_local, 'r') as f:
-            reader = csv.DictReader(f, delimiter=self.delimiter)
-            required_columns = set(self.mutations_column_mapping.values())
-            if not set(reader.fieldnames) >= required_columns:
-                raise ValueError(f'Missing required fields: {required_columns - set(reader.fieldnames)}')
-
     @staticmethod
     def _get_timestamp():
         return datetime.now().isoformat(timespec='seconds')
@@ -945,10 +912,54 @@ class VariantsMutationsCombinedParser(FileParser):
         StandardColumnNames.position_aa: 'pos_aa',
     }
 
+    class InputFile:
+        def __init__(self, filename: str, delimiter: str = '\t'):
+            self.delimiter = delimiter
+            self.raw_name = filename
+            self.relative_name, self.local_name = (
+                VariantsMutationsCombinedParser._find_relative_and_local_abs_paths(self.raw_name)
+            )
+            self.record_type: RecordType = self._choose_record_type()
+            self.header_order: List[str] = self._get_header_order()
+
+        def _choose_record_type(self):
+            variants_columns = set(VariantsMutationsCombinedParser.variants_column_mapping.values())
+            mutations_columns = set(VariantsMutationsCombinedParser.mutations_column_mapping.values())
+
+            with open(self.local_name, 'r') as f:
+                reader = csv.DictReader(f, delimiter=self.delimiter)
+                if set(reader.fieldnames) >= variants_columns:
+                    return RecordType.variants
+                elif set(reader.fieldnames) >= mutations_columns:
+                    return RecordType.mutations
+                else:
+                    raise ValueError(
+                        f'File has an unacceptable header and cannot be processed for variants or mutations: '
+                        f'{self.raw_name}'
+                    )
+
+        def _get_header_order(self) -> List[str]:
+            column_name_mapping = None
+            if self.record_type == RecordType.variants:
+                column_name_mapping = VariantsMutationsCombinedParser.variants_column_mapping
+            if self.record_type == RecordType.mutations:
+                column_name_mapping = VariantsMutationsCombinedParser.mutations_column_mapping
+
+            proper_col_names = {
+                v: k for k, v in column_name_mapping.items()
+            }
+            ordered_header = []
+            with open(self.local_name, 'r') as f:
+                header = f.readline().split(self.delimiter)
+                ordered_header = [proper_col_names[h.strip()] for h in header]
+            if len(ordered_header) != len(proper_col_names.keys()):
+                raise ValueError(f'Failed to construct header ordering for file: {self.raw_name}')
+            return ordered_header
+
 
 class VariantsMutationsCombinedParserBig(VariantsMutationsCombinedParser):
     def __init__(self, variants_filename: str, mutations_filename: str):
-        super().__init__(variants_filename, mutations_filename)
+        super().__init__([variants_filename, mutations_filename])
         self.tmp_wal_size_mb = 1024 * 200
         self.tmp_checkpoint_timeout_s = 3600
 
