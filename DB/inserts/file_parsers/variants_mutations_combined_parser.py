@@ -66,10 +66,12 @@ class VariantsMutationsCombinedParser(FileParser):
         await self._restore_alleles_indexes()
 
         print(f'{self._get_timestamp()} insert amino acids')
-        await self._insert_amino_acids()
-
-        print(f'{self._get_timestamp()} amino acid ref conflicts')
+        await self._stage_amino_acids()
         await self._write_amino_acid_ref_conflicts()
+        await self._drop_amino_acids_indexes()
+        await self._insert_amino_acids()
+        await self._restore_amino_acids_indexes()
+
 
         print(f'{self._get_timestamp()} insert variants')
         await self._insert_variants()
@@ -264,7 +266,7 @@ class VariantsMutationsCombinedParser(FileParser):
                 text('create index ix_tmp_alleles on tmp_alleles (region, position_nt, alt_nt, ref_nt);')
             )
 
-            # delete existing alleles from tmp_alleles
+            # delete existing alleles from tmp_alleles, it's important to ignore ref_nt here
             await session.execute(
                 text(
                     'delete\n'
@@ -282,7 +284,6 @@ class VariantsMutationsCombinedParser(FileParser):
     @staticmethod
     async def _insert_alleles():
         async with get_async_write_session() as session:
-            # insert into alleles
             # todo: this way of handling ref conflicts is hacky
             await session.execute(
                 text(
@@ -343,65 +344,107 @@ class VariantsMutationsCombinedParser(FileParser):
                 print('no conflicts found', file=f)
 
     @staticmethod
-    async def _insert_amino_acids():
+    async def _stage_amino_acids():
         async with get_async_write_session() as session:
             await session.execute(
                 text(
-                    '''
-                    create unlogged table tmp_amino_acids
-                    (
-                        gff_feature text not null,
-                        ref_aa      text not null,
-                        alt_aa      text not null,
-                        position_aa      int  not null,
-                        ref_codon text not null,
-                        alt_codon text not null
-                    );
-                    '''
+                    'create unlogged table tmp_amino_acids\n'
+                    '(\n'
+                    '    gff_feature text not null,\n'
+                    '    ref_aa      text not null,\n'
+                    '    alt_aa      text not null,\n'
+                    '    position_aa int  not null,\n'
+                    '    ref_codon   text not null,\n'
+                    '    alt_codon   text not null\n'
+                    ');'
                 )
             )
 
             await session.execute(
                 text(
-                    '''
-                    create unique index uq_tmp_amino_acids_all on tmp_amino_acids 
-                    (gff_feature, position_aa, alt_aa, ref_aa, ref_codon, alt_codon);
-                    '''
+                    'create index ix_tmp_mutations_aa_values on '
+                    'tmp_mutations (gff_feature, position_aa, alt_aa, alt_codon, ref_aa, ref_codon);'
+                )
+            )
+            await session.execute(
+                text(
+                    'create index ix_tmp_variants_aa_values on '
+                    'tmp_variants (gff_feature, position_aa, alt_aa, alt_codon, ref_aa, ref_codon);'
+                )
+            )
+
+            # get amino acid values from mutations
+            await session.execute(
+                text(
+                    'insert into tmp_amino_acids (\n'
+                    '    gff_feature, position_aa, alt_aa, alt_codon, ref_aa, ref_codon\n'
+                    ')\n'
+                    'select gff_feature, position_aa, alt_aa, alt_codon, ref_aa, ref_codon\n'
+                    'from tmp_mutations\n'
+                    'where gff_feature is not null\n'
+                    'and position_aa is not null\n'
+                    'and alt_aa is not null\n'
+                    'and ref_aa is not null\n'
+                    'and alt_codon is not null\n'
+                    'and ref_codon is not null\n'
+                    'group by gff_feature, position_aa, alt_aa, alt_codon, ref_aa, ref_codon;'
+                )
+            )
+
+            # get values from variants, skipping over values from mutations, which will already be in tmp_amino_acids
+            # (we do it this way because tmp_mutations is indexed on these values, and tmp_amino_acids is not)
+            await session.execute(
+                text(
+                    'insert into tmp_amino_acids (\n'
+                    '    gff_feature, position_aa, alt_aa, alt_codon, ref_aa, ref_codon\n'
+                    ')\n'
+                    'select gff_feature, position_aa, alt_aa, alt_codon, ref_aa, ref_codon\n'
+                    'from tmp_variants\n'
+                    'where gff_feature is not null \n'
+                    'and position_aa is not null\n'
+                    'and alt_aa is not null\n'
+                    'and ref_aa is not null\n'
+                    'and alt_codon is not null\n'
+                    'and ref_codon is not null\n'
+                    'and (gff_feature, position_aa, alt_aa, alt_codon, ref_aa, ref_codon) not in (\n'
+                    '    select gff_feature, position_aa, alt_aa, alt_codon, ref_aa, ref_codon\n'
+                    '    from tmp_mutations\n'
+                    ')\n'
+                    'group by gff_feature, position_aa, alt_aa, alt_codon, ref_aa, ref_codon;'
                 )
             )
 
             await session.execute(
                 text(
-                    '''
-                    insert into tmp_amino_acids (gff_feature, ref_aa, alt_aa, position_aa, ref_codon, alt_codon)
-                    select gff_feature, ref_aa, alt_aa, position_aa, ref_codon, alt_codon
-                    from tmp_mutations
-                    where num_nulls(gff_feature, ref_aa, alt_aa, position_aa) = 0
-                    on conflict (gff_feature, ref_aa, alt_aa, position_aa, ref_codon, alt_codon) do nothing;
-                    '''
+                    'create index ix_tmp_amino_acids on '
+                    'tmp_amino_acids (gff_feature, position_aa, alt_aa, alt_codon, ref_aa, ref_codon);'
                 )
             )
-
+            # delete pre-existing values. Note: it's important to ignore ref aa and ref codon for this
             await session.execute(
                 text(
-                    '''
-                    insert into tmp_amino_acids (gff_feature, ref_aa, alt_aa, position_aa, ref_codon, alt_codon)
-                    select gff_feature, ref_aa, alt_aa, position_aa, ref_codon, alt_codon
-                    from tmp_variants
-                    where num_nulls(gff_feature, ref_aa, alt_aa, position_aa) = 0
-                    on conflict (gff_feature, ref_aa, alt_aa, position_aa, ref_codon, alt_codon) do nothing;
-                    '''
+                    'delete\n'
+                    'from tmp_amino_acids\n'
+                    'where (gff_feature, position_aa, alt_aa, alt_codon) in (\n'
+                    '    select gff_feature, position_aa, alt_aa, alt_codon\n'
+                    '    from amino_acids\n'
+                    ');'
                 )
             )
+            await session.commit()
 
+    @staticmethod
+    async def _insert_amino_acids():
+        async with get_async_write_session() as session:
+            # todo: this way of handling ref conflicts is hacky
             await session.execute(
                 text(
-                    '''
-                    insert into amino_acids (position_aa, ref_aa, alt_aa, gff_feature, ref_codon, alt_codon)
-                    select position_aa, ref_aa, alt_aa, gff_feature, ref_codon, alt_codon
-                    from tmp_amino_acids
-                    on conflict (gff_feature, position_aa, alt_aa, alt_codon) do nothing;
-                    '''
+                    'insert into amino_acids (\n'
+                    '    gff_feature, position_aa, alt_aa, alt_codon, ref_aa, ref_codon\n'
+                    ')\n'
+                    'select gff_feature, position_aa, alt_aa, alt_codon, min(ref_aa), min(ref_codon)\n'
+                    'from tmp_amino_acids\n'
+                    'group by gff_feature, position_aa, alt_aa, alt_codon;'
                 )
             )
 
