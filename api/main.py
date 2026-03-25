@@ -464,8 +464,8 @@ async def get_lineage_abundance(
             return await DB.queries.lineages.get_abundances(q)
 
 @app.get('/v0/lineages:mutationIncidence')
-async def get_mutation_incidence(lineage:str, lineage_system_name: str, change_bin:NtOrAa, prevalence_threshold:float = DEFAULT_PREVALENCE_THRESHOLD, match_reference:bool = False, q: str = None):
-    return await DB.queries.lineages.get_mutation_incidence(lineage, lineage_system_name, change_bin, prevalence_threshold, match_reference, q)
+async def get_mutation_incidence(lineage:str, background:str, lineage_system_name: str, change_bin:NtOrAa, prevalence_threshold:float = DEFAULT_PREVALENCE_THRESHOLD, match_reference:bool = False, q: str = None):
+    return await DB.queries.lineages.get_mutation_incidence(lineage, background, lineage_system_name, change_bin, prevalence_threshold, match_reference, q)
 
 @app.get('/v0/lineages:mutationProfile', response_model=List[MutationProfileInfo])
 async def get_mutation_profile(lineage:str, lineage_system_name: str, q: str = None) -> List[MutationProfileInfo]:
@@ -543,6 +543,7 @@ async def get_phenotype_metric_counts(
 @app.get('/v0/phenotype_metric_values:forMutationsAggregateBySampleAndCollectionDate', response_model=List[Dict])
 async def get_phenotype_metric_counts(
     phenotype_metric_name: str,
+    background: str | None = None,
     date_bin: DateBinOpt = DateBinOpt.month,
     days: int = DEFAULT_DAYS,
     q: str | None = None,
@@ -552,6 +553,7 @@ async def get_phenotype_metric_counts(
     return await DB.queries.phenotype_metrics.get_pheno_value_for_mutations_by_sample_and_collection_date(
         date_bin,
         phenotype_metric_name,
+        background,
         days,
         max_span_days,
         q

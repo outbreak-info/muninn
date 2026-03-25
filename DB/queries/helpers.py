@@ -1,4 +1,4 @@
-from typing import Type, List
+from typing import Type, List, Tuple
 
 from sqlalchemy import text
 
@@ -28,7 +28,7 @@ async def get_region_and_gff_features(
 
 
 # eventually-do: this doesn't really belong here because it's not a database query, but for now this is fine.
-def get_appropriate_translations_table_and_id(table: Type[IntraHostVariant] | Type[Mutation] | str) -> (str, str):
+def get_appropriate_translations_table_and_id(table: Type[IntraHostVariant] | Type[Mutation] | str) -> tuple[str, str]:
     """
     :param table: IntraHostVariants or Mutations, or string table name
     :return: (translations table name, name of id col to join to table)

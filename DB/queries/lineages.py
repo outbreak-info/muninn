@@ -309,6 +309,7 @@ async def get_abundance_summaries_by_collection_date(
 
 async def get_mutation_incidence(
     lineage: str,
+    background: str,
     lineage_system_name: str,
     change_bin: NtOrAa,
     prevalence_threshold: float,
@@ -348,7 +349,7 @@ async def get_mutation_incidence(
         """
 
         if change_bin == NtOrAa.nt:
-            not_reference = 'where ref_nt <> alt_nt'
+            not_reference = 'AND ref_nt <> alt_nt'
             if match_reference:
                 not_reference = ''
 
@@ -357,17 +358,19 @@ async def get_mutation_incidence(
                     f'''
                     WITH sample_subset as (
                         {sample_subset_query}
-                    ) SELECT ref_nt, position_nt, alt_nt, region, count(*) as mutation_count, count(*) / {sample_count} as mutation_prevalence from sample_subset
+                    ) SELECT ref_nt, position_nt, alt_nt, region, 
+                        count(DISTINCT sample_aa.sample_id) as mutation_count, count(DISTINCT sample_aa.sample_id) / {sample_count} as mutation_prevalence from sample_subset
                     inner join mutations m ON m.sample_id = sample_subset.id
                     inner join alleles a on a.id = m.allele_id
+                    WHERE a.region = '{background}'
                     {not_reference}
                     group by ref_nt, position_nt, alt_nt, region
-                    having count(*) / {sample_count} >= {prevalence_threshold};
+                    having count(DISTINCT sample_aa.sample_id) / {sample_count} >= {prevalence_threshold};
                     '''
                 )
             )
         else:
-            not_reference = 'where ref_aa <> alt_aa'
+            not_reference = 'AND ref_aa <> alt_aa'
             if match_reference:
                 not_reference = ''
             res = await session.execute(
@@ -378,16 +381,21 @@ async def get_mutation_incidence(
                     ),
                     sample_aa AS (
                     SELECT DISTINCT m.sample_id,
-                                    t.amino_acid_id
+                                    t.amino_acid_id,
+                                    m.allele_id
                     FROM   mutations    m
                     JOIN   {TableNames.mutations_translations} t ON t.{StandardColumnNames.mutation_id} = m.id
-                    ) SELECT ref_aa, position_aa, alt_aa, gff_feature, count(*) as mutation_count, count(*) / {sample_count} as mutation_prevalence
+                    ) SELECT ref_aa, position_aa, alt_aa, gff_feature, 
+                        count(DISTINCT sample_aa.sample_id) as mutation_count, 
+                        count(DISTINCT sample_aa.sample_id) / {sample_count} as mutation_prevalence
                     from sample_subset
                     inner join sample_aa ON sample_aa.sample_id = sample_subset.id
                     inner join amino_acids aa on aa.id = sample_aa.amino_acid_id
+                    inner join alleles a on a.id = sample_aa.allele_id
+                    WHERE a.region = '{background}'
                     {not_reference}
                     group by ref_aa, position_aa, alt_aa, gff_feature
-                    having count(*) / {sample_count} >= {prevalence_threshold};
+                    having count(DISTINCT sample_aa.sample_id) / {sample_count} >= {prevalence_threshold};
                     '''
                 )
             )

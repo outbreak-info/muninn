@@ -179,3 +179,5 @@ cython_debug/
 .pypirc
 
 .DS_Store
+
+/inputs
