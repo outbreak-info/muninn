@@ -964,8 +964,13 @@ class VariantsMutationsCombinedParserBig(VariantsMutationsCombinedParser):
         self.tmp_checkpoint_timeout_s = 3600
 
     async def parse_and_insert(self):
+        print(
+            f'Setting max_wal_size to {self.tmp_wal_size_mb}MB '
+            f'and checkpoint_timeout to {self.tmp_checkpoint_timeout_s} s'
+        )
         await self._increase_wal_size()
         await super().parse_and_insert()
+        print('Resetting max_wal_size and checkpoint_timeout')
         await self._reset_wal_size()
 
     async def _increase_wal_size(self):
