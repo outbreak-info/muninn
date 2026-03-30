@@ -194,15 +194,13 @@ class VariantsMutationsCombinedParser(FileParser):
         async with get_async_write_session() as session:
             await session.execute(
                 text(
-                    '''
-                    create unlogged table tmp_alleles
-                    (
-                        region      text not null,
-                        position_nt int  not null,
-                        ref_nt      text not null,
-                        alt_nt      text not null
-                    );
-                    '''
+                    'create unlogged table tmp_alleles\n'
+                    '(\n'
+                    '    region      text not null,\n'
+                    '    position_nt int  not null,\n'
+                    '    ref_nt      text not null,\n'
+                    '    alt_nt      text not null\n'
+                    ');'
                 )
             )
 
@@ -226,7 +224,6 @@ class VariantsMutationsCombinedParser(FileParser):
             )
             # get allele values from variants
             # Skipping over entries already in tmp_alleles
-            # use tmp_mutations instead to take advantage of its index
             await session.execute(
                 text(
                     'insert into tmp_alleles (\n'
@@ -236,7 +233,7 @@ class VariantsMutationsCombinedParser(FileParser):
                     'from tmp_variants\n'
                     'where (region, position_nt, ref_nt, alt_nt) not in (\n'
                     '    select region, position_nt, ref_nt, alt_nt\n'
-                    '    from tmp_mutations\n'
+                    '    from tmp_alleles\n'
                     ')\n'
                     'group by region, position_nt, ref_nt, alt_nt;'
                 )
@@ -251,11 +248,10 @@ class VariantsMutationsCombinedParser(FileParser):
                 text(
                     'delete\n'
                     'from tmp_alleles\n'
-                    'where (region, position_nt, alt_nt)\n'
-                    '          in (\n'
-                    '          select region, position_nt, alt_nt\n'
-                    '          from alleles\n'
-                    '      );'
+                    'where (region, position_nt, alt_nt) in (\n'
+                    '    select region, position_nt, alt_nt\n'
+                    '    from alleles\n'
+                    ');'
                 )
             )
 
@@ -371,8 +367,7 @@ class VariantsMutationsCombinedParser(FileParser):
                 )
             )
 
-            # get values from variants, skipping over values from mutations, which will already be in tmp_amino_acids
-            # (we do it this way because tmp_mutations is indexed on these values, and tmp_amino_acids is not)
+            # get values from variants, skipping over values already in tmp_amino_acids
             await session.execute(
                 text(
                     'insert into tmp_amino_acids (\n'
@@ -388,7 +383,7 @@ class VariantsMutationsCombinedParser(FileParser):
                     'and ref_codon is not null\n'
                     'and (gff_feature, position_aa, alt_aa, alt_codon, ref_aa, ref_codon) not in (\n'
                     '    select gff_feature, position_aa, alt_aa, alt_codon, ref_aa, ref_codon\n'
-                    '    from tmp_mutations\n'
+                    '    from tmp_amino_acids\n'
                     ')\n'
                     'group by gff_feature, position_aa, alt_aa, alt_codon, ref_aa, ref_codon;'
                 )
