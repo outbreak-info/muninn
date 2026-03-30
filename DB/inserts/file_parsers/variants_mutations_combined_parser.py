@@ -129,63 +129,50 @@ class VariantsMutationsCombinedParser(FileParser):
         async with get_async_write_session() as session:
             await session.execute(
                 text(
-                    '''
-                    create table tmp_variants
-                    (
-                        id          bigserial primary key,
-                        region      text  not null,
-                        position_nt int   not null,
-                        ref_nt      text  not null,
-                        alt_nt      text  not null,
-                        ref_dp      int   not null,
-                        ref_rv      int   not null,
-                        ref_qual    float not null,
-                        alt_dp      int   not null,
-                        alt_rv      int   not null,
-                        alt_qual    float not null,
-                        alt_freq    float not null,
-                        total_dp    int   not null,
-                        pval        float not null,
-                        pass_qc     bool  not null,
-                        gff_feature text,
-                        ref_codon   text,
-                        ref_aa      text,
-                        alt_codon   text,
-                        alt_aa      text,
-                        position_aa      int,
-                        accession   text  not null
-                    );
-                    '''
+                    'create table tmp_variants (\n'
+                    '    region      text  not null,\n'
+                    '    position_nt int   not null,\n'
+                    '    ref_nt      text  not null,\n'
+                    '    alt_nt      text  not null,\n'
+                    '    ref_dp      int   not null,\n'
+                    '    ref_rv      int   not null,\n'
+                    '    ref_qual    float not null,\n'
+                    '    alt_dp      int   not null,\n'
+                    '    alt_rv      int   not null,\n'
+                    '    alt_qual    float not null,\n'
+                    '    alt_freq    float not null,\n'
+                    '    total_dp    int   not null,\n'
+                    '    pval        float not null,\n'
+                    '    pass_qc     bool  not null,\n'
+                    '    gff_feature text,\n'
+                    '    ref_codon   text,\n'
+                    '    ref_aa      text,\n'
+                    '    alt_codon   text,\n'
+                    '    alt_aa      text,\n'
+                    '    position_aa      int,\n'
+                    '    accession   text  not null\n'
+                    ');'
                 )
             )
             for file in self.input_files:
                 if file.record_type == RecordType.variants:
                     await session.execute(
                         text(
-                            f'''
-                            copy tmp_variants ({', '.join(file.header_order)})
-                            from '/muninn/data/{file.relative_name}' delimiter E'{file.delimiter}' csv header;
-                            '''
+                            f"copy tmp_variants ({', '.join(file.header_order)})\n"
+                            f"from '/muninn/data/{file.relative_name}' delimiter E'{file.delimiter}' csv header;"
                         )
                     )
             await session.execute(
                 text(
-                    '''
-                    create index idx_tmp_variants_accession on tmp_variants (accession);
-                    '''
+                    'delete from tmp_variants\n'
+                    'where accession not in (\n'
+                    '    select accession\n'
+                    '    from samples\n'
+                    ');'
                 )
             )
             await session.execute(
-                text(
-                    '''
-                    delete
-                    from tmp_variants
-                    where accession not in (
-                        select accession
-                        from samples
-                    );
-                    '''
-                )
+                text('create index ix_tmp_variants_accession on tmp_variants (accession);')
             )
             await session.commit()
 
