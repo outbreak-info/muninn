@@ -253,15 +253,14 @@ class VariantsMutationsCombinedParser(FileParser):
     @staticmethod
     async def _insert_alleles():
         async with get_async_write_session() as session:
-            # todo: this way of handling ref conflicts is hacky
+            # insert, takes the first value in ref conflicts
             await session.execute(
                 text(
                     'insert into alleles (\n'
                     '    region, position_nt, alt_nt, ref_nt\n'
                     ')\n'
-                    'select region, position_nt, alt_nt, min(ref_nt)\n'
-                    'from tmp_alleles\n'
-                    'group by region, position_nt, alt_nt;'
+                    'select distinct on (region, position_nt, alt_nt) region, position_nt, alt_nt, ref_nt\n'
+                    'from tmp_alleles;'
                 )
             )
 
@@ -402,15 +401,20 @@ class VariantsMutationsCombinedParser(FileParser):
     @staticmethod
     async def _insert_amino_acids():
         async with get_async_write_session() as session:
-            # todo: this way of handling ref conflicts is hacky
+            # insert, takes the first value seen in ref conflicts
             await session.execute(
                 text(
                     'insert into amino_acids (\n'
                     '    gff_feature, position_aa, alt_aa, alt_codon, ref_aa, ref_codon\n'
                     ')\n'
-                    'select gff_feature, position_aa, alt_aa, alt_codon, min(ref_aa), min(ref_codon)\n'
-                    'from tmp_amino_acids\n'
-                    'group by gff_feature, position_aa, alt_aa, alt_codon;'
+                    'select distinct on (gff_feature, position_aa, alt_aa, alt_codon)\n'
+                    '       gff_feature,\n'
+                    '       position_aa,\n'
+                    '       alt_aa,\n'
+                    '       alt_codon,\n'
+                    '       ref_aa,\n'
+                    '       ref_codon\n'
+                    'from tmp_amino_acids;'
                 )
             )
 
