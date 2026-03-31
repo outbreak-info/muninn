@@ -50,7 +50,10 @@ class VariantsMutationsCombinedParser(FileParser):
         await self._restore_amino_acids_indexes()
 
         print(f'{self._get_timestamp()} insert variants')
+        await self._stage_variants()
+        await self._drop_intra_host_variants_indexes()
         await self._insert_variants()
+        await self._restore_intra_host_variants_indexes()
 
         print(f'{self._get_timestamp()} insert mutations')
         await self._stage_mutations()
@@ -506,42 +509,89 @@ class VariantsMutationsCombinedParser(FileParser):
             await session.commit()
 
     @staticmethod
+    async def _stage_variants():
+        async with get_async_write_session() as session:
+            # all the sample and allele ids from this query will be valid,
+            # which is good because we won't be enforcing fk constraints on the insert.
+            await session.execute(
+                text(
+                    'create unlogged table tmp_variants_staging as\n'
+                    'select s.id as sample_id,\n'
+                    '       a.id as allele_id,\n'
+                    '       tvar.ref_dp,\n'
+                    '       tvar.alt_dp,\n'
+                    '       tvar.alt_freq,\n'
+                    '       tvar.ref_rv,\n'
+                    '       tvar.alt_rv,\n'
+                    '       tvar.ref_qual,\n'
+                    '       tvar.alt_qual,\n'
+                    '       tvar.total_dp,\n'
+                    '       tvar.pval,\n'
+                    '       tvar.pass_qc\n'
+                    'from tmp_variants tvar\n'
+                    'inner join alleles a on a.region = tvar.region and a.position_nt = tvar.position_nt and a.alt_nt = tvar.alt_nt\n'
+                    'inner join samples s on s.accession = tvar.accession;'
+                )
+            )
+            # delete existing records. Note: this means no updates.
+            await session.execute(
+                text(
+                    'delete\n'
+                    'from tmp_variants_staging\n'
+                    'where (sample_id, allele_id) in (\n'
+                    '    select sample_id, allele_id\n'
+                    '    from intra_host_variants\n'
+                    ');'
+                )
+            )
+            await session.execute(
+                text('create index ix_variants_staging on tmp_variants_staging (sample_id, allele_id);')
+            )
+
+            # check for duplicated sample-allele pairs and warn if found
+            res = await session.execute(
+                text(
+                    'select *\n'
+                    'from (\n'
+                    '    select sample_id, allele_id, count(*) as count\n'
+                    '    from tmp_variants_staging\n'
+                    '    group by sample_id, allele_id\n'
+                    ') _\n'
+                    'where count > 1;'
+                )
+            )
+            conflicts = res.mappings().all()
+            if len(conflicts) > 0:
+                print(
+                    f'Warning: found {len(conflicts)} sample-allele pairs with duplicate entries. '
+                    f'Duplicates will be skipped, no guarantees are made about how we choose which entries to skip.'
+                )
+
+            await session.commit()
+
+
+    @staticmethod
     async def _insert_variants():
         async with get_async_write_session() as session:
             await session.execute(
                 text(
-                    '''
-                    insert into intra_host_variants (
-                        sample_id, allele_id, ref_dp, alt_dp, alt_freq, ref_rv, alt_rv, ref_qual, alt_qual, total_dp, pval, pass_qc
-                    )
-                    select distinct on (s.id, a.id)
-                        s.id as sample_id,
-                        a.id as allele_id,
-                        tvar.ref_dp,
-                        tvar.alt_dp,
-                        tvar.alt_freq,
-                        tvar.ref_rv,
-                        tvar.alt_rv,
-                        tvar.ref_qual,
-                        tvar.alt_qual,
-                        tvar.total_dp,
-                        tvar.pval,
-                        tvar.pass_qc
-                    from tmp_variants tvar
-                    left join alleles a on a.region = tvar.region and a.position_nt = tvar.position_nt and a.alt_nt = tvar.alt_nt
-                    left join samples s on s.accession = tvar.accession
-                    on conflict (sample_id, allele_id) do update
-                        set ref_dp   = excluded.ref_dp,
-                            alt_dp   = excluded.alt_dp,
-                            alt_freq = excluded.alt_freq,
-                            ref_rv   = excluded.ref_rv,
-                            alt_rv   = excluded.alt_rv,
-                            ref_qual = excluded.ref_qual,
-                            alt_qual = excluded.alt_qual,
-                            total_dp = excluded.total_dp,
-                            pval     = excluded.pval,
-                            pass_qc  = excluded.pass_qc;
-                    '''
+                    'insert into intra_host_variants(\n'
+                    '    sample_id, allele_id, ref_dp, alt_dp, alt_freq, ref_rv, alt_rv, ref_qual, alt_qual, total_dp, pval, pass_qc\n'
+                    ')\n'
+                    'select distinct on (sample_id, allele_id) \n'
+                    '    sample_id,\n'
+                    '    allele_id,\n'
+                    '    ref_dp,\n'
+                    '    alt_dp,\n'
+                    '    alt_freq,\n'
+                    '    ref_rv,\n'
+                    '    alt_rv,\n'
+                    '    ref_qual,\n'
+                    '    alt_qual,\n'
+                    '    total_dp,\n'
+                    '    pval,\n'
+                    '    pass_qc\n'
+                    'from tmp_variants_staging;'
                 )
             )
             await session.commit()
@@ -648,7 +698,8 @@ class VariantsMutationsCombinedParser(FileParser):
             'tmp_alleles',
             'tmp_amino_acids',
             'tmp_mutations_staging',
-            'tmp_mutation_translations_staging'
+            'tmp_mutation_translations_staging',
+            'tmp_variants_staging',
         ]
         async with get_async_write_session() as session:
             for t in temp_tables:
@@ -802,6 +853,55 @@ class VariantsMutationsCombinedParser(FileParser):
                 text(
                     f'alter table {TableNames.mutations} \n'
                     f'add constraint {ConstraintNames.fk_mutations_sample_id_samples} \n'
+                    f'foreign key ({StandardColumnNames.sample_id}) references {TableNames.samples} (id);'
+                )
+            )
+            await session.commit()
+
+    @staticmethod
+    async def _drop_intra_host_variants_indexes():
+        constraint_names = [
+            ConstraintNames.uq_intra_host_variants_sample_allele_pair,
+            ConstraintNames.fk_intra_host_variants_allele_id_alleles,
+            ConstraintNames.fk_intra_host_variants_sample_id_samples
+        ]
+        async with get_async_write_session() as session:
+            for conname in constraint_names:
+                await session.execute(
+                    text(f'alter table {TableNames.intra_host_variants} drop constraint {conname};')
+                )
+            await session.execute(
+                text(f'drop index {IndexNames.ix_intra_host_variants_allele_id};')
+            )
+            await session.commit()
+
+    @staticmethod
+    async def _restore_intra_host_variants_indexes():
+        async with get_async_write_session() as session:
+            await session.execute(
+                text(
+                    f'alter table {TableNames.intra_host_variants} \n'
+                    f'add constraint {ConstraintNames.uq_intra_host_variants_sample_allele_pair} \n'
+                    f'unique ({StandardColumnNames.sample_id}, {StandardColumnNames.allele_id});'
+                )
+            )
+            await session.execute(
+                text(
+                    f'create index {IndexNames.ix_intra_host_variants_allele_id} \n'
+                    f'on {TableNames.intra_host_variants} ({StandardColumnNames.allele_id});'
+                )
+            )
+            await session.execute(
+                text(
+                    f'alter table {TableNames.intra_host_variants} \n'
+                    f'add constraint {ConstraintNames.fk_intra_host_variants_allele_id_alleles} \n'
+                    f'foreign key ({StandardColumnNames.allele_id}) references {TableNames.alleles} (id);'
+                )
+            )
+            await session.execute(
+                text(
+                    f'alter table {TableNames.intra_host_variants} \n'
+                    f'add constraint {ConstraintNames.fk_intra_host_variants_sample_id_samples} \n'
                     f'foreign key ({StandardColumnNames.sample_id}) references {TableNames.samples} (id);'
                 )
             )
