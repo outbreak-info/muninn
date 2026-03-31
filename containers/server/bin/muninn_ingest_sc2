@@ -142,11 +142,11 @@ fi
 
 {
   # ingest bjorn-general outputs
-  python3 -u runinserts.py "$SAMPLES_FILE" --format sc2_sd_samples
+  python3 -u runinserts.py "$SAMPLES_FILE" --format sc2_samples
   python3 -u runinserts.py \
   "$VARIANTS_FILE" \
   "$MUTATIONS_FILE" \
-  --format variants_mutations_combined_tsv
+  --format variants_mutations_combined_big_tsv
   python3 -u runinserts.py "$FREYJA_DEMIXED_DIR" --format freyja_demixed
   python3 -u runinserts.py "$FREYJA_DEMIXED_LINEAGE_HIERARCHY_FILE" --format freyja_demixed_hierarchy_yaml
   python3 -u runinserts.py "$LINEAGE_FILE" --format sc2_lineages

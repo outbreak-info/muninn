@@ -6,7 +6,7 @@ from DB.engine import get_async_session
 from DB.models import PhenotypeMetric, IntraHostVariant, Mutation, PhenotypeMetricValues
 from DB.queries.date_count_helpers import get_extract_clause, get_group_by_clause, get_order_by_cause, \
     MID_COLLECTION_DATE_CALCULATION
-from DB.queries.helpers import get_appropriate_translations_table_and_id, get_closest_ref
+from DB.queries.helpers import get_appropriate_translations_table_and_id
 from api.models import PhenotypeMetricInfo
 from parser.parser import parser
 from utils.constants import DateBinOpt, COLLECTION_DATE, StandardColumnNames

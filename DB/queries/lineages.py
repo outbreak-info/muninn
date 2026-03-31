@@ -1,5 +1,10 @@
+import pandas as pd
 from collections import defaultdict
 from typing import List, Dict
+
+from scipy.interpolate import UnivariateSpline
+from scipy.stats import t
+import numpy as np
 
 from sqlalchemy import select, func, distinct, text, and_
 from sqlalchemy.orm import contains_eager
@@ -358,14 +363,13 @@ async def get_mutation_incidence(
                     f'''
                     WITH sample_subset as (
                         {sample_subset_query}
-                    ) SELECT ref_nt, position_nt, alt_nt, region, 
-                        count(DISTINCT sample_aa.sample_id) as mutation_count, count(DISTINCT sample_aa.sample_id) / {sample_count} as mutation_prevalence from sample_subset
+                    ) SELECT ref_nt, position_nt, alt_nt, region, count(*) as mutation_count, count(*) / {sample_count} as mutation_prevalence from sample_subset
                     inner join mutations m ON m.sample_id = sample_subset.id
                     inner join alleles a on a.id = m.allele_id
                     WHERE a.region = '{background}'
                     {not_reference}
                     group by ref_nt, position_nt, alt_nt, region
-                    having count(DISTINCT sample_aa.sample_id) / {sample_count} >= {prevalence_threshold};
+                    having count(*) / {sample_count} >= {prevalence_threshold};
                     '''
                 )
             )
@@ -442,4 +446,122 @@ async def get_mutation_profile(lineage: str, lineage_system_name: str, samples_r
     async with get_async_session() as session:
         results = await session.execute(query)
         out_data = [MutationProfileInfo(**row) for row in results.mappings().all()]
+    return out_data
+
+async def get_growth_rate_by_date(
+        time_start: str, 
+        time_end: str, 
+        lineage_system_name: str,
+        n_lineages: int,
+        raw_query: str | None,
+        max_span_days: int,
+    ):
+    user_where_clause = ''
+    if raw_query is not None:
+        user_where_clause = f'where {parser.parse(raw_query)}'
+
+    # extract_clause = get_extract_clause(COLLECTION_DATE, date_bin=DateBinOpt.day, days=1)
+    # group_by_clause = get_group_by_clause(
+    #     date_bin,
+    #     [StandardColumnNames.lineage_name, StandardColumnNames.lineage_system_name]
+    # )
+    # order_by_clause = get_order_by_cause(date_bin)
+
+    async with get_async_session() as session:
+        res = await session.execute( # group by time and lineage system
+            text(
+                f'''
+                select
+                mid_collection_date,
+                lineage_name,
+                count(*) AS lineage_count,
+                COUNT(*) / SUM(COUNT(*)) OVER (PARTITION BY mid_collection_date) AS lineage_prop
+                from (
+                    select
+                    *,
+                    {MID_COLLECTION_DATE_CALCULATION}
+                    from (
+                        select
+                        lineage_name,
+                        lineage_system_name,
+                        collection_start_date,
+                        collection_end_date,
+                        collection_end_date - collection_start_date as collection_span
+                        from samples_lineages sl
+                        inner join lineages l on l.id = sl.lineage_id
+                        inner join lineage_systems ls on ls.id = l.lineage_system_id
+                        inner join samples s on s.id = sl.sample_id
+                        {user_where_clause}
+                    )
+                    where collection_start_date >= '{time_start}' 
+                        AND collection_end_date <= '{time_end}' 
+                        AND collection_span <= {max_span_days} 
+                        AND lineage_system_name = '{lineage_system_name}'
+                        AND lineage_name IN (
+                            SELECT lineage_name 
+                            from samples_lineages sl
+                            inner join lineages l on l.id = sl.lineage_id
+                            inner join lineage_systems ls on ls.id = l.lineage_system_id
+                            inner join samples s on s.id = sl.sample_id
+                            WHERE collection_start_date >= '{time_start}' AND collection_end_date <= '{time_end}' AND lineage_system_name = '{lineage_system_name}'
+                            GROUP BY lineage_name
+                            ORDER BY COUNT(*) DESC
+                            LIMIT {n_lineages}       
+                    )
+                )
+                GROUP BY mid_collection_date, lineage_name
+                ORDER BY mid_collection_date, lineage_name
+                '''
+            )
+        )
+
+    out_data = dict()
+    rows = []
+    for r in res:
+        date = str(r[0])
+        lineage = r[1]
+        count = r[2]
+        prop = r[3]
+
+        try:
+            out_data[lineage][date]["count"] = count
+            out_data[lineage][date]["proportion"] = round(prop, 4)
+        except KeyError:
+            if lineage not in out_data.keys():
+                out_data[lineage] = {date: {"count": count, "proportion": round(prop, 4)}}
+            elif date not in out_data[lineage].keys():
+                out_data[lineage][date] = {"count": count, "proportion": round(prop, 4)}
+
+        rows.append({
+            'collection_time': pd.to_datetime(date),
+            'lineage_name': lineage,
+            'lineage_count': count,
+            'lineage_prop': float(prop)
+        })
+    res_df = pd.DataFrame(rows)
+    
+    for lineage, group in res_df.groupby("lineage_name"):
+        x = (group['collection_time'] - group['collection_time'].min()).dt.days.values
+        y = group['lineage_prop'].values
+
+        if len(x) < 4 or len(np.unique(y)) < 4:
+            for _, row in group.iterrows():
+                date = row['collection_time'].strftime('%Y-%m-%d')
+                out_data[lineage][date]['spline_fit'] = None
+                out_data[lineage][date]['ci_low'] = None
+                out_data[lineage][date]['ci_high'] = None
+            continue
+
+        spline = UnivariateSpline(x, y, k=3, s=len(x) * np.var(y) * 0.1)
+        spline_fit = spline(x)
+        residuals = y - spline_fit
+        df = max(len(x) - 4, 1)
+        ci = t.ppf(0.975, df) * np.std(residuals)
+
+        for i, (_, row) in enumerate(group.iterrows()):
+            date = row['collection_time'].strftime('%Y-%m-%d')
+            out_data[lineage][date]['spline_fit'] = round(float(spline_fit[i]), 4)
+            out_data[lineage][date]['ci_low'] = round(float(spline_fit[i] - ci), 4)
+            out_data[lineage][date]['ci_high'] = round(float(spline_fit[i] + ci), 4)
+        
     return out_data

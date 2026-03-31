@@ -31,6 +31,7 @@ DEFAULT_DAYS = 5
 DEFAULT_PREVALENCE_THRESHOLD = 0.75
 ASYNCPG_MAX_QUERY_ARGS = 32767
 NUCLEOTIDE_CHARACTERS = ['A', 'C', 'G', 'T']
+DEFAULT_N_LINEAGES = 10
 # https://en.wikipedia.org/wiki/Nucleic_acid_notation
 NUCLEOTIDE_CHARACTERS_AMBIGUOUS = ['A', 'C', 'G', 'T', 'M', 'R', 'W', 'S', 'Y', 'K', 'B', 'D', 'H', 'V', 'N']
 CONTAINER_DATA_DIRECTORY = '/home/muninn/data'

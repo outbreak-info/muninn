@@ -21,7 +21,7 @@ from api.models import LineageAbundanceWithSampleInfo, VariantInfo, SampleInfo, 
     MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo, \
     LineageInfo, VariantMutationLagInfo, RegionAndGffFeatureInfo, MutationProfileInfo, AverageLineageAbundanceInfo
 from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, SIMPLE_DATE_FIELDS, NtOrAa, \
-    DEFAULT_MAX_SPAN_DAYS, COLLECTION_DATE, DEFAULT_DAYS, COMMA_SEP_WORDLIKE_PATTERN, LINEAGE, DEFAULT_PREVALENCE_THRESHOLD
+    DEFAULT_MAX_SPAN_DAYS, COLLECTION_DATE, DEFAULT_DAYS, COMMA_SEP_WORDLIKE_PATTERN, LINEAGE, DEFAULT_PREVALENCE_THRESHOLD, DEFAULT_N_LINEAGES
 from utils.errors import ParsingError
 
 app = FastAPI()
@@ -625,3 +625,14 @@ async def get_annotations_by_mutations_and_amino_acid_position(
     q: str | None = None
 ) -> Dict:
     return await DB.queries.annotations.get_annotations_by_mutations_and_amino_acid_position(effect_detail, q)
+
+@app.get('/v0/lineages:DailyGrowthRate', response_model=Dict)
+async def get_growth_rate_by_date(
+    time_start: str,
+    time_end: str,
+    lineage_system_name: str,
+    n_lineages: int = DEFAULT_N_LINEAGES,
+    q: str | None = None,
+    max_span_days: int = DEFAULT_MAX_SPAN_DAYS,
+) -> Dict:
+    return await DB.queries.lineages.get_growth_rate_by_date(time_start, time_end, lineage_system_name, n_lineages, q, max_span_days)
