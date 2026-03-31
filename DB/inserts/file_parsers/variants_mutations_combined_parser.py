@@ -272,30 +272,28 @@ class VariantsMutationsCombinedParser(FileParser):
         async with get_async_session() as session:
             res = await session.execute(
                 text(
-                    '''
-                    select combo.region, combo.position_nt, combo.alt_nt, combo.ref_nt, count(*) from
-                    (
-                        select region, position_nt, alt_nt
-                        from (
-                            select region, position_nt, alt_nt, count(*)
-                            from tmp_alleles
-                            group by region, position_nt, alt_nt
-                        ) _
-                        where _.count > 1
-                    ) dups
-                    inner join (
-                        (
-                            select region, position_nt, alt_nt, ref_nt
-                            from tmp_mutations tmut
-                        )
-                        union all
-                        (
-                            select region, position_nt, alt_nt, ref_nt
-                            from tmp_variants tvar
-                        )
-                    ) combo on dups.region = combo.region and dups.position_nt = combo.position_nt and dups.alt_nt = combo.alt_nt
-                    group by combo.region, combo.position_nt, combo.alt_nt, combo.ref_nt ;
-                    '''
+                    'select combo.region, combo.position_nt, combo.alt_nt, combo.ref_nt, count(*) from\n'
+                    '(\n'
+                    '    select region, position_nt, alt_nt\n'
+                    '    from (\n'
+                    '        select region, position_nt, alt_nt, count(*)\n'
+                    '        from tmp_alleles\n'
+                    '        group by region, position_nt, alt_nt\n'
+                    '    ) _\n'
+                    '    where _.count > 1\n'
+                    ') dups\n'
+                    'inner join (\n'
+                    '    (\n'
+                    '        select region, position_nt, alt_nt, ref_nt\n'
+                    '        from tmp_mutations tmut\n'
+                    '    )\n'
+                    '    union all\n'
+                    '    (\n'
+                    '        select region, position_nt, alt_nt, ref_nt\n'
+                    '        from tmp_variants tvar\n'
+                    '    )\n'
+                    ') combo on dups.region = combo.region and dups.position_nt = combo.position_nt and dups.alt_nt = combo.alt_nt\n'
+                    'group by combo.region, combo.position_nt, combo.alt_nt, combo.ref_nt ;'
                 )
             )
         conflicts = res.mappings().all()
@@ -423,29 +421,27 @@ class VariantsMutationsCombinedParser(FileParser):
         async with get_async_session() as session:
             res = await session.execute(
                 text(
-                    '''
-                    select  combo.gff_feature, combo.position_aa,  combo.alt_aa,  combo.alt_codon, combo.ref_aa, combo.ref_codon, count(*) from
-                    (
-                        select * from (
-                        select gff_feature, position_aa, alt_aa, alt_codon, count(*)
-                        from tmp_amino_acids
-                        group by gff_feature, position_aa, alt_aa, alt_codon
-                    )_ where _.count > 1
-                    ) dups
-                    inner join (
-                        (
-                            select gff_feature, position_aa, ref_aa, alt_aa, ref_codon, alt_codon
-                            from tmp_mutations tmut
-                        )
-                        union all
-                        (
-                            select gff_feature, position_aa, ref_aa, alt_aa, ref_codon, alt_codon
-                            from tmp_variants tvar
-                        )
-                    ) combo on dups.gff_feature = combo.gff_feature and dups.position_aa = combo.position_aa and dups.alt_aa = combo.alt_aa and dups.alt_codon = combo.alt_codon
-                    group by combo.gff_feature, combo.position_aa, combo.alt_aa, combo.alt_codon, combo.ref_aa, combo.ref_codon
-                    ;
-                    '''
+                    'select  combo.gff_feature, combo.position_aa,  combo.alt_aa,  combo.alt_codon, combo.ref_aa, combo.ref_codon, count(*) from\n'
+                    '(\n'
+                    'select * from (\n'
+                    'select gff_feature, position_aa, alt_aa, alt_codon, count(*)\n'
+                    'from tmp_amino_acids\n'
+                    'group by gff_feature, position_aa, alt_aa, alt_codon\n'
+                    ')_ where _.count > 1\n'
+                    ') dups\n'
+                    'inner join (\n'
+                    '(\n'
+                    '    select gff_feature, position_aa, ref_aa, alt_aa, ref_codon, alt_codon\n'
+                    '    from tmp_mutations tmut\n'
+                    ')\n'
+                    'union all\n'
+                    '(\n'
+                    '    select gff_feature, position_aa, ref_aa, alt_aa, ref_codon, alt_codon\n'
+                    '    from tmp_variants tvar\n'
+                    ')\n'
+                    ') combo on dups.gff_feature = combo.gff_feature and dups.position_aa = combo.position_aa and dups.alt_aa = combo.alt_aa and dups.alt_codon = combo.alt_codon\n'
+                    'group by combo.gff_feature, combo.position_aa, combo.alt_aa, combo.alt_codon, combo.ref_aa, combo.ref_codon\n'
+                    ';'
                 )
             )
         conflicts = res.mappings().all()
@@ -467,27 +463,22 @@ class VariantsMutationsCombinedParser(FileParser):
         async with get_async_write_session() as session:
             await session.execute(
                 text(
-                    '''
-                    create unlogged table tmp_mutations_staging
-                    as
-                    select s.id as sample_id, a.id as allele_id
-                    from tmp_mutations tmut
-                    inner join alleles a on a.region = tmut.region and a.position_nt = tmut.position_nt and a.alt_nt = tmut.alt_nt
-                    inner join samples s on s.accession = tmut.accession;
-                    '''
+                    'create unlogged table tmp_mutations_staging\n'
+                    'as\n'
+                    'select s.id as sample_id, a.id as allele_id\n'
+                    'from tmp_mutations tmut\n'
+                    'inner join alleles a on a.region = tmut.region and a.position_nt = tmut.position_nt and a.alt_nt = tmut.alt_nt\n'
+                    'inner join samples s on s.accession = tmut.accession;'
                 )
             )
             await session.execute(
                 text(
-                    '''
-                    delete
-                    from tmp_mutations_staging
-                    where (sample_id, allele_id) in
-                          (
-                              select sample_id, allele_id
-                              from mutations
-                          );
-                    '''
+                    'delete from tmp_mutations_staging\n'
+                    'where (sample_id, allele_id) in\n'
+                    '      (\n'
+                    '          select sample_id, allele_id\n'
+                    '          from mutations\n'
+                    '      );'
                 )
             )
             await session.execute(
@@ -500,13 +491,11 @@ class VariantsMutationsCombinedParser(FileParser):
         async with get_async_write_session() as session:
             await session.execute(
                 text(
-                    '''
-                    insert into mutations (
-                        sample_id, allele_id
-                    )
-                    select sample_id, allele_id from tmp_mutations_staging
-                    group by sample_id, allele_id;
-                    '''
+                    'insert into mutations (\n'
+                    '    sample_id, allele_id\n'
+                    ')\n'
+                    'select sample_id, allele_id from tmp_mutations_staging\n'
+                    'group by sample_id, allele_id;'
                 )
             )
             await session.commit()
@@ -604,57 +593,49 @@ class VariantsMutationsCombinedParser(FileParser):
             # create a partial index on tmp_mutations to help with distinct in the next step
             await session.execute(
                 text(
-                    f'''
-                    create index ix_tmp_mutations_sample_allele_amino_acid
-                    on tmp_mutations (accession, gff_feature, position_aa, alt_aa, alt_codon, region, position_nt, alt_nt)
-                    where gff_feature is not null
-                        and position_aa is not null
-                        and alt_aa is not null
-                        and ref_aa is not null;
-                    '''
+                    'create index ix_tmp_mutations_sample_allele_amino_acid\n'
+                    'on tmp_mutations (accession, gff_feature, position_aa, alt_aa, alt_codon, region, position_nt, alt_nt)\n'
+                    'where gff_feature is not null\n'
+                    '    and position_aa is not null\n'
+                    '    and alt_aa is not null\n'
+                    '    and ref_aa is not null;'
                 )
             )
 
             # create staging table
             await session.execute(
                 text(
-                    f'''
-                    create unlogged table tmp_mutation_translations_staging as (
-                        with base as (
-                            select distinct on (accession, gff_feature, position_aa, alt_aa, alt_codon, region, position_nt, alt_nt) *
-                            from tmp_mutations tmut
-                            where tmut.gff_feature is not null
-                              and tmut.position_aa is not null
-                              and tmut.alt_aa is not null
-                              and tmut.ref_aa is not null
-                        )
-                        select m.id as mutation_id, aa.id as amino_acid_id
-                        from base tmut
-                        left join amino_acids aa
-                                  on aa.gff_feature = tmut.gff_feature
-                                      and aa.position_aa = tmut.position_aa
-                                      and aa.alt_aa = tmut.alt_aa
-                                      and aa.alt_codon = tmut.alt_codon
-                        left join samples s on s.accession = tmut.accession
-                        left join alleles a on a.region = tmut.region and a.position_nt = tmut.position_nt and a.alt_nt = tmut.alt_nt
-                        left join mutations m on m.sample_id = s.id and m.allele_id = a.id
-                    );
-                    '''
+                    'create unlogged table tmp_mutation_translations_staging as (\n'
+                    '    with base as (\n'
+                    '        select distinct on (accession, gff_feature, position_aa, alt_aa, alt_codon, region, position_nt, alt_nt) *\n'
+                    '        from tmp_mutations tmut\n'
+                    '        where tmut.gff_feature is not null\n'
+                    '          and tmut.position_aa is not null\n'
+                    '          and tmut.alt_aa is not null\n'
+                    '          and tmut.ref_aa is not null\n'
+                    '    )\n'
+                    '    select m.id as mutation_id, aa.id as amino_acid_id\n'
+                    '    from base tmut\n'
+                    '    left join amino_acids aa\n'
+                    '              on aa.gff_feature = tmut.gff_feature\n'
+                    '                  and aa.position_aa = tmut.position_aa\n'
+                    '                  and aa.alt_aa = tmut.alt_aa\n'
+                    '                  and aa.alt_codon = tmut.alt_codon\n'
+                    '    left join samples s on s.accession = tmut.accession\n'
+                    '    left join alleles a on a.region = tmut.region and a.position_nt = tmut.position_nt and a.alt_nt = tmut.alt_nt\n'
+                    '    left join mutations m on m.sample_id = s.id and m.allele_id = a.id\n'
+                    ');'
                 )
             )
 
             # delete existing records from staging
             await session.execute(
                 text(
-                    f'''
-                    delete
-                    from tmp_mutation_translations_staging
-                    where (mutation_id, amino_acid_id) in
-                          (
-                              select mutation_id, amino_acid_id
-                              from mutation_translations
-                          );
-                    '''
+                    'delete from tmp_mutation_translations_staging\n'
+                    'where (mutation_id, amino_acid_id) in (\n'
+                    '          select mutation_id, amino_acid_id\n'
+                    '          from mutation_translations\n'
+                    '      );'
                 )
             )
 
@@ -665,10 +646,8 @@ class VariantsMutationsCombinedParser(FileParser):
         async with get_async_write_session() as session:
             await session.execute(
                 text(
-                    '''
-                    insert into mutation_translations (mutation_id, amino_acid_id)
-                    select mutation_id, amino_acid_id from tmp_mutation_translations_staging;
-                    '''
+                    'insert into mutation_translations (mutation_id, amino_acid_id)\n'
+                    'select mutation_id, amino_acid_id from tmp_mutation_translations_staging;'
                 )
             )
             await session.commit()
@@ -1018,7 +997,6 @@ class VariantsMutationsCombinedParser(FileParser):
                 text(f'drop index {IndexNames.ix_intra_host_translations_amino_acid_id};')
             )
             await session.commit()
-
 
     @staticmethod
     async def _restore_intra_host_translations_indexes():
