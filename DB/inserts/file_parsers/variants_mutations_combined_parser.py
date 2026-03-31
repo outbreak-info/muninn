@@ -62,7 +62,10 @@ class VariantsMutationsCombinedParser(FileParser):
         await self._restore_mutations_indexes()
 
         print(f'{self._get_timestamp()} insert intra host translations')
+        await self._stage_intra_host_translations()
+        await self._drop_intra_host_translations_indexes()
         await self._insert_intra_host_translations()
+        await self._restore_intra_host_translations_indexes()
 
         print(f'{self._get_timestamp()} insert mutation translations')
         await self._stage_mutation_translations()
@@ -569,7 +572,6 @@ class VariantsMutationsCombinedParser(FileParser):
 
             await session.commit()
 
-
     @staticmethod
     async def _insert_variants():
         async with get_async_write_session() as session:
@@ -672,20 +674,63 @@ class VariantsMutationsCombinedParser(FileParser):
             await session.commit()
 
     @staticmethod
+    async def _stage_intra_host_translations():
+        async with get_async_write_session() as session:
+            await session.execute(
+                text(
+                    'create index ix_tmp_variants_sample_allele_aa\n'
+                    '    on tmp_variants (accession, gff_feature, position_aa, alt_aa, alt_codon, region, position_nt, alt_nt)\n'
+                    '    where gff_feature is not null\n'
+                    '        and position_aa is not null\n'
+                    '        and alt_aa is not null\n'
+                    '        and ref_aa is not null;'
+                )
+            )
+            await session.execute(
+                text(
+                    'create unlogged table tmp_intra_host_translations_staging as (\n'
+                    '    with base as (\n'
+                    '        select distinct on (accession, gff_feature, position_aa, alt_aa, alt_codon, region, position_nt, alt_nt) *\n'
+                    '        from tmp_variants tvar\n'
+                    '        where tvar.gff_feature is not null\n'
+                    '          and tvar.position_aa is not null\n'
+                    '          and tvar.alt_aa is not null\n'
+                    '          and tvar.ref_aa is not null\n'
+                    '    )\n'
+                    '    select ihv.id as intra_host_variant_id, aa.id as amino_acid_id\n'
+                    '    from base tvar\n'
+                    '    left join amino_acids aa\n'
+                    '              on aa.gff_feature = tvar.gff_feature\n'
+                    '                  and aa.position_aa = tvar.position_aa\n'
+                    '                  and aa.alt_aa = tvar.alt_aa\n'
+                    '                  and aa.alt_codon = tvar.alt_codon\n'
+                    '    left join samples s on s.accession = tvar.accession\n'
+                    '    left join alleles a on a.region = tvar.region and a.position_nt = tvar.position_nt and a.alt_nt = tvar.alt_nt\n'
+                    '    left join intra_host_variants ihv on ihv.sample_id = s.id and ihv.allele_id = a.id\n'
+                    ');'
+                )
+            )
+            await session.execute(
+                text(
+                    'delete from tmp_intra_host_translations_staging\n'
+                    'where (intra_host_variant_id, amino_acid_id) in (\n'
+                    '          select intra_host_variant_id, amino_acid_id\n'
+                    '          from intra_host_translations\n'
+                    '      );'
+                )
+            )
+            await session.commit()
+
+    @staticmethod
     async def _insert_intra_host_translations():
         async with get_async_write_session() as session:
             await session.execute(
                 text(
-                    '''
-                    insert into intra_host_translations (intra_host_variant_id, amino_acid_id)
-                    select distinct ihv.id as intra_host_variant_id, aa.id as amino_acid_id from tmp_variants tvar
-                    left join amino_acids aa on aa.gff_feature = tvar.gff_feature and aa.position_aa = tvar.position_aa and aa.alt_aa = tvar.alt_aa and aa.alt_codon = tvar.alt_codon
-                    left join samples s on s.accession = tvar.accession
-                    left join alleles a on a.region = tvar.region and a.position_nt = tvar.position_nt and a.alt_nt = tvar.alt_nt
-                    left join intra_host_variants ihv on ihv.sample_id = s.id and ihv.allele_id = a.id
-                    where num_nulls(tvar.gff_feature, tvar.position_aa, tvar.alt_aa, tvar.ref_aa) = 0
-                    on conflict (intra_host_variant_id, amino_acid_id) do nothing;
-                    '''
+                    'insert into intra_host_translations (\n'
+                    '    intra_host_variant_id, amino_acid_id\n'
+                    ')\n'
+                    'select intra_host_variant_id, amino_acid_id\n'
+                    'from tmp_intra_host_translations_staging;'
                 )
             )
             await session.commit()
@@ -700,6 +745,7 @@ class VariantsMutationsCombinedParser(FileParser):
             'tmp_mutations_staging',
             'tmp_mutation_translations_staging',
             'tmp_variants_staging',
+            'tmp_intra_host_translations_staging',
         ]
         async with get_async_write_session() as session:
             for t in temp_tables:
@@ -952,6 +998,56 @@ class VariantsMutationsCombinedParser(FileParser):
                     f'alter table {TableNames.mutation_translations} \n'
                     f'add constraint {ConstraintNames.fk_mutation_translations_mutation_id_mutations} \n'
                     f'foreign key ({StandardColumnNames.mutation_id}) references {TableNames.mutations} (id);'
+                )
+            )
+            await session.commit()
+
+    @staticmethod
+    async def _drop_intra_host_translations_indexes():
+        constraint_names = [
+            ConstraintNames.uq_intra_host_translations_variant_amino_acid_pair,
+            ConstraintNames.fk_intra_host_translations_intra_host_variant_id,
+            ConstraintNames.fk_intra_host_translations_amino_acid_id_amino_acids
+        ]
+        async with get_async_write_session() as session:
+            for conname in constraint_names:
+                await session.execute(
+                    text(f'alter table {TableNames.intra_host_translations} drop constraint {conname};')
+                )
+            await session.execute(
+                text(f'drop index {IndexNames.ix_intra_host_translations_amino_acid_id};')
+            )
+            await session.commit()
+
+
+    @staticmethod
+    async def _restore_intra_host_translations_indexes():
+        async with get_async_write_session() as session:
+            await session.execute(
+                text(
+                    f'alter table {TableNames.intra_host_translations} \n'
+                    f'add constraint {ConstraintNames.uq_intra_host_translations_variant_amino_acid_pair} \n'
+                    f'unique ({StandardColumnNames.intra_host_variant_id}, {StandardColumnNames.amino_acid_id});'
+                )
+            )
+            await session.execute(
+                text(
+                    f'create index {IndexNames.ix_intra_host_translations_amino_acid_id} \n'
+                    f'on {TableNames.intra_host_translations} ({StandardColumnNames.amino_acid_id});'
+                )
+            )
+            await session.execute(
+                text(
+                    f'alter table {TableNames.intra_host_translations} \n'
+                    f'add constraint {ConstraintNames.fk_intra_host_translations_amino_acid_id_amino_acids} \n'
+                    f'foreign key ({StandardColumnNames.amino_acid_id}) references {TableNames.amino_acids} (id);'
+                )
+            )
+            await session.execute(
+                text(
+                    f'alter table {TableNames.intra_host_translations} \n'
+                    f'add constraint {ConstraintNames.fk_intra_host_translations_intra_host_variant_id} \n'
+                    f'foreign key ({StandardColumnNames.intra_host_variant_id}) references {TableNames.intra_host_variants} (id);'
                 )
             )
             await session.commit()
