@@ -11,7 +11,7 @@ from sqlalchemy.orm import contains_eager
 
 from DB.engine import get_async_session
 from DB.models import LineageSystem, Lineage, Sample, SampleLineage, GeoLocation, Allele, Mutation
-from DB.queries.date_count_helpers import get_extract_clause, get_group_by_clause, get_order_by_cause, \
+from DB.queries.date_count_helpers import get_extract_clause, get_group_by_clause, get_order_by_cause, get_cols_clause, \
     MID_COLLECTION_DATE_CALCULATION
 from api.models import LineageCountInfo, LineageAbundanceInfo, LineageInfo, LineageAbundanceSummaryInfo, \
     MutationProfileInfo
@@ -452,7 +452,9 @@ async def get_growth_rate_by_date(
         time_start: str, 
         time_end: str, 
         lineage_system_name: str,
+        date_bin: DateBinOpt,
         n_lineages: int,
+        days: int,
         raw_query: str | None,
         max_span_days: int,
     ):
@@ -460,57 +462,66 @@ async def get_growth_rate_by_date(
     if raw_query is not None:
         user_where_clause = f'where {parser.parse(raw_query)}'
 
-    # extract_clause = get_extract_clause(COLLECTION_DATE, date_bin=DateBinOpt.day, days=1)
-    # group_by_clause = get_group_by_clause(
-    #     date_bin,
-    #     [StandardColumnNames.lineage_name, StandardColumnNames.lineage_system_name]
-    # )
-    # order_by_clause = get_order_by_cause(date_bin)
+    extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
+    select_clause = get_cols_clause(date_bin)
+    group_by_clause = get_group_by_clause(
+        date_bin,
+        [StandardColumnNames.lineage_name]
+    )
+    order_by_clause = get_order_by_cause(date_bin)
 
     async with get_async_session() as session:
         res = await session.execute( # group by time and lineage system
             text(
                 f'''
-                select
-                mid_collection_date,
+                SELECT
+                {select_clause},
                 lineage_name,
-                count(*) AS lineage_count,
-                COUNT(*) / SUM(COUNT(*)) OVER (PARTITION BY mid_collection_date) AS lineage_prop
-                from (
-                    select
-                    *,
-                    {MID_COLLECTION_DATE_CALCULATION}
-                    from (
-                        select
-                        lineage_name,
-                        lineage_system_name,
-                        collection_start_date,
-                        collection_end_date,
-                        collection_end_date - collection_start_date as collection_span
-                        from samples_lineages sl
-                        inner join lineages l on l.id = sl.lineage_id
-                        inner join lineage_systems ls on ls.id = l.lineage_system_id
-                        inner join samples s on s.id = sl.sample_id
-                        {user_where_clause}
+                lineage_count,
+                lineage_count * 1.0 / SUM(lineage_count) OVER (PARTITION BY {select_clause}) AS lineage_prop
+                FROM (
+                    SELECT
+                    {extract_clause},
+                    lineage_name,
+                    COUNT(*) AS lineage_count
+                    FROM (
+                        SELECT
+                        *,
+                        {MID_COLLECTION_DATE_CALCULATION}
+                        FROM (
+                            SELECT
+                            lineage_name,
+                            lineage_system_name,
+                            collection_start_date,
+                            collection_end_date,
+                            collection_end_date - collection_start_date AS collection_span
+                            FROM samples_lineages sl
+                            INNER JOIN lineages l ON l.id = sl.lineage_id
+                            INNER JOIN lineage_systems ls ON ls.id = l.lineage_system_id
+                            INNER JOIN samples s ON s.id = sl.sample_id
+                            {user_where_clause}
+                        )
+                        WHERE collection_start_date >= '{time_start}' 
+                            AND collection_end_date <= '{time_end}' 
+                            AND collection_span <= {max_span_days} 
+                            AND lineage_system_name = '{lineage_system_name}'
+                            AND lineage_name IN (
+                                SELECT lineage_name 
+                                FROM samples_lineages sl
+                                INNER JOIN lineages l ON l.id = sl.lineage_id
+                                INNER JOIN lineage_systems ls ON ls.id = l.lineage_system_id
+                                INNER JOIN samples s ON s.id = sl.sample_id
+                                WHERE collection_start_date >= '{time_start}' 
+                                    AND collection_end_date <= '{time_end}' 
+                                    AND lineage_system_name = '{lineage_system_name}'
+                                GROUP BY lineage_name
+                                ORDER BY COUNT(*) DESC
+                                LIMIT {n_lineages}
+                            )
                     )
-                    where collection_start_date >= '{time_start}' 
-                        AND collection_end_date <= '{time_end}' 
-                        AND collection_span <= {max_span_days} 
-                        AND lineage_system_name = '{lineage_system_name}'
-                        AND lineage_name IN (
-                            SELECT lineage_name 
-                            from samples_lineages sl
-                            inner join lineages l on l.id = sl.lineage_id
-                            inner join lineage_systems ls on ls.id = l.lineage_system_id
-                            inner join samples s on s.id = sl.sample_id
-                            WHERE collection_start_date >= '{time_start}' AND collection_end_date <= '{time_end}' AND lineage_system_name = '{lineage_system_name}'
-                            GROUP BY lineage_name
-                            ORDER BY COUNT(*) DESC
-                            LIMIT {n_lineages}       
-                    )
+                    {group_by_clause}
                 )
-                GROUP BY mid_collection_date, lineage_name
-                ORDER BY mid_collection_date, lineage_name
+                {order_by_clause}
                 '''
             )
         )
@@ -518,10 +529,10 @@ async def get_growth_rate_by_date(
     out_data = dict()
     rows = []
     for r in res:
-        date = str(r[0])
-        lineage = r[1]
-        count = r[2]
-        prop = r[3]
+        date = date_bin.format_iso_chunk(r[0], r[1])
+        lineage = r[2]
+        count = r[3]
+        prop = float(r[4])
 
         try:
             out_data[lineage][date]["count"] = count
@@ -533,23 +544,34 @@ async def get_growth_rate_by_date(
                 out_data[lineage][date] = {"count": count, "proportion": round(prop, 4)}
 
         rows.append({
-            'collection_time': pd.to_datetime(date),
+            'date_interval': date,
+            'date_last': r[1], # chunk or bin_start
+            'date_first': r[0], # year or bin_end
             'lineage_name': lineage,
             'lineage_count': count,
-            'lineage_prop': float(prop)
+            'lineage_prop': prop
         })
     res_df = pd.DataFrame(rows)
     
     for lineage, group in res_df.groupby("lineage_name"):
-        x = (group['collection_time'] - group['collection_time'].min()).dt.days.values
+        match date_bin:
+            case DateBinOpt.day:
+                x = (pd.to_datetime(group['date_last']) - pd.to_datetime(group['date_last'].min())).dt.days.values // days
+            case DateBinOpt.week:
+                x = ((group['date_last'].astype(float) - group['date_last'].astype(float).min()) + 
+                    (group['date_first'].astype(float) - group['date_first'].astype(float).min()) * 52).values.astype(int)
+            case DateBinOpt.month:
+                x = ((group['date_last'].astype(float) - group['date_last'].astype(float).min()) +
+                    (group['date_first'].astype(float) - group['date_first'].astype(float).min()) * 12).values.astype(int)
+
         y = group['lineage_prop'].values
 
         if len(x) < 4 or len(np.unique(y)) < 4:
             for _, row in group.iterrows():
-                date = row['collection_time'].strftime('%Y-%m-%d')
+                date = row['date_interval']
                 out_data[lineage][date]['spline_fit'] = None
-                out_data[lineage][date]['ci_low'] = None
-                out_data[lineage][date]['ci_high'] = None
+                out_data[lineage][date]['ci_lower'] = None
+                out_data[lineage][date]['ci_upper'] = None
             continue
 
         spline = UnivariateSpline(x, y, k=3, s=len(x) * np.var(y) * 0.1)
@@ -559,9 +581,9 @@ async def get_growth_rate_by_date(
         ci = t.ppf(0.975, df) * np.std(residuals)
 
         for i, (_, row) in enumerate(group.iterrows()):
-            date = row['collection_time'].strftime('%Y-%m-%d')
+            date = row['date_interval']
             out_data[lineage][date]['spline_fit'] = round(float(spline_fit[i]), 4)
-            out_data[lineage][date]['ci_low'] = round(float(spline_fit[i] - ci), 4)
-            out_data[lineage][date]['ci_high'] = round(float(spline_fit[i] + ci), 4)
+            out_data[lineage][date]['ci_lower'] = round(float(spline_fit[i] - ci), 4)
+            out_data[lineage][date]['ci_upper'] = round(float(spline_fit[i] + ci), 4)
         
     return out_data

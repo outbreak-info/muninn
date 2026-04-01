@@ -63,3 +63,12 @@ def get_order_by_cause(date_bin: DateBinOpt) -> str:
             return f'order by {BIN_START}'
         case _:
             raise NotImplementedError
+        
+def get_cols_clause(datebin: DateBinOpt):
+    match datebin:
+        case DateBinOpt.week | DateBinOpt.month:
+            return f'{YEAR}, {CHUNK}'
+        case DateBinOpt.day:
+            return f'{BIN_END}, {BIN_START}'
+        case _:
+            raise NotImplementedError

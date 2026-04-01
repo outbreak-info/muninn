@@ -626,13 +626,15 @@ async def get_annotations_by_mutations_and_amino_acid_position(
 ) -> Dict:
     return await DB.queries.annotations.get_annotations_by_mutations_and_amino_acid_position(effect_detail, q)
 
-@app.get('/v0/lineages:DailyGrowthRate', response_model=Dict)
+@app.get('/v0/lineages:GrowthbyCollectionDate', response_model=Dict)
 async def get_growth_rate_by_date(
     time_start: str,
     time_end: str,
     lineage_system_name: str,
+    date_bin: DateBinOpt = DateBinOpt.month,
     n_lineages: int = DEFAULT_N_LINEAGES,
+    days: int = 5,
     q: str | None = None,
     max_span_days: int = DEFAULT_MAX_SPAN_DAYS,
 ) -> Dict:
-    return await DB.queries.lineages.get_growth_rate_by_date(time_start, time_end, lineage_system_name, n_lineages, q, max_span_days)
+    return await DB.queries.lineages.get_growth_rate_by_date(time_start, time_end, lineage_system_name, date_bin, n_lineages, days, q, max_span_days)
