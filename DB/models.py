@@ -4,10 +4,11 @@ from typing import List
 import sqlalchemy as sa
 from sqlalchemy import UniqueConstraint, CheckConstraint, MetaData
 from sqlalchemy.ext.asyncio import AsyncAttrs
-from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase, relationship
+from sqlalchemy.sql.schema import Index
 
-from utils.constants import ConstraintNames, TableNames, StandardColumnNames, MiscDbNames
+from utils.constants import ConstraintNames, TableNames, StandardColumnNames, MiscDbNames, IndexNames
+
 
 #########################################################################################
 # NOTE:
@@ -25,21 +26,9 @@ from utils.constants import ConstraintNames, TableNames, StandardColumnNames, Mi
 # Also, don't use unique=True, it will create an unnamed constraint
 #########################################################################################
 
-# This is magic and I don't understand it at all.
-# From https://stackoverflow.com/a/77475375
-UniqueConstraint.argument_for("postgresql", 'nulls_not_distinct', None)
-
-
-@compiles(UniqueConstraint, "postgresql")
-def compile_create_uc(create, compiler, **kw):
-    """Add NULLS NOT DISTINCT if its in args."""
-    stmt = compiler.visit_unique_constraint(create, **kw)
-    postgresql_opts = create.dialect_options["postgresql"]
-
-    if postgresql_opts.get("nulls_not_distinct"):
-        return stmt.rstrip().replace("UNIQUE (", "UNIQUE NULLS NOT DISTINCT (")
-    return stmt
-
+# Leaving this note in case it's needed again
+# this SO post explains how to add a missing dialect-specific feature to sqlalchemy
+# https://stackoverflow.com/a/77475375
 
 class Base(DeclarativeBase, AsyncAttrs):
     metadata = MetaData(
@@ -49,8 +38,8 @@ class Base(DeclarativeBase, AsyncAttrs):
         naming_convention={
             "ix": "ix_%(column_0_label)s",
             "uq": "uq_%(table_name)s_%(column_0_name)s",
-            # you always have to name check constraints, they just get a prefix
-            "ck": "ck_%(table_name)s_%(constraint_name)s",
+            # you always have to name check constraints: they should be named: ck_<table>_<descriptive name>
+            "ck": "%(constraint_name)s",
             "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
             "pk": "pk_%(table_name)s"
         }
@@ -130,15 +119,15 @@ class Sample(Base):
             CheckConstraint(
                 f'(not {StandardColumnNames.is_retracted} and {StandardColumnNames.retraction_detected_date} is null) or '
                 f'({StandardColumnNames.is_retracted} and {StandardColumnNames.retraction_detected_date} is not null)',
-                name='retraction_values_existence_in_harmony'
+                name='ck_samples_retraction_values_existence_in_harmony'
             ),
             CheckConstraint(
                 f'num_nulls({StandardColumnNames.collection_start_date}, {StandardColumnNames.collection_end_date}) in (0, 2)',
-                name='collection_start_and_end_both_absent_or_both_present'
+                name='ck_samples_collection_start_and_end_both_absent_or_both_present'
             ),
             CheckConstraint(
                 f'{StandardColumnNames.collection_start_date} <= {StandardColumnNames.collection_end_date}',
-                name='collection_start_not_after_collection_end'
+                name='ck_samples_collection_start_not_after_collection_end'
             )
         ]
     )
@@ -201,10 +190,11 @@ class Allele(Base):
                 StandardColumnNames.position_nt,
                 StandardColumnNames.alt_nt,
                 postgresql_nulls_not_distinct=True,
-                name='uq_alleles_nt_values'
+                name=ConstraintNames.uq_alleles_nt_values,
+                postgresql_include=['id']
             ),
-            CheckConstraint(f"{StandardColumnNames.alt_nt} <> ''", name='alt_nt_not_empty'),
-            CheckConstraint(f"{StandardColumnNames.ref_nt} <> ''", name='ref_nt_not_empty')
+            CheckConstraint(f"{StandardColumnNames.alt_nt} <> ''", name=ConstraintNames.ck_alleles_alt_nt_not_empty),
+            CheckConstraint(f"{StandardColumnNames.ref_nt} <> ''", name=ConstraintNames.ck_alleles_ref_nt_not_empty)
         ]
     )
 
@@ -226,17 +216,33 @@ class AminoAcid(Base):
 
     __table_args__ = tuple(
         [
-            CheckConstraint(f"{StandardColumnNames.gff_feature} <> ''", name='gff_feature_not_empty'),
-            CheckConstraint(f"{StandardColumnNames.ref_aa} <> ''", name='ref_aa_not_empty'),
-            CheckConstraint(f"{StandardColumnNames.alt_aa} <> ''", name='alt_aa_not_empty'),
-            CheckConstraint(f"{StandardColumnNames.alt_codon} <> ''", name='alt_codon_not_empty'),
-            CheckConstraint(f"{StandardColumnNames.ref_codon} <> ''", name='ref_codon_not_empty'),
+            CheckConstraint(
+                f"{StandardColumnNames.gff_feature} <> ''",
+                name=ConstraintNames.ck_amino_acids_gff_feature_not_empty
+            ),
+            CheckConstraint(
+                f"{StandardColumnNames.ref_aa} <> ''",
+                name=ConstraintNames.ck_amino_acids_ref_aa_not_empty
+            ),
+            CheckConstraint(
+                f"{StandardColumnNames.alt_aa} <> ''",
+                name=ConstraintNames.ck_amino_acids_alt_aa_not_empty
+            ),
+            CheckConstraint(
+                f"{StandardColumnNames.alt_codon} <> ''",
+                name=ConstraintNames.ck_amino_acids_alt_codon_not_empty
+            ),
+            CheckConstraint(
+                f"{StandardColumnNames.ref_codon} <> ''",
+                name=ConstraintNames.ck_amino_acids_ref_codon_not_empty
+            ),
             UniqueConstraint(
                 StandardColumnNames.position_aa,
                 StandardColumnNames.alt_aa,
                 StandardColumnNames.gff_feature,
                 StandardColumnNames.alt_codon,
-                name=f'uq_{__tablename__}_gff_feature_position_alt_aa_alt_codon'
+                name=ConstraintNames.uq_amino_acids_gff_feature_position_alt_aa_alt_codon,
+                postgresql_include=['id']
             )
         ]
     )
@@ -252,8 +258,14 @@ class Mutation(Base):
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
-    sample_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.samples}.id'), nullable=False)
-    allele_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.alleles}.id'), nullable=False, index=True)
+    sample_id: Mapped[int] = mapped_column(
+        sa.ForeignKey(f'{TableNames.samples}.id', name=ConstraintNames.fk_mutations_sample_id_samples),
+        nullable=False
+    )
+    allele_id: Mapped[int] = mapped_column(
+        sa.ForeignKey(f'{TableNames.alleles}.id', name=ConstraintNames.fk_mutations_allele_id_alleles),
+        nullable=False
+    )
 
     __table_args__ = tuple(
         [
@@ -261,7 +273,8 @@ class Mutation(Base):
                 StandardColumnNames.sample_id,
                 StandardColumnNames.allele_id,
                 name=ConstraintNames.uq_mutations_sample_allele_pair
-            )
+            ),
+            Index(IndexNames.ix_mutations_allele_id, allele_id)
         ]
     )
 
@@ -275,8 +288,14 @@ class IntraHostVariant(Base):
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
-    sample_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.samples}.id'), nullable=False)
-    allele_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.alleles}.id'), nullable=False, index=True)
+    sample_id: Mapped[int] = mapped_column(
+        sa.ForeignKey(f'{TableNames.samples}.id', name=ConstraintNames.fk_intra_host_variants_sample_id_samples),
+        nullable=False
+    )
+    allele_id: Mapped[int] = mapped_column(
+        sa.ForeignKey(f'{TableNames.alleles}.id', name=ConstraintNames.fk_intra_host_variants_allele_id_alleles),
+        nullable=False
+    )
 
     ref_dp: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
     alt_dp: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
@@ -295,8 +314,10 @@ class IntraHostVariant(Base):
                 StandardColumnNames.sample_id,
                 StandardColumnNames.allele_id,
                 name=ConstraintNames.uq_intra_host_variants_sample_allele_pair
-            )
+            ),
+            Index(IndexNames.ix_intra_host_variants_allele_id, allele_id)
         ]
+
     )
 
     r_sample: Mapped['Sample'] = relationship(back_populates='r_variants')
@@ -320,14 +341,22 @@ class IntraHostVariant(Base):
 
 
 class MutationTranslation(Base):
-    __tablename__ = TableNames.mutations_translations
+    __tablename__ = TableNames.mutation_translations
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
-    mutation_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.mutations}.id'), nullable=False)
+    mutation_id: Mapped[int] = mapped_column(
+        sa.ForeignKey(
+            f'{TableNames.mutations}.id',
+            name=ConstraintNames.fk_mutation_translations_mutation_id_mutations
+        ),
+        nullable=False
+    )
     amino_acid_id: Mapped[int] = mapped_column(
-        sa.ForeignKey(f'{TableNames.amino_acids}.id'),
-        nullable=False,
-        index=True
+        sa.ForeignKey(
+            f'{TableNames.amino_acids}.id',
+            name=ConstraintNames.fk_mutation_translations_amino_acid_id_amino_acids
+        ),
+        nullable=False
     )
 
     __table_args__ = tuple(
@@ -335,8 +364,9 @@ class MutationTranslation(Base):
             UniqueConstraint(
                 StandardColumnNames.mutation_id,
                 StandardColumnNames.amino_acid_id,
-                name=f'uq_{__tablename__}_mutation_amino_acid_pair'
-            )
+                name=ConstraintNames.uq_mutation_translations_mutation_amino_acid_pair
+            ),
+            Index(IndexNames.ix_mutation_translations_amino_acid_id, amino_acid_id)
         ]
     )
     r_mutation: Mapped['Mutation'] = relationship(back_populates='r_translations')
@@ -348,13 +378,18 @@ class IntraHostTranslation(Base):
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
     intra_host_variant_id: Mapped[int] = mapped_column(
-        sa.ForeignKey(f'{TableNames.intra_host_variants}.id'),
+        sa.ForeignKey(
+            f'{TableNames.intra_host_variants}.id',
+            name=ConstraintNames.fk_intra_host_translations_intra_host_variant_id
+        ),
         nullable=False
     )
     amino_acid_id: Mapped[int] = mapped_column(
-        sa.ForeignKey(f'{TableNames.amino_acids}.id'),
-        nullable=False,
-        index=True
+        sa.ForeignKey(
+            f'{TableNames.amino_acids}.id',
+            name=ConstraintNames.fk_intra_host_translations_amino_acid_id_amino_acids
+        ),
+        nullable=False
     )
 
     __table_args__ = tuple(
@@ -363,7 +398,8 @@ class IntraHostTranslation(Base):
                 StandardColumnNames.intra_host_variant_id,
                 StandardColumnNames.amino_acid_id,
                 name=f'uq_{__tablename__}_variant_amino_acid_pair'
-            )
+            ),
+            Index(IndexNames.ix_intra_host_translations_amino_acid_id, amino_acid_id)
         ]
     )
     r_variant: Mapped['IntraHostVariant'] = relationship(back_populates='r_translations')
@@ -412,8 +448,14 @@ class PhenotypeMetric(Base):
     __table_args__ = tuple(
         [
             UniqueConstraint(StandardColumnNames.phenotype_metric_name, name='uq_phenotype_metrics_name'),
-            CheckConstraint(f"{StandardColumnNames.phenotype_metric_name} <> ''", name='name_not_empty'),
-            CheckConstraint(f"{StandardColumnNames.phenotype_metric_assay_type} <> ''", name='assay_type_not_empty')
+            CheckConstraint(
+                f"{StandardColumnNames.phenotype_metric_name} <> ''",
+                name='ck_phenotype_metrics_name_not_empty'
+            ),
+            CheckConstraint(
+                f"{StandardColumnNames.phenotype_metric_assay_type} <> ''",
+                name='ck_phenotype_metrics_assay_type_not_empty'
+            )
         ]
     )
 
@@ -505,7 +547,7 @@ class SampleLineage(Base):
             ),
             CheckConstraint(
                 f'({StandardColumnNames.abundance} is null) = {StandardColumnNames.is_consensus_call}',
-                name='has_abundance_xor_is_consensus'
+                name=f'ck_{TableNames.samples_lineages}_has_abundance_xor_is_consensus'
             )
         ]
     )
@@ -530,7 +572,7 @@ class LineageImmediateChild(Base):
             ),
             CheckConstraint(
                 f'{StandardColumnNames.parent_id} <> {StandardColumnNames.child_id}',
-                name='no_self_parenthood'
+                name=f'ck_{TableNames.lineages_immediate_children}_no_self_parenthood'
             )
         ]
     )

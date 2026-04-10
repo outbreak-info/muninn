@@ -35,6 +35,7 @@ NUCLEOTIDE_CHARACTERS = ['A', 'C', 'G', 'T']
 NUCLEOTIDE_CHARACTERS_AMBIGUOUS = ['A', 'C', 'G', 'T', 'M', 'R', 'W', 'S', 'Y', 'K', 'B', 'D', 'H', 'V', 'N']
 CONTAINER_DATA_DIRECTORY = '/home/muninn/data'
 
+
 class PhenotypeMetricAssayTypes:
     DMS = 'DMS'
     EVE = 'EVEscape'
@@ -84,7 +85,35 @@ class NtOrAa(Enum):
         return str(self.value)
 
 
-class TableNames:
+class StandardPhenoMetricNames:
+    species_sera_escape = 'species_sera_escape'
+    entry_in_293t_cells = 'entry_in_293t_cells'
+    stability = 'stability'
+    sa26_usage_increase = 'sa26_usage_increase'
+    mature_h5_site = 'mature_h5_site'
+    ferret_sera_escape = 'ferret_sera_escape'
+    mouse_sera_escape = 'mouse_sera_escape'
+    entry_in_sa26_and_sa23_293t_cells = 'entry_in_sa26_and_sa23_293t_cells'
+    mutdiffsel = 'mutdiffsel'
+
+
+class StandardLineageSystemNames:
+    genoflu = 'usda_genoflu'
+    sc2 = 'PANGO'
+
+
+class PgIdentifiers(object):
+    @classmethod
+    def _check_id_lengths(cls):
+        for attribute in cls.__dict__.keys():
+            if attribute[:2] != '__':
+                value = getattr(cls, attribute)
+                if type(value) == str:
+                    if len(value) > 63:
+                        raise ValueError(f'Postgres identifier should have length <= 63 bytes: {value}')
+
+
+class TableNames(PgIdentifiers):
     samples = 'samples'
     alleles = 'alleles'
     amino_acids = 'amino_acids'
@@ -102,12 +131,12 @@ class TableNames:
     annotations_papers = 'annotations_papers'
     annotations_amino_acids = 'annotations_amino_acids'
     lineages_immediate_children = 'lineages_immediate_children'
-    lineages_deep_children = 'lineages_deep_children' # actually a view.
-    mutations_translations = 'mutation_translations'
+    lineages_deep_children = 'lineages_deep_children'  # actually a view.
+    mutation_translations = 'mutation_translations'
     intra_host_translations = 'intra_host_translations'
 
 
-class StandardColumnNames:
+class StandardColumnNames(PgIdentifiers):
     # ids
     sample_id = 'sample_id'
     allele_id = 'allele_id'
@@ -213,31 +242,62 @@ class StandardColumnNames:
     parent_id = 'parent_id'
     child_id = 'child_id'
 
-class StandardPhenoMetricNames:
-    species_sera_escape = 'species_sera_escape'
-    entry_in_293t_cells = 'entry_in_293t_cells'
-    stability = 'stability'
-    sa26_usage_increase = 'sa26_usage_increase'
-    mature_h5_site = 'mature_h5_site'
-    ferret_sera_escape = 'ferret_sera_escape'
-    mouse_sera_escape = 'mouse_sera_escape'
-    entry_in_sa26_and_sa23_293t_cells = 'entry_in_sa26_and_sa23_293t_cells'
-    mutdiffsel = 'mutdiffsel'
 
-class StandardLineageSystemNames:
-    genoflu = 'usda_genoflu'
-    sc2 = 'PANGO'
-
-class ConstraintNames:
-    uq_intra_host_variants_sample_allele_pair = 'uq_intra_host_variants_sample_allele_pair'
+class ConstraintNames(PgIdentifiers):
+    # samples
     uq_samples_accession = 'uq_samples_accession'
-    uq_mutations_sample_allele_pair = 'uq_mutations_sample_allele_pair'
 
-class MiscDbNames:
+    # alleles
+    ck_alleles_alt_nt_not_empty = 'ck_alleles_alt_nt_not_empty'
+    ck_alleles_ref_nt_not_empty = 'ck_alleles_ref_nt_not_empty'
+    uq_alleles_nt_values = 'uq_alleles_nt_values'
+
+    # amino acids
+    ck_amino_acids_gff_feature_not_empty = 'ck_amino_acids_gff_feature_not_empty'
+    ck_amino_acids_ref_aa_not_empty = 'ck_amino_acids_ref_aa_not_empty'
+    ck_amino_acids_alt_aa_not_empty = 'ck_amino_acids_alt_aa_not_empty'
+    ck_amino_acids_alt_codon_not_empty = 'ck_amino_acids_alt_codon_not_empty'
+    ck_amino_acids_ref_codon_not_empty = 'ck_amino_acids_ref_codon_not_empty'
+    uq_amino_acids_gff_feature_position_alt_aa_alt_codon = 'uq_amino_acids_gff_feature_position_alt_aa_alt_codon'
+
+    # intra host variants
+    uq_intra_host_variants_sample_allele_pair = 'uq_intra_host_variants_sample_allele_pair'
+    fk_intra_host_variants_allele_id_alleles = 'fk_intra_host_variants_allele_id_alleles'
+    fk_intra_host_variants_sample_id_samples = 'fk_intra_host_variants_sample_id_samples'
+
+    # mutations
+    uq_mutations_sample_allele_pair = 'uq_mutations_sample_allele_pair'
+    fk_mutations_sample_id_samples = 'fk_mutations_sample_id_samples'
+    fk_mutations_allele_id_alleles = 'fk_mutations_allele_id_alleles'
+
+    # mutation translations
+    uq_mutation_translations_mutation_amino_acid_pair = 'uq_mutation_translations_mutation_amino_acid_pair'
+    fk_mutation_translations_amino_acid_id_amino_acids = 'fk_mutation_translations_amino_acid_id_amino_acids'
+    fk_mutation_translations_mutation_id_mutations = 'fk_mutation_translations_mutation_id_mutations'
+
+    # intra host translations
+    fk_intra_host_translations_amino_acid_id_amino_acids = 'fk_intra_host_translations_amino_acid_id_amino_acids'
+    fk_intra_host_translations_intra_host_variant_id = 'fk_intra_host_translations_intra_host_variant_id'
+    uq_intra_host_translations_variant_amino_acid_pair = 'uq_intra_host_translations_variant_amino_acid_pair'
+
+
+class IndexNames(PgIdentifiers):
+    ix_mutations_allele_id = 'ix_mutations_allele_id'
+    ix_mutation_translations_amino_acid_id = 'ix_mutation_translations_amino_acid_id'
+    ix_intra_host_translations_amino_acid_id = 'ix_intra_host_translations_amino_acid_id'
+    ix_intra_host_variants_allele_id = 'ix_intra_host_variants_allele_id'
+
+
+class MiscDbNames(PgIdentifiers):
     check_cyclic_lineage = 'check_cyclic_lineage'
     check_cyclic_lineage_trigger = 'check_cyclic_lineage_trigger'
     check_cross_system_lineage = 'check_cross_system_lineage'
     check_cross_system_lineage_trigger = 'check_cross_system_lineage_trigger'
+
+
+# Keep this after all pg identifier definitions
+for cls in PgIdentifiers.__subclasses__():
+    cls._check_id_lengths()
 
 # Problematic redacted SRAs
 EXCLUDED_SRAS = {

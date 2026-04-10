@@ -17,7 +17,8 @@ from DB.inserts.file_parsers.sarscov2_parsers.eve_parser import Sc2EveCsvParser
 from DB.inserts.file_parsers.sarscov2_parsers.sc2_wastewater_samples_parser import SC2WastewaterSamplesParser
 from DB.inserts.file_parsers.sarscov2_parsers.sc2_sd_samples_parser import SC2SDSamplesParser
 from DB.inserts.file_parsers.simple_lineage_parser import GenofluLineageParser, Sc2LineageParser
-from DB.inserts.file_parsers.variants_mutations_combined_parser import VariantsMutationsCombinedParser
+from DB.inserts.file_parsers.variants_mutations_combined_parser import VariantsMutationsCombinedParser, \
+    VariantsMutationsCombinedParserBig
 
 
 def main():
@@ -35,6 +36,8 @@ def main():
         'sc2_dms_tsv': Sc2DmsTsvParser,
         'freyja_demixed': FreyjaDemixedParser,
         'variants_mutations_combined_tsv': VariantsMutationsCombinedParser,
+        'variants_mutations_combined_big_tsv': VariantsMutationsCombinedParserBig,
+        'sc2_samples': SC2SDSamplesParser,
         'sc2_wastewater_samples': SC2WastewaterSamplesParser,
         'sc2_sd_samples': SC2SDSamplesParser,
         'flumut_tsv': FlumutTsvParser,
@@ -77,10 +80,7 @@ def main():
 
     file_parser: FileParser = formats[args.format]
     filename: str = args.filenames[0]
-    filename2: str | None = None
-    if issubclass(file_parser, VariantsMutationsCombinedParser):
-        filename2 = args.filenames[1]
-    elif len(args.filenames) > 1:
+    if not issubclass(file_parser, VariantsMutationsCombinedParser) and len(args.filenames) > 1:
         raise ValueError('Multiple filenames provided, but this format takes only one.')
 
     # run inserts method
@@ -88,7 +88,7 @@ def main():
     print(f'{filename} {args.format} start at {start_time}')
     if issubclass(file_parser, FileParser):
         if issubclass(file_parser, VariantsMutationsCombinedParser):
-            parser = file_parser(filename, filename2)
+            parser = file_parser(args.filenames)
         else:
             parser = file_parser(filename)
         asyncio.run(parser.parse_and_insert())
