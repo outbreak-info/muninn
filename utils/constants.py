@@ -134,6 +134,8 @@ class TableNames(PgIdentifiers):
     lineages_deep_children = 'lineages_deep_children'  # actually a view.
     mutation_translations = 'mutation_translations'
     intra_host_translations = 'intra_host_translations'
+    sequences = 'sequences'
+    samples_sequences = 'samples_sequences'
 
 
 class StandardColumnNames(PgIdentifiers):
@@ -149,6 +151,7 @@ class StandardColumnNames(PgIdentifiers):
     effect_id = 'effect_id'
     paper_id = 'paper_id'
     annotation_id = 'annotation_id'
+    sequence_id = 'sequence_id'
 
     # samples
     accession = 'accession'
@@ -261,13 +264,13 @@ class ConstraintNames(PgIdentifiers):
     uq_amino_acids_gff_feature_position_alt_aa_alt_codon = 'uq_amino_acids_gff_feature_position_alt_aa_alt_codon'
 
     # intra host variants
-    uq_intra_host_variants_sample_allele_pair = 'uq_intra_host_variants_sample_allele_pair'
+    uq_intra_host_variants_sequence_allele_pair = 'uq_intra_host_variants_sequence_allele_pair'
     fk_intra_host_variants_allele_id_alleles = 'fk_intra_host_variants_allele_id_alleles'
-    fk_intra_host_variants_sample_id_samples = 'fk_intra_host_variants_sample_id_samples'
+    fk_intra_host_variants_sequence_id_sequences = 'fk_intra_host_variants_sequence_id_sequences'
 
     # mutations
-    uq_mutations_sample_allele_pair = 'uq_mutations_sample_allele_pair'
-    fk_mutations_sample_id_samples = 'fk_mutations_sample_id_samples'
+    uq_mutations_sequence_allele_pair = 'uq_mutations_sequence_allele_pair'
+    fk_mutations_sequence_id_sequences = 'fk_mutations_sequence_id_sequences'
     fk_mutations_allele_id_alleles = 'fk_mutations_allele_id_alleles'
 
     # mutation translations
@@ -280,12 +283,19 @@ class ConstraintNames(PgIdentifiers):
     fk_intra_host_translations_intra_host_variant_id = 'fk_intra_host_translations_intra_host_variant_id'
     uq_intra_host_translations_variant_amino_acid_pair = 'uq_intra_host_translations_variant_amino_acid_pair'
 
+    # samples sequences
+    fk_samples_sequences_sample_id_samples = 'fk_samples_sequences_sample_id_samples'
+    fk_samples_sequences_sequence_id_sequences = 'fk_samples_sequences_sequence_id_sequences'
+    uq_samples_sequences_sample_id_sequence_id = 'uq_samples_sequences_sample_id_sequence_id'
+
 
 class IndexNames(PgIdentifiers):
     ix_mutations_allele_id = 'ix_mutations_allele_id'
     ix_mutation_translations_amino_acid_id = 'ix_mutation_translations_amino_acid_id'
     ix_intra_host_translations_amino_acid_id = 'ix_intra_host_translations_amino_acid_id'
     ix_intra_host_variants_allele_id = 'ix_intra_host_variants_allele_id'
+    ix_samples_lineages_lineage_id = 'ix_samples_lineages_lineage_id'
+    ix_samples_sequences_sequence_id = 'ix_samples_sequences_sequence_id'
 
 
 class MiscDbNames(PgIdentifiers):

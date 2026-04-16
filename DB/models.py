@@ -132,8 +132,7 @@ class Sample(Base):
         ]
     )
 
-    r_variants: Mapped[List['IntraHostVariant']] = relationship(back_populates='r_sample')
-    r_mutations: Mapped[List['Mutation']] = relationship(back_populates='r_sample')
+    r_sample_sequences: Mapped[List['SampleSequence']] = relationship(back_populates='r_sample')
     r_geo_location: Mapped['GeoLocation'] = relationship(back_populates='r_samples')
     r_sample_lineages: Mapped[List['SampleLineage']] = relationship(back_populates='r_sample')
 
@@ -172,6 +171,46 @@ class Sample(Base):
         self.avg_spot_length = other.avg_spot_length
         self.bases = other.bases
 
+
+class Sequence(Base):
+    __tablename__ = TableNames.sequences
+
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+
+    r_sample_sequences: Mapped[List['SampleSequence']] = relationship(back_populates='r_sequence')
+    r_mutations: Mapped[List['Mutation']] = relationship(back_populates='r_sequence')
+    r_variants: Mapped[List['IntraHostVariant']] = relationship(back_populates='r_sequence')
+
+
+class SampleSequence(Base):
+    __tablename__ = TableNames.samples_sequences
+
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    sample_id: Mapped[int] = mapped_column(
+        sa.ForeignKey(f'{TableNames.samples}.id', name=ConstraintNames.fk_samples_sequences_sample_id_samples),
+        nullable=False
+    )
+    sequence_id: Mapped[int] = mapped_column(
+        sa.ForeignKey(
+            f'{TableNames.sequences}.id',
+            name=ConstraintNames.fk_samples_sequences_sequence_id_sequences
+        ),
+        nullable=False
+    )
+
+    __table_args__ = tuple(
+        [
+            UniqueConstraint(
+                StandardColumnNames.sample_id,
+                StandardColumnNames.sequence_id,
+                name=ConstraintNames.uq_samples_sequences_sample_id_sequence_id
+            ),
+            Index(IndexNames.ix_samples_sequences_sequence_id, sequence_id, sample_id)
+        ]
+    )
+
+    r_sample: Mapped['Sample'] = relationship(back_populates='r_sample_sequences')
+    r_sequence: Mapped['Sequence'] = relationship(back_populates='r_sample_sequences')
 
 class Allele(Base):
     __tablename__ = TableNames.alleles
@@ -258,8 +297,8 @@ class Mutation(Base):
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
-    sample_id: Mapped[int] = mapped_column(
-        sa.ForeignKey(f'{TableNames.samples}.id', name=ConstraintNames.fk_mutations_sample_id_samples),
+    sequence_id: Mapped[int] = mapped_column(
+        sa.ForeignKey(f'{TableNames.sequences}.id', name=ConstraintNames.fk_mutations_sequence_id_sequences),
         nullable=False
     )
     allele_id: Mapped[int] = mapped_column(
@@ -270,15 +309,15 @@ class Mutation(Base):
     __table_args__ = tuple(
         [
             UniqueConstraint(
-                StandardColumnNames.sample_id,
+                StandardColumnNames.sequence_id,
                 StandardColumnNames.allele_id,
-                name=ConstraintNames.uq_mutations_sample_allele_pair
+                name=ConstraintNames.uq_mutations_sequence_allele_pair
             ),
             Index(IndexNames.ix_mutations_allele_id, allele_id)
         ]
     )
 
-    r_sample: Mapped['Sample'] = relationship(back_populates='r_mutations')
+    r_sequence: Mapped['Sequence'] = relationship(back_populates='r_mutations')
     r_allele: Mapped['Allele'] = relationship(back_populates='r_mutations')
     r_translations: Mapped[List['MutationTranslation']] = relationship(back_populates='r_mutation')
 
@@ -288,8 +327,8 @@ class IntraHostVariant(Base):
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
-    sample_id: Mapped[int] = mapped_column(
-        sa.ForeignKey(f'{TableNames.samples}.id', name=ConstraintNames.fk_intra_host_variants_sample_id_samples),
+    sequence_id: Mapped[int] = mapped_column(
+        sa.ForeignKey(f'{TableNames.sequences}.id', name=ConstraintNames.fk_intra_host_variants_sequence_id_sequences),
         nullable=False
     )
     allele_id: Mapped[int] = mapped_column(
@@ -311,16 +350,16 @@ class IntraHostVariant(Base):
     __table_args__ = tuple(
         [
             UniqueConstraint(
-                StandardColumnNames.sample_id,
+                StandardColumnNames.sequence_id,
                 StandardColumnNames.allele_id,
-                name=ConstraintNames.uq_intra_host_variants_sample_allele_pair
+                name=ConstraintNames.uq_intra_host_variants_sequence_allele_pair
             ),
             Index(IndexNames.ix_intra_host_variants_allele_id, allele_id)
         ]
 
     )
 
-    r_sample: Mapped['Sample'] = relationship(back_populates='r_variants')
+    r_sequence: Mapped['Sequence'] = relationship(back_populates='r_variants')
     r_allele: Mapped['Allele'] = relationship(back_populates='r_variants')
     r_translations: Mapped[List['IntraHostTranslation']] = relationship(back_populates='r_variant')
 
@@ -532,7 +571,7 @@ class SampleLineage(Base):
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
     sample_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.samples}.id'), nullable=False)
-    lineage_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.lineages}.id'), nullable=False, index=True)
+    lineage_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.lineages}.id'), nullable=False)
 
     abundance: Mapped[float] = mapped_column(sa.Float, nullable=True)
     is_consensus_call: Mapped[bool] = mapped_column(sa.Boolean, nullable=False)
@@ -548,7 +587,8 @@ class SampleLineage(Base):
             CheckConstraint(
                 f'({StandardColumnNames.abundance} is null) = {StandardColumnNames.is_consensus_call}',
                 name=f'ck_{TableNames.samples_lineages}_has_abundance_xor_is_consensus'
-            )
+            ),
+            Index(IndexNames.ix_samples_lineages_lineage_id, lineage_id)
         ]
     )
 

@@ -841,8 +841,8 @@ class VariantsMutationsCombinedParser(FileParser):
     @staticmethod
     async def _drop_mutations_indexes():
         constraint_names = [
-            ConstraintNames.uq_mutations_sample_allele_pair,
-            ConstraintNames.fk_mutations_sample_id_samples,
+            ConstraintNames.uq_mutations_sequence_allele_pair,
+            ConstraintNames.fk_mutations_sequence_id_sequences,
             ConstraintNames.fk_mutations_allele_id_alleles
         ]
         async with get_async_write_session() as session:
@@ -861,7 +861,7 @@ class VariantsMutationsCombinedParser(FileParser):
             await session.execute(
                 text(
                     f'alter table {TableNames.mutations} \n'
-                    f'add constraint {ConstraintNames.uq_mutations_sample_allele_pair} \n'
+                    f'add constraint {ConstraintNames.uq_mutations_sequence_allele_pair} \n'
                     f'unique ({StandardColumnNames.sample_id}, {StandardColumnNames.allele_id});'
                 )
             )
@@ -881,7 +881,7 @@ class VariantsMutationsCombinedParser(FileParser):
             await session.execute(
                 text(
                     f'alter table {TableNames.mutations} \n'
-                    f'add constraint {ConstraintNames.fk_mutations_sample_id_samples} \n'
+                    f'add constraint {ConstraintNames.fk_mutations_sequence_id_sequences} \n'
                     f'foreign key ({StandardColumnNames.sample_id}) references {TableNames.samples} (id);'
                 )
             )
@@ -890,9 +890,9 @@ class VariantsMutationsCombinedParser(FileParser):
     @staticmethod
     async def _drop_intra_host_variants_indexes():
         constraint_names = [
-            ConstraintNames.uq_intra_host_variants_sample_allele_pair,
+            ConstraintNames.uq_intra_host_variants_sequence_allele_pair,
             ConstraintNames.fk_intra_host_variants_allele_id_alleles,
-            ConstraintNames.fk_intra_host_variants_sample_id_samples
+            ConstraintNames.fk_intra_host_variants_sequence_id_sequences
         ]
         async with get_async_write_session() as session:
             for conname in constraint_names:
@@ -910,7 +910,7 @@ class VariantsMutationsCombinedParser(FileParser):
             await session.execute(
                 text(
                     f'alter table {TableNames.intra_host_variants} \n'
-                    f'add constraint {ConstraintNames.uq_intra_host_variants_sample_allele_pair} \n'
+                    f'add constraint {ConstraintNames.uq_intra_host_variants_sequence_allele_pair} \n'
                     f'unique ({StandardColumnNames.sample_id}, {StandardColumnNames.allele_id});'
                 )
             )
@@ -930,7 +930,7 @@ class VariantsMutationsCombinedParser(FileParser):
             await session.execute(
                 text(
                     f'alter table {TableNames.intra_host_variants} \n'
-                    f'add constraint {ConstraintNames.fk_intra_host_variants_sample_id_samples} \n'
+                    f'add constraint {ConstraintNames.fk_intra_host_variants_sequence_id_sequences} \n'
                     f'foreign key ({StandardColumnNames.sample_id}) references {TableNames.samples} (id);'
                 )
             )
