@@ -62,6 +62,12 @@ class Sample(Base):
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
     accession: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    sequence_id: Mapped[int] = mapped_column(
+        sa.ForeignKey(f'{TableNames.sequences}.id'),
+        nullable=False,
+        name=ConstraintNames.fk_samples_sequence_id_sequences
+    )
+
     bio_project: Mapped[str] = mapped_column(sa.Text, nullable=True)
     bio_sample: Mapped[str] = mapped_column(sa.Text, nullable=True)
     bio_sample_accession: Mapped[str] = mapped_column(sa.Text, nullable=True)
@@ -132,7 +138,7 @@ class Sample(Base):
         ]
     )
 
-    r_sample_sequences: Mapped[List['SampleSequence']] = relationship(back_populates='r_sample')
+    r_sequence: Mapped['Sequence'] = relationship(back_populates='r_samples')
     r_geo_location: Mapped['GeoLocation'] = relationship(back_populates='r_samples')
     r_sample_lineages: Mapped[List['SampleLineage']] = relationship(back_populates='r_sample')
 
@@ -177,40 +183,10 @@ class Sequence(Base):
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
-    r_sample_sequences: Mapped[List['SampleSequence']] = relationship(back_populates='r_sequence')
+    r_samples: Mapped[List['Sample']] = relationship(back_populates='r_sequence')
     r_mutations: Mapped[List['Mutation']] = relationship(back_populates='r_sequence')
     r_variants: Mapped[List['IntraHostVariant']] = relationship(back_populates='r_sequence')
 
-
-class SampleSequence(Base):
-    __tablename__ = TableNames.samples_sequences
-
-    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
-    sample_id: Mapped[int] = mapped_column(
-        sa.ForeignKey(f'{TableNames.samples}.id', name=ConstraintNames.fk_samples_sequences_sample_id_samples),
-        nullable=False
-    )
-    sequence_id: Mapped[int] = mapped_column(
-        sa.ForeignKey(
-            f'{TableNames.sequences}.id',
-            name=ConstraintNames.fk_samples_sequences_sequence_id_sequences
-        ),
-        nullable=False
-    )
-
-    __table_args__ = tuple(
-        [
-            UniqueConstraint(
-                StandardColumnNames.sample_id,
-                StandardColumnNames.sequence_id,
-                name=ConstraintNames.uq_samples_sequences_sample_id_sequence_id
-            ),
-            Index(IndexNames.ix_samples_sequences_sequence_id, sequence_id, sample_id)
-        ]
-    )
-
-    r_sample: Mapped['Sample'] = relationship(back_populates='r_sample_sequences')
-    r_sequence: Mapped['Sequence'] = relationship(back_populates='r_sample_sequences')
 
 class Allele(Base):
     __tablename__ = TableNames.alleles

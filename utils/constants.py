@@ -249,6 +249,7 @@ class StandardColumnNames(PgIdentifiers):
 class ConstraintNames(PgIdentifiers):
     # samples
     uq_samples_accession = 'uq_samples_accession'
+    fk_samples_sequence_id_sequences = 'fk_samples_sequence_id_sequences'
 
     # alleles
     ck_alleles_alt_nt_not_empty = 'ck_alleles_alt_nt_not_empty'
@@ -282,11 +283,6 @@ class ConstraintNames(PgIdentifiers):
     fk_intra_host_translations_amino_acid_id_amino_acids = 'fk_intra_host_translations_amino_acid_id_amino_acids'
     fk_intra_host_translations_intra_host_variant_id = 'fk_intra_host_translations_intra_host_variant_id'
     uq_intra_host_translations_variant_amino_acid_pair = 'uq_intra_host_translations_variant_amino_acid_pair'
-
-    # samples sequences
-    fk_samples_sequences_sample_id_samples = 'fk_samples_sequences_sample_id_samples'
-    fk_samples_sequences_sequence_id_sequences = 'fk_samples_sequences_sequence_id_sequences'
-    uq_samples_sequences_sample_id_sequence_id = 'uq_samples_sequences_sample_id_sequence_id'
 
 
 class IndexNames(PgIdentifiers):
