@@ -1,5 +1,7 @@
 import csv
+import sys
 import time
+from abc import abstractmethod
 from time import perf_counter
 from typing import Set
 
@@ -13,28 +15,36 @@ from utils.constants import StandardColumnNames, COLLECTION_DATE, GEO_LOCATION
 from utils.dates_and_times import parse_collection_start_and_end
 
 
-class SC2SDSamplesParser(FileParser):
-    def __init__(self, filename: str):
-        self.filename = filename
-        self.delimiter = '\t'
+class Sc2SamplesParser(FileParser):
+    def __init__(
+        self,
+        samples_filename: str,
+        unique_seqs_filename: str,
+        samples_delimiter: str = '\t',
+        unique_seqs_delimiter: str = '\t',
+        unique_seqs_within_field_delimiter: str = ',',
+    ):
+        self.samples_filename = samples_filename
+        self.samples_delimiter = samples_delimiter
         self._verify_header()
+
+        # todo: we can allow uq seqs file to be none, and treat every sample as unique.
+        self.unique_seqs_filename = unique_seqs_filename
+        self.unique_seqs_delimiter = unique_seqs_delimiter
+        self.unique_seqs_within_field_delimiter = unique_seqs_within_field_delimiter
 
     async def parse_and_insert(self):
         start = perf_counter()
         # Scan file, rename columns, drop unused cols, drop rows with null collection date
         samples_input = (
-            pl.scan_csv(self.filename, separator=self.delimiter)
-            .rename({old: new for new, old in column_name_map.items()})
-            .select(set(column_name_map.keys()))
+            pl.scan_csv(self.samples_filename, separator=self.samples_delimiter)
+            .rename({old: new for new, old in self.column_name_map.items()})
+            .select(set(self.column_name_map.keys()))
             .drop_nulls([pl.col(COLLECTION_DATE)])
-            .with_columns(  # This column has some missing values that must be filled
-                pl.lit("NA").alias(StandardColumnNames.organism),
-                pl.lit(False).alias(StandardColumnNames.is_retracted)
-            )
         )
         # unique by accession? No, leave it out for now to force errors on conflict.
 
-        geo_locations = await SC2SDSamplesParser._insert_geo_locations(samples_input)
+        geo_locations = await self._insert_geo_locations(samples_input)
         existing_samples = await get_samples_accession_and_id_as_pl_df()
 
         samples_finished: pl.DataFrame = (
@@ -57,8 +67,8 @@ class SC2SDSamplesParser(FileParser):
         )
         setup_elapsed = perf_counter() - start
         print(f'samples: starting db ops. setup took {round(setup_elapsed, 2)}s')
-        await SC2SDSamplesParser._insert_new_samples(samples_finished, existing_samples)
-        await SC2SDSamplesParser._update_existing_samples(samples_finished, existing_samples)
+        await self._insert_new_samples(samples_finished, existing_samples)
+        await self._update_existing_samples(samples_finished, existing_samples)
 
     @staticmethod
     async def _insert_geo_locations(samples_input: pl.LazyFrame) -> pl.DataFrame:
@@ -111,6 +121,17 @@ class SC2SDSamplesParser(FileParser):
         print(f'geo locations took {round(time.perf_counter() - start, 2)}s')
         return geo_locations
 
+    async def _parse_unique_seqs(self):
+        # csv.field_size_limit(int(sys.maxsize / 100))
+        with open(self.unique_seqs_filename, 'r') as f:
+            reader = csv.reader(f, delimiter=self.unique_seqs_delimiter)
+            header = next(reader)
+            # todo: verify that required cols are present
+            # todo: pick out indexes of data columns
+            for row in reader:
+                accessions = {get_value(row, 'unique_id')}
+                accessions.update(get_value(row, 'dup_ids', transform=lambda s: set(s.split(self.dups_delimiter))))
+
     @staticmethod
     async def _insert_new_samples(samples_finished: pl.DataFrame, existing_samples: pl.DataFrame):
         new_samples = samples_finished.join(
@@ -131,20 +152,72 @@ class SC2SDSamplesParser(FileParser):
         await batch_upsert_samples(updated_samples)
 
     def _verify_header(self):
-        with open(self.filename, 'r') as f:
-            reader = csv.DictReader(f, delimiter=self.delimiter)
-            required_columns = set(column_name_map.values())
+        with open(self.samples_filename, 'r') as f:
+            reader = csv.DictReader(f, delimiter=self.samples_delimiter)
+            required_columns = set(self.column_name_map.values())
             if not set(reader.fieldnames) >= required_columns:
                 raise ValueError(f'Missing required fields: {required_columns - set(reader.fieldnames)}')
 
     @classmethod
     def get_required_column_set(cls) -> Set[str]:
-        return set(column_name_map.keys())
+        return set(cls.column_name_map.keys())
+
+    @abstractmethod
+    def fill_missing_required_cols(self, samples_input: pl.LazyFrame) -> pl.LazyFrame:
+        raise NotImplementedError
+
+    column_name_map = dict()
+
+    unique_seqs_accession_columns = set()
 
 
-column_name_map = {
-    StandardColumnNames.accession: 'ID',
-    StandardColumnNames.host: 'host',
-    COLLECTION_DATE: 'collection_date',
-    GEO_LOCATION: 'location'
-}
+class SC2SDSamplesParser(Sc2SamplesParser):
+
+    def __init__(self, samples_filename: str, unique_sequences_filename: str):
+        super().__init__(samples_filename)
+
+    def fill_missing_required_cols(self, samples_input: pl.LazyFrame) -> pl.LazyFrame:
+        return samples_input.with_columns(
+            pl.lit("NA").alias(StandardColumnNames.organism),
+            pl.lit(False).alias(StandardColumnNames.is_retracted)
+        )
+
+    column_name_map = {
+        StandardColumnNames.accession: 'ID',
+        StandardColumnNames.host: 'host',
+        COLLECTION_DATE: 'collection_date',
+        GEO_LOCATION: 'location'
+    }
+
+    unique_seqs_accession_columns = {
+        'unique_id',
+        'dup_ids'
+    }
+
+
+class SC2WastewaterSamplesParser(Sc2SamplesParser):
+    def __init__(self, samples_filename: str, unique_sequences_filename: str):
+        super().__init__(samples_filename)
+
+    def fill_missing_required_cols(self, samples_input: pl.LazyFrame) -> pl.LazyFrame:
+        return samples_input.with_columns(
+            pl.lit(False).alias(StandardColumnNames.is_retracted)
+        )
+
+    column_name_map = {
+        StandardColumnNames.accession: 'Accession',
+        StandardColumnNames.bio_project: 'Bioprojects',
+        StandardColumnNames.bio_sample: 'Biosample',
+        StandardColumnNames.host: 'Host_OrganismName',
+        StandardColumnNames.isolate: 'Isolate_Name',
+        StandardColumnNames.organism: 'Virus_OrganismName',
+        StandardColumnNames.isolation_source: 'Isolate_Source',
+        COLLECTION_DATE: 'Collection_Date',
+        GEO_LOCATION: 'Geographic_Location',
+        StandardColumnNames.census_region: 'census_region',
+        StandardColumnNames.bases: 'Length',
+        StandardColumnNames.ww_viral_load: 'viral_load',
+        StandardColumnNames.ww_catchment_population: 'population',
+        StandardColumnNames.ww_site_id: 'site_id',
+        StandardColumnNames.ww_collected_by: 'collected_by',
+    }
