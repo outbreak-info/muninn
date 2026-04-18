@@ -9,9 +9,11 @@ import polars as pl
 
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.geo_locations import find_or_insert_geo_location
-from DB.inserts.samples import copy_insert_samples, batch_upsert_samples, get_samples_accession_and_id_as_pl_df
+from DB.inserts.samples import copy_insert_samples, batch_upsert_samples, get_samples_accession_and_id_as_pl_df, \
+    get_samples_accession_id_and_seq_id_as_pl_df
 from DB.models import GeoLocation
 from utils.constants import StandardColumnNames, COLLECTION_DATE, GEO_LOCATION
+from utils.csv_helpers import get_value
 from utils.dates_and_times import parse_collection_start_and_end
 
 
@@ -33,7 +35,12 @@ class Sc2SamplesParser(FileParser):
         self.unique_seqs_delimiter = unique_seqs_delimiter
         self.unique_seqs_within_field_delimiter = unique_seqs_within_field_delimiter
 
+
     async def parse_and_insert(self):
+        row_numbers_by_accession = self._parse_unique_seqs()
+        # todo: get existing sample -> seq id pairs
+        # todo: create a map of row number -> seq id
+
         start = perf_counter()
         # Scan file, rename columns, drop unused cols, drop rows with null collection date
         samples_input = (
@@ -42,10 +49,14 @@ class Sc2SamplesParser(FileParser):
             .select(set(self.column_name_map.keys()))
             .drop_nulls([pl.col(COLLECTION_DATE)])
         )
+        samples_input = self.fill_missing_required_cols(samples_input)
         # unique by accession? No, leave it out for now to force errors on conflict.
 
         geo_locations = await self._insert_geo_locations(samples_input)
-        existing_samples = await get_samples_accession_and_id_as_pl_df()
+        existing_samples = await get_samples_accession_id_and_seq_id_as_pl_df()
+
+        # todo: accession - seq_id pairs
+        # todo: use a one-time dict for these to catch any conflicts.
 
         samples_finished: pl.DataFrame = (
             samples_input
@@ -121,16 +132,20 @@ class Sc2SamplesParser(FileParser):
         print(f'geo locations took {round(time.perf_counter() - start, 2)}s')
         return geo_locations
 
-    async def _parse_unique_seqs(self):
-        # csv.field_size_limit(int(sys.maxsize / 100))
+    def _parse_unique_seqs(self) -> dict[str, int]:
+        csv.field_size_limit(int(sys.maxsize / 100))
         with open(self.unique_seqs_filename, 'r') as f:
-            reader = csv.reader(f, delimiter=self.unique_seqs_delimiter)
-            header = next(reader)
+            reader = csv.DictReader(f, delimiter=self.unique_seqs_delimiter)
             # todo: verify that required cols are present
-            # todo: pick out indexes of data columns
-            for row in reader:
-                accessions = {get_value(row, 'unique_id')}
-                accessions.update(get_value(row, 'dup_ids', transform=lambda s: set(s.split(self.dups_delimiter))))
+            row_numbers_by_accession = dict()
+            for row_number, row in enumerate(reader):
+                for colname in self.unique_seqs_accession_columns:
+                    if self.unique_seqs_within_field_delimiter in row[colname]:
+                        for accession in row[colname].split(self.unique_seqs_within_field_delimiter):
+                            row_numbers_by_accession[accession] = row_number
+                    else:
+                        row_numbers_by_accession[row[colname]] = row_number
+            return row_numbers_by_accession
 
     @staticmethod
     async def _insert_new_samples(samples_finished: pl.DataFrame, existing_samples: pl.DataFrame):
@@ -174,7 +189,7 @@ class Sc2SamplesParser(FileParser):
 class SC2SDSamplesParser(Sc2SamplesParser):
 
     def __init__(self, samples_filename: str, unique_sequences_filename: str):
-        super().__init__(samples_filename)
+        super().__init__(samples_filename, unique_sequences_filename)
 
     def fill_missing_required_cols(self, samples_input: pl.LazyFrame) -> pl.LazyFrame:
         return samples_input.with_columns(

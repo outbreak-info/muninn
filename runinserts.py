@@ -15,7 +15,7 @@ from DB.inserts.file_parsers.samples_parser import SamplesCsvParser, SamplesTsvP
 from DB.inserts.file_parsers.sarscov2_parsers.dms_parser import Sc2DmsTsvParser
 from DB.inserts.file_parsers.sarscov2_parsers.eve_parser import Sc2EveCsvParser
 from DB.inserts.file_parsers.sarscov2_parsers.sc2_wastewater_samples_parser import SC2WastewaterSamplesParser
-from DB.inserts.file_parsers.sarscov2_parsers.sc2_sd_samples_parser import SC2SDSamplesParser
+from DB.inserts.file_parsers.sarscov2_parsers.sc2_samples_parser import SC2SDSamplesParser, Sc2SamplesParser
 from DB.inserts.file_parsers.sarscov2_parsers.unique_sequences_parser import UniqueSequencesParser
 from DB.inserts.file_parsers.simple_lineage_parser import GenofluLineageParser, Sc2LineageParser
 from DB.inserts.file_parsers.variants_mutations_combined_parser import VariantsMutationsCombinedParser, \
@@ -82,7 +82,10 @@ def main():
 
     file_parser: FileParser = formats[args.format]
     filename: str = args.filenames[0]
-    if not issubclass(file_parser, VariantsMutationsCombinedParser) and len(args.filenames) > 1:
+    if len(args.filenames) > 1 and not (
+            issubclass(file_parser, VariantsMutationsCombinedParser) or
+            issubclass(file_parser, Sc2SamplesParser)
+    ):
         raise ValueError('Multiple filenames provided, but this format takes only one.')
 
     # run inserts method
@@ -91,6 +94,8 @@ def main():
     if issubclass(file_parser, FileParser):
         if issubclass(file_parser, VariantsMutationsCombinedParser):
             parser = file_parser(args.filenames)
+        elif issubclass(file_parser, Sc2SamplesParser):
+            parser = file_parser(args.filenames[0], args.filenames[1])
         else:
             parser = file_parser(filename)
         asyncio.run(parser.parse_and_insert())

@@ -133,6 +133,13 @@ async def get_samples_accession_and_id_as_pl_df() -> pl.DataFrame:
     ).rename({'id': StandardColumnNames.sample_id})
 
 
+async def get_samples_accession_id_and_seq_id_as_pl_df() -> pl.DataFrame:
+    return pl.read_database_uri(
+        query=f'select id, accession, sequence_id from samples;',
+        uri=get_uri_for_polars()
+    ).rename({'id': StandardColumnNames.sample_id})
+
+
 async def get_sample_ids_by_accessions(accessions: list[str]) -> dict[str, int]:
     async with get_async_session() as session:
         accessions_ids = await session.execute(
