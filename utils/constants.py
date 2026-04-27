@@ -49,6 +49,7 @@ class DefaultGffFeaturesByRegion:
 class LineageSystemNames:
     usda_genoflu = 'usda_genoflu'
     freyja_demixed = 'freyja_demixed'
+    PANGO = 'PANGO'
 
 
 class DateBinOpt(Enum):

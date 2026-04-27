@@ -543,6 +543,7 @@ async def get_phenotype_metric_counts(
 @app.get('/v0/phenotype_metric_values:forMutationsAggregateBySampleAndCollectionDate', response_model=List[Dict])
 async def get_phenotype_metric_counts(
     phenotype_metric_name: str,
+    lineage_system_name: str,
     background: str | None = None,
     date_bin: DateBinOpt = DateBinOpt.month,
     days: int = DEFAULT_DAYS,
@@ -553,6 +554,7 @@ async def get_phenotype_metric_counts(
     return await DB.queries.phenotype_metrics.get_pheno_value_for_mutations_by_sample_and_collection_date(
         date_bin,
         phenotype_metric_name,
+        lineage_system_name,
         background,
         days,
         max_span_days,
@@ -562,6 +564,8 @@ async def get_phenotype_metric_counts(
 @app.get('/v0/phenotype_metric_values:forVariantsAggregateBySampleAndCollectionDate', response_model=List[Dict])
 async def get_phenotype_metric_counts(
     phenotype_metric_name: str,
+    lineage_system_name: str,
+    background: str | None = None,
     date_bin: DateBinOpt = DateBinOpt.month,
     days: int = DEFAULT_DAYS,
     q: str | None = None,
@@ -571,6 +575,8 @@ async def get_phenotype_metric_counts(
     return await DB.queries.phenotype_metrics.get_pheno_value_for_variants_by_sample_and_collection_date(
         date_bin,
         phenotype_metric_name,
+        lineage_system_name,
+        background,
         days,
         max_span_days,
         q

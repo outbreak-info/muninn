@@ -16,19 +16,20 @@ PARENT_NAME = 'parent_name'
 CHILD_NAME = 'child_name'
 
 
-class FreyjaDemixedLineageHierarchyYamlParser(FileParser):
+class LineageHierarchyYamlParser(FileParser):
 
-    def __init__(self, filename: str):
+    def __init__(self, filename: str, lineage_system_name: str):
         self.filename = filename
+        self.lineage_system_name = lineage_system_name
 
     async def parse_and_insert(self):
 
         lineage_system_id = await find_or_insert_lineage_system(
-            LineageSystem(lineage_system_name=LineageSystemNames.freyja_demixed)
+            LineageSystem(lineage_system_name=self.lineage_system_name)
         )
 
         # lineage_id, lineage_name
-        existing_lineages = await get_all_lineages_by_lineage_system_as_pl_df(LineageSystemNames.freyja_demixed)
+        existing_lineages = await get_all_lineages_by_lineage_system_as_pl_df(self.lineage_system_name)
 
         relationships = self.extract_relationships()
 
@@ -68,7 +69,7 @@ class FreyjaDemixedLineageHierarchyYamlParser(FileParser):
         print(f'New lineages added: {lineages_added}')
 
         # get updated lineages
-        existing_lineages = await get_all_lineages_by_lineage_system_as_pl_df(LineageSystemNames.freyja_demixed)
+        existing_lineages = await get_all_lineages_by_lineage_system_as_pl_df(self.lineage_system_name)
 
         # add ids to relationships
         relationships = relationships.join(
@@ -93,7 +94,7 @@ class FreyjaDemixedLineageHierarchyYamlParser(FileParser):
 
         # we assume that each time we ingest the file, we are getting the full, correct hierarchy
         # so we add any new relationships, and remove any that aren't in the new data.
-        existing_relationships = await get_all_lineages_immediate_children_by_system_as_pl_df(LineageSystemNames.freyja_demixed)
+        existing_relationships = await get_all_lineages_immediate_children_by_system_as_pl_df(self.lineage_system_name)
 
         # find any existing relationships that should be dropped
         # this should be done before new relationships are added to avoid possible cycles
@@ -131,3 +132,18 @@ class FreyjaDemixedLineageHierarchyYamlParser(FileParser):
     @classmethod
     def get_required_column_set(cls) -> Set[str]:
         return set("Expects a YAML file")
+
+class GenofluLineageHierarchyYamlParser(LineageHierarchyYamlParser):
+    def __init__(self, filename: str):
+        super().__init__(filename, LineageSystemNames.freyja_demixed)
+
+    async def parse_and_insert(self):
+        await super().parse_and_insert()
+
+
+class Sc2LineageHierarchyYamlParser(LineageHierarchyYamlParser):
+    def __init__(self, filename: str):
+        super().__init__(filename, LineageSystemNames.PANGO)
+
+    async def parse_and_insert(self):
+        await super().parse_and_insert()

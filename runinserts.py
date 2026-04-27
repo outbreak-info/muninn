@@ -9,7 +9,7 @@ from DB.inserts.file_parsers.dms_parser import HaRegionDmsTsvParser, HaRegionDms
 from DB.inserts.file_parsers.eve_parser import EveCsvParser
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.file_parsers.flumut_annotations_parser import FlumutTsvParser
-from DB.inserts.file_parsers.freyja_demixed_lineage_hierarchy_parser import FreyjaDemixedLineageHierarchyYamlParser
+from DB.inserts.file_parsers.freyja_demixed_lineage_hierarchy_parser import GenofluLineageHierarchyYamlParser, Sc2LineageHierarchyYamlParser
 from DB.inserts.file_parsers.freyja_demixed_parser import FreyjaDemixedParser
 from DB.inserts.file_parsers.samples_parser import SamplesCsvParser, SamplesTsvParser
 from DB.inserts.file_parsers.sarscov2_parsers.dms_parser import Sc2DmsTsvParser
@@ -39,7 +39,8 @@ def main():
         'sc2_sd_samples': SC2SDSamplesParser,
         'flumut_tsv': FlumutTsvParser,
         'dms_tmp_csv': HaRegionDmsCsvParserNewData,
-        'freyja_demixed_hierarchy_yaml': FreyjaDemixedLineageHierarchyYamlParser,
+        'genoflu_hierarchy_yaml': GenofluLineageHierarchyYamlParser,
+        'pango_hierarchy_yaml': Sc2LineageHierarchyYamlParser,
     }
 
     ## Parse and verify args ##

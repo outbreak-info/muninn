@@ -458,6 +458,8 @@ async def get_growth_rate_by_date(
         raw_query: str | None,
         max_span_days: int,
     ):
+
+
     user_where_clause = ''
     if raw_query is not None:
         user_where_clause = f'where {parser.parse(raw_query)}'
@@ -469,59 +471,100 @@ async def get_growth_rate_by_date(
         [StandardColumnNames.lineage_name]
     )
     order_by_clause = get_order_by_cause(date_bin)
+    join_clause = ' AND '.join(
+        f'lineage_counts.{col.strip()} = total_sample_counts.{col.strip()}' 
+        for col in select_clause.split(',')
+    )
+    prefixed_select_clause = ', '.join(
+        f'lineage_counts.{col.strip()}'
+        for col in select_clause.split(',')
+    )
 
     async with get_async_session() as session:
         res = await session.execute( # group by time and lineage system
             text(
                 f'''
-                SELECT
-                {select_clause},
-                lineage_name,
-                lineage_count,
-                lineage_count * 1.0 / SUM(lineage_count) OVER (PARTITION BY {select_clause}) AS lineage_prop
-                FROM (
-                    SELECT
-                    {extract_clause},
-                    lineage_name,
-                    COUNT(*) AS lineage_count
+                WITH total_sample_counts AS (
+                    SELECT 
+                        COUNT(*) AS total_count,
+                        {extract_clause}
                     FROM (
-                        SELECT
-                        *,
-                        {MID_COLLECTION_DATE_CALCULATION}
+                        SELECT *, {MID_COLLECTION_DATE_CALCULATION}
                         FROM (
-                            SELECT
-                            lineage_name,
-                            lineage_system_name,
-                            collection_start_date,
-                            collection_end_date,
-                            collection_end_date - collection_start_date AS collection_span
-                            FROM samples_lineages sl
-                            INNER JOIN lineages l ON l.id = sl.lineage_id
-                            INNER JOIN lineage_systems ls ON ls.id = l.lineage_system_id
-                            INNER JOIN samples s ON s.id = sl.sample_id
-                            {user_where_clause}
+                            SELECT 
+                                lineage_name,
+                                lineage_system_name,
+                                collection_start_date,
+                                collection_end_date,
+                                collection_end_date - collection_start_date AS collection_span
+                            FROM samples s
+                                left join samples_lineages sl on sl.sample_id = s.id
+                                left join lineages l on l.id = sl.lineage_id
+                                left join lineage_systems ls on ls.id = l.lineage_system_id 
+                                {user_where_clause}
                         )
                         WHERE collection_start_date >= '{time_start}' 
                             AND collection_end_date <= '{time_end}' 
                             AND collection_span <= {max_span_days} 
                             AND lineage_system_name = '{lineage_system_name}'
-                            AND lineage_name IN (
-                                SELECT lineage_name 
+                    )
+                    GROUP BY {select_clause}
+                ),
+                lineage_counts AS (
+                    SELECT
+                    {select_clause},
+                    lineage_name,
+                    lineage_count
+                    FROM (
+                        SELECT
+                        {extract_clause},
+                        lineage_name,
+                        COUNT(*) AS lineage_count
+                        FROM (
+                            SELECT
+                            *,
+                            {MID_COLLECTION_DATE_CALCULATION}
+                            FROM (
+                                SELECT
+                                lineage_name,
+                                lineage_system_name,
+                                collection_start_date,
+                                collection_end_date,
+                                collection_end_date - collection_start_date AS collection_span
                                 FROM samples_lineages sl
                                 INNER JOIN lineages l ON l.id = sl.lineage_id
                                 INNER JOIN lineage_systems ls ON ls.id = l.lineage_system_id
                                 INNER JOIN samples s ON s.id = sl.sample_id
-                                WHERE collection_start_date >= '{time_start}' 
-                                    AND collection_end_date <= '{time_end}' 
-                                    AND lineage_system_name = '{lineage_system_name}'
-                                GROUP BY lineage_name
-                                ORDER BY COUNT(*) DESC
-                                LIMIT {n_lineages}
+                                {user_where_clause}
                             )
+                            WHERE collection_start_date >= '{time_start}' 
+                                AND collection_end_date <= '{time_end}' 
+                                AND collection_span <= {max_span_days} 
+                                AND lineage_system_name = '{lineage_system_name}'
+                                AND lineage_name IN (
+                                    SELECT lineage_name 
+                                    FROM samples_lineages sl
+                                    INNER JOIN lineages l ON l.id = sl.lineage_id
+                                    INNER JOIN lineage_systems ls ON ls.id = l.lineage_system_id
+                                    INNER JOIN samples s ON s.id = sl.sample_id
+                                    WHERE collection_start_date >= '{time_start}' 
+                                        AND collection_end_date <= '{time_end}' 
+                                        AND lineage_system_name = '{lineage_system_name}'
+                                    GROUP BY lineage_name
+                                    ORDER BY COUNT(*) DESC
+                                    LIMIT {n_lineages}
+                                )
+                        )
+                        {group_by_clause}
                     )
-                    {group_by_clause}
                 )
-                {order_by_clause}
+                SELECT 
+                    {prefixed_select_clause},
+                    lineage_name,
+                    lineage_count,
+                    lineage_count * 1.0 / total_count AS lineage_prop
+                FROM lineage_counts LEFT JOIN total_sample_counts ON {join_clause} 
+                ORDER BY lineage_name, {prefixed_select_clause}
                 '''
             )
         )
