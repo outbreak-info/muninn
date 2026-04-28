@@ -1,5 +1,4 @@
 import csv
-import sys
 import time
 from abc import abstractmethod
 from time import perf_counter
@@ -30,7 +29,6 @@ class Sc2SamplesParser(FileParser):
         self.samples_delimiter = samples_delimiter
         self._verify_header()
 
-        # todo: we can allow uq seqs file to be none, and treat every sample as unique.
         self.unique_seqs_filename = unique_seqs_filename
         self.unique_seqs_delimiter = unique_seqs_delimiter
         self.unique_seqs_within_field_delimiter = unique_seqs_within_field_delimiter
@@ -302,7 +300,7 @@ class Sc2SamplesParser(FileParser):
     unique_seqs_accession_columns = set()
 
 
-class SC2SDSamplesParser(Sc2SamplesParser):
+class Sc2SdSamplesParser(Sc2SamplesParser):
 
     def __init__(self, samples_filename: str, unique_sequences_filename: str | None = None):
         super().__init__(samples_filename, unique_sequences_filename)
@@ -326,7 +324,7 @@ class SC2SDSamplesParser(Sc2SamplesParser):
     }
 
 
-class SC2WastewaterSamplesParser(Sc2SamplesParser):
+class Sc2WastewaterSamplesParser(Sc2SamplesParser):
     def __init__(self, samples_filename: str, unique_sequences_filename: str | None = None):
         super().__init__(samples_filename, unique_sequences_filename)
 
