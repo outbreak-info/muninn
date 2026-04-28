@@ -51,88 +51,13 @@ class Sc2SamplesParser(FileParser):
         geo_locations = await self._insert_geo_locations(samples_input)
         existing_samples = await get_samples_accession_id_and_seq_id_as_pl_df()
 
-        uq_seq_input: pl.DataFrame = self._parse_unique_seqs_pl()
-
-        # existing samples plus listed duplicates
-        existing_plus_uq_seqs = uq_seq_input.join(
-            existing_samples, on=pl.col(StandardColumnNames.accession), how='left'
+        sequence_id_by_accession = await self._handle_sequences(
+            samples_input.select(pl.col(StandardColumnNames.accession)).collect(),
+            existing_samples
         )
-
-        # check that new unique sequence data matches with existing
-        if not (
-                existing_plus_uq_seqs.filter(pl.col(StandardColumnNames.sample_id).is_not_null()).select(
-                    (pl.col(StandardColumnNames.sequence_id).n_unique().over('row_number') == 1) &
-                    (pl.col('row_number').n_unique().over(StandardColumnNames.sequence_id) == 1)
-                ).to_series().all()
-        ):
-            raise ValueError(f'New unique sequence data does not match up with existing. Unable to continue.')
-
-        max_row_number = uq_seq_input['row_number'].max()
-        samples_uq_rows = (
-            # join with the unique sequences data
-            samples_input
-            .join(uq_seq_input.lazy(), on=pl.col(StandardColumnNames.accession), how="left")
-            # for samples not listed in the duplicates file, assign them a row number unique to them.
-            .with_row_index('alt_row_number')
-            .with_columns(pl.col('row_number').fill_null(pl.col('alt_row_number') + max_row_number + 1))
-            .drop('alt_row_number')
-            # join with uq seqs data for existing samples, which will fill in seq id for new samples in existing groups
-            .join(
-                existing_plus_uq_seqs.filter(pl.col(StandardColumnNames.sample_id).is_not_null())
-                .select(pl.col('row_number'), pl.col(StandardColumnNames.sequence_id))
-                .unique()
-                .lazy(),
-                on=pl.col('row_number'),
-                how='left'
-            )
-        )
-
-        # Add new sequences as needed
-        row_numbers_for_new_seqs: list[int] = (
-            samples_uq_rows
-            .filter(pl.col(StandardColumnNames.sequence_id).is_null())
-            .select(pl.col('row_number'))
-            .unique()
-            .collect()
-            .to_series().to_list()
-        )
-        new_seq_ids_by_row_number = await insert_sequences_for_row_numbers(row_numbers_for_new_seqs)
-
-        # stitch new seq ids into sample data
-        samples_uq_rows = (
-            samples_uq_rows
-            .with_columns(
-                pl.col('row_number').replace_strict(new_seq_ids_by_row_number, default=None).alias('new_seq_id')
-            )
-            .with_columns(pl.col(StandardColumnNames.sequence_id).fill_null(pl.col('new_seq_id')))
-            .drop(pl.col('new_seq_id'))
-            .drop(pl.col('row_number'))
-        )
-
-        # todo: check that no existing sample has its sequence id changed?
-
-        if not(
-            samples_uq_rows
-            .select(
-                pl.col(StandardColumnNames.accession),
-                pl.col(StandardColumnNames.sequence_id).alias('new_sequence_id')
-            )
-            .collect()
-            .join(
-                existing_samples,
-                on=pl.col(StandardColumnNames.accession),
-                how='inner'
-            )
-            .select(
-                pl.col(StandardColumnNames.sequence_id) == pl.col('new_sequence_id')
-            )
-            .to_series()
-            .all()
-        ):
-            raise ValueError('An existing sample has had its sequence id changed. This is forbidden.')
 
         samples_finished: pl.DataFrame = (
-            samples_uq_rows
+            samples_input
             .join(geo_locations.lazy(), on=pl.col(GEO_LOCATION), how='left')
             .drop(pl.col(GEO_LOCATION))
             .with_columns(
@@ -147,6 +72,7 @@ class Sc2SamplesParser(FileParser):
                 )
             )
             .unnest(COLLECTION_DATE)
+            .join(sequence_id_by_accession.lazy(), on=pl.col(StandardColumnNames.accession), how='left', validate='1:1')
             .collect()
         )
         setup_elapsed = perf_counter() - start
@@ -227,20 +153,111 @@ class Sc2SamplesParser(FileParser):
         )
         return uq
 
-    def _parse_unique_seqs(self) -> dict[str, int]:
-        csv.field_size_limit(int(sys.maxsize / 100))
-        with open(self.unique_seqs_filename, 'r') as f:
-            reader = csv.DictReader(f, delimiter=self.unique_seqs_delimiter)
-            # todo: verify that required cols are present
-            row_numbers_by_accession = OneTimeDict()
-            for row_number, row in enumerate(reader):
-                for colname in self.unique_seqs_accession_columns:
-                    if self.unique_seqs_within_field_delimiter in row[colname]:
-                        for accession in row[colname].split(self.unique_seqs_within_field_delimiter):
-                            row_numbers_by_accession[accession] = row_number
-                    else:
-                        row_numbers_by_accession[row[colname]] = row_number
-            return row_numbers_by_accession
+    async def _handle_sequences(
+        self,
+        samples_input: pl.DataFrame,
+        existing_samples: pl.DataFrame
+    ) -> pl.DataFrame:
+        """
+        Read unique sequences input, correlate with existing sequences, add new sequences as needed.
+        Return a mapping from accession to sequence id for all input accessions.
+
+        :not a param, but still input uq_seqs_input: accession, row number
+        :param samples_input: accession
+        :param existing_samples: accession, id, sequence_id
+        :return: pl.DataFrame: accession, sequence id --- giving a seq id for every acc listed in samples input
+        """
+
+        uq_seqs_input = self._parse_unique_seqs_pl()
+
+        existing_plus_row_number = (
+            existing_samples
+            .join(uq_seqs_input, on=pl.col(StandardColumnNames.accession), how='left', validate='1:1')
+        )
+
+        if not (
+                existing_plus_row_number
+                        .filter(pl.col('row_number').is_not_null())
+                        .select(
+                    (pl.col(StandardColumnNames.sequence_id).n_unique().over('row_number') == 1) &
+                    (pl.col('row_number').n_unique().over(StandardColumnNames.sequence_id) == 1)
+                ).to_series().all()
+        ):
+            raise ValueError(f'New unique sequence data does not match up with existing. Unable to continue.')
+
+        # Join input samples with uq seqs data.
+        # Some samples may not be listed in the uq seqs file. They don't have row numbers
+        # We consider these to be un-duplicated samples, and assign each one a unique made up row number.
+        max_row_number = uq_seqs_input['row_number'].max()
+        samples_input_plus_row_numbers = (
+            samples_input
+            .join(uq_seqs_input, on=pl.col(StandardColumnNames.accession), how='left', validate='1:1')
+            .with_row_index('alt_row_number')
+            .with_columns(pl.col('row_number').fill_null(pl.col('alt_row_number') + max_row_number + 1))
+            .drop('alt_row_number')
+        )
+
+        # Join the row numbers (both from the file and the ones we just made up) into the existing samples data
+        # to find seq ids for groups that already exist.
+        enriched_row_numbers_plus_existing = samples_input_plus_row_numbers.join(
+            existing_samples,
+            on=pl.col(StandardColumnNames.accession),
+            how="left",
+            validate='1:1'
+        ).select(pl.col('row_number'), pl.col(StandardColumnNames.sequence_id)).unique()
+
+        # and join back into input samples data. This fills in seq ids for groups that already exist.
+        samples_uq_seqs = samples_input_plus_row_numbers.join(
+            enriched_row_numbers_plus_existing,
+            on=pl.col('row_number'),
+            how="left",
+            validate='m:1'
+        )
+
+        # add new sequences for new groups
+        row_numbers_for_new_seqs: list[int] = (
+            samples_uq_seqs
+            .filter(pl.col(StandardColumnNames.sequence_id).is_null())
+            .select(pl.col('row_number'))
+            .unique()
+            .to_series().to_list()
+        )
+        new_seq_ids_by_row_number: dict[int, int] = await insert_sequences_for_row_numbers(row_numbers_for_new_seqs)
+
+        # integrate new seq ids
+        samples_uq_seqs_complete = (
+            samples_uq_seqs
+            .with_columns(
+                pl.col('row_number')
+                .replace_strict(new_seq_ids_by_row_number, default=None)
+                .alias('new_sequence_id')
+            )
+            .with_columns(pl.col(StandardColumnNames.sequence_id).fill_null(pl.col('new_sequence_id')))
+            .drop(pl.col('new_sequence_id'))
+        )
+
+        # check that no existing samples had their seq ids changed.
+        altered_seq_ids = (
+            existing_samples
+            .join(
+                samples_uq_seqs_complete.select(
+                    pl.col(StandardColumnNames.accession),
+                    pl.col(StandardColumnNames.sequence_id).alias('new_sequence_id')
+                ),
+                on=pl.col(StandardColumnNames.accession),
+                how='inner',
+                validate='1:1'
+            )
+            .filter(pl.col(StandardColumnNames.sequence_id) != pl.col('new_sequence_id'))
+        )
+        if not altered_seq_ids.is_empty():
+            print(altered_seq_ids)
+            raise ValueError('An existing sample has had its sequence id changed. This is forbidden.')
+
+        return samples_uq_seqs_complete.select(
+            pl.col(StandardColumnNames.accession),
+            pl.col(StandardColumnNames.sequence_id)
+        )
 
     @staticmethod
     async def _insert_new_samples(samples_finished: pl.DataFrame, existing_samples: pl.DataFrame):
