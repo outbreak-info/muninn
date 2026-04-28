@@ -14,8 +14,8 @@ from DB.inserts.file_parsers.freyja_demixed_parser import FreyjaDemixedParser
 from DB.inserts.file_parsers.samples_parser import SamplesCsvParser, SamplesTsvParser
 from DB.inserts.file_parsers.sarscov2_parsers.dms_parser import Sc2DmsTsvParser
 from DB.inserts.file_parsers.sarscov2_parsers.eve_parser import Sc2EveCsvParser
-from DB.inserts.file_parsers.sarscov2_parsers.sc2_wastewater_samples_parser import SC2WastewaterSamplesParser
-from DB.inserts.file_parsers.sarscov2_parsers.sc2_samples_parser import SC2SDSamplesParser, Sc2SamplesParser
+from DB.inserts.file_parsers.sarscov2_parsers.sc2_samples_parser import SC2SDSamplesParser, Sc2SamplesParser, \
+    SC2WastewaterSamplesParser
 from DB.inserts.file_parsers.sarscov2_parsers.unique_sequences_parser import UniqueSequencesParser
 from DB.inserts.file_parsers.simple_lineage_parser import GenofluLineageParser, Sc2LineageParser
 from DB.inserts.file_parsers.variants_mutations_combined_parser import VariantsMutationsCombinedParser, \
@@ -94,7 +94,7 @@ def main():
     if issubclass(file_parser, FileParser):
         if issubclass(file_parser, VariantsMutationsCombinedParser):
             parser = file_parser(args.filenames)
-        elif issubclass(file_parser, Sc2SamplesParser):
+        elif issubclass(file_parser, Sc2SamplesParser) and len(args.filenames) >= 2:
             parser = file_parser(args.filenames[0], args.filenames[1])
         else:
             parser = file_parser(filename)

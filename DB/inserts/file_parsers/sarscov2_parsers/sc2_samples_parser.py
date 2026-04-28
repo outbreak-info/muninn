@@ -14,7 +14,6 @@ from DB.inserts.samples import copy_insert_samples, batch_upsert_samples, get_sa
 from DB.inserts.sequences import insert_sequences_for_row_numbers
 from DB.models import GeoLocation
 from utils.constants import StandardColumnNames, COLLECTION_DATE, GEO_LOCATION
-from utils.data_stuctures import OneTimeDict
 from utils.dates_and_times import parse_collection_start_and_end
 
 
@@ -22,7 +21,7 @@ class Sc2SamplesParser(FileParser):
     def __init__(
         self,
         samples_filename: str,
-        unique_seqs_filename: str,
+        unique_seqs_filename: str | None,
         samples_delimiter: str = '\t',
         unique_seqs_delimiter: str = '\t',
         unique_seqs_within_field_delimiter: str = ',',
@@ -132,25 +131,28 @@ class Sc2SamplesParser(FileParser):
         return geo_locations
 
     def _parse_unique_seqs_pl(self) -> pl.DataFrame:
-        uq = (
-            pl.read_csv(
-                self.unique_seqs_filename,
-                separator=self.unique_seqs_delimiter,
-                row_index_name='row_number',
-                columns=list(self.unique_seqs_accession_columns)
-            )
-            .with_columns(
-                pl.concat_str(
-                    list(self.unique_seqs_accession_columns),
-                    separator=self.unique_seqs_within_field_delimiter
+        if self.unique_seqs_filename is None:
+            uq = pl.DataFrame(schema={StandardColumnNames.accession: str, 'row_number': int})
+        else:
+            uq = (
+                pl.read_csv(
+                    self.unique_seqs_filename,
+                    separator=self.unique_seqs_delimiter,
+                    row_index_name='row_number',
+                    columns=list(self.unique_seqs_accession_columns)
                 )
-                .alias('concat_accessions')
+                .with_columns(
+                    pl.concat_str(
+                        list(self.unique_seqs_accession_columns),
+                        separator=self.unique_seqs_within_field_delimiter
+                    )
+                    .alias('concat_accessions')
+                )
+                .select(['row_number', 'concat_accessions'])
+                .with_columns(pl.col('concat_accessions').str.split(self.unique_seqs_within_field_delimiter))
+                .explode('concat_accessions')
+                .rename({'concat_accessions': StandardColumnNames.accession})
             )
-            .select(['row_number', 'concat_accessions'])
-            .with_columns(pl.col('concat_accessions').str.split(self.unique_seqs_within_field_delimiter))
-            .explode('concat_accessions')
-            .rename({'concat_accessions': StandardColumnNames.accession})
-        )
         return uq
 
     async def _handle_sequences(
@@ -189,6 +191,8 @@ class Sc2SamplesParser(FileParser):
         # Some samples may not be listed in the uq seqs file. They don't have row numbers
         # We consider these to be un-duplicated samples, and assign each one a unique made up row number.
         max_row_number = uq_seqs_input['row_number'].max()
+        if max_row_number is None:
+            max_row_number = 0
         samples_input_plus_row_numbers = (
             samples_input
             .join(uq_seqs_input, on=pl.col(StandardColumnNames.accession), how='left', validate='1:1')
@@ -300,7 +304,7 @@ class Sc2SamplesParser(FileParser):
 
 class SC2SDSamplesParser(Sc2SamplesParser):
 
-    def __init__(self, samples_filename: str, unique_sequences_filename: str):
+    def __init__(self, samples_filename: str, unique_sequences_filename: str | None = None):
         super().__init__(samples_filename, unique_sequences_filename)
 
     def fill_missing_required_cols(self, samples_input: pl.LazyFrame) -> pl.LazyFrame:
@@ -323,8 +327,8 @@ class SC2SDSamplesParser(Sc2SamplesParser):
 
 
 class SC2WastewaterSamplesParser(Sc2SamplesParser):
-    def __init__(self, samples_filename: str, unique_sequences_filename: str):
-        super().__init__(samples_filename)
+    def __init__(self, samples_filename: str, unique_sequences_filename: str | None = None):
+        super().__init__(samples_filename, unique_sequences_filename)
 
     def fill_missing_required_cols(self, samples_input: pl.LazyFrame) -> pl.LazyFrame:
         return samples_input.with_columns(
