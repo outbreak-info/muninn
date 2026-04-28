@@ -179,6 +179,20 @@ class HaRegionDmsCsvParserNewData(DmsFileParser):
     }
 
 
+class HaRegionDmsCsvParserNeuAcVsNeuGc(DmsFileParser):
+    def __init__(self, filename: str):
+        super().__init__(filename, ',', DefaultGffFeaturesByRegion.HA)
+
+    async def parse_and_insert(self):
+        await super().parse_and_insert()
+
+    data_column_name_map = {
+        StandardPhenoMetricNames.entry_in_neuac: 'entry in 293 cells',
+        StandardPhenoMetricNames.entry_in_neugc: 'entry in CMAH cells',
+        StandardPhenoMetricNames.neugc_usage_increase: 'NeuGc usage increase',
+    }
+
+
 class Pb2RegionDmsCsvParser(DmsFileParser):
     """Parser for DMS data for Influenza PB2 region"""
     def __init__(self, filename: str):
