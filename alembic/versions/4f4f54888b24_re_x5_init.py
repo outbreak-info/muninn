@@ -149,7 +149,7 @@ def upgrade() -> None:
     op.create_table('samples',
     sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
     sa.Column('accession', sa.Text(), nullable=False),
-    sa.Column('fk_samples_sequence_id_sequences', sa.BigInteger(), nullable=False),
+    sa.Column('sequence_id', sa.BigInteger(), nullable=False),
     sa.Column('bio_project', sa.Text(), nullable=True),
     sa.Column('bio_sample', sa.Text(), nullable=True),
     sa.Column('bio_sample_accession', sa.Text(), nullable=True),
@@ -188,7 +188,7 @@ def upgrade() -> None:
     sa.CheckConstraint('(not is_retracted and retraction_detected_date is null) or (is_retracted and retraction_detected_date is not null)', name=op.f('ck_samples_retraction_values_existence_in_harmony')),
     sa.CheckConstraint('collection_start_date <= collection_end_date', name=op.f('ck_samples_collection_start_not_after_collection_end')),
     sa.CheckConstraint('num_nulls(collection_start_date, collection_end_date) in (0, 2)', name=op.f('ck_samples_collection_start_and_end_both_absent_or_both_present')),
-    sa.ForeignKeyConstraint(['fk_samples_sequence_id_sequences'], ['sequences.id'], name=op.f('fk_samples_fk_samples_sequence_id_sequences_sequences')),
+    sa.ForeignKeyConstraint(['sequence_id'], ['sequences.id'], name=op.f('fk_samples_sequence_id_sequences')),
     sa.ForeignKeyConstraint(['geo_location_id'], ['geo_locations.id'], name=op.f('fk_samples_geo_location_id_geo_locations')),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_samples')),
     sa.UniqueConstraint('accession', name='uq_samples_accession')

@@ -63,9 +63,8 @@ class Sample(Base):
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
     accession: Mapped[str] = mapped_column(sa.Text, nullable=False)
     sequence_id: Mapped[int] = mapped_column(
-        sa.ForeignKey(f'{TableNames.sequences}.id'),
-        nullable=False,
-        name=ConstraintNames.fk_samples_sequence_id_sequences
+        sa.ForeignKey(f'{TableNames.sequences}.id',  name=ConstraintNames.fk_samples_sequence_id_sequences),
+        nullable=False
     )
 
     bio_project: Mapped[str] = mapped_column(sa.Text, nullable=True)

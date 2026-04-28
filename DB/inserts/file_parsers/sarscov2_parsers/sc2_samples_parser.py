@@ -11,9 +11,10 @@ from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.geo_locations import find_or_insert_geo_location
 from DB.inserts.samples import copy_insert_samples, batch_upsert_samples, get_samples_accession_and_id_as_pl_df, \
     get_samples_accession_id_and_seq_id_as_pl_df
+from DB.inserts.sequences import insert_sequences_for_row_numbers
 from DB.models import GeoLocation
 from utils.constants import StandardColumnNames, COLLECTION_DATE, GEO_LOCATION
-from utils.csv_helpers import get_value
+from utils.data_stuctures import OneTimeDict
 from utils.dates_and_times import parse_collection_start_and_end
 
 
@@ -35,12 +36,7 @@ class Sc2SamplesParser(FileParser):
         self.unique_seqs_delimiter = unique_seqs_delimiter
         self.unique_seqs_within_field_delimiter = unique_seqs_within_field_delimiter
 
-
     async def parse_and_insert(self):
-        row_numbers_by_accession = self._parse_unique_seqs()
-        # todo: get existing sample -> seq id pairs
-        # todo: create a map of row number -> seq id
-
         start = perf_counter()
         # Scan file, rename columns, drop unused cols, drop rows with null collection date
         samples_input = (
@@ -55,11 +51,88 @@ class Sc2SamplesParser(FileParser):
         geo_locations = await self._insert_geo_locations(samples_input)
         existing_samples = await get_samples_accession_id_and_seq_id_as_pl_df()
 
-        # todo: accession - seq_id pairs
-        # todo: use a one-time dict for these to catch any conflicts.
+        uq_seq_input: pl.DataFrame = self._parse_unique_seqs_pl()
+
+        # existing samples plus listed duplicates
+        existing_plus_uq_seqs = uq_seq_input.join(
+            existing_samples, on=pl.col(StandardColumnNames.accession), how='left'
+        )
+
+        # check that new unique sequence data matches with existing
+        if not (
+                existing_plus_uq_seqs.filter(pl.col(StandardColumnNames.sample_id).is_not_null()).select(
+                    (pl.col(StandardColumnNames.sequence_id).n_unique().over('row_number') == 1) &
+                    (pl.col('row_number').n_unique().over(StandardColumnNames.sequence_id) == 1)
+                ).to_series().all()
+        ):
+            raise ValueError(f'New unique sequence data does not match up with existing. Unable to continue.')
+
+        max_row_number = uq_seq_input['row_number'].max()
+        samples_uq_rows = (
+            # join with the unique sequences data
+            samples_input
+            .join(uq_seq_input.lazy(), on=pl.col(StandardColumnNames.accession), how="left")
+            # for samples not listed in the duplicates file, assign them a row number unique to them.
+            .with_row_index('alt_row_number')
+            .with_columns(pl.col('row_number').fill_null(pl.col('alt_row_number') + max_row_number + 1))
+            .drop('alt_row_number')
+            # join with uq seqs data for existing samples, which will fill in seq id for new samples in existing groups
+            .join(
+                existing_plus_uq_seqs.filter(pl.col(StandardColumnNames.sample_id).is_not_null())
+                .select(pl.col('row_number'), pl.col(StandardColumnNames.sequence_id))
+                .unique()
+                .lazy(),
+                on=pl.col('row_number'),
+                how='left'
+            )
+        )
+
+        # Add new sequences as needed
+        row_numbers_for_new_seqs: list[int] = (
+            samples_uq_rows
+            .filter(pl.col(StandardColumnNames.sequence_id).is_null())
+            .select(pl.col('row_number'))
+            .unique()
+            .collect()
+            .to_series().to_list()
+        )
+        new_seq_ids_by_row_number = await insert_sequences_for_row_numbers(row_numbers_for_new_seqs)
+
+        # stitch new seq ids into sample data
+        samples_uq_rows = (
+            samples_uq_rows
+            .with_columns(
+                pl.col('row_number').replace_strict(new_seq_ids_by_row_number, default=None).alias('new_seq_id')
+            )
+            .with_columns(pl.col(StandardColumnNames.sequence_id).fill_null(pl.col('new_seq_id')))
+            .drop(pl.col('new_seq_id'))
+            .drop(pl.col('row_number'))
+        )
+
+        # todo: check that no existing sample has its sequence id changed?
+
+        if not(
+            samples_uq_rows
+            .select(
+                pl.col(StandardColumnNames.accession),
+                pl.col(StandardColumnNames.sequence_id).alias('new_sequence_id')
+            )
+            .collect()
+            .join(
+                existing_samples,
+                on=pl.col(StandardColumnNames.accession),
+                how='inner'
+            )
+            .select(
+                pl.col(StandardColumnNames.sequence_id) == pl.col('new_sequence_id')
+            )
+            .to_series()
+            .all()
+        ):
+            raise ValueError('An existing sample has had its sequence id changed. This is forbidden.')
 
         samples_finished: pl.DataFrame = (
-            samples_input
+            samples_uq_rows
             .join(geo_locations.lazy(), on=pl.col(GEO_LOCATION), how='left')
             .drop(pl.col(GEO_LOCATION))
             .with_columns(
@@ -74,7 +147,7 @@ class Sc2SamplesParser(FileParser):
                 )
             )
             .unnest(COLLECTION_DATE)
-            .collect(engine='streaming')
+            .collect()
         )
         setup_elapsed = perf_counter() - start
         print(f'samples: starting db ops. setup took {round(setup_elapsed, 2)}s')
@@ -132,12 +205,34 @@ class Sc2SamplesParser(FileParser):
         print(f'geo locations took {round(time.perf_counter() - start, 2)}s')
         return geo_locations
 
+    def _parse_unique_seqs_pl(self) -> pl.DataFrame:
+        uq = (
+            pl.read_csv(
+                self.unique_seqs_filename,
+                separator=self.unique_seqs_delimiter,
+                row_index_name='row_number',
+                columns=list(self.unique_seqs_accession_columns)
+            )
+            .with_columns(
+                pl.concat_str(
+                    list(self.unique_seqs_accession_columns),
+                    separator=self.unique_seqs_within_field_delimiter
+                )
+                .alias('concat_accessions')
+            )
+            .select(['row_number', 'concat_accessions'])
+            .with_columns(pl.col('concat_accessions').str.split(self.unique_seqs_within_field_delimiter))
+            .explode('concat_accessions')
+            .rename({'concat_accessions': StandardColumnNames.accession})
+        )
+        return uq
+
     def _parse_unique_seqs(self) -> dict[str, int]:
         csv.field_size_limit(int(sys.maxsize / 100))
         with open(self.unique_seqs_filename, 'r') as f:
             reader = csv.DictReader(f, delimiter=self.unique_seqs_delimiter)
             # todo: verify that required cols are present
-            row_numbers_by_accession = dict()
+            row_numbers_by_accession = OneTimeDict()
             for row_number, row in enumerate(reader):
                 for colname in self.unique_seqs_accession_columns:
                     if self.unique_seqs_within_field_delimiter in row[colname]:
