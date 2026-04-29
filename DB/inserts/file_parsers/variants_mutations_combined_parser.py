@@ -469,7 +469,7 @@ class VariantsMutationsCombinedParser(FileParser):
                 text(
                     'create unlogged table tmp_mutations_staging\n'
                     'as\n'
-                    'select s.id as sample_id, a.id as allele_id\n'
+                    'select s.sequence_id as sequence_id, a.id as allele_id\n'
                     'from tmp_mutations tmut\n'
                     'inner join alleles a on a.region = tmut.region and a.position_nt = tmut.position_nt and a.alt_nt = tmut.alt_nt\n'
                     'inner join samples s on s.accession = tmut.accession;'
@@ -478,15 +478,15 @@ class VariantsMutationsCombinedParser(FileParser):
             await session.execute(
                 text(
                     'delete from tmp_mutations_staging\n'
-                    'where (sample_id, allele_id) in\n'
+                    'where (sequence_id, allele_id) in\n'
                     '      (\n'
-                    '          select sample_id, allele_id\n'
+                    '          select sequence_id, allele_id\n'
                     '          from mutations\n'
                     '      );'
                 )
             )
             await session.execute(
-                text('create index idx_mutations_staging on tmp_mutations_staging (sample_id, allele_id);')
+                text('create index idx_mutations_staging on tmp_mutations_staging (sequence_id, allele_id);')
             )
             await session.commit()
 
@@ -496,10 +496,10 @@ class VariantsMutationsCombinedParser(FileParser):
             await session.execute(
                 text(
                     'insert into mutations (\n'
-                    '    sample_id, allele_id\n'
+                    '    sequence_id, allele_id\n'
                     ')\n'
-                    'select sample_id, allele_id from tmp_mutations_staging\n'
-                    'group by sample_id, allele_id;'
+                    'select sequence_id, allele_id from tmp_mutations_staging\n'
+                    'group by sequence_id, allele_id;'
                 )
             )
             await session.commit()
@@ -512,7 +512,7 @@ class VariantsMutationsCombinedParser(FileParser):
             await session.execute(
                 text(
                     'create unlogged table tmp_variants_staging as\n'
-                    'select s.id as sample_id,\n'
+                    'select s.sequence_id as sequence_id,\n'
                     '       a.id as allele_id,\n'
                     '       tvar.ref_dp,\n'
                     '       tvar.alt_dp,\n'
@@ -534,14 +534,14 @@ class VariantsMutationsCombinedParser(FileParser):
                 text(
                     'delete\n'
                     'from tmp_variants_staging\n'
-                    'where (sample_id, allele_id) in (\n'
-                    '    select sample_id, allele_id\n'
+                    'where (sequence_id, allele_id) in (\n'
+                    '    select sequence_id, allele_id\n'
                     '    from intra_host_variants\n'
                     ');'
                 )
             )
             await session.execute(
-                text('create index ix_variants_staging on tmp_variants_staging (sample_id, allele_id);')
+                text('create index ix_variants_staging on tmp_variants_staging (sequence_id, allele_id);')
             )
 
             # check for duplicated sample-allele pairs and warn if found
@@ -549,9 +549,9 @@ class VariantsMutationsCombinedParser(FileParser):
                 text(
                     'select *\n'
                     'from (\n'
-                    '    select sample_id, allele_id, count(*) as count\n'
+                    '    select sequence_id, allele_id, count(*) as count\n'
                     '    from tmp_variants_staging\n'
-                    '    group by sample_id, allele_id\n'
+                    '    group by sequence_id, allele_id\n'
                     ') _\n'
                     'where count > 1;'
                 )
@@ -571,10 +571,10 @@ class VariantsMutationsCombinedParser(FileParser):
             await session.execute(
                 text(
                     'insert into intra_host_variants(\n'
-                    '    sample_id, allele_id, ref_dp, alt_dp, alt_freq, ref_rv, alt_rv, ref_qual, alt_qual, total_dp, pval, pass_qc\n'
+                    '    sequence_id, allele_id, ref_dp, alt_dp, alt_freq, ref_rv, alt_rv, ref_qual, alt_qual, total_dp, pval, pass_qc\n'
                     ')\n'
-                    'select distinct on (sample_id, allele_id) \n'
-                    '    sample_id,\n'
+                    'select distinct on (sequence_id, allele_id) \n'
+                    '    sequence_id,\n'
                     '    allele_id,\n'
                     '    ref_dp,\n'
                     '    alt_dp,\n'
@@ -627,7 +627,7 @@ class VariantsMutationsCombinedParser(FileParser):
                     '                  and aa.alt_codon = tmut.alt_codon\n'
                     '    left join samples s on s.accession = tmut.accession\n'
                     '    left join alleles a on a.region = tmut.region and a.position_nt = tmut.position_nt and a.alt_nt = tmut.alt_nt\n'
-                    '    left join mutations m on m.sample_id = s.id and m.allele_id = a.id\n'
+                    '    left join mutations m on m.sequence_id = s.sequence_id and m.allele_id = a.id\n'
                     ');'
                 )
             )
@@ -689,7 +689,7 @@ class VariantsMutationsCombinedParser(FileParser):
                     '                  and aa.alt_codon = tvar.alt_codon\n'
                     '    left join samples s on s.accession = tvar.accession\n'
                     '    left join alleles a on a.region = tvar.region and a.position_nt = tvar.position_nt and a.alt_nt = tvar.alt_nt\n'
-                    '    left join intra_host_variants ihv on ihv.sample_id = s.id and ihv.allele_id = a.id\n'
+                    '    left join intra_host_variants ihv on ihv.sequence_id = s.sequence_id and ihv.allele_id = a.id\n'
                     ');'
                 )
             )
@@ -862,7 +862,7 @@ class VariantsMutationsCombinedParser(FileParser):
                 text(
                     f'alter table {TableNames.mutations} \n'
                     f'add constraint {ConstraintNames.uq_mutations_sequence_allele_pair} \n'
-                    f'unique ({StandardColumnNames.sample_id}, {StandardColumnNames.allele_id});'
+                    f'unique ({StandardColumnNames.sequence_id}, {StandardColumnNames.allele_id});'
                 )
             )
             await session.execute(
@@ -882,7 +882,7 @@ class VariantsMutationsCombinedParser(FileParser):
                 text(
                     f'alter table {TableNames.mutations} \n'
                     f'add constraint {ConstraintNames.fk_mutations_sequence_id_sequences} \n'
-                    f'foreign key ({StandardColumnNames.sample_id}) references {TableNames.samples} (id);'
+                    f'foreign key ({StandardColumnNames.sequence_id}) references {TableNames.sequences} (id);'
                 )
             )
             await session.commit()
@@ -911,7 +911,7 @@ class VariantsMutationsCombinedParser(FileParser):
                 text(
                     f'alter table {TableNames.intra_host_variants} \n'
                     f'add constraint {ConstraintNames.uq_intra_host_variants_sequence_allele_pair} \n'
-                    f'unique ({StandardColumnNames.sample_id}, {StandardColumnNames.allele_id});'
+                    f'unique ({StandardColumnNames.sequence_id}, {StandardColumnNames.allele_id});'
                 )
             )
             await session.execute(
@@ -931,7 +931,7 @@ class VariantsMutationsCombinedParser(FileParser):
                 text(
                     f'alter table {TableNames.intra_host_variants} \n'
                     f'add constraint {ConstraintNames.fk_intra_host_variants_sequence_id_sequences} \n'
-                    f'foreign key ({StandardColumnNames.sample_id}) references {TableNames.samples} (id);'
+                    f'foreign key ({StandardColumnNames.sequence_id}) references {TableNames.sequences} (id);'
                 )
             )
             await session.commit()

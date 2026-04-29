@@ -8,6 +8,7 @@ import dateutil
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.geo_locations import find_or_insert_geo_location
 from DB.inserts.samples import find_or_insert_sample
+from DB.inserts.sequences import insert_sequences_for_row_numbers
 from DB.models import GeoLocation, Sample
 from utils.constants import EXCLUDED_SRAS
 from utils.csv_helpers import get_value, bool_from_str
@@ -82,9 +83,12 @@ class SamplesParser(FileParser):
                         # todo: handle the tz better
                         retraction_detected_date = dateutil.parser.isoparse(retraction_detected_date + 'Z')
 
+                    sequence_id = (await insert_sequences_for_row_numbers([0]))[0]
+
                     sample = Sample(
                         geo_location_id=geo_location_id,
                         accession=accession,
+                        sequence_id=sequence_id,
                         assay_type=get_value(row, ColNameMapping.assay_type.value, allow_none=True),
                         avg_spot_length=get_value(
                             row,
