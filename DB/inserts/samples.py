@@ -29,6 +29,7 @@ async def find_or_insert_sample(s: Sample, upsert: bool = False) -> (int, bool):
             await session.refresh(s)
             existing = s
         elif upsert:
+            s.sequence_id = existing.sequence_id #
             existing.copy_from(s)
             await session.commit()
 

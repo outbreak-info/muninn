@@ -643,6 +643,12 @@ class VariantsMutationsCombinedParser(FileParser):
                 )
             )
 
+            await session.execute(
+                text(
+                    'create index ix_mutation_translations_staging on tmp_mutation_translations_staging (mutation_id, amino_acid_id);'
+                )
+            )
+
             await session.commit()
 
     @staticmethod
@@ -650,8 +656,13 @@ class VariantsMutationsCombinedParser(FileParser):
         async with get_async_write_session() as session:
             await session.execute(
                 text(
-                    'insert into mutation_translations (mutation_id, amino_acid_id)\n'
-                    'select mutation_id, amino_acid_id from tmp_mutation_translations_staging;'
+                    'insert into mutation_translations (\n'
+                    '    mutation_id, amino_acid_id\n'
+                    ')\n'
+                    'select distinct on (mutation_id, amino_acid_id)\n'
+                    '       mutation_id,\n'
+                    '       amino_acid_id\n'
+                    'from tmp_mutation_translations_staging;'
                 )
             )
             await session.commit()
@@ -702,6 +713,11 @@ class VariantsMutationsCombinedParser(FileParser):
                     '      );'
                 )
             )
+            await session.execute(
+                text(
+                    'create index ix_intrahost_translations_staging on tmp_intra_host_translations_staging (intra_host_variant_id, amino_acid_id);'
+                )
+            )
             await session.commit()
 
     @staticmethod
@@ -712,7 +728,9 @@ class VariantsMutationsCombinedParser(FileParser):
                     'insert into intra_host_translations (\n'
                     '    intra_host_variant_id, amino_acid_id\n'
                     ')\n'
-                    'select intra_host_variant_id, amino_acid_id\n'
+                    'select distinct on (intra_host_variant_id, amino_acid_id)\n'
+                    '       intra_host_variant_id,\n'
+                    '       amino_acid_id\n'
                     'from tmp_intra_host_translations_staging;'
                 )
             )
