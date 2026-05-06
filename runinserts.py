@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any
 
 from DB.inserts.file_parsers.dms_parser import HaRegionDmsTsvParser, HaRegionDmsCsvParser, HaRegionDmsCsvParserNewData, \
-    Pb2RegionDmsCsvParser
+    Pb2RegionDmsCsvParser, HaRegionDmsCsvParserNeuAcVsNeuGc
 from DB.inserts.file_parsers.eve_parser import EveCsvParser
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.file_parsers.flumut_annotations_parser import FlumutTsvParser
@@ -33,6 +33,7 @@ def main():
         'ha_dms_tsv': HaRegionDmsTsvParser,
         'ha_dms_csv': HaRegionDmsCsvParser,
         'pb2_dms_csv': Pb2RegionDmsCsvParser,
+        'ha_neuac_vs_neugc_dms_csv': HaRegionDmsCsvParserNeuAcVsNeuGc,
         'sc2_dms_tsv': Sc2DmsTsvParser,
         'freyja_demixed': FreyjaDemixedParser,
         'variants_mutations_combined_tsv': VariantsMutationsCombinedParser,

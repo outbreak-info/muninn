@@ -116,6 +116,7 @@ EVE_FILE="eve_dms_data.csv"
 FREYJA_DEMIXED_DIR="demixed"
 FLUMUT_FILE="flumut_annotations.tsv"
 ADDITIONAL_HA_DMS_FILE="26_increase_low_sera.csv"
+HA_NEUAC_VS_NEUGC_DMS="entry_in_NeuAc_vs_NeuGc_cells.csv"
 
 # Debug output files for ref conflicts
 AMINO_SUB_REF_CONFLICTS_FILE="/tmp/amino_acid_ref_conflicts.csv"
@@ -137,6 +138,7 @@ ALLELE_REF_CONFLICTS_FILE="/tmp/allele_ref_conflicts.csv"
   python3 -u runinserts.py "$DATA_DIR/$FREYJA_DEMIXED_DIR" --format freyja_demixed
   python3 -u runinserts.py "$DATA_DIR/$FLUMUT_FILE" --format flumut_tsv
   python3 -u runinserts.py "$DATA_DIR/$ADDITIONAL_HA_DMS_FILE" --format dms_tmp_csv
+  python3 -u runinserts.py "$DATA_DIR/$HA_NEUAC_VS_NEUGC_DMS" --format ha_neuac_vs_neugc_dms_csv
 } &>> "$LOG"
 
 # Copying over some debug files

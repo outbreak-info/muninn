@@ -1,7 +1,7 @@
 #! /bin/bash
 
 ARCHIVE_FILENAME="$1"
-DATA_DIR=$(dirname "$ARCHIVE_FILENAME")
+DATA_DIR=$(realpath "$(dirname "$ARCHIVE_FILENAME")")
 
 if [[ "$#" -eq 0 ]]; then
   echo "archive name not provided"
@@ -26,6 +26,7 @@ EVE="$TMP/eve.csv"
 GENOFLU="$TMP/genoflu.tsv"
 DEMIXED_DIR="$TMP/demixed_out"
 FLUMUT="$TMP/flumut_annotations.tsv"
+HA_NEUAC_VS_NEUGC_DMS="$TMP/entry_in_NeuAc_vs_NeuGc_cells.csv"
 
 # ingest bjorn-general outputs
 python3 -u runinserts.py "$SAMPLES" --format samples_tsv
@@ -37,6 +38,7 @@ python3 -u runinserts.py "$EVE"  --format eve_dms_csv
 python3 -u runinserts.py "$GENOFLU"  --format genoflu_lineages
 python3 -u runinserts.py "$DEMIXED_DIR"  --format freyja_demixed
 python3 -u runinserts.py "$FLUMUT"  --format flumut_tsv
+python3 -u runinserts.py "$FLUMUT"  --format flumut_tsv
+python3 -u runinserts.py "$HA_NEUAC_VS_NEUGC_DMS" --format ha_neuac_vs_neugc_dms_csv
 
 rm -r "$TMP"
-
