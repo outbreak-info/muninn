@@ -22,7 +22,7 @@ services:
       - "-c"
       - "config_file=/docker-entrypoint-initdb.d/${MUNINN_PG_CONFIG_NAME}.postgresql.conf"
     healthcheck:
-      test: pg_isready -U flu_reader -d flu
+      test: pg_isready -U sc2 -d sc2_all
       interval: 2s
       timeout: 3s
       retries: 15

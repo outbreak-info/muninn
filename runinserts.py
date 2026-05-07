@@ -15,7 +15,7 @@ from DB.inserts.file_parsers.samples_parser import SamplesCsvParser, SamplesTsvP
 from DB.inserts.file_parsers.sarscov2_parsers.dms_parser import Sc2DmsTsvParser
 from DB.inserts.file_parsers.sarscov2_parsers.eve_parser import Sc2EveCsvParser
 from DB.inserts.file_parsers.sarscov2_parsers.sc2_samples_parser import Sc2SdSamplesParser, Sc2SamplesParser, \
-    Sc2WastewaterSamplesParser
+    Sc2NCBISamplesParser, Sc2WastewaterSamplesParser
 from DB.inserts.file_parsers.simple_lineage_parser import GenofluLineageParser, Sc2LineageParser
 from DB.inserts.file_parsers.variants_mutations_combined_parser import VariantsMutationsCombinedParser, \
     VariantsMutationsCombinedParserBig
@@ -37,7 +37,7 @@ def main():
         'freyja_demixed': FreyjaDemixedParser,
         'variants_mutations_combined_tsv': VariantsMutationsCombinedParser,
         'variants_mutations_combined_big_tsv': VariantsMutationsCombinedParserBig,
-        'sc2_samples': Sc2SdSamplesParser,
+        'sc2_samples': Sc2NCBISamplesParser,
         'sc2_wastewater_samples': Sc2WastewaterSamplesParser,
         'sc2_sd_samples': Sc2SdSamplesParser,
         'flumut_tsv': FlumutTsvParser,
