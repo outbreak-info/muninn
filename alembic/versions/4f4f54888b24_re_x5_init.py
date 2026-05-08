@@ -142,7 +142,7 @@ def upgrade() -> None:
     sa.Column('amino_acid_id', sa.BigInteger(), nullable=False),
     sa.Column('value', sa.Double(), nullable=False),
     sa.ForeignKeyConstraint(['amino_acid_id'], ['amino_acids.id'], name=op.f('fk_phenotype_metric_values_amino_acid_id_amino_acids')),
-    sa.ForeignKeyConstraint(['phenotype_metric_id'], ['phenotype_metrics.id'], name=op.f('fk_phenotype_metric_values_phenotype_metric_id_phenotype_metrics')),
+    sa.ForeignKeyConstraint(['phenotype_metric_id'], ['phenotype_metrics.id'], name=op.f('fk_phenotype_metric_values_phenotype_metric_id_pheno_metrics')),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_phenotype_metric_values')),
     sa.UniqueConstraint('phenotype_metric_id', 'amino_acid_id', name='uq_phenotype_metric_values_metric_and_amino_acid')
     )

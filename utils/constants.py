@@ -314,7 +314,7 @@ class ConstraintNames(PgIdentifiers):
     ck_phenotype_metrics_assay_type_not_empty = 'ck_phenotype_metrics_assay_type_not_empty'
     uq_phenotype_metric_values_metric_and_amino_acid = f'uq_{TableNames.phenotype_metric_values}_metric_and_amino_acid'
     fk_phenotype_metric_values_amino_acid_id_amino_acids = 'fk_phenotype_metric_values_amino_acid_id_amino_acids'
-    fk_phenotype_metric_values_phenotype_metric_id_pheno_metrics = 'fk_phenotype_metric_values_phenotype_metric_id_phenotyp_c662' # todo: fix this name
+    fk_phenotype_metric_values_phenotype_metric_id_pheno_metrics = 'fk_phenotype_metric_values_phenotype_metric_id_pheno_metrics'
 
     # geo locations
     uq_geo_locations_division_names = 'uq_geo_locations_division_names'
