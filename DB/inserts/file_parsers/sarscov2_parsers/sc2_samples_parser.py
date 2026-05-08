@@ -24,6 +24,7 @@ class Sc2SamplesParser(FileParser):
         samples_delimiter: str = '\t',
         unique_seqs_delimiter: str = '\t',
         unique_seqs_within_field_delimiter: str = ',',
+        geo_location_levels_delimiter: str = '/'
     ):
         self.samples_filename = samples_filename
         self.samples_delimiter = samples_delimiter
@@ -32,6 +33,7 @@ class Sc2SamplesParser(FileParser):
         self.unique_seqs_filename = unique_seqs_filename
         self.unique_seqs_delimiter = unique_seqs_delimiter
         self.unique_seqs_within_field_delimiter = unique_seqs_within_field_delimiter
+        self.geo_location_levels_delimiter = geo_location_levels_delimiter
 
     async def parse_and_insert(self):
         start = perf_counter()
@@ -77,8 +79,7 @@ class Sc2SamplesParser(FileParser):
         await self._insert_new_samples(samples_finished, existing_samples)
         await self._update_existing_samples(samples_finished, existing_samples)
 
-    @staticmethod
-    async def _insert_geo_locations(samples_input: pl.LazyFrame) -> pl.DataFrame:
+    async def _insert_geo_locations(self, samples_input: pl.LazyFrame) -> pl.DataFrame:
         """
         Insert geo_locations from samples, return original geo_location strings and db ids
         :param samples_input:
@@ -92,7 +93,7 @@ class Sc2SamplesParser(FileParser):
             .unique()
             .drop_nulls()
             .with_columns(
-                pl.col(GEO_LOCATION).str.split('/').list.to_struct(
+                pl.col(GEO_LOCATION).str.split(self.geo_location_levels_delimiter).list.to_struct(
                     n_field_strategy="max_width",
                     fields=[
                         StandardColumnNames.country_name,
@@ -104,6 +105,12 @@ class Sc2SamplesParser(FileParser):
                 .alias('tmp_geo_struct')
             )
             .unnest('tmp_geo_struct')
+            .with_columns([
+                pl.col(StandardColumnNames.country_name).str.strip_chars(),
+                pl.col(StandardColumnNames.admin1_name).str.strip_chars(),
+                pl.col(StandardColumnNames.admin2_name).str.strip_chars(),
+                pl.col(StandardColumnNames.admin3_name).str.strip_chars(),
+            ])
             .collect()
         )
 
@@ -349,4 +356,37 @@ class Sc2WastewaterSamplesParser(Sc2SamplesParser):
         StandardColumnNames.ww_catchment_population: 'population',
         StandardColumnNames.ww_site_id: 'site_id',
         StandardColumnNames.ww_collected_by: 'collected_by',
+    }
+
+class Sc2NcbiSamplesParser(Sc2SamplesParser):
+    def __init__(self, samples_filename: str, unique_sequences_filename: str | None = None):
+        super().__init__(samples_filename, unique_sequences_filename, geo_location_levels_delimiter=':')
+
+    def fill_missing_required_cols(self, samples_input: pl.LazyFrame) -> pl.LazyFrame:
+        return samples_input.with_columns(
+            pl.lit("NA").alias(StandardColumnNames.organism),
+            pl.lit(False).alias(StandardColumnNames.is_retracted)
+        )
+
+    column_name_map = {
+        StandardColumnNames.accession: 'Accession',
+        StandardColumnNames.bio_project: 'Bioprojects',
+        StandardColumnNames.bio_sample: 'Biosample',
+        StandardColumnNames.host: 'Host_OrganismName',
+        StandardColumnNames.isolate: 'Isolate_Name',
+        StandardColumnNames.organism: 'Virus_OrganismName',
+        StandardColumnNames.isolation_source: 'Isolate_Source',
+        COLLECTION_DATE: 'Collection_Date',
+        GEO_LOCATION: 'Geographic_Location',
+        StandardColumnNames.census_region: 'census_region',
+        StandardColumnNames.bases: 'Length',
+        StandardColumnNames.ww_viral_load: 'viral_load',
+        StandardColumnNames.ww_catchment_population: 'population',
+        StandardColumnNames.ww_site_id: 'site_id',
+        StandardColumnNames.ww_collected_by: 'collected_by',
+    }
+
+    unique_seqs_accession_columns = {
+        'unique_id',
+        'dup_ids'
     }
