@@ -16,6 +16,7 @@ ARCHIVE_HASH="UNSET"
 
 ARCHIVE_FILENAME="UNSET"
 AUTO=false
+SKIP_CHECKING_ARCHIVE=false
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -29,30 +30,39 @@ while [[ $# -gt 0 ]]; do
     echo "Auto mode: will attempt to locate files within input archive" >> "$LOG"
     shift
     ;;
+  --dir_in)
+    SKIP_DECOMPRESSION=true
+    SKIP_CHECKING_ARCHIVE=true
+    ARCHIVE_DEST_DIR="$DATA_DIR/$2"
+    echo "Skipping decompression and reading from $ARCHIVE_DEST_DIR"
+    shift
+    shift
+    ;;
   esac
 done
 
 # bjorn-general outputs
 BJORN_GENERAL_OUTPUT_ARCHIVE="$DATA_DIR/$ARCHIVE_FILENAME"
 
-
-# check that archive exists
-SKIP_DECOMPRESSION=false
-if [[ ! -f "$BJORN_GENERAL_OUTPUT_ARCHIVE" ]]; then
-  echo "bjorn-general outputs archive not found: $BJORN_GENERAL_OUTPUT_ARCHIVE" >> "$LOG"
-  exit 1
-fi
-
-if [[ -d "$ARCHIVE_DEST_DIR" ]]; then
-  if [[ -f "$ARCHIVE_HASH_FILENAME" ]]; then
-    ARCHIVE_HASH=$(md5sum "$BJORN_GENERAL_OUTPUT_ARCHIVE")
-    if [[ "$ARCHIVE_HASH" = $(cat "$ARCHIVE_HASH_FILENAME") ]]; then
-      echo "It appears this input archive has already been expanded (hashes matched) so skipping decompression" >> "$LOG"
-      SKIP_DECOMPRESSION=true
-    fi
+if [[ "$SKIP_CHECKING_ARCHIVE" = false ]]; then
+  # check that archive exists
+  SKIP_DECOMPRESSION=false
+  if [[ ! -f "$BJORN_GENERAL_OUTPUT_ARCHIVE" ]]; then
+    echo "bjorn-general outputs archive not found: $BJORN_GENERAL_OUTPUT_ARCHIVE" >> "$LOG"
+    exit 1
   fi
-  if [[ "$SKIP_DECOMPRESSION" = false ]]; then
-    rm -r "$ARCHIVE_DEST_DIR"
+
+  if [[ -d "$ARCHIVE_DEST_DIR" ]]; then
+    if [[ -f "$ARCHIVE_HASH_FILENAME" ]]; then
+      ARCHIVE_HASH=$(md5sum "$BJORN_GENERAL_OUTPUT_ARCHIVE")
+      if [[ "$ARCHIVE_HASH" = $(cat "$ARCHIVE_HASH_FILENAME") ]]; then
+        echo "It appears this input archive has already been expanded (hashes matched) so skipping decompression" >> "$LOG"
+        SKIP_DECOMPRESSION=true
+      fi
+    fi
+    if [[ "$SKIP_DECOMPRESSION" = false ]]; then
+      rm -r "$ARCHIVE_DEST_DIR"
+    fi
   fi
 fi
 
@@ -91,7 +101,7 @@ if [[ $AUTO = true ]]; then
   fi
 
   # Variants file
-  TMP_FILE=$(find "$ARCHIVE_DEST_DIR" -type f -name "*variants*.tsv" | head -1)
+  TMP_FILE=$(find "$ARCHIVE_DEST_DIR" -type f -name "*foobar*.tsv" | head -1)
   if [[ -f "$TMP_FILE" ]]; then
     VARIANTS_FILE="$TMP_FILE"
     echo "using variants file: $VARIANTS_FILE" >> "$LOG"
@@ -102,56 +112,25 @@ if [[ $AUTO = true ]]; then
     MUTATIONS_FILE="$TMP_FILE"
     echo "using mutations file: $MUTATIONS_FILE" >> "$LOG"
   fi
-
-#  # Demixed dir
-#  TMP_DIR=$(find "$ARCHIVE_DEST_DIR" -type d -name "*demix*" | head -1)
-#  if [[ -d "$TMP_DIR" ]]; then
-#    FREYJA_DEMIXED_DIR="$TMP_DIR"
-#    echo "using demixed dir: $FREYJA_DEMIXED_DIR" >> "$LOG"
-#  fi
-#
-#  # Lineage hierarchy file
-#  TMP_FILE=$(find "$ARCHIVE_DEST_DIR" -type f -name "*lineages*.yml" | head -1)
-#  if [[ -f "$TMP_FILE" ]]; then
-#    FREYJA_DEMIXED_LINEAGE_HIERARCHY_FILE="$TMP_FILE"
-#    echo "using lineage hierarchy file: $FREYJA_DEMIXED_LINEAGE_HIERARCHY_FILE" >> "$LOG"
-#  fi
-#
-#  # Lineage file
-#  TMP_FILE=$(find "$ARCHIVE_DEST_DIR" -type f -name "*lineage*.csv" | head -1)
-#  if [[ -f "$TMP_FILE" ]]; then
-#    LINEAGE_FILE="$TMP_FILE"
-#    echo "using lineage file: $LINEAGE_FILE" >> "$LOG"
-#  fi
-#
-#  # DMS file
-#  TMP_FILE=$(find "$ARCHIVE_DEST_DIR" -type f -name "*dms*.tsv" | head -1)
-#  if [[ -f "$TMP_FILE" ]]; then
-#    DMS_FILE="$TMP_FILE"
-#    echo "using DMS file: $DMS_FILE" >> "$LOG"
-#  fi
-#
-#  # EVEsacpe file
-#  TMP_FILE=$(find "$ARCHIVE_DEST_DIR" -type f -name "*evescape*.csv" | head -1)
-#  if [[ -f "$TMP_FILE" ]]; then
-#    EVE_FILE="$TMP_FILE"
-#    echo "using EVEscape file: $EVE_FILE" >> "$LOG"
-#  fi
 fi
+
+if [[ ! -f "$VARIANTS_FILE" ]]; then
+  VARIANTS_FILE=""
+fi
+
+if [[ ! -f "$MUTATIONS_FILE" ]]; then
+  MUTATIONS_FILE=""
+fi
+
 
 
 {
   # ingest bjorn-general outputs
-  python3 -u runinserts.py "$SAMPLES_FILE" --format sc2_sd_samples
+  python3 -u runinserts.py "$SAMPLES_FILE" --format sc2_ncbi_samples
   python3 -u runinserts.py \
   "$VARIANTS_FILE" \
   "$MUTATIONS_FILE" \
   --format variants_mutations_combined_big_tsv
-#  python3 -u runinserts.py "$FREYJA_DEMIXED_DIR" --format freyja_demixed
-#  python3 -u runinserts.py "$FREYJA_DEMIXED_LINEAGE_HIERARCHY_FILE" --format freyja_demixed_hierarchy_yaml
-#  python3 -u runinserts.py "$LINEAGE_FILE" --format sc2_lineages
-#  python3 -u runinserts.py "$DMS_FILE" --format sc2_dms_tsv
-#  python3 -u runinserts.py "$EVE_FILE" --format sc2_eve_dms_csv
 } &>> "$LOG"
 
 # Copying over some debug files

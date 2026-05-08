@@ -28,6 +28,7 @@ class VariantsMutationsCombinedParser(FileParser):
         # All validation now handled in the InputFile class
         self.input_files = [
             VariantsMutationsCombinedParser.InputFile(name, delimiter=self.delimiter) for name in filenames
+            if len(name.strip()) > 0
         ]
 
         self.index_constraint_manager = IndexAndConstraintManager(Base)
