@@ -5,7 +5,7 @@ import sqlalchemy as sa
 from sqlalchemy import UniqueConstraint, CheckConstraint, MetaData
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase, relationship
-from sqlalchemy.sql.schema import Index
+from sqlalchemy.sql.schema import Index, PrimaryKeyConstraint
 
 from utils.constants import ConstraintNames, TableNames, StandardColumnNames, MiscDbNames, IndexNames
 
@@ -60,10 +60,10 @@ class Base(DeclarativeBase, AsyncAttrs):
 class Sample(Base):
     __tablename__ = TableNames.samples
 
-    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(sa.BigInteger, autoincrement=True)
     accession: Mapped[str] = mapped_column(sa.Text, nullable=False)
     sequence_id: Mapped[int] = mapped_column(
-        sa.ForeignKey(f'{TableNames.sequences}.id',  name=ConstraintNames.fk_samples_sequence_id_sequences),
+        sa.ForeignKey(f'{TableNames.sequences}.id', name=ConstraintNames.fk_samples_sequence_id_sequences),
         nullable=False
     )
 
@@ -120,19 +120,20 @@ class Sample(Base):
 
     __table_args__ = tuple(
         [
+            PrimaryKeyConstraint('id', name=ConstraintNames.pk_samples),
             UniqueConstraint(StandardColumnNames.accession, name=ConstraintNames.uq_samples_accession),
             CheckConstraint(
                 f'(not {StandardColumnNames.is_retracted} and {StandardColumnNames.retraction_detected_date} is null) or '
                 f'({StandardColumnNames.is_retracted} and {StandardColumnNames.retraction_detected_date} is not null)',
-                name='ck_samples_retraction_values_existence_in_harmony'
+                name=ConstraintNames.ck_samples_retraction_values_existence_in_harmony
             ),
             CheckConstraint(
                 f'num_nulls({StandardColumnNames.collection_start_date}, {StandardColumnNames.collection_end_date}) in (0, 2)',
-                name='ck_samples_collection_start_and_end_both_absent_or_both_present'
+                name=ConstraintNames.ck_samples_collection_start_and_end_both_absent_or_both_present
             ),
             CheckConstraint(
                 f'{StandardColumnNames.collection_start_date} <= {StandardColumnNames.collection_end_date}',
-                name='ck_samples_collection_start_not_after_collection_end'
+                name=ConstraintNames.ck_samples_collection_start_not_after_collection_end
             )
         ]
     )
@@ -180,17 +181,23 @@ class Sample(Base):
 class Sequence(Base):
     __tablename__ = TableNames.sequences
 
-    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(sa.BigInteger, autoincrement=True)
 
     r_samples: Mapped[List['Sample']] = relationship(back_populates='r_sequence')
     r_mutations: Mapped[List['Mutation']] = relationship(back_populates='r_sequence')
     r_variants: Mapped[List['IntraHostVariant']] = relationship(back_populates='r_sequence')
 
+    __table_args__ = tuple(
+        [
+            PrimaryKeyConstraint('id', name=ConstraintNames.pk_sequences)
+        ]
+    )
+
 
 class Allele(Base):
     __tablename__ = TableNames.alleles
 
-    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(sa.BigInteger, autoincrement=True)
 
     region: Mapped[str] = mapped_column(sa.Text, nullable=False)
     position_nt: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
@@ -199,6 +206,7 @@ class Allele(Base):
 
     __table_args__ = tuple(
         [
+            PrimaryKeyConstraint('id', name=ConstraintNames.pk_alleles),
             UniqueConstraint(
                 StandardColumnNames.region,
                 StandardColumnNames.position_nt,
@@ -219,7 +227,7 @@ class Allele(Base):
 class AminoAcid(Base):
     __tablename__ = TableNames.amino_acids
 
-    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(sa.BigInteger, autoincrement=True)
 
     position_aa: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
     ref_aa: Mapped[str] = mapped_column(sa.Text, nullable=False)
@@ -230,6 +238,7 @@ class AminoAcid(Base):
 
     __table_args__ = tuple(
         [
+            PrimaryKeyConstraint('id', name=ConstraintNames.pk_amino_acids),
             CheckConstraint(
                 f"{StandardColumnNames.gff_feature} <> ''",
                 name=ConstraintNames.ck_amino_acids_gff_feature_not_empty
@@ -270,7 +279,7 @@ class AminoAcid(Base):
 class Mutation(Base):
     __tablename__ = TableNames.mutations
 
-    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(sa.BigInteger, autoincrement=True)
 
     sequence_id: Mapped[int] = mapped_column(
         sa.ForeignKey(f'{TableNames.sequences}.id', name=ConstraintNames.fk_mutations_sequence_id_sequences),
@@ -283,6 +292,7 @@ class Mutation(Base):
 
     __table_args__ = tuple(
         [
+            PrimaryKeyConstraint('id', name=ConstraintNames.pk_mutations),
             UniqueConstraint(
                 StandardColumnNames.sequence_id,
                 StandardColumnNames.allele_id,
@@ -300,7 +310,7 @@ class Mutation(Base):
 class IntraHostVariant(Base):
     __tablename__ = TableNames.intra_host_variants
 
-    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(sa.BigInteger, autoincrement=True)
 
     sequence_id: Mapped[int] = mapped_column(
         sa.ForeignKey(f'{TableNames.sequences}.id', name=ConstraintNames.fk_intra_host_variants_sequence_id_sequences),
@@ -324,6 +334,7 @@ class IntraHostVariant(Base):
 
     __table_args__ = tuple(
         [
+            PrimaryKeyConstraint('id', name=ConstraintNames.pk_intra_host_variants),
             UniqueConstraint(
                 StandardColumnNames.sequence_id,
                 StandardColumnNames.allele_id,
@@ -339,7 +350,7 @@ class IntraHostVariant(Base):
     r_translations: Mapped[List['IntraHostTranslation']] = relationship(back_populates='r_variant')
 
     def copy_from(self, other: 'IntraHostVariant'):
-        if not (other.sample_id, other.allele_id) == (self.sample_id, self.allele_id):
+        if not (other.sequence_id, other.allele_id) == (self.sequence_id, self.allele_id):
             raise ValueError('sample and allele ids do not match, copying will not proceed.')
 
         self.ref_dp = other.ref_dp
@@ -356,7 +367,7 @@ class IntraHostVariant(Base):
 
 class MutationTranslation(Base):
     __tablename__ = TableNames.mutation_translations
-    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(sa.BigInteger, autoincrement=True)
 
     mutation_id: Mapped[int] = mapped_column(
         sa.ForeignKey(
@@ -375,6 +386,7 @@ class MutationTranslation(Base):
 
     __table_args__ = tuple(
         [
+            PrimaryKeyConstraint('id', name=ConstraintNames.pk_mutation_translations),
             UniqueConstraint(
                 StandardColumnNames.mutation_id,
                 StandardColumnNames.amino_acid_id,
@@ -389,7 +401,7 @@ class MutationTranslation(Base):
 
 class IntraHostTranslation(Base):
     __tablename__ = TableNames.intra_host_translations
-    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(sa.BigInteger, autoincrement=True)
 
     intra_host_variant_id: Mapped[int] = mapped_column(
         sa.ForeignKey(
@@ -408,10 +420,11 @@ class IntraHostTranslation(Base):
 
     __table_args__ = tuple(
         [
+            PrimaryKeyConstraint('id', name=ConstraintNames.pk_intra_host_translations),
             UniqueConstraint(
                 StandardColumnNames.intra_host_variant_id,
                 StandardColumnNames.amino_acid_id,
-                name=f'uq_{__tablename__}_variant_amino_acid_pair'
+                name=ConstraintNames.uq_intra_host_translations_variant_amino_acid_pair
             ),
             Index(IndexNames.ix_intra_host_translations_amino_acid_id, amino_acid_id)
         ]
@@ -422,7 +435,7 @@ class IntraHostTranslation(Base):
 
 class GeoLocation(Base):
     __tablename__ = TableNames.geo_locations
-    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(sa.BigInteger, autoincrement=True)
 
     country_name: Mapped[str] = mapped_column(sa.Text, nullable=False)
     # State / Province / Region
@@ -437,13 +450,14 @@ class GeoLocation(Base):
 
     __table_args__ = tuple(
         [
+            PrimaryKeyConstraint('id', name=ConstraintNames.pk_geo_locations),
             UniqueConstraint(
                 StandardColumnNames.country_name,
                 StandardColumnNames.admin1_name,
                 StandardColumnNames.admin2_name,
                 StandardColumnNames.admin3_name,
                 postgresql_nulls_not_distinct=True,
-                name='uq_geo_locations_division_names'
+                name=ConstraintNames.uq_geo_locations_division_names
             )
         ]
     )
@@ -454,21 +468,22 @@ class GeoLocation(Base):
 class PhenotypeMetric(Base):
     __tablename__ = TableNames.phenotype_metrics
 
-    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(sa.BigInteger, autoincrement=True)
 
     phenotype_metric_name: Mapped[str] = mapped_column(sa.Text, nullable=False)
     phenotype_metric_assay_type: Mapped[str] = mapped_column(sa.Text, nullable=False)
 
     __table_args__ = tuple(
         [
-            UniqueConstraint(StandardColumnNames.phenotype_metric_name, name='uq_phenotype_metrics_name'),
+            PrimaryKeyConstraint('id', name=ConstraintNames.pk_phenotype_metrics),
+            UniqueConstraint(StandardColumnNames.phenotype_metric_name, name=ConstraintNames.uq_phenotype_metrics_name),
             CheckConstraint(
                 f"{StandardColumnNames.phenotype_metric_name} <> ''",
-                name='ck_phenotype_metrics_name_not_empty'
+                name=ConstraintNames.ck_phenotype_metrics_name_not_empty
             ),
             CheckConstraint(
                 f"{StandardColumnNames.phenotype_metric_assay_type} <> ''",
-                name='ck_phenotype_metrics_assay_type_not_empty'
+                name=ConstraintNames.ck_phenotype_metrics_assay_type_not_empty
             )
         ]
     )
@@ -481,13 +496,19 @@ class PhenotypeMetric(Base):
 class PhenotypeMetricValues(Base):
     __tablename__ = TableNames.phenotype_metric_values
 
-    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(sa.BigInteger, autoincrement=True)
     phenotype_metric_id: Mapped[int] = mapped_column(
-        sa.ForeignKey(f'{TableNames.phenotype_metrics}.id'),
+        sa.ForeignKey(
+            f'{TableNames.phenotype_metrics}.id',
+            name=ConstraintNames.fk_phenotype_metric_values_phenotype_metric_id_pheno_metrics
+        ),
         nullable=False
     )
     amino_acid_id: Mapped[int] = mapped_column(
-        sa.ForeignKey(f'{TableNames.amino_acids}.id'),
+        sa.ForeignKey(
+            f'{TableNames.amino_acids}.id',
+            name=ConstraintNames.fk_phenotype_metric_values_amino_acid_id_amino_acids
+        ),
         nullable=False
     )
 
@@ -495,10 +516,11 @@ class PhenotypeMetricValues(Base):
 
     __table_args__ = tuple(
         [
+            PrimaryKeyConstraint('id', name=ConstraintNames.pk_phenotype_metric_values),
             UniqueConstraint(
                 StandardColumnNames.phenotype_metric_id,
                 StandardColumnNames.amino_acid_id,
-                name=f'uq_{TableNames.phenotype_metric_values}_metric_and_amino_acid'
+                name=ConstraintNames.uq_phenotype_metric_values_metric_and_amino_acid
             )
         ]
     )
@@ -509,12 +531,13 @@ class PhenotypeMetricValues(Base):
 
 class LineageSystem(Base):
     __tablename__ = TableNames.lineage_systems
-    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(sa.BigInteger, autoincrement=True)
     lineage_system_name: Mapped[str] = mapped_column(sa.Text, nullable=False)
 
     __table_args__ = tuple(
         [
-            UniqueConstraint(StandardColumnNames.lineage_system_name, name='uq_lineage_systems_name'),
+            PrimaryKeyConstraint('id', name=ConstraintNames.pk_lineage_systems),
+            UniqueConstraint(StandardColumnNames.lineage_system_name, name=ConstraintNames.uq_lineage_systems_name),
         ]
     )
 
@@ -523,16 +546,17 @@ class LineageSystem(Base):
 
 class Lineage(Base):
     __tablename__ = TableNames.lineages
-    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(sa.BigInteger, autoincrement=True)
     lineage_system_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.lineage_systems}.id'), nullable=False)
     lineage_name: Mapped[str] = mapped_column(sa.Text, nullable=False)
 
     __table_args__ = tuple(
         [
+            PrimaryKeyConstraint('id', name=ConstraintNames.pk_lineages),
             UniqueConstraint(
                 StandardColumnNames.lineage_system_id,
                 StandardColumnNames.lineage_name,
-                name='uq_lineages_name_uq_within_system'
+                name=ConstraintNames.uq_lineages_name_uq_within_system
             )
         ]
     )
@@ -543,7 +567,7 @@ class Lineage(Base):
 
 class SampleLineage(Base):
     __tablename__ = TableNames.samples_lineages
-    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(sa.BigInteger, autoincrement=True)
 
     sample_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.samples}.id'), nullable=False)
     lineage_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.lineages}.id'), nullable=False)
@@ -553,15 +577,16 @@ class SampleLineage(Base):
 
     __table_args__ = tuple(
         [
+            PrimaryKeyConstraint('id', name=ConstraintNames.pk_samples_lineages),
             UniqueConstraint(
                 StandardColumnNames.sample_id,
                 StandardColumnNames.lineage_id,
                 StandardColumnNames.is_consensus_call,
-                name='uq_samples_lineages_sample_id_lineage_id_is_consensus_call'
+                name=ConstraintNames.uq_samples_lineages_sample_id_lineage_id_is_consensus_call
             ),
             CheckConstraint(
                 f'({StandardColumnNames.abundance} is null) = {StandardColumnNames.is_consensus_call}',
-                name=f'ck_{TableNames.samples_lineages}_has_abundance_xor_is_consensus'
+                name=ConstraintNames.ck_samples_lineages_has_abundance_xor_consensus
             ),
             Index(IndexNames.ix_samples_lineages_lineage_id, lineage_id)
         ]
@@ -573,21 +598,22 @@ class SampleLineage(Base):
 
 class LineageImmediateChild(Base):
     __tablename__ = TableNames.lineages_immediate_children
-    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(sa.BigInteger, autoincrement=True)
 
     parent_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.lineages}.id'))
     child_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.lineages}.id'))
 
     __table_args__ = tuple(
         [
+            PrimaryKeyConstraint('id', name=ConstraintNames.pk_lineages_immediate_children),
             UniqueConstraint(
                 StandardColumnNames.parent_id,
                 StandardColumnNames.child_id,
-                name=f'uq_{TableNames.lineages_immediate_children}_parent_child'
+                name=ConstraintNames.uq_lineages_immediate_children_parent_child
             ),
             CheckConstraint(
                 f'{StandardColumnNames.parent_id} <> {StandardColumnNames.child_id}',
-                name=f'ck_{TableNames.lineages_immediate_children}_no_self_parenthood'
+                name=ConstraintNames.ck_lineages_immediate_children_no_self_parenthood
             )
         ]
     )
@@ -596,7 +622,7 @@ class LineageImmediateChild(Base):
 class Paper(Base):
     __tablename__ = TableNames.papers
 
-    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(sa.BigInteger, autoincrement=True)
 
     authors: Mapped[str] = mapped_column(sa.Text, nullable=False)
     title: Mapped[str] = mapped_column(sa.Text, nullable=False)
@@ -604,11 +630,12 @@ class Paper(Base):
 
     __table_args__ = tuple(
         [
+            PrimaryKeyConstraint('id', name=ConstraintNames.pk_papers),
             UniqueConstraint(
                 StandardColumnNames.authors,
                 StandardColumnNames.publication_year,
                 StandardColumnNames.title,
-                name='uq_papers_authors_title_year'
+                name=ConstraintNames.uq_papers_authors_title_year
             )
         ]
     )
@@ -619,15 +646,16 @@ class Paper(Base):
 class Effect(Base):
     __tablename__ = TableNames.effects
 
-    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(sa.BigInteger, autoincrement=True)
 
     detail: Mapped[str] = mapped_column(sa.Text, nullable=False)
 
     __table_args__ = tuple(
         [
+            PrimaryKeyConstraint('id', name=ConstraintNames.pk_effects),
             UniqueConstraint(
                 StandardColumnNames.detail,
-                name='uq_effects_detail'
+                name=ConstraintNames.uq_effects_detail
             )
         ]
     )
@@ -638,8 +666,14 @@ class Effect(Base):
 class Annotation(Base):
     __tablename__ = TableNames.annotations
 
-    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(sa.BigInteger, autoincrement=True)
     effect_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.effects}.id'), nullable=False)
+
+    __table_args__ = tuple(
+        [
+            PrimaryKeyConstraint('id', name=ConstraintNames.pk_annotations)
+        ]
+    )
 
     r_annotations_amino_acids: Mapped[List['AnnotationAminoAcid']] = relationship(back_populates='r_annotation')
     r_annotations_papers: Mapped[List['AnnotationPaper']] = relationship(back_populates='r_annotation')
@@ -649,7 +683,7 @@ class Annotation(Base):
 class AnnotationPaper(Base):
     __tablename__ = TableNames.annotations_papers
 
-    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(sa.BigInteger, autoincrement=True)
 
     paper_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.papers}.id'), nullable=False)
     annotation_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.annotations}.id'), nullable=False)
@@ -658,10 +692,11 @@ class AnnotationPaper(Base):
 
     __table_args__ = tuple(
         [
+            PrimaryKeyConstraint('id', name=ConstraintNames.pk_annotations_papers),
             UniqueConstraint(
                 StandardColumnNames.paper_id,
                 StandardColumnNames.annotation_id,
-                name='uq_annotations_papers_annotation_paper_pair'
+                name=ConstraintNames.uq_annotations_papers_annotation_paper_pair
             )
         ]
     )
@@ -672,17 +707,24 @@ class AnnotationPaper(Base):
 
 class AnnotationAminoAcid(Base):
     __tablename__ = TableNames.annotations_amino_acids
-    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(sa.BigInteger, autoincrement=True)
 
-    amino_acid_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.amino_acids}.id'), nullable=False)
+    amino_acid_id: Mapped[int] = mapped_column(
+        sa.ForeignKey(
+            f'{TableNames.amino_acids}.id',
+            name=ConstraintNames.fk_annotations_amino_acids_amino_acid_id_amino_acids
+        ),
+        nullable=False
+    )
     annotation_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.annotations}.id'), nullable=False)
 
     __table_args__ = tuple(
         [
+            PrimaryKeyConstraint('id', name=ConstraintNames.pk_annotations_amino_acids),
             UniqueConstraint(
                 StandardColumnNames.amino_acid_id,
                 StandardColumnNames.annotation_id,
-                name='uq_annotations_amino_acids_pair'
+                name=ConstraintNames.uq_annotations_amino_acids_pair
             )
         ]
     )

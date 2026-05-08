@@ -135,7 +135,6 @@ class TableNames(PgIdentifiers):
     mutation_translations = 'mutation_translations'
     intra_host_translations = 'intra_host_translations'
     sequences = 'sequences'
-    samples_sequences = 'samples_sequences'
 
 
 class StandardColumnNames(PgIdentifiers):
@@ -247,9 +246,34 @@ class StandardColumnNames(PgIdentifiers):
 
 
 class ConstraintNames(PgIdentifiers):
+    # primary keys
+    pk_samples = f'pk_{TableNames.samples}'
+    pk_alleles = f'pk_{TableNames.alleles}'
+    pk_amino_acids = f'pk_{TableNames.amino_acids}'
+    pk_mutations = f'pk_{TableNames.mutations}'
+    pk_intra_host_variants = f'pk_{TableNames.intra_host_variants}'
+    pk_geo_locations = f'pk_{TableNames.geo_locations}'
+    pk_phenotype_metrics = f'pk_{TableNames.phenotype_metrics}'
+    pk_phenotype_metric_values = f'pk_{TableNames.phenotype_metric_values}'
+    pk_lineage_systems = f'pk_{TableNames.lineage_systems}'
+    pk_lineages = f'pk_{TableNames.lineages}'
+    pk_samples_lineages = f'pk_{TableNames.samples_lineages}'
+    pk_papers = f'pk_{TableNames.papers}'
+    pk_effects = f'pk_{TableNames.effects}'
+    pk_annotations = f'pk_{TableNames.annotations}'
+    pk_annotations_papers = f'pk_{TableNames.annotations_papers}'
+    pk_annotations_amino_acids = f'pk_{TableNames.annotations_amino_acids}'
+    pk_lineages_immediate_children = f'pk_{TableNames.lineages_immediate_children}'
+    pk_mutation_translations = f'pk_{TableNames.mutation_translations}'
+    pk_intra_host_translations = f'pk_{TableNames.intra_host_translations}'
+    pk_sequences = f'pk_{TableNames.sequences}'
+
     # samples
     uq_samples_accession = 'uq_samples_accession'
     fk_samples_sequence_id_sequences = 'fk_samples_sequence_id_sequences'
+    ck_samples_retraction_values_existence_in_harmony = 'ck_samples_retraction_values_existence_in_harmony'
+    ck_samples_collection_start_and_end_both_absent_or_both_present = 'ck_samples_collection_start_and_end_both_absent_or_both_present'
+    ck_samples_collection_start_not_after_collection_end = 'ck_samples_collection_start_not_after_collection_end'
 
     # alleles
     ck_alleles_alt_nt_not_empty = 'ck_alleles_alt_nt_not_empty'
@@ -283,6 +307,32 @@ class ConstraintNames(PgIdentifiers):
     fk_intra_host_translations_amino_acid_id_amino_acids = 'fk_intra_host_translations_amino_acid_id_amino_acids'
     fk_intra_host_translations_intra_host_variant_id = 'fk_intra_host_translations_intra_host_variant_id'
     uq_intra_host_translations_variant_amino_acid_pair = 'uq_intra_host_translations_variant_amino_acid_pair'
+
+    # phenotype metrics tables
+    uq_phenotype_metrics_name = 'uq_phenotype_metrics_name'
+    ck_phenotype_metrics_name_not_empty = 'ck_phenotype_metrics_name_not_empty'
+    ck_phenotype_metrics_assay_type_not_empty = 'ck_phenotype_metrics_assay_type_not_empty'
+    uq_phenotype_metric_values_metric_and_amino_acid = f'uq_{TableNames.phenotype_metric_values}_metric_and_amino_acid'
+    fk_phenotype_metric_values_amino_acid_id_amino_acids = 'fk_phenotype_metric_values_amino_acid_id_amino_acids'
+    fk_phenotype_metric_values_phenotype_metric_id_pheno_metrics = 'fk_phenotype_metric_values_phenotype_metric_id_phenotyp_c662' # todo: fix this name
+
+    # geo locations
+    uq_geo_locations_division_names = 'uq_geo_locations_division_names'
+
+    # lineages tables
+    uq_lineage_systems_name = 'uq_lineage_systems_name'
+    uq_lineages_name_uq_within_system = 'uq_lineages_name_uq_within_system'
+    uq_samples_lineages_sample_id_lineage_id_is_consensus_call = 'uq_samples_lineages_sample_id_lineage_id_is_consensus_call'
+    ck_samples_lineages_has_abundance_xor_consensus = f'ck_{TableNames.samples_lineages}_has_abundance_xor_is_consensus'
+    uq_lineages_immediate_children_parent_child = f'uq_{TableNames.lineages_immediate_children}_parent_child'
+    ck_lineages_immediate_children_no_self_parenthood = f'ck_{TableNames.lineages_immediate_children}_no_self_parenthood'
+
+    # annotations tables
+    uq_papers_authors_title_year = 'uq_papers_authors_title_year'
+    uq_effects_detail = 'uq_effects_detail'
+    uq_annotations_papers_annotation_paper_pair = 'uq_annotations_papers_annotation_paper_pair'
+    uq_annotations_amino_acids_pair = 'uq_annotations_amino_acids_pair'
+    fk_annotations_amino_acids_amino_acid_id_amino_acids = 'fk_annotations_amino_acids_amino_acid_id_amino_acids'
 
 
 class IndexNames(PgIdentifiers):

@@ -6,7 +6,9 @@ from enum import Enum
 
 from sqlalchemy.sql.expression import text
 
+from DB.models import Base
 from DB.engine import get_async_write_session, get_async_session
+from DB.index_constraint_manager import IndexAndConstraintManager
 from DB.inserts.file_parsers.file_parser import FileParser
 from utils.constants import StandardColumnNames, CONTAINER_DATA_DIRECTORY, Env, ConstraintNames, IndexNames, TableNames
 
@@ -28,6 +30,8 @@ class VariantsMutationsCombinedParser(FileParser):
             VariantsMutationsCombinedParser.InputFile(name, delimiter=self.delimiter) for name in filenames
         ]
 
+        self.index_constraint_manager = IndexAndConstraintManager(Base)
+
     async def parse_and_insert(self):
         print(f'{self._get_timestamp()} read mutations')
         await self._read_mutations_input()
@@ -38,6 +42,7 @@ class VariantsMutationsCombinedParser(FileParser):
         print(f'{self._get_timestamp()} insert alleles')
         await self._stage_alleles()
         await self._write_allele_ref_conflicts()
+        await self._drop_fks_using_allele_id()
         await self._drop_alleles_indexes()
         await self._insert_alleles()
         await self._restore_alleles_indexes()
@@ -45,18 +50,22 @@ class VariantsMutationsCombinedParser(FileParser):
         print(f'{self._get_timestamp()} insert amino acids')
         await self._stage_amino_acids()
         await self._write_amino_acid_ref_conflicts()
+        await self._drop_fks_using_amino_acid_id()
         await self._drop_amino_acids_indexes()
         await self._insert_amino_acids()
         await self._restore_amino_acids_indexes()
+        await self._restore_fks_using_amino_acid_id()
 
         print(f'{self._get_timestamp()} insert variants')
         await self._stage_variants()
+        await self._drop_fks_using_intra_host_variant_id()
         await self._drop_intra_host_variants_indexes()
         await self._insert_variants()
         await self._restore_intra_host_variants_indexes()
 
         print(f'{self._get_timestamp()} insert mutations')
         await self._stage_mutations()
+        await self._drop_fks_using_mutation_id()
         await self._drop_mutations_indexes()
         await self._insert_mutations()
         await self._restore_mutations_indexes()
@@ -806,251 +815,156 @@ class VariantsMutationsCombinedParser(FileParser):
     def _get_timestamp():
         return datetime.now().isoformat(timespec='seconds')
 
-    @staticmethod
-    async def _drop_alleles_indexes():
-        async with get_async_write_session() as session:
-            await session.execute(
-                text(f'alter table {TableNames.alleles} drop constraint {ConstraintNames.uq_alleles_nt_values};')
-            )
-            await session.commit()
+    async def _drop_fks_using_allele_id(self):
+        await self.index_constraint_manager.drop_names(
+            [
+                ConstraintNames.fk_mutations_allele_id_alleles,
+                ConstraintNames.fk_intra_host_variants_allele_id_alleles
+            ]
+        )
 
-    @staticmethod
-    async def _restore_alleles_indexes():
-        async with get_async_write_session() as session:
-            await session.execute(
-                text(
-                    f'alter table {TableNames.alleles}\n'
-                    f'add constraint {ConstraintNames.uq_alleles_nt_values}\n'
-                    f'unique ({StandardColumnNames.region}, {StandardColumnNames.position_nt}, {StandardColumnNames.alt_nt})\n'
-                    f'include (id);'
-                )
-            )
-            await session.commit()
+    async def _drop_alleles_indexes(self):
+        await self.index_constraint_manager.drop_names(
+            [
+                ConstraintNames.uq_alleles_nt_values,
+                ConstraintNames.pk_alleles
+            ]
+        )
 
-    @staticmethod
-    async def _drop_amino_acids_indexes():
-        async with get_async_write_session() as session:
-            await session.execute(
-                text(
-                    f'alter table {TableNames.amino_acids} \n'
-                    f'drop constraint {ConstraintNames.uq_amino_acids_gff_feature_position_alt_aa_alt_codon};'
-                )
-            )
-            await session.commit()
+    async def _restore_alleles_indexes(self):
+        await self.index_constraint_manager.restore_constraint(ConstraintNames.pk_alleles)
+        await self.index_constraint_manager.restore_constraint(ConstraintNames.uq_alleles_nt_values)
 
-    @staticmethod
-    async def _restore_amino_acids_indexes():
-        async with get_async_write_session() as session:
-            await session.execute(
-                text(
-                    f'alter table {TableNames.amino_acids}\n'
-                    f'add constraint {ConstraintNames.uq_amino_acids_gff_feature_position_alt_aa_alt_codon}\n'
-                    f'unique (\n'
-                    f'    {StandardColumnNames.position_aa},\n'
-                    f'    {StandardColumnNames.alt_aa}, \n'
-                    f'    {StandardColumnNames.gff_feature},\n'
-                    f'    {StandardColumnNames.alt_codon}\n'
-                    f')\n'
-                    f'include (id);'
-                )
-            )
-            await session.commit()
+    async def _drop_fks_using_amino_acid_id(self):
+        await self.index_constraint_manager.drop_names(
+            [
+                ConstraintNames.fk_intra_host_translations_amino_acid_id_amino_acids,
+                ConstraintNames.fk_mutation_translations_amino_acid_id_amino_acids,
+                ConstraintNames.fk_phenotype_metric_values_amino_acid_id_amino_acids,
+                ConstraintNames.fk_annotations_amino_acids_amino_acid_id_amino_acids,
+            ]
+        )
 
-    @staticmethod
-    async def _drop_mutations_indexes():
-        constraint_names = [
-            ConstraintNames.uq_mutations_sequence_allele_pair,
-            ConstraintNames.fk_mutations_sequence_id_sequences,
-            ConstraintNames.fk_mutations_allele_id_alleles
-        ]
-        async with get_async_write_session() as session:
-            for conname in constraint_names:
-                await session.execute(
-                    text(f'alter table {TableNames.mutations} drop constraint {conname};')
-                )
-            await session.execute(
-                text(f'drop index {IndexNames.ix_mutations_allele_id};')
-            )
-            await session.commit()
+    async def _drop_amino_acids_indexes(self):
+        await self.index_constraint_manager.drop_names(
+            [
+                ConstraintNames.uq_amino_acids_gff_feature_position_alt_aa_alt_codon,
+                ConstraintNames.pk_amino_acids
+            ]
+        )
 
-    @staticmethod
-    async def _restore_mutations_indexes():
-        async with get_async_write_session() as session:
-            await session.execute(
-                text(
-                    f'alter table {TableNames.mutations} \n'
-                    f'add constraint {ConstraintNames.uq_mutations_sequence_allele_pair} \n'
-                    f'unique ({StandardColumnNames.sequence_id}, {StandardColumnNames.allele_id});'
-                )
-            )
-            await session.execute(
-                text(
-                    f'create index {IndexNames.ix_mutations_allele_id} \n'
-                    f'on {TableNames.mutations} ({StandardColumnNames.allele_id});'
-                )
-            )
-            await session.execute(
-                text(
-                    f'alter table {TableNames.mutations} \n'
-                    f'add constraint {ConstraintNames.fk_mutations_allele_id_alleles} \n'
-                    f'foreign key ({StandardColumnNames.allele_id}) references {TableNames.alleles} (id);'
-                )
-            )
-            await session.execute(
-                text(
-                    f'alter table {TableNames.mutations} \n'
-                    f'add constraint {ConstraintNames.fk_mutations_sequence_id_sequences} \n'
-                    f'foreign key ({StandardColumnNames.sequence_id}) references {TableNames.sequences} (id);'
-                )
-            )
-            await session.commit()
+    async def _restore_amino_acids_indexes(self):
+        await self.index_constraint_manager.restore_names(
+            [
+                ConstraintNames.pk_amino_acids,
+                ConstraintNames.uq_amino_acids_gff_feature_position_alt_aa_alt_codon
+            ]
+        )
 
-    @staticmethod
-    async def _drop_intra_host_variants_indexes():
-        constraint_names = [
-            ConstraintNames.uq_intra_host_variants_sequence_allele_pair,
-            ConstraintNames.fk_intra_host_variants_allele_id_alleles,
-            ConstraintNames.fk_intra_host_variants_sequence_id_sequences
-        ]
-        async with get_async_write_session() as session:
-            for conname in constraint_names:
-                await session.execute(
-                    text(f'alter table {TableNames.intra_host_variants} drop constraint {conname};')
-                )
-            await session.execute(
-                text(f'drop index {IndexNames.ix_intra_host_variants_allele_id};')
-            )
-            await session.commit()
+    async def _restore_fks_using_amino_acid_id(self):
+        await self.index_constraint_manager.restore_names(
+            [
+                ConstraintNames.fk_phenotype_metric_values_amino_acid_id_amino_acids,
+                ConstraintNames.fk_annotations_amino_acids_amino_acid_id_amino_acids,
+            ]
+        )
 
-    @staticmethod
-    async def _restore_intra_host_variants_indexes():
-        async with get_async_write_session() as session:
-            await session.execute(
-                text(
-                    f'alter table {TableNames.intra_host_variants} \n'
-                    f'add constraint {ConstraintNames.uq_intra_host_variants_sequence_allele_pair} \n'
-                    f'unique ({StandardColumnNames.sequence_id}, {StandardColumnNames.allele_id});'
-                )
-            )
-            await session.execute(
-                text(
-                    f'create index {IndexNames.ix_intra_host_variants_allele_id} \n'
-                    f'on {TableNames.intra_host_variants} ({StandardColumnNames.allele_id});'
-                )
-            )
-            await session.execute(
-                text(
-                    f'alter table {TableNames.intra_host_variants} \n'
-                    f'add constraint {ConstraintNames.fk_intra_host_variants_allele_id_alleles} \n'
-                    f'foreign key ({StandardColumnNames.allele_id}) references {TableNames.alleles} (id);'
-                )
-            )
-            await session.execute(
-                text(
-                    f'alter table {TableNames.intra_host_variants} \n'
-                    f'add constraint {ConstraintNames.fk_intra_host_variants_sequence_id_sequences} \n'
-                    f'foreign key ({StandardColumnNames.sequence_id}) references {TableNames.sequences} (id);'
-                )
-            )
-            await session.commit()
+    async def _drop_fks_using_intra_host_variant_id(self):
+        await self.index_constraint_manager.drop_constraint(
+            ConstraintNames.fk_intra_host_translations_intra_host_variant_id
+        )
 
-    @staticmethod
-    async def _drop_mutation_translations_indexes():
-        constraint_names = [
-            ConstraintNames.uq_mutation_translations_mutation_amino_acid_pair,
+    async def _drop_intra_host_variants_indexes(self):
+        await self.index_constraint_manager.drop_names(
+            [
+                ConstraintNames.pk_intra_host_variants,
+                ConstraintNames.uq_intra_host_variants_sequence_allele_pair,
+                ConstraintNames.fk_intra_host_variants_sequence_id_sequences,
+                IndexNames.ix_intra_host_variants_allele_id
+            ]
+        )
+
+    async def _restore_intra_host_variants_indexes(self):
+        await self.index_constraint_manager.restore_names(
+            [
+                ConstraintNames.pk_intra_host_variants,
+                ConstraintNames.uq_intra_host_variants_sequence_allele_pair,
+                ConstraintNames.fk_intra_host_variants_sequence_id_sequences,
+                IndexNames.ix_intra_host_variants_allele_id,
+                ConstraintNames.fk_intra_host_variants_allele_id_alleles
+            ]
+        )
+
+    async def _drop_fks_using_mutation_id(self):
+        await self.index_constraint_manager.drop_constraint(
             ConstraintNames.fk_mutation_translations_mutation_id_mutations,
-            ConstraintNames.fk_mutation_translations_amino_acid_id_amino_acids
-        ]
-        async with get_async_write_session() as session:
-            for conname in constraint_names:
-                await session.execute(
-                    text(f'alter table {TableNames.mutation_translations} drop constraint {conname};')
-                )
-            await session.execute(
-                text(f'drop index {IndexNames.ix_mutation_translations_amino_acid_id};')
-            )
-            await session.commit()
+        )
 
-    @staticmethod
-    async def _restore_mutation_translations_indexes():
-        async with get_async_write_session() as session:
-            await session.execute(
-                text(
-                    f'alter table {TableNames.mutation_translations} \n'
-                    f'add constraint {ConstraintNames.uq_mutation_translations_mutation_amino_acid_pair} \n'
-                    f'unique ({StandardColumnNames.mutation_id}, {StandardColumnNames.amino_acid_id});'
-                )
-            )
-            await session.execute(
-                text(
-                    f'create index {IndexNames.ix_mutation_translations_amino_acid_id} \n'
-                    f'on {TableNames.mutation_translations} ({StandardColumnNames.amino_acid_id});'
-                )
-            )
-            await session.execute(
-                text(
-                    f'alter table {TableNames.mutation_translations} \n'
-                    f'add constraint {ConstraintNames.fk_mutation_translations_amino_acid_id_amino_acids} \n'
-                    f'foreign key ({StandardColumnNames.amino_acid_id}) references {TableNames.amino_acids} (id);'
-                )
-            )
-            await session.execute(
-                text(
-                    f'alter table {TableNames.mutation_translations} \n'
-                    f'add constraint {ConstraintNames.fk_mutation_translations_mutation_id_mutations} \n'
-                    f'foreign key ({StandardColumnNames.mutation_id}) references {TableNames.mutations} (id);'
-                )
-            )
-            await session.commit()
+    async def _restore_fks_using_mutation_id(self):
+        await self.index_constraint_manager.restore_constraint(
+            ConstraintNames.fk_mutation_translations_mutation_id_mutations
+        )
 
-    @staticmethod
-    async def _drop_intra_host_translations_indexes():
-        constraint_names = [
-            ConstraintNames.uq_intra_host_translations_variant_amino_acid_pair,
-            ConstraintNames.fk_intra_host_translations_intra_host_variant_id,
-            ConstraintNames.fk_intra_host_translations_amino_acid_id_amino_acids
-        ]
-        async with get_async_write_session() as session:
-            for conname in constraint_names:
-                await session.execute(
-                    text(f'alter table {TableNames.intra_host_translations} drop constraint {conname};')
-                )
-            await session.execute(
-                text(f'drop index {IndexNames.ix_intra_host_translations_amino_acid_id};')
-            )
-            await session.commit()
+    async def _drop_mutations_indexes(self):
+        await self.index_constraint_manager.drop_names(
+            [
+                ConstraintNames.pk_mutations,
+                ConstraintNames.uq_mutations_sequence_allele_pair,
+                ConstraintNames.fk_mutations_sequence_id_sequences,
+                IndexNames.ix_mutations_allele_id,
+            ]
+        )
 
-    @staticmethod
-    async def _restore_intra_host_translations_indexes():
-        async with get_async_write_session() as session:
-            await session.execute(
-                text(
-                    f'alter table {TableNames.intra_host_translations} \n'
-                    f'add constraint {ConstraintNames.uq_intra_host_translations_variant_amino_acid_pair} \n'
-                    f'unique ({StandardColumnNames.intra_host_variant_id}, {StandardColumnNames.amino_acid_id});'
-                )
-            )
-            await session.execute(
-                text(
-                    f'create index {IndexNames.ix_intra_host_translations_amino_acid_id} \n'
-                    f'on {TableNames.intra_host_translations} ({StandardColumnNames.amino_acid_id});'
-                )
-            )
-            await session.execute(
-                text(
-                    f'alter table {TableNames.intra_host_translations} \n'
-                    f'add constraint {ConstraintNames.fk_intra_host_translations_amino_acid_id_amino_acids} \n'
-                    f'foreign key ({StandardColumnNames.amino_acid_id}) references {TableNames.amino_acids} (id);'
-                )
-            )
-            await session.execute(
-                text(
-                    f'alter table {TableNames.intra_host_translations} \n'
-                    f'add constraint {ConstraintNames.fk_intra_host_translations_intra_host_variant_id} \n'
-                    f'foreign key ({StandardColumnNames.intra_host_variant_id}) references {TableNames.intra_host_variants} (id);'
-                )
-            )
-            await session.commit()
+    async def _restore_mutations_indexes(self):
+        await self.index_constraint_manager.restore_names(
+            [
+                ConstraintNames.pk_mutations,
+                ConstraintNames.uq_mutations_sequence_allele_pair,
+                ConstraintNames.fk_mutations_sequence_id_sequences,
+                ConstraintNames.fk_mutations_allele_id_alleles,
+                IndexNames.ix_mutations_allele_id
+            ]
+        )
+
+    async def _drop_intra_host_translations_indexes(self):
+        await self.index_constraint_manager.drop_names(
+            [
+                ConstraintNames.pk_intra_host_translations,
+                ConstraintNames.uq_intra_host_translations_variant_amino_acid_pair,
+                IndexNames.ix_intra_host_translations_amino_acid_id
+            ]
+        )
+
+    async def _restore_intra_host_translations_indexes(self):
+        await self.index_constraint_manager.restore_names(
+            [
+                ConstraintNames.pk_intra_host_translations,
+                ConstraintNames.uq_intra_host_translations_variant_amino_acid_pair,
+                IndexNames.ix_intra_host_translations_amino_acid_id,
+                ConstraintNames.fk_intra_host_translations_intra_host_variant_id,
+                ConstraintNames.fk_intra_host_translations_amino_acid_id_amino_acids
+            ]
+        )
+
+    async def _drop_mutation_translations_indexes(self):
+        await self.index_constraint_manager.drop_names(
+            [
+                ConstraintNames.pk_mutation_translations,
+                ConstraintNames.uq_mutation_translations_mutation_amino_acid_pair,
+                IndexNames.ix_mutation_translations_amino_acid_id
+            ]
+        )
+
+    async def _restore_mutation_translations_indexes(self):
+        await self.index_constraint_manager.restore_names(
+            [
+                ConstraintNames.pk_mutation_translations,
+                ConstraintNames.uq_mutation_translations_mutation_amino_acid_pair,
+                ConstraintNames.fk_mutation_translations_amino_acid_id_amino_acids,
+                ConstraintNames.fk_mutation_translations_mutation_id_mutations,
+                IndexNames.ix_mutation_translations_amino_acid_id
+            ]
+        )
 
     variants_column_mapping = {
         StandardColumnNames.region: 'REGION',
