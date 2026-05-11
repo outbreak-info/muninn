@@ -34,7 +34,7 @@ while [[ $# -gt 0 ]]; do
     SKIP_DECOMPRESSION=true
     SKIP_CHECKING_ARCHIVE=true
     ARCHIVE_DEST_DIR="$DATA_DIR/$2"
-    echo "Skipping decompression and reading from $ARCHIVE_DEST_DIR"
+    echo "Skipping decompression and reading from $ARCHIVE_DEST_DIR" >> "$LOG"
     shift
     shift
     ;;
