@@ -316,7 +316,7 @@ async def get_sample_counts(
         elif group_by == LINEAGE:
             return await DB.queries.lineages.get_sample_counts_by_lineage(q)
         else:
-            return await DB.queries.counts.count_samples_by_column(group_by)
+            return await DB.queries.counts.count_samples_by_column(group_by, q)
 
 
 @app.get('/v0/variants:count', response_model=Dict[str, Dict[str, int]] | Dict[str, int])

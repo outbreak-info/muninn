@@ -13,16 +13,21 @@ from parser.parser import parser
 from utils.constants import DateBinOpt, NtOrAa, StandardColumnNames, COLLECTION_DATE
 
 
-async def count_samples_by_column(by_col: str):
+async def count_samples_by_column(by_col: str, raw_query: str | None = None):
+    query = (
+        select(Sample, GeoLocation)
+        .join(GeoLocation, GeoLocation.id == Sample.geo_location_id, isouter=True)
+        .select_from(Sample)
+        .with_only_columns(text(by_col), func.count().label('count1'))
+        .group_by(text(by_col))
+        .order_by(text('count1 desc'))
+    )
+    if raw_query is not None and raw_query.strip():
+        user_where_clause = text(parser.parse(raw_query))
+        query = query.where(user_where_clause)
+
     async with get_async_session() as session:
-        res = await session.execute(
-            select(Sample, GeoLocation)
-            .join(GeoLocation, GeoLocation.id == Sample.geo_location_id, isouter=True)
-            .select_from(Sample)
-            .with_only_columns(text(by_col), func.count().label('count1'))
-            .group_by(text(by_col))
-            .order_by(text('count1 desc'))
-        )
+        res = await session.execute(query)
         return await _package_count_by_column(res)
 
 
