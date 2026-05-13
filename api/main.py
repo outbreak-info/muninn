@@ -282,6 +282,12 @@ async def count_samples_with_lineages(
 ):
     return await DB.queries.wastewater.count_samples_with_lineage_data(group_by, q)
 
+@app.get('/v0/wastwater/lineages:countLineagesBySample', response_model=Dict[str, int])
+async def count_samples_with_lineages(
+    q: str | None = None,
+):
+    return await DB.queries.wastewater.count_lineages_by_sample_data(q)
+
 @app.get('/lineages/abundances/summary_stats', response_model=List[LineageAbundanceSummaryInfo])
 async def get_lineage_abundance_summary_stats(q: str | None = None):
     try:

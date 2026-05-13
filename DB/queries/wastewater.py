@@ -4,7 +4,7 @@ from sqlalchemy import select, func, text, Result
 from sqlalchemy.orm import contains_eager
 
 from DB.engine import get_async_session
-from DB.models import Sample, GeoLocation, SampleLineage
+from DB.models import Sample, GeoLocation, SampleLineage, Lineage
 from api.models import LineageAbundanceWithSampleInfo, AverageLineageAbundanceInfo, SampleInfo
 from parser.parser import parser
 from utils.constants import DEFAULT_MAX_SPAN_DAYS
@@ -352,3 +352,23 @@ async def count_samples_with_lineage_data(by_col: str, raw_query: str | None = N
 
 async def _package_count_by_column(query_result: Result[tuple[Any, int]] | List[tuple]) -> Dict[str, int]:
     return {str(r[0]): r[1] for r in query_result}
+
+async def count_lineages_by_sample_data(raw_query: str | None = None):
+    query = (
+        select(Sample, GeoLocation, SampleLineage, Lineage)
+        .join(GeoLocation, GeoLocation.id == Sample.geo_location_id, isouter=True)
+        .join(SampleLineage, SampleLineage.sample_id == Sample.id, isouter=True)
+        .join(Lineage, Lineage.id == SampleLineage.lineage_id, isouter=True)
+        .select_from(Sample)
+        .with_only_columns(Lineage.lineage_name, func.count().label('count1'))
+        .where(SampleLineage.abundance.is_not(None))
+        .group_by(Lineage.lineage_name)
+        .order_by(text('count1 desc'))
+    )
+    if raw_query is not None and raw_query.strip():
+        user_where_clause = text(parser.parse(raw_query))
+        query = query.where(user_where_clause)
+
+    async with get_async_session() as session:
+        res = await session.execute(query)
+        return await _package_count_by_column(res)
