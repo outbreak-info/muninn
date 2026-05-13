@@ -275,6 +275,13 @@ async def get_latest_sample(q: str | None = None):
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
+@app.get('/v0/wastwater/samples:countSamplesWithLineageData', response_model=Dict[str, int])
+async def count_samples_with_lineages(
+    group_by: Annotated[str, Query(regex=COMMA_SEP_WORDLIKE_PATTERN.pattern)],
+    q: str | None = None,
+):
+    return await DB.queries.wastewater.count_samples_with_lineage_data(group_by, q)
+
 @app.get('/lineages/abundances/summary_stats', response_model=List[LineageAbundanceSummaryInfo])
 async def get_lineage_abundance_summary_stats(q: str | None = None):
     try:
@@ -316,7 +323,7 @@ async def get_sample_counts(
         elif group_by == LINEAGE:
             return await DB.queries.lineages.get_sample_counts_by_lineage(q)
         else:
-            return await DB.queries.counts.count_samples_by_column(group_by, q)
+            return await DB.queries.counts.count_samples_by_column(group_by)
 
 
 @app.get('/v0/variants:count', response_model=Dict[str, Dict[str, int]] | Dict[str, int])
