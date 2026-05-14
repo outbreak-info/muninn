@@ -145,7 +145,7 @@ class VariantsMutationsCombinedParser(FileParser):
         async with get_async_write_session() as session:
             await session.execute(
                 text(
-                    'create table tmp_variants (\n'
+                    'create unlogged table tmp_variants (\n'
                     '    region      text  not null,\n'
                     '    position_nt int   not null,\n'
                     '    ref_nt      text  not null,\n'
