@@ -27,7 +27,7 @@ services:
       timeout: 3s
       retries: 15
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
       - type: bind
         source: ./containers/database/initdb.d
         target: /docker-entrypoint-initdb.d

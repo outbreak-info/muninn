@@ -508,8 +508,8 @@ class VariantsMutationsCombinedParser(FileParser):
                     'insert into mutations (\n'
                     '    sequence_id, allele_id\n'
                     ')\n'
-                    'select sequence_id, allele_id from tmp_mutations_staging\n'
-                    'group by sequence_id, allele_id;'
+                    'select distinct on (sequence_id, allele_id) sequence_id, allele_id\n'
+                    'from tmp_mutations_staging;'
                 )
             )
             await session.commit()

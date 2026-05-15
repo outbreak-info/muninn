@@ -1,4 +1,4 @@
-FROM postgres:16-bullseye
+FROM postgres:18-bookworm
 
 RUN apt-get update && apt-get install -y python3
 
