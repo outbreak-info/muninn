@@ -228,59 +228,83 @@ async def _pheno_value_for_mutations_or_variants_by_sample_and_collection_date(
                 f'''
                 SELECT DISTINCT a.region 
                 FROM alleles a
+                INNER JOIN mutations m ON a.id = m.allele_id 
+                INNER JOIN mutation_translations mt ON m.id = mt.mutation_id
+                INNER JOIN phenotype_metric_values pmv ON pmv.amino_acid_id = mt.amino_acid_id
+                INNER JOIN phenotype_metrics pm ON pm.id = pmv.phenotype_metric_id
+                WHERE pm.phenotype_metric_name = :pm_name
                 '''
-            )
+            ),
+            {"pm_name": phenotype_metric_name}
         )
         refs_ls = [row[0] for row in refs.fetchall()]
-        refs_ls = [m.group(1) if (m := re.match(r'^NC_045512\.2_(.+)_(?:rbd|spike)$', r)) else r for r in refs_ls]
+        refs_normalized = [m.group(1) if (m := re.match(r'^NC_045512\.2_(.+)_(?:rbd|spike)$', r)) else r for r in refs_ls]
 
         if background is not None and background in refs_ls:
             res = await session.execute(
                 text(
                     f'''
-                    select
-                    {extract_clause},
-                    percentile_cont(0.25) within group (order by aggregate_value) as q1,
-                    percentile_cont(0.5) within group (order by aggregate_value) as median,
-                    percentile_cont(0.75) within group (order by aggregate_value) as q3,
-                    percentile_cont(0.25) within group (order by n_amino_acid_mutations) as q1_aa,
-                    percentile_cont(0.5) within group (order by n_amino_acid_mutations) as median_aa,
-                    percentile_cont(0.75) within group (order by n_amino_acid_mutations) as q3_aa,
-                    :background AS ref
-                    from(
-                        WITH allele_subset AS (
-                            SELECT * FROM alleles
-                            WHERE region = :background
-                        )
-                        select 
-                        SUM(value) as aggregate_value,
-                        count(distinct aa_id) as n_amino_acid_mutations,
-                        {MID_COLLECTION_DATE_CALCULATION}
-                        from (
-                            select 
-                            pmv.value as value,
-                            s.id as sample_id,
-                            aa.id as aa_id,
-                            collection_start_date, collection_end_date,
-                            collection_end_date - collection_start_date as collection_span
-                            from samples s
-                            inner join {table.__tablename__} VM on VM.sample_id = s.id
-                            INNER JOIN allele_subset als ON als.id = VM.allele_id
-                            inner join samples_lineages sl on sl.sample_id = s.id
-                            inner join lineages l ON l.id = sl.lineage_id
-                            inner join lineage_systems ls on ls.id = l.lineage_system_id
-                            left join {translations_table} t on t.{translations_join_col} = VM.id
-                            left join amino_acids aa on aa.id = t.amino_acid_id
-                            inner join phenotype_metric_values pmv ON pmv.amino_acid_id = aa.id
-                            inner join phenotype_metrics pm on pm.id = pmv.phenotype_metric_id
-                            where num_nulls(collection_end_date, collection_start_date) = 0 
-                            and pm.{StandardColumnNames.phenotype_metric_name}=:pm_name
-                            AND ls.lineage_system_name = :lineage_system_name
-                            {user_where_clause}
-                        )
-                        where collection_span <= {max_span_days}
-                        group by sample_id, collection_start_date, collection_end_date
+                    WITH allele_subset AS MATERIALIZED (
+                        SELECT id FROM alleles
+                        WHERE region = :background
+                    ),
+                    pmv_filtered AS MATERIALIZED (
+                        SELECT pmv.amino_acid_id, pmv.value
+                        FROM phenotype_metric_values pmv
+                        INNER JOIN phenotype_metrics pm ON pm.id = pmv.phenotype_metric_id
+                        WHERE pm.phenotype_metric_name = :pm_name
+                    ),
+                    translated_subset AS MATERIALIZED (
+                        SELECT t.{translations_join_col}, pmv.value, aa.id AS aa_id
+                        FROM {translations_table} t
+                        INNER JOIN amino_acids aa ON aa.id = t.amino_acid_id
+                        INNER JOIN pmv_filtered pmv ON pmv.amino_acid_id = aa.id
+                    ),
+                    vm_subset AS MATERIALIZED (
+                        SELECT VM.id, VM.sample_id, VM.allele_id
+                        FROM {table.__tablename__} VM
+                        INNER JOIN allele_subset als ON als.id = VM.allele_id
+                    ),
+                    samples_subset AS MATERIALIZED (
+                        SELECT s.id, sl.lineage_id, s.collection_start_date, s.collection_end_date
+                        FROM samples s
+                        INNER JOIN samples_lineages sl ON sl.sample_id = s.id
+                        INNER JOIN lineages l ON l.id = sl.lineage_id
+                        INNER JOIN lineage_systems ls ON ls.id = l.lineage_system_id
+                        WHERE num_nulls(s.collection_end_date, s.collection_start_date) = 0
+                        AND ls.lineage_system_name = :lineage_system_name
+                        AND (s.collection_end_date - s.collection_start_date) <= {max_span_days}
+                    ),
+                    inner_query AS MATERIALIZED (
+                        SELECT
+                            tr.value,
+                            ss.id AS sample_id,
+                            tr.aa_id,
+                            ss.collection_start_date,
+                            ss.collection_end_date
+                        FROM samples_subset ss
+                        INNER JOIN vm_subset vm ON vm.sample_id = ss.id
+                        INNER JOIN translated_subset tr ON tr.{translations_join_col} = vm.id
+                        {f"WHERE {user_where_clause.lstrip('and ')}" if user_where_clause else ""}
+                    ),
+                    per_sample AS (
+                        SELECT
+                            SUM(value) AS aggregate_value,
+                            count(distinct aa_id) AS n_amino_acid_mutations,
+                            {MID_COLLECTION_DATE_CALCULATION}
+                        FROM inner_query
+                        GROUP BY sample_id, collection_start_date, collection_end_date
                     )
+                    SELECT
+                        {extract_clause},
+                        percentile_cont(0.25) WITHIN GROUP (ORDER BY aggregate_value) AS q1,
+                        percentile_cont(0.5)  WITHIN GROUP (ORDER BY aggregate_value) AS median,
+                        percentile_cont(0.75) WITHIN GROUP (ORDER BY aggregate_value) AS q3,
+                        percentile_cont(0.25) WITHIN GROUP (ORDER BY n_amino_acid_mutations) AS q1_aa,
+                        percentile_cont(0.5)  WITHIN GROUP (ORDER BY n_amino_acid_mutations) AS median_aa,
+                        percentile_cont(0.75) WITHIN GROUP (ORDER BY n_amino_acid_mutations) AS q3_aa,
+                        :background AS ref
+                    FROM per_sample
                     {group_by_clause}
                     {order_by_clause}
                     '''
@@ -301,7 +325,7 @@ async def _pheno_value_for_mutations_or_variants_by_sample_and_collection_date(
                     WITH RECURSIVE
                     ref_lineages AS (
                         SELECT rc.ref_name, l.id AS lineage_id
-                        FROM (VALUES {", ".join(f"('{ref}')" for ref in refs_ls)}) AS rc(ref_name)
+                        FROM (VALUES {", ".join(f"('{ref}')" for ref in refs_normalized)}) AS rc(ref_name)
                         INNER JOIN lineages l ON l.lineage_name = rc.ref_name
                         INNER JOIN lineage_systems ls ON l.lineage_system_id = ls.id
                         WHERE ls.lineage_system_name = 'freyja_demixed' -- lineages_immediate_children is linked to freyja system only, hard-coded for now
