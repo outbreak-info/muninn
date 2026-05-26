@@ -345,12 +345,18 @@ async def get_mutation_incidence(
         sample_count = float(sample_count)
 
         sample_subset_query = f"""
-        select s.id from samples s
+        select s.id, s.sequence_id from samples s
         inner join samples_lineages sl ON sl.sample_id = s.id
         inner join lineages l on l.id = sl.lineage_id
         inner join lineage_systems ls on ls.id = l.lineage_system_id
         where l.lineage_name = '{lineage}' and ls.lineage_system_name='{lineage_system_name}'
         {user_where_clause}
+        """
+
+        mutation_subset_query = f"""
+        SELECT m.*, sample_subset.id AS sample_id 
+        FROM mutations m
+        INNER JOIN sample_subset ON m.sequence_id = sample_subset.sequence_id
         """
 
         if change_bin == NtOrAa.nt:
@@ -363,8 +369,9 @@ async def get_mutation_incidence(
                     f'''
                     WITH sample_subset as (
                         {sample_subset_query}
-                    ) SELECT ref_nt, position_nt, alt_nt, region, count(*) as mutation_count, count(*) / {sample_count} as mutation_prevalence from sample_subset
-                    inner join mutations m ON m.sample_id = sample_subset.id
+                    ) SELECT ref_nt, position_nt, alt_nt, region, count(*) as mutation_count, count(*) / {sample_count} as mutation_prevalence 
+                    FROM sample_subset
+                    inner join mutations m ON m.sequence_id = sample_subset.sequence_id
                     inner join alleles a on a.id = m.allele_id
                     WHERE a.region = '{background}'
                     {not_reference}
@@ -383,20 +390,27 @@ async def get_mutation_incidence(
                     WITH sample_subset as (
                         {sample_subset_query}
                     ),
+                    mutation_subset AS (
+                        {mutation_subset_query}
+                    ),
+                    alleles_subset AS (
+                        SELECT id FROM alleles
+                        WHERE region = '{background}'
+                    ),
                     sample_aa AS (
-                    SELECT DISTINCT m.sample_id,
+                    SELECT DISTINCT mutation_subset.sample_id,
                                     t.amino_acid_id,
-                                    m.allele_id
-                    FROM   mutations    m
-                    JOIN   {TableNames.mutations_translations} t ON t.{StandardColumnNames.mutation_id} = m.id
-                    ) SELECT ref_aa, position_aa, alt_aa, gff_feature, 
+                                    mutation_subset.allele_id
+                    FROM   mutation_subset    
+                    JOIN   {TableNames.mutations_translations} t ON t.{StandardColumnNames.mutation_id} = mutation_subset.id
+                    )
+                    SELECT ref_aa, position_aa, alt_aa, gff_feature, 
                         count(DISTINCT sample_aa.sample_id) as mutation_count, 
                         count(DISTINCT sample_aa.sample_id) / {sample_count} as mutation_prevalence
-                    from sample_subset
+                    from sample_subset 
                     inner join sample_aa ON sample_aa.sample_id = sample_subset.id
                     inner join amino_acids aa on aa.id = sample_aa.amino_acid_id
-                    inner join alleles a on a.id = sample_aa.allele_id
-                    WHERE a.region = '{background}'
+                    inner join alleles_subset a on a.id = sample_aa.allele_id
                     {not_reference}
                     group by ref_aa, position_aa, alt_aa, gff_feature
                     having count(DISTINCT sample_aa.sample_id) / {sample_count} >= {prevalence_threshold};
@@ -409,6 +423,76 @@ async def get_mutation_incidence(
         out[region_or_gff].append({"ref": ref, "alt": alt, "pos": pos, "count": count, "prevalence": prevalence})
     return {'sample_count': sample_count, 'mutation_counts': out}
 
+
+async def get_lineage_prevalence_by_collection_date(
+        lineage: str, 
+        lineage_system_name: str, 
+        date_bin: DateBinOpt,
+        days: int,
+        max_span_days: int,
+    ):
+    async with get_async_session() as session:
+        extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
+        group_by_clause = get_group_by_clause(date_bin)
+        order_by_clause = get_order_by_cause(date_bin)
+
+        res = await session.execute(
+            text(
+                f'''
+                WITH samples_with_mid_collection_date AS (
+                    SELECT *, 
+                    {MID_COLLECTION_DATE_CALCULATION}
+                    FROM (
+                        SELECT *, collection_end_date - collection_start_date AS collection_span
+                        FROM samples
+                    ) s
+                    WHERE s.collection_span <= :max_span_days
+                ),
+                lineage_count_by_collection_date AS (
+                    SELECT count(*) AS lineage_count,
+                        {extract_clause}
+                    FROM samples_with_mid_collection_date s
+                    INNER JOIN samples_lineages sl ON sl.sample_id = s.id
+                    INNER JOIN lineages l ON l.id = sl.lineage_id
+                    INNER JOIN lineage_systems ls ON ls.id = l.lineage_system_id
+                    WHERE l.lineage_name = :lineage AND ls.lineage_system_name = :lineage_system_name
+                    {group_by_clause}
+                    {order_by_clause}
+                ),
+                sample_count_by_collection_date AS (
+                    SELECT
+                        count(*) AS sample_count,
+                        {extract_clause}
+                    FROM samples_with_mid_collection_date s
+                    INNER JOIN samples_lineages sl ON sl.sample_id = s.id
+                    INNER JOIN lineages l ON l.id = sl.lineage_id
+                    INNER JOIN lineage_systems ls ON ls.id = l.lineage_system_id
+                    WHERE ls.lineage_system_name = :lineage_system_name
+                    {group_by_clause}
+                    {order_by_clause}
+                )
+                SELECT 
+                    lc.year, lc.chunk, 
+                    lc.lineage_count as lineage_count, sc.sample_count AS total_sample_count,
+                    lc.lineage_count::float / sc.sample_count AS lienage_prevalence
+                FROM lineage_count_by_collection_date lc
+                INNER JOIN sample_count_by_collection_date sc ON lc.year = sc.year AND lc.chunk = sc.chunk
+                {order_by_clause};
+                '''
+            ),
+            {
+                "lineage": lineage,
+                "lineage_system_name": lineage_system_name,
+                "max_span_days": max_span_days
+            }
+        )
+
+    out_data = {}
+    for r in res:
+        date = date_bin.format_iso_chunk(r[0], r[1])
+        out_data[date] = {"lineage_count": r[2], "total_sample_count": r[3], "lineage_prevalence": r[4]}
+
+    return out_data
 
 async def get_mutation_profile(lineage: str, lineage_system_name: str, samples_raw_query: str | None) -> List[
     'MutationProfileInfo']:

@@ -1,6 +1,7 @@
 # custom
 test_data/
 *.prof
+run_dev.sh
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

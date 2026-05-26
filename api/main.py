@@ -467,6 +467,10 @@ async def get_lineage_abundance(
 async def get_mutation_incidence(lineage:str, background:str, lineage_system_name: str, change_bin:NtOrAa, prevalence_threshold:float = DEFAULT_PREVALENCE_THRESHOLD, match_reference:bool = False, q: str = None):
     return await DB.queries.lineages.get_mutation_incidence(lineage, background, lineage_system_name, change_bin, prevalence_threshold, match_reference, q)
 
+@app.get('/v0/lineages:lineagePrevalenceByCollectionDate')
+async def get_lineage_prevalence_by_collection_date(lineage:str, lineage_system_name: str, date_bin: DateBinOpt = DateBinOpt.month, days: int = DEFAULT_DAYS, max_span_days: int = DEFAULT_MAX_SPAN_DAYS):
+    return await DB.queries.lineages.get_lineage_prevalence_by_collection_date(lineage, lineage_system_name, date_bin, days, max_span_days)
+
 @app.get('/v0/lineages:mutationProfile', response_model=List[MutationProfileInfo])
 async def get_mutation_profile(lineage:str, lineage_system_name: str, q: str = None) -> List[MutationProfileInfo]:
     return await DB.queries.lineages.get_mutation_profile(lineage, lineage_system_name, q)
