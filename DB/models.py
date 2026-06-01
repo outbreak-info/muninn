@@ -186,6 +186,8 @@ class Sequence(Base):
     r_samples: Mapped[List['Sample']] = relationship(back_populates='r_sequence')
     r_mutations: Mapped[List['Mutation']] = relationship(back_populates='r_sequence')
     r_variants: Mapped[List['IntraHostVariant']] = relationship(back_populates='r_sequence')
+    r_mutation_translations: Mapped[List['MutationTranslation']] = relationship(back_populates='r_sequence')
+    r_intrahost_translations: Mapped[List['IntraHostTranslation']] = relationship(back_populates='r_sequence')
 
     __table_args__ = tuple(
         [
@@ -279,8 +281,6 @@ class AminoAcid(Base):
 class Mutation(Base):
     __tablename__ = TableNames.mutations
 
-    id: Mapped[int] = mapped_column(sa.BigInteger, autoincrement=True)
-
     sequence_id: Mapped[int] = mapped_column(
         sa.ForeignKey(f'{TableNames.sequences}.id', name=ConstraintNames.fk_mutations_sequence_id_sequences),
         nullable=False
@@ -292,25 +292,24 @@ class Mutation(Base):
 
     __table_args__ = tuple(
         [
-            PrimaryKeyConstraint('id', name=ConstraintNames.pk_mutations),
-            UniqueConstraint(
+            PrimaryKeyConstraint(
                 StandardColumnNames.sequence_id,
                 StandardColumnNames.allele_id,
-                name=ConstraintNames.uq_mutations_sequence_allele_pair
+                name=ConstraintNames.pk_mutations
             ),
-            Index(IndexNames.ix_mutations_allele_id, allele_id)
+            Index(
+                IndexNames.ix_mutations_allele_id_sequence_id,
+                allele_id, sequence_id
+            )
         ]
     )
-
+    # todo: try switching the relationship to point directly at samples
     r_sequence: Mapped['Sequence'] = relationship(back_populates='r_mutations')
     r_allele: Mapped['Allele'] = relationship(back_populates='r_mutations')
-    r_translations: Mapped[List['MutationTranslation']] = relationship(back_populates='r_mutation')
 
 
 class IntraHostVariant(Base):
     __tablename__ = TableNames.intra_host_variants
-
-    id: Mapped[int] = mapped_column(sa.BigInteger, autoincrement=True)
 
     sequence_id: Mapped[int] = mapped_column(
         sa.ForeignKey(f'{TableNames.sequences}.id', name=ConstraintNames.fk_intra_host_variants_sequence_id_sequences),
@@ -334,20 +333,18 @@ class IntraHostVariant(Base):
 
     __table_args__ = tuple(
         [
-            PrimaryKeyConstraint('id', name=ConstraintNames.pk_intra_host_variants),
-            UniqueConstraint(
+            PrimaryKeyConstraint(
                 StandardColumnNames.sequence_id,
                 StandardColumnNames.allele_id,
-                name=ConstraintNames.uq_intra_host_variants_sequence_allele_pair
+                name=ConstraintNames.pk_intra_host_variants
             ),
-            Index(IndexNames.ix_intra_host_variants_allele_id, allele_id)
+            Index(IndexNames.ix_intra_host_variants_allele_id_sequence_id, allele_id, sequence_id)
         ]
 
     )
 
     r_sequence: Mapped['Sequence'] = relationship(back_populates='r_variants')
     r_allele: Mapped['Allele'] = relationship(back_populates='r_variants')
-    r_translations: Mapped[List['IntraHostTranslation']] = relationship(back_populates='r_variant')
 
     def copy_from(self, other: 'IntraHostVariant'):
         if not (other.sequence_id, other.allele_id) == (self.sequence_id, self.allele_id):
@@ -367,12 +364,11 @@ class IntraHostVariant(Base):
 
 class MutationTranslation(Base):
     __tablename__ = TableNames.mutation_translations
-    id: Mapped[int] = mapped_column(sa.BigInteger, autoincrement=True)
 
-    mutation_id: Mapped[int] = mapped_column(
+    sequence_id: Mapped[int] = mapped_column(
         sa.ForeignKey(
-            f'{TableNames.mutations}.id',
-            name=ConstraintNames.fk_mutation_translations_mutation_id_mutations
+            f'{TableNames.sequences}.id',
+            name=ConstraintNames.fk_mutation_translations_sequence_id_sequences
         ),
         nullable=False
     )
@@ -386,27 +382,21 @@ class MutationTranslation(Base):
 
     __table_args__ = tuple(
         [
-            PrimaryKeyConstraint('id', name=ConstraintNames.pk_mutation_translations),
-            UniqueConstraint(
-                StandardColumnNames.mutation_id,
-                StandardColumnNames.amino_acid_id,
-                name=ConstraintNames.uq_mutation_translations_mutation_amino_acid_pair
-            ),
-            Index(IndexNames.ix_mutation_translations_amino_acid_id, amino_acid_id)
+            PrimaryKeyConstraint(sequence_id, amino_acid_id, name=ConstraintNames.pk_mutation_translations),
+            Index(IndexNames.ix_mutation_translations_amino_acid_id_sequence_id, amino_acid_id, sequence_id)
         ]
     )
-    r_mutation: Mapped['Mutation'] = relationship(back_populates='r_translations')
+    r_sequence: Mapped['Sequence'] = relationship(back_populates='r_mutation_translations')
     r_amino_acid: Mapped['AminoAcid'] = relationship(back_populates='r_mutation_translations')
 
 
 class IntraHostTranslation(Base):
     __tablename__ = TableNames.intra_host_translations
-    id: Mapped[int] = mapped_column(sa.BigInteger, autoincrement=True)
 
-    intra_host_variant_id: Mapped[int] = mapped_column(
+    sequence_id: Mapped[int] = mapped_column(
         sa.ForeignKey(
-            f'{TableNames.intra_host_variants}.id',
-            name=ConstraintNames.fk_intra_host_translations_intra_host_variant_id
+            f'{TableNames.sequences}.id',
+            name=ConstraintNames.fk_intra_host_translations_sequence_id_sequences
         ),
         nullable=False
     )
@@ -420,16 +410,11 @@ class IntraHostTranslation(Base):
 
     __table_args__ = tuple(
         [
-            PrimaryKeyConstraint('id', name=ConstraintNames.pk_intra_host_translations),
-            UniqueConstraint(
-                StandardColumnNames.intra_host_variant_id,
-                StandardColumnNames.amino_acid_id,
-                name=ConstraintNames.uq_intra_host_translations_variant_amino_acid_pair
-            ),
-            Index(IndexNames.ix_intra_host_translations_amino_acid_id, amino_acid_id)
+            PrimaryKeyConstraint(sequence_id, amino_acid_id, name=ConstraintNames.pk_intra_host_translations),
+            Index(IndexNames.ix_intra_host_translations_amino_acid_id_sequence_id, amino_acid_id, sequence_id)
         ]
     )
-    r_variant: Mapped['IntraHostVariant'] = relationship(back_populates='r_translations')
+    r_sequence: Mapped['Sequence'] = relationship(back_populates='r_intra_host_translations')
     r_amino_acid: Mapped['AminoAcid'] = relationship(back_populates='r_intra_host_translations')
 
 

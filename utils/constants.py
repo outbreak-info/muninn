@@ -299,14 +299,12 @@ class ConstraintNames(PgIdentifiers):
     fk_mutations_allele_id_alleles = 'fk_mutations_allele_id_alleles'
 
     # mutation translations
-    uq_mutation_translations_mutation_amino_acid_pair = 'uq_mutation_translations_mutation_amino_acid_pair'
     fk_mutation_translations_amino_acid_id_amino_acids = 'fk_mutation_translations_amino_acid_id_amino_acids'
-    fk_mutation_translations_mutation_id_mutations = 'fk_mutation_translations_mutation_id_mutations'
+    fk_mutation_translations_sequence_id_sequences = 'fk_mutation_translations_sequence_id_sequences'
 
     # intra host translations
     fk_intra_host_translations_amino_acid_id_amino_acids = 'fk_intra_host_translations_amino_acid_id_amino_acids'
-    fk_intra_host_translations_intra_host_variant_id = 'fk_intra_host_translations_intra_host_variant_id'
-    uq_intra_host_translations_variant_amino_acid_pair = 'uq_intra_host_translations_variant_amino_acid_pair'
+    fk_intra_host_translations_sequence_id_sequences = 'fk_intra_host_translations_sequence_id_sequences'
 
     # phenotype metrics tables
     uq_phenotype_metrics_name = 'uq_phenotype_metrics_name'
@@ -336,12 +334,20 @@ class ConstraintNames(PgIdentifiers):
 
 
 class IndexNames(PgIdentifiers):
-    ix_mutations_allele_id = 'ix_mutations_allele_id'
-    ix_mutation_translations_amino_acid_id = 'ix_mutation_translations_amino_acid_id'
-    ix_intra_host_translations_amino_acid_id = 'ix_intra_host_translations_amino_acid_id'
-    ix_intra_host_variants_allele_id = 'ix_intra_host_variants_allele_id'
+    # mutations
+    ix_mutations_allele_id_sequence_id = 'ix_mutations_allele_id_sequence_id'
+
+    # mutation translations
+    ix_mutation_translations_amino_acid_id_sequence_id = 'ix_mutation_translations_amino_acid_id_sequence_id'
+
+    # variants
+    ix_intra_host_variants_allele_id_sequence_id = 'ix_intra_host_variants_allele_id_sequence_id'
+
+    # intra-host translations
+    ix_intra_host_translations_amino_acid_id_sequence_id = 'ix_intra_host_translations_amino_acid_id_sequence_id'
+
+    # samples lineages
     ix_samples_lineages_lineage_id = 'ix_samples_lineages_lineage_id'
-    ix_samples_sequences_sequence_id = 'ix_samples_sequences_sequence_id'
 
 
 class MiscDbNames(PgIdentifiers):

@@ -1,8 +1,8 @@
-"""re_x5_init
+"""re_x6_init
 
-Revision ID: 4f4f54888b24
+Revision ID: ce3d42c4e0ba
 Revises: 
-Create Date: 2026-04-16 14:33:03.688159
+Create Date: 2026-06-01 16:18:57.956275
 
 """
 from typing import Sequence, Union
@@ -10,10 +10,10 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 
-import DB.models
+import DB
 
 # revision identifiers, used by Alembic.
-revision: str = '4f4f54888b24'
+revision: str = 'ce3d42c4e0ba'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -29,7 +29,7 @@ def upgrade() -> None:
     sa.Column('alt_nt', sa.Text(), nullable=False),
     sa.CheckConstraint("alt_nt <> ''", name=op.f('ck_alleles_alt_nt_not_empty')),
     sa.CheckConstraint("ref_nt <> ''", name=op.f('ck_alleles_ref_nt_not_empty')),
-    sa.PrimaryKeyConstraint('id', name=op.f('pk_alleles')),
+    sa.PrimaryKeyConstraint('id', name='pk_alleles'),
     sa.UniqueConstraint('region', 'position_nt', 'alt_nt', name='uq_alleles_nt_values', postgresql_nulls_not_distinct=True, postgresql_include=['id'])
     )
     op.create_table('amino_acids',
@@ -45,13 +45,13 @@ def upgrade() -> None:
     sa.CheckConstraint("gff_feature <> ''", name=op.f('ck_amino_acids_gff_feature_not_empty')),
     sa.CheckConstraint("ref_aa <> ''", name=op.f('ck_amino_acids_ref_aa_not_empty')),
     sa.CheckConstraint("ref_codon <> ''", name=op.f('ck_amino_acids_ref_codon_not_empty')),
-    sa.PrimaryKeyConstraint('id', name=op.f('pk_amino_acids')),
+    sa.PrimaryKeyConstraint('id', name='pk_amino_acids'),
     sa.UniqueConstraint('position_aa', 'alt_aa', 'gff_feature', 'alt_codon', name='uq_amino_acids_gff_feature_position_alt_aa_alt_codon', postgresql_include=['id'])
     )
     op.create_table('effects',
     sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
     sa.Column('detail', sa.Text(), nullable=False),
-    sa.PrimaryKeyConstraint('id', name=op.f('pk_effects')),
+    sa.PrimaryKeyConstraint('id', name='pk_effects'),
     sa.UniqueConstraint('detail', name='uq_effects_detail')
     )
     op.create_table('geo_locations',
@@ -62,13 +62,13 @@ def upgrade() -> None:
     sa.Column('admin3_name', sa.Text(), nullable=True),
     sa.Column('geo_center_lon', sa.Double(), nullable=True),
     sa.Column('geo_center_lat', sa.Double(), nullable=True),
-    sa.PrimaryKeyConstraint('id', name=op.f('pk_geo_locations')),
+    sa.PrimaryKeyConstraint('id', name='pk_geo_locations'),
     sa.UniqueConstraint('country_name', 'admin1_name', 'admin2_name', 'admin3_name', name='uq_geo_locations_division_names', postgresql_nulls_not_distinct=True)
     )
     op.create_table('lineage_systems',
     sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
     sa.Column('lineage_system_name', sa.Text(), nullable=False),
-    sa.PrimaryKeyConstraint('id', name=op.f('pk_lineage_systems')),
+    sa.PrimaryKeyConstraint('id', name='pk_lineage_systems'),
     sa.UniqueConstraint('lineage_system_name', name='uq_lineage_systems_name')
     )
     op.create_table('papers',
@@ -76,7 +76,7 @@ def upgrade() -> None:
     sa.Column('authors', sa.Text(), nullable=False),
     sa.Column('title', sa.Text(), nullable=False),
     sa.Column('publication_year', sa.BigInteger(), nullable=False),
-    sa.PrimaryKeyConstraint('id', name=op.f('pk_papers')),
+    sa.PrimaryKeyConstraint('id', name='pk_papers'),
     sa.UniqueConstraint('authors', 'publication_year', 'title', name='uq_papers_authors_title_year')
     )
     op.create_table('phenotype_metrics',
@@ -85,21 +85,28 @@ def upgrade() -> None:
     sa.Column('phenotype_metric_assay_type', sa.Text(), nullable=False),
     sa.CheckConstraint("phenotype_metric_assay_type <> ''", name=op.f('ck_phenotype_metrics_assay_type_not_empty')),
     sa.CheckConstraint("phenotype_metric_name <> ''", name=op.f('ck_phenotype_metrics_name_not_empty')),
-    sa.PrimaryKeyConstraint('id', name=op.f('pk_phenotype_metrics')),
+    sa.PrimaryKeyConstraint('id', name='pk_phenotype_metrics'),
     sa.UniqueConstraint('phenotype_metric_name', name='uq_phenotype_metrics_name')
     )
     op.create_table('sequences',
     sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
-    sa.PrimaryKeyConstraint('id', name=op.f('pk_sequences'))
+    sa.PrimaryKeyConstraint('id', name='pk_sequences')
     )
     op.create_table('annotations',
     sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
     sa.Column('effect_id', sa.BigInteger(), nullable=False),
     sa.ForeignKeyConstraint(['effect_id'], ['effects.id'], name=op.f('fk_annotations_effect_id_effects')),
-    sa.PrimaryKeyConstraint('id', name=op.f('pk_annotations'))
+    sa.PrimaryKeyConstraint('id', name='pk_annotations')
     )
+    op.create_table('intra_host_translations',
+    sa.Column('sequence_id', sa.BigInteger(), nullable=False),
+    sa.Column('amino_acid_id', sa.BigInteger(), nullable=False),
+    sa.ForeignKeyConstraint(['amino_acid_id'], ['amino_acids.id'], name='fk_intra_host_translations_amino_acid_id_amino_acids'),
+    sa.ForeignKeyConstraint(['sequence_id'], ['sequences.id'], name='fk_intra_host_translations_sequence_id_sequences'),
+    sa.PrimaryKeyConstraint('sequence_id', 'amino_acid_id', name='pk_intra_host_translations')
+    )
+    op.create_index('ix_intra_host_translations_amino_acid_id_sequence_id', 'intra_host_translations', ['amino_acid_id', 'sequence_id'], unique=False)
     op.create_table('intra_host_variants',
-    sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
     sa.Column('sequence_id', sa.BigInteger(), nullable=False),
     sa.Column('allele_id', sa.BigInteger(), nullable=False),
     sa.Column('ref_dp', sa.BigInteger(), nullable=False),
@@ -114,36 +121,41 @@ def upgrade() -> None:
     sa.Column('pass_qc', sa.Boolean(), nullable=False),
     sa.ForeignKeyConstraint(['allele_id'], ['alleles.id'], name='fk_intra_host_variants_allele_id_alleles'),
     sa.ForeignKeyConstraint(['sequence_id'], ['sequences.id'], name='fk_intra_host_variants_sequence_id_sequences'),
-    sa.PrimaryKeyConstraint('id', name=op.f('pk_intra_host_variants')),
-    sa.UniqueConstraint('sequence_id', 'allele_id', name='uq_intra_host_variants_sequence_allele_pair')
+    sa.PrimaryKeyConstraint('sequence_id', 'allele_id', name='pk_intra_host_variants')
     )
-    op.create_index('ix_intra_host_variants_allele_id', 'intra_host_variants', ['allele_id'], unique=False)
+    op.create_index('ix_intra_host_variants_allele_id_sequence_id', 'intra_host_variants', ['allele_id', 'sequence_id'], unique=False)
     op.create_table('lineages',
     sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
     sa.Column('lineage_system_id', sa.BigInteger(), nullable=False),
     sa.Column('lineage_name', sa.Text(), nullable=False),
     sa.ForeignKeyConstraint(['lineage_system_id'], ['lineage_systems.id'], name=op.f('fk_lineages_lineage_system_id_lineage_systems')),
-    sa.PrimaryKeyConstraint('id', name=op.f('pk_lineages')),
+    sa.PrimaryKeyConstraint('id', name='pk_lineages'),
     sa.UniqueConstraint('lineage_system_id', 'lineage_name', name='uq_lineages_name_uq_within_system')
     )
+    op.create_table('mutation_translations',
+    sa.Column('sequence_id', sa.BigInteger(), nullable=False),
+    sa.Column('amino_acid_id', sa.BigInteger(), nullable=False),
+    sa.ForeignKeyConstraint(['amino_acid_id'], ['amino_acids.id'], name='fk_mutation_translations_amino_acid_id_amino_acids'),
+    sa.ForeignKeyConstraint(['sequence_id'], ['sequences.id'], name='fk_mutation_translations_sequence_id_sequences'),
+    sa.PrimaryKeyConstraint('sequence_id', 'amino_acid_id', name='pk_mutation_translations')
+    )
+    op.create_index('ix_mutation_translations_amino_acid_id_sequence_id', 'mutation_translations', ['amino_acid_id', 'sequence_id'], unique=False)
     op.create_table('mutations',
-    sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
     sa.Column('sequence_id', sa.BigInteger(), nullable=False),
     sa.Column('allele_id', sa.BigInteger(), nullable=False),
     sa.ForeignKeyConstraint(['allele_id'], ['alleles.id'], name='fk_mutations_allele_id_alleles'),
     sa.ForeignKeyConstraint(['sequence_id'], ['sequences.id'], name='fk_mutations_sequence_id_sequences'),
-    sa.PrimaryKeyConstraint('id', name=op.f('pk_mutations')),
-    sa.UniqueConstraint('sequence_id', 'allele_id', name='uq_mutations_sequence_allele_pair')
+    sa.PrimaryKeyConstraint('sequence_id', 'allele_id', name='pk_mutations')
     )
-    op.create_index('ix_mutations_allele_id', 'mutations', ['allele_id'], unique=False)
+    op.create_index('ix_mutations_allele_id_sequence_id', 'mutations', ['allele_id', 'sequence_id'], unique=False)
     op.create_table('phenotype_metric_values',
     sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
     sa.Column('phenotype_metric_id', sa.BigInteger(), nullable=False),
     sa.Column('amino_acid_id', sa.BigInteger(), nullable=False),
     sa.Column('value', sa.Double(), nullable=False),
-    sa.ForeignKeyConstraint(['amino_acid_id'], ['amino_acids.id'], name=op.f('fk_phenotype_metric_values_amino_acid_id_amino_acids')),
-    sa.ForeignKeyConstraint(['phenotype_metric_id'], ['phenotype_metrics.id'], name=op.f('fk_phenotype_metric_values_phenotype_metric_id_pheno_metrics')),
-    sa.PrimaryKeyConstraint('id', name=op.f('pk_phenotype_metric_values')),
+    sa.ForeignKeyConstraint(['amino_acid_id'], ['amino_acids.id'], name='fk_phenotype_metric_values_amino_acid_id_amino_acids'),
+    sa.ForeignKeyConstraint(['phenotype_metric_id'], ['phenotype_metrics.id'], name='fk_phenotype_metric_values_phenotype_metric_id_pheno_metrics'),
+    sa.PrimaryKeyConstraint('id', name='pk_phenotype_metric_values'),
     sa.UniqueConstraint('phenotype_metric_id', 'amino_acid_id', name='uq_phenotype_metric_values_metric_and_amino_acid')
     )
     op.create_table('samples',
@@ -188,18 +200,18 @@ def upgrade() -> None:
     sa.CheckConstraint('(not is_retracted and retraction_detected_date is null) or (is_retracted and retraction_detected_date is not null)', name=op.f('ck_samples_retraction_values_existence_in_harmony')),
     sa.CheckConstraint('collection_start_date <= collection_end_date', name=op.f('ck_samples_collection_start_not_after_collection_end')),
     sa.CheckConstraint('num_nulls(collection_start_date, collection_end_date) in (0, 2)', name=op.f('ck_samples_collection_start_and_end_both_absent_or_both_present')),
-    sa.ForeignKeyConstraint(['sequence_id'], ['sequences.id'], name=op.f('fk_samples_sequence_id_sequences')),
     sa.ForeignKeyConstraint(['geo_location_id'], ['geo_locations.id'], name=op.f('fk_samples_geo_location_id_geo_locations')),
-    sa.PrimaryKeyConstraint('id', name=op.f('pk_samples')),
+    sa.ForeignKeyConstraint(['sequence_id'], ['sequences.id'], name='fk_samples_sequence_id_sequences'),
+    sa.PrimaryKeyConstraint('id', name='pk_samples'),
     sa.UniqueConstraint('accession', name='uq_samples_accession')
     )
     op.create_table('annotations_amino_acids',
     sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
     sa.Column('amino_acid_id', sa.BigInteger(), nullable=False),
     sa.Column('annotation_id', sa.BigInteger(), nullable=False),
-    sa.ForeignKeyConstraint(['amino_acid_id'], ['amino_acids.id'], name=op.f('fk_annotations_amino_acids_amino_acid_id_amino_acids')),
+    sa.ForeignKeyConstraint(['amino_acid_id'], ['amino_acids.id'], name='fk_annotations_amino_acids_amino_acid_id_amino_acids'),
     sa.ForeignKeyConstraint(['annotation_id'], ['annotations.id'], name=op.f('fk_annotations_amino_acids_annotation_id_annotations')),
-    sa.PrimaryKeyConstraint('id', name=op.f('pk_annotations_amino_acids')),
+    sa.PrimaryKeyConstraint('id', name='pk_annotations_amino_acids'),
     sa.UniqueConstraint('amino_acid_id', 'annotation_id', name='uq_annotations_amino_acids_pair')
     )
     op.create_table('annotations_papers',
@@ -209,19 +221,9 @@ def upgrade() -> None:
     sa.Column('quotation', sa.Text(), nullable=True),
     sa.ForeignKeyConstraint(['annotation_id'], ['annotations.id'], name=op.f('fk_annotations_papers_annotation_id_annotations')),
     sa.ForeignKeyConstraint(['paper_id'], ['papers.id'], name=op.f('fk_annotations_papers_paper_id_papers')),
-    sa.PrimaryKeyConstraint('id', name=op.f('pk_annotations_papers')),
+    sa.PrimaryKeyConstraint('id', name='pk_annotations_papers'),
     sa.UniqueConstraint('paper_id', 'annotation_id', name='uq_annotations_papers_annotation_paper_pair')
     )
-    op.create_table('intra_host_translations',
-    sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
-    sa.Column('intra_host_variant_id', sa.BigInteger(), nullable=False),
-    sa.Column('amino_acid_id', sa.BigInteger(), nullable=False),
-    sa.ForeignKeyConstraint(['amino_acid_id'], ['amino_acids.id'], name='fk_intra_host_translations_amino_acid_id_amino_acids'),
-    sa.ForeignKeyConstraint(['intra_host_variant_id'], ['intra_host_variants.id'], name='fk_intra_host_translations_intra_host_variant_id'),
-    sa.PrimaryKeyConstraint('id', name=op.f('pk_intra_host_translations')),
-    sa.UniqueConstraint('intra_host_variant_id', 'amino_acid_id', name='uq_intra_host_translations_variant_amino_acid_pair')
-    )
-    op.create_index('ix_intra_host_translations_amino_acid_id', 'intra_host_translations', ['amino_acid_id'], unique=False)
     op.create_table('lineages_immediate_children',
     sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
     sa.Column('parent_id', sa.BigInteger(), nullable=False),
@@ -229,19 +231,9 @@ def upgrade() -> None:
     sa.CheckConstraint('parent_id <> child_id', name=op.f('ck_lineages_immediate_children_no_self_parenthood')),
     sa.ForeignKeyConstraint(['child_id'], ['lineages.id'], name=op.f('fk_lineages_immediate_children_child_id_lineages')),
     sa.ForeignKeyConstraint(['parent_id'], ['lineages.id'], name=op.f('fk_lineages_immediate_children_parent_id_lineages')),
-    sa.PrimaryKeyConstraint('id', name=op.f('pk_lineages_immediate_children')),
+    sa.PrimaryKeyConstraint('id', name='pk_lineages_immediate_children'),
     sa.UniqueConstraint('parent_id', 'child_id', name='uq_lineages_immediate_children_parent_child')
     )
-    op.create_table('mutation_translations',
-    sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
-    sa.Column('mutation_id', sa.BigInteger(), nullable=False),
-    sa.Column('amino_acid_id', sa.BigInteger(), nullable=False),
-    sa.ForeignKeyConstraint(['amino_acid_id'], ['amino_acids.id'], name='fk_mutation_translations_amino_acid_id_amino_acids'),
-    sa.ForeignKeyConstraint(['mutation_id'], ['mutations.id'], name='fk_mutation_translations_mutation_id_mutations'),
-    sa.PrimaryKeyConstraint('id', name=op.f('pk_mutation_translations')),
-    sa.UniqueConstraint('mutation_id', 'amino_acid_id', name='uq_mutation_translations_mutation_amino_acid_pair')
-    )
-    op.create_index('ix_mutation_translations_amino_acid_id', 'mutation_translations', ['amino_acid_id'], unique=False)
     op.create_table('samples_lineages',
     sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
     sa.Column('sample_id', sa.BigInteger(), nullable=False),
@@ -251,7 +243,7 @@ def upgrade() -> None:
     sa.CheckConstraint('(abundance is null) = is_consensus_call', name=op.f('ck_samples_lineages_has_abundance_xor_is_consensus')),
     sa.ForeignKeyConstraint(['lineage_id'], ['lineages.id'], name=op.f('fk_samples_lineages_lineage_id_lineages')),
     sa.ForeignKeyConstraint(['sample_id'], ['samples.id'], name=op.f('fk_samples_lineages_sample_id_samples')),
-    sa.PrimaryKeyConstraint('id', name=op.f('pk_samples_lineages')),
+    sa.PrimaryKeyConstraint('id', name='pk_samples_lineages'),
     sa.UniqueConstraint('sample_id', 'lineage_id', 'is_consensus_call', name='uq_samples_lineages_sample_id_lineage_id_is_consensus_call')
     )
     op.create_index('ix_samples_lineages_lineage_id', 'samples_lineages', ['lineage_id'], unique=False)
@@ -276,20 +268,20 @@ def downgrade() -> None:
     # ### commands auto generated by Alembic - please adjust! ###
     op.drop_index('ix_samples_lineages_lineage_id', table_name='samples_lineages')
     op.drop_table('samples_lineages')
-    op.drop_index('ix_mutation_translations_amino_acid_id', table_name='mutation_translations')
-    op.drop_table('mutation_translations')
     op.drop_table('lineages_immediate_children')
-    op.drop_index('ix_intra_host_translations_amino_acid_id', table_name='intra_host_translations')
-    op.drop_table('intra_host_translations')
     op.drop_table('annotations_papers')
     op.drop_table('annotations_amino_acids')
     op.drop_table('samples')
     op.drop_table('phenotype_metric_values')
-    op.drop_index('ix_mutations_allele_id', table_name='mutations')
+    op.drop_index('ix_mutations_allele_id_sequence_id', table_name='mutations')
     op.drop_table('mutations')
+    op.drop_index('ix_mutation_translations_amino_acid_id_sequence_id', table_name='mutation_translations')
+    op.drop_table('mutation_translations')
     op.drop_table('lineages')
-    op.drop_index('ix_intra_host_variants_allele_id', table_name='intra_host_variants')
+    op.drop_index('ix_intra_host_variants_allele_id_sequence_id', table_name='intra_host_variants')
     op.drop_table('intra_host_variants')
+    op.drop_index('ix_intra_host_translations_amino_acid_id_sequence_id', table_name='intra_host_translations')
+    op.drop_table('intra_host_translations')
     op.drop_table('annotations')
     op.drop_table('sequences')
     op.drop_table('phenotype_metrics')

@@ -952,7 +952,7 @@ class VariantsMutationsCombinedParser(FileParser):
             [
                 ConstraintNames.pk_mutation_translations,
                 ConstraintNames.uq_mutation_translations_mutation_amino_acid_pair,
-                IndexNames.ix_mutation_translations_amino_acid_id
+                IndexNames.ix_mutation_translations_amino_acid_id_sequence_id
             ]
         )
 
@@ -963,7 +963,7 @@ class VariantsMutationsCombinedParser(FileParser):
                 ConstraintNames.uq_mutation_translations_mutation_amino_acid_pair,
                 ConstraintNames.fk_mutation_translations_amino_acid_id_amino_acids,
                 ConstraintNames.fk_mutation_translations_mutation_id_mutations,
-                IndexNames.ix_mutation_translations_amino_acid_id
+                IndexNames.ix_mutation_translations_amino_acid_id_sequence_id
             ]
         )
 
