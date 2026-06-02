@@ -89,7 +89,7 @@ def main():
 
     # run inserts method
     start_time = datetime.now()
-    print(f'{filename} {args.format} start at {start_time}')
+    print(f'{args.filenames} {args.format} start at {start_time}')
     if issubclass(file_parser, FileParser):
         if issubclass(file_parser, VariantsMutationsCombinedParser):
             parser = file_parser(args.filenames)
@@ -99,7 +99,7 @@ def main():
             parser = file_parser(filename)
         asyncio.run(parser.parse_and_insert())
     end_time = datetime.now()
-    print(f'{filename} {args.format} end at {end_time}, elapsed: {end_time - start_time}')
+    print(f'{args.filenames} {args.format} end at {end_time}, elapsed: {end_time - start_time}')
 
 
 def print_req_col_info(formats: dict[str, Any]) -> None:

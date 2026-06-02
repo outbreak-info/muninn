@@ -289,12 +289,10 @@ class ConstraintNames(PgIdentifiers):
     uq_amino_acids_gff_feature_position_alt_aa_alt_codon = 'uq_amino_acids_gff_feature_position_alt_aa_alt_codon'
 
     # intra host variants
-    uq_intra_host_variants_sequence_allele_pair = 'uq_intra_host_variants_sequence_allele_pair'
     fk_intra_host_variants_allele_id_alleles = 'fk_intra_host_variants_allele_id_alleles'
     fk_intra_host_variants_sequence_id_sequences = 'fk_intra_host_variants_sequence_id_sequences'
 
     # mutations
-    uq_mutations_sequence_allele_pair = 'uq_mutations_sequence_allele_pair'
     fk_mutations_sequence_id_sequences = 'fk_mutations_sequence_id_sequences'
     fk_mutations_allele_id_alleles = 'fk_mutations_allele_id_alleles'
 

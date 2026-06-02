@@ -187,7 +187,7 @@ class Sequence(Base):
     r_mutations: Mapped[List['Mutation']] = relationship(back_populates='r_sequence')
     r_variants: Mapped[List['IntraHostVariant']] = relationship(back_populates='r_sequence')
     r_mutation_translations: Mapped[List['MutationTranslation']] = relationship(back_populates='r_sequence')
-    r_intrahost_translations: Mapped[List['IntraHostTranslation']] = relationship(back_populates='r_sequence')
+    r_intra_host_translations: Mapped[List['IntraHostTranslation']] = relationship(back_populates='r_sequence')
 
     __table_args__ = tuple(
         [
