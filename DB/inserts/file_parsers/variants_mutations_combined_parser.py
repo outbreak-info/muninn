@@ -872,7 +872,7 @@ class VariantsMutationsCombinedParser(FileParser):
         await self.index_constraint_manager.drop_names(
             [
                 ConstraintNames.pk_intra_host_variants,
-                ConstraintNames.fk_intra_host_variants_sequence_id_sequences,
+                ConstraintNames.fk_intra_host_variants_sequence_id_samples,
                 IndexNames.ix_intra_host_variants_allele_id_sequence_id,
             ]
         )
@@ -881,7 +881,7 @@ class VariantsMutationsCombinedParser(FileParser):
         await self.index_constraint_manager.restore_names(
             [
                 ConstraintNames.pk_intra_host_variants,
-                ConstraintNames.fk_intra_host_variants_sequence_id_sequences,
+                ConstraintNames.fk_intra_host_variants_sequence_id_samples,
                 IndexNames.ix_intra_host_variants_allele_id_sequence_id,
                 ConstraintNames.fk_intra_host_variants_allele_id_alleles
             ]
@@ -891,7 +891,7 @@ class VariantsMutationsCombinedParser(FileParser):
         await self.index_constraint_manager.drop_names(
             [
                 ConstraintNames.pk_mutations,
-                ConstraintNames.fk_mutations_sequence_id_sequences,
+                ConstraintNames.fk_mutations_sequence_id_samples,
                 IndexNames.ix_mutations_allele_id_sequence_id
             ]
         )
@@ -901,7 +901,7 @@ class VariantsMutationsCombinedParser(FileParser):
             [
                 ConstraintNames.pk_mutations,
                 IndexNames.ix_mutations_allele_id_sequence_id,
-                ConstraintNames.fk_mutations_sequence_id_sequences,
+                ConstraintNames.fk_mutations_sequence_id_samples,
                 ConstraintNames.fk_mutations_allele_id_alleles,
             ]
         )
@@ -910,7 +910,7 @@ class VariantsMutationsCombinedParser(FileParser):
         await self.index_constraint_manager.drop_names(
             [
                 ConstraintNames.pk_intra_host_translations,
-                ConstraintNames.fk_intra_host_translations_sequence_id_sequences,
+                ConstraintNames.fk_intra_host_translations_sequence_id_samples,
                 IndexNames.ix_intra_host_translations_amino_acid_id_sequence_id,
             ]
         )
@@ -920,7 +920,7 @@ class VariantsMutationsCombinedParser(FileParser):
             [
                 ConstraintNames.pk_intra_host_translations,
                 IndexNames.ix_intra_host_translations_amino_acid_id_sequence_id,
-                ConstraintNames.fk_intra_host_translations_sequence_id_sequences,
+                ConstraintNames.fk_intra_host_translations_sequence_id_samples,
                 ConstraintNames.fk_intra_host_translations_amino_acid_id_amino_acids
             ]
         )
@@ -930,7 +930,7 @@ class VariantsMutationsCombinedParser(FileParser):
             [
                 ConstraintNames.pk_mutation_translations,
                 IndexNames.ix_mutation_translations_amino_acid_id_sequence_id,
-                ConstraintNames.fk_mutation_translations_sequence_id_sequences,
+                ConstraintNames.fk_mutation_translations_sequence_id_samples,
             ]
         )
 
@@ -939,7 +939,7 @@ class VariantsMutationsCombinedParser(FileParser):
             [
                 ConstraintNames.pk_mutation_translations,
                 ConstraintNames.fk_mutation_translations_amino_acid_id_amino_acids,
-                ConstraintNames.fk_mutation_translations_sequence_id_sequences,
+                ConstraintNames.fk_mutation_translations_sequence_id_samples,
                 IndexNames.ix_mutation_translations_amino_acid_id_sequence_id
             ]
         )

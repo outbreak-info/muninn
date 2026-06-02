@@ -290,19 +290,19 @@ class ConstraintNames(PgIdentifiers):
 
     # intra host variants
     fk_intra_host_variants_allele_id_alleles = 'fk_intra_host_variants_allele_id_alleles'
-    fk_intra_host_variants_sequence_id_sequences = 'fk_intra_host_variants_sequence_id_sequences'
+    fk_intra_host_variants_sequence_id_samples = 'fk_intra_host_variants_sequence_id_samples'
 
     # mutations
-    fk_mutations_sequence_id_sequences = 'fk_mutations_sequence_id_sequences'
+    fk_mutations_sequence_id_samples = 'fk_mutations_sequence_id_samples'
     fk_mutations_allele_id_alleles = 'fk_mutations_allele_id_alleles'
 
     # mutation translations
     fk_mutation_translations_amino_acid_id_amino_acids = 'fk_mutation_translations_amino_acid_id_amino_acids'
-    fk_mutation_translations_sequence_id_sequences = 'fk_mutation_translations_sequence_id_sequences'
+    fk_mutation_translations_sequence_id_samples = 'fk_mutation_translations_sequence_id_samples'
 
     # intra host translations
     fk_intra_host_translations_amino_acid_id_amino_acids = 'fk_intra_host_translations_amino_acid_id_amino_acids'
-    fk_intra_host_translations_sequence_id_sequences = 'fk_intra_host_translations_sequence_id_sequences'
+    fk_intra_host_translations_sequence_id_samples = 'fk_intra_host_translations_sequence_id_samples'
 
     # phenotype metrics tables
     uq_phenotype_metrics_name = 'uq_phenotype_metrics_name'
