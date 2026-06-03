@@ -29,12 +29,17 @@ Database system to store mutation and variant data for avian influenza.
     
     # this will be used as a prefix to the container names
     export MUNINN_INSTANCE_NAME="flu_db"
+   
+    # this is not used in the default docker-compose file
+    # directory to be mounted to store postgres data
+    export MUNINN_PG_DATA_BIND_DIR="/dev/null"
     ```
     - Change the value for `MUNINN_SERVER_DATA_INPUT_DIR` to allow the server to read input data from a host directory.
     - If the server and DB are running on the same host, they will talk through the docker network. 
     In that case, `MUNINN_DB_PORT_FOR_SERVER` should be 5432, regardless of the value of `MUNINN_DB_PORT`, 
     and `MUNINN_DB_HOST` should be `"postgres"`, which is the name of the database service within docker.
     - If the DB and server are on different hosts, then `MUNINN_DB_HOST` should be the DB host, and `MUNINN_DB_PORT_FOR_SERVER` must be the same as `MUNINN_DB_PORT`
+    - For local testing, `MUNINN_PG_DATA_BIND_DIR` does not need to be set. 
 3. Run docker compose to start the database and api containers.
     1. `docker-compose -f docker-compose.yml up -d --build`
     2. This will start up two containers, `flu_db_pg` for postgres, and `flu_db_server` for the webserver.
@@ -48,11 +53,6 @@ Database system to store mutation and variant data for avian influenza.
        will remain available.
     3. For information on logs see Troubleshooting Information > Webserver
     4. The `--auto` flag is optional, but this mode avoids the need to adhere to specific file and dir names within the input archive.
-6. Load or update test data: `docker exec -d flu_db_server muninn_ingest_playset ${MUNINN_SERVER_DATA_INPUT_DIR}/<archive name>`
-    1. Input data must be placed in `MUNINN_SERVER_DATA_INPUT_DIR` on the host machine.
-       For details read ingestion script: `containers/server/bin/muninn_ingest_playset`
-    2. This process will take a few minutes and data will persist in a docker volume. Please see `docker-compose.yml` for details.
-    3. For information on logs see Troubleshooting Information > Webserver
 
 ### Running Multiple Instances
 
