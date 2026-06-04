@@ -141,10 +141,6 @@ class Sample(Base):
     r_sequence: Mapped['Sequence'] = relationship(back_populates='r_samples')
     r_geo_location: Mapped['GeoLocation'] = relationship(back_populates='r_samples')
     r_sample_lineages: Mapped[List['SampleLineage']] = relationship(back_populates='r_sample')
-    r_mutations: Mapped[List['Mutation']] = relationship(back_populates='r_sample')
-    r_variants: Mapped[List['IntraHostVariant']] = relationship(back_populates='r_sample')
-    r_mutation_translations: Mapped[List['MutationTranslation']] = relationship(back_populates='r_sample')
-    r_intra_host_translations: Mapped[List['IntraHostTranslation']] = relationship(back_populates='r_sample')
 
     def copy_from(self, other: 'Sample'):
         if other.accession != self.accession:
@@ -185,9 +181,13 @@ class Sample(Base):
 class Sequence(Base):
     __tablename__ = TableNames.sequences
 
-    id: Mapped[int] = mapped_column(sa.Integer, autoincrement=True)
+    id: Mapped[int] = mapped_column(sa.BigInteger, autoincrement=True)
 
     r_samples: Mapped[List['Sample']] = relationship(back_populates='r_sequence')
+    r_mutations: Mapped[List['Mutation']] = relationship(back_populates='r_sequence')
+    r_variants: Mapped[List['IntraHostVariant']] = relationship(back_populates='r_sequence')
+    r_mutation_translations: Mapped[List['MutationTranslation']] = relationship(back_populates='r_sequence')
+    r_intra_host_translations: Mapped[List['IntraHostTranslation']] = relationship(back_populates='r_sequence')
 
     __table_args__ = tuple(
         [
@@ -199,7 +199,7 @@ class Sequence(Base):
 class Allele(Base):
     __tablename__ = TableNames.alleles
 
-    id: Mapped[int] = mapped_column(sa.Integer, autoincrement=True)
+    id: Mapped[int] = mapped_column(sa.BigInteger, autoincrement=True)
 
     region: Mapped[str] = mapped_column(sa.Text, nullable=False)
     position_nt: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
@@ -282,10 +282,7 @@ class Mutation(Base):
     __tablename__ = TableNames.mutations
 
     sequence_id: Mapped[int] = mapped_column(
-        sa.ForeignKey(
-            f'{TableNames.samples}.{StandardColumnNames.sequence_id}',
-            name=ConstraintNames.fk_mutations_sequence_id_samples
-        ),
+        sa.ForeignKey(f'{TableNames.sequences}.id', name=ConstraintNames.fk_mutations_sequence_id_sequences),
         nullable=False
     )
     allele_id: Mapped[int] = mapped_column(
@@ -306,7 +303,8 @@ class Mutation(Base):
             )
         ]
     )
-    r_sample: Mapped['Sample'] = relationship(back_populates='r_mutations')
+    # todo: try switching the relationship to point directly at samples
+    r_sequence: Mapped['Sequence'] = relationship(back_populates='r_mutations')
     r_allele: Mapped['Allele'] = relationship(back_populates='r_mutations')
 
 
@@ -314,10 +312,7 @@ class IntraHostVariant(Base):
     __tablename__ = TableNames.intra_host_variants
 
     sequence_id: Mapped[int] = mapped_column(
-        sa.ForeignKey(
-            f'{TableNames.samples}.{StandardColumnNames.sequence_id}',
-            name=ConstraintNames.fk_intra_host_variants_sequence_id_samples
-        ),
+        sa.ForeignKey(f'{TableNames.sequences}.id', name=ConstraintNames.fk_intra_host_variants_sequence_id_sequences),
         nullable=False
     )
     allele_id: Mapped[int] = mapped_column(
@@ -348,7 +343,7 @@ class IntraHostVariant(Base):
 
     )
 
-    r_sample: Mapped['Sample'] = relationship(back_populates='r_variants')
+    r_sequence: Mapped['Sequence'] = relationship(back_populates='r_variants')
     r_allele: Mapped['Allele'] = relationship(back_populates='r_variants')
 
     def copy_from(self, other: 'IntraHostVariant'):
@@ -372,8 +367,8 @@ class MutationTranslation(Base):
 
     sequence_id: Mapped[int] = mapped_column(
         sa.ForeignKey(
-            f'{TableNames.samples}.{StandardColumnNames.sequence_id}',
-            name=ConstraintNames.fk_mutation_translations_sequence_id_samples
+            f'{TableNames.sequences}.id',
+            name=ConstraintNames.fk_mutation_translations_sequence_id_sequences
         ),
         nullable=False
     )
@@ -391,7 +386,7 @@ class MutationTranslation(Base):
             Index(IndexNames.ix_mutation_translations_amino_acid_id_sequence_id, amino_acid_id, sequence_id)
         ]
     )
-    r_sample: Mapped['Sample'] = relationship(back_populates='r_mutation_translations')
+    r_sequence: Mapped['Sequence'] = relationship(back_populates='r_mutation_translations')
     r_amino_acid: Mapped['AminoAcid'] = relationship(back_populates='r_mutation_translations')
 
 
@@ -400,8 +395,8 @@ class IntraHostTranslation(Base):
 
     sequence_id: Mapped[int] = mapped_column(
         sa.ForeignKey(
-            f'{TableNames.samples}.{StandardColumnNames.sequence_id}',
-            name=ConstraintNames.fk_intra_host_translations_sequence_id_samples
+            f'{TableNames.sequences}.id',
+            name=ConstraintNames.fk_intra_host_translations_sequence_id_sequences
         ),
         nullable=False
     )
@@ -419,7 +414,7 @@ class IntraHostTranslation(Base):
             Index(IndexNames.ix_intra_host_translations_amino_acid_id_sequence_id, amino_acid_id, sequence_id)
         ]
     )
-    r_sample: Mapped['Sample'] = relationship(back_populates='r_intra_host_translations')
+    r_sequence: Mapped['Sequence'] = relationship(back_populates='r_intra_host_translations')
     r_amino_acid: Mapped['AminoAcid'] = relationship(back_populates='r_intra_host_translations')
 
 
