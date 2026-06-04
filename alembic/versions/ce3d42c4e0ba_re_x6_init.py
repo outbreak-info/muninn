@@ -99,7 +99,7 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id', name='pk_annotations')
     )
     op.create_table('intra_host_translations',
-    sa.Column('sequence_id', sa.BigInteger(), nullable=False),
+    sa.Column('sequence_id', sa.Integer(), nullable=False),
     sa.Column('amino_acid_id', sa.BigInteger(), nullable=False),
     sa.ForeignKeyConstraint(['amino_acid_id'], ['amino_acids.id'], name='fk_intra_host_translations_amino_acid_id_amino_acids'),
     sa.ForeignKeyConstraint(['sequence_id'], ['sequences.id'], name='fk_intra_host_translations_sequence_id_sequences'),
@@ -107,8 +107,8 @@ def upgrade() -> None:
     )
     op.create_index('ix_intra_host_translations_amino_acid_id_sequence_id', 'intra_host_translations', ['amino_acid_id', 'sequence_id'], unique=False)
     op.create_table('intra_host_variants',
-    sa.Column('sequence_id', sa.BigInteger(), nullable=False),
-    sa.Column('allele_id', sa.BigInteger(), nullable=False),
+    sa.Column('sequence_id', sa.Integer(), nullable=False),
+    sa.Column('allele_id', sa.Integer(), nullable=False),
     sa.Column('ref_dp', sa.BigInteger(), nullable=False),
     sa.Column('alt_dp', sa.BigInteger(), nullable=False),
     sa.Column('alt_freq', sa.Double(), nullable=False),
@@ -133,7 +133,7 @@ def upgrade() -> None:
     sa.UniqueConstraint('lineage_system_id', 'lineage_name', name='uq_lineages_name_uq_within_system')
     )
     op.create_table('mutation_translations',
-    sa.Column('sequence_id', sa.BigInteger(), nullable=False),
+    sa.Column('sequence_id', sa.Integer(), nullable=False),
     sa.Column('amino_acid_id', sa.BigInteger(), nullable=False),
     sa.ForeignKeyConstraint(['amino_acid_id'], ['amino_acids.id'], name='fk_mutation_translations_amino_acid_id_amino_acids'),
     sa.ForeignKeyConstraint(['sequence_id'], ['sequences.id'], name='fk_mutation_translations_sequence_id_sequences'),
@@ -141,8 +141,8 @@ def upgrade() -> None:
     )
     op.create_index('ix_mutation_translations_amino_acid_id_sequence_id', 'mutation_translations', ['amino_acid_id', 'sequence_id'], unique=False)
     op.create_table('mutations',
-    sa.Column('sequence_id', sa.BigInteger(), nullable=False),
-    sa.Column('allele_id', sa.BigInteger(), nullable=False),
+    sa.Column('sequence_id', sa.Integer(), nullable=False),
+    sa.Column('allele_id', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['allele_id'], ['alleles.id'], name='fk_mutations_allele_id_alleles'),
     sa.ForeignKeyConstraint(['sequence_id'], ['sequences.id'], name='fk_mutations_sequence_id_sequences'),
     sa.PrimaryKeyConstraint('sequence_id', 'allele_id', name='pk_mutations')
@@ -161,7 +161,7 @@ def upgrade() -> None:
     op.create_table('samples',
     sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
     sa.Column('accession', sa.Text(), nullable=False),
-    sa.Column('sequence_id', sa.BigInteger(), nullable=False),
+    sa.Column('sequence_id', sa.Integer(), nullable=False),
     sa.Column('bio_project', sa.Text(), nullable=True),
     sa.Column('bio_sample', sa.Text(), nullable=True),
     sa.Column('bio_sample_accession', sa.Text(), nullable=True),

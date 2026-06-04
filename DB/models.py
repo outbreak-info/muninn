@@ -181,7 +181,7 @@ class Sample(Base):
 class Sequence(Base):
     __tablename__ = TableNames.sequences
 
-    id: Mapped[int] = mapped_column(sa.BigInteger, autoincrement=True)
+    id: Mapped[int] = mapped_column(sa.Integer, autoincrement=True)
 
     r_samples: Mapped[List['Sample']] = relationship(back_populates='r_sequence')
     r_mutations: Mapped[List['Mutation']] = relationship(back_populates='r_sequence')
@@ -199,7 +199,7 @@ class Sequence(Base):
 class Allele(Base):
     __tablename__ = TableNames.alleles
 
-    id: Mapped[int] = mapped_column(sa.BigInteger, autoincrement=True)
+    id: Mapped[int] = mapped_column(sa.Integer, autoincrement=True)
 
     region: Mapped[str] = mapped_column(sa.Text, nullable=False)
     position_nt: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
