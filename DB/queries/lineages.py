@@ -229,6 +229,7 @@ async def get_abundance_summaries_by_simple_date(
             out_data[date] = [info]
     return out_data
 
+
 async def get_abundance_summaries_by_collection_date(
     date_bin: DateBinOpt,
     days: int,
@@ -314,7 +315,7 @@ async def get_mutation_incidence(
     prevalence_threshold: float,
     match_reference: bool,
     raw_query: str | None
-):
+) -> Dict:
     user_where_clause = ''
     if raw_query is not None:
         user_where_clause = f'and ({parser.parse(raw_query)})'
@@ -339,7 +340,7 @@ async def get_mutation_incidence(
         sample_count = float(sample_count)
 
         sample_subset_query = f"""
-        select s.id from samples s
+        select s.sequence_id, s.id from samples s
         inner join samples_lineages sl ON sl.sample_id = s.id
         inner join lineages l on l.id = sl.lineage_id
         inner join lineage_systems ls on ls.id = l.lineage_system_id
@@ -358,7 +359,7 @@ async def get_mutation_incidence(
                     WITH sample_subset as (
                         {sample_subset_query}
                     ) SELECT ref_nt, position_nt, alt_nt, region, count(*) as mutation_count, count(*) / {sample_count} as mutation_prevalence from sample_subset
-                    inner join mutations m ON m.sample_id = sample_subset.id
+                    inner join mutations m ON m.sequence_id = sample_subset.sequence_id
                     inner join alleles a on a.id = m.allele_id
                     {not_reference}
                     group by ref_nt, position_nt, alt_nt, region
@@ -367,6 +368,7 @@ async def get_mutation_incidence(
                 )
             )
         else:
+            # todo: fix for new schema
             not_reference = 'where ref_aa <> alt_aa'
             if match_reference:
                 not_reference = ''
@@ -398,8 +400,11 @@ async def get_mutation_incidence(
     return {'sample_count': sample_count, 'mutation_counts': out}
 
 
-async def get_mutation_profile(lineage: str, lineage_system_name: str, samples_raw_query: str | None) -> List[
-    'MutationProfileInfo']:
+async def get_mutation_profile(
+    lineage: str,
+    lineage_system_name: str,
+    samples_raw_query: str | None
+) -> List['MutationProfileInfo']:
     samples_query = parser.parse(samples_raw_query) if samples_raw_query else None
     query = (
         select(
@@ -435,3 +440,23 @@ async def get_mutation_profile(lineage: str, lineage_system_name: str, samples_r
         results = await session.execute(query)
         out_data = [MutationProfileInfo(**row) for row in results.mappings().all()]
     return out_data
+
+
+async def count_samples_by_lineage(lineage_system_name: str) -> List[Dict]:
+    async with get_async_session() as session:
+        res = await session.execute(
+            text(
+                'select lineage_name, count(*) as n_samples\n'
+                'from lineages l\n'
+                'inner join samples_lineages sl on sl.lineage_id = l.id\n'
+                'inner join samples s on s.id = sl.sample_id\n'
+                'inner join lineage_systems ls on ls.id = l.lineage_system_id\n'
+                'where ls.lineage_system_name = :lineage_system_name\n'
+                'group by lineage_name\n'
+                'order by n_samples desc;'
+            ),
+            {
+                'lineage_system_name': lineage_system_name
+            }
+        )
+    return [{'lineage_name': r[0], 'n_samples': r[1]} for r in res]
