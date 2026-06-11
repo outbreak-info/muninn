@@ -1,7 +1,6 @@
-import logging
 from asyncio import create_task
+from contextlib import asynccontextmanager
 from typing import List, Annotated, Dict
-from datetime import date
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,10 +25,25 @@ from api.models import LineageAbundanceWithSampleInfo, VariantInfo, SampleInfo, 
     LineageInfo, VariantMutationLagInfo, RegionAndGffFeatureInfo, MutationProfileInfo, AverageLineageAbundanceInfo
 from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, SIMPLE_DATE_FIELDS, NtOrAa, \
     DEFAULT_MAX_SPAN_DAYS, COLLECTION_DATE, DEFAULT_DAYS, COMMA_SEP_WORDLIKE_PATTERN, LINEAGE, \
-    DEFAULT_PREVALENCE_THRESHOLD, MIN_PREVALENCE_THRESHOLD
+    DEFAULT_PREVALENCE_THRESHOLD, MIN_PREVALENCE_THRESHOLD, LineageSystemNames
 from utils.errors import ParsingError
 
-app = FastAPI()
+background_tasks = set()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    for v in LineageSystemNames.__dict__.keys():
+        if v[:2] != '__':
+            lineage_system_name = getattr(LineageSystemNames, v)
+            cache = AlleleIncidenceByLineageCache.get_cache(lineage_system_name)
+            task = create_task(cache.populate())
+            background_tasks.add(task)
+            task.add_done_callback(background_tasks.discard)
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -39,7 +53,6 @@ app.add_middleware(
     allow_headers=['*']
 )
 
-background_tasks = set()
 
 @app.get('/sample/{sample_id}', response_model=SampleInfo)
 async def get_sample_by_id(sample_id: int):
@@ -505,7 +518,7 @@ async def get_mutation_incidence(
                 match_reference
             )
         except KeyError as e:
-            print(f'KeyError: {e}') # todo rm
+            print(f'KeyError: {e}')  # todo rm
 
     try:
         return await DB.queries.lineages.get_mutation_incidence(
@@ -637,7 +650,7 @@ async def get_phenotype_metric_value_by_mutation_quantile(phenotype_metric_name:
     return await DB.queries.phenotype_metrics.get_phenotype_metric_value_by_mutation_quantile(
         phenotype_metric_name,
         quantile
-        )
+    )
 
 
 @app.get('/v0/phenotype_metric_values:byVariantsQuantile', response_model=Dict[str, float])
@@ -646,7 +659,7 @@ async def get_phenotype_metric_value_by_variant_quantile(phenotype_metric_name: 
     return await DB.queries.phenotype_metrics.get_phenotype_metric_value_by_variant_quantile(
         phenotype_metric_name,
         quantile
-        )
+    )
 
 
 @app.get('/v0/phenotype_metric_values:getMinAndMaxValues', response_model=List)
@@ -668,7 +681,7 @@ async def get_annotations_by_mutations_and_collection_date(
         days,
         max_span_days,
         q
-        )
+    )
 
 
 @app.get('/v0/annotations:byVariantsAndCollectionDate', response_model=List[Dict])
@@ -685,7 +698,7 @@ async def get_annotations_by_variants_and_collection_date(
         days,
         max_span_days,
         q
-        )
+    )
 
 
 @app.get('/v0/annotationEffects', response_model=List[str])
@@ -709,42 +722,21 @@ async def get_annotations_by_mutations_and_amino_acid_position(
     return await DB.queries.annotations.get_annotations_by_mutations_and_amino_acid_position(effect_detail, q)
 
 
-@app.get('/v0/cache:populate', response_model=bool)
-async def populate_cache(name: str, lineage_system_name: str | None = None) -> bool:
-    cache = None
-    match name:
-        case 'AlleleIncidenceByLineage':
-            try:
-                cache = AlleleIncidenceByLineageCache.get_cache(lineage_system_name)
-            except TypeError:
-                raise HTTPException(400, 'lineage_system_name required')
-        case _:
-            raise HTTPException(400, 'name not recognized')
-
-    if cache.populated or cache.populating:
-        return False
-
-    task = create_task(cache.populate())
-    background_tasks.add(task)
-    task.add_done_callback(background_tasks.discard)
-
-    return True
-
-
 @app.get('/v0/cache:status', response_model=Dict)
-async def populate_cache(name: str, lineage_system_name: str | None = None, show_contents: bool = False) -> dict:
+async def get_cache_status(name: str, lineage_system_name: str | None = None, show_contents: bool = False) -> dict:
     cache = None
     match name:
         case 'AlleleIncidenceByLineage':
             try:
                 cache = AlleleIncidenceByLineageCache.get_cache(lineage_system_name)
+                print(cache)  # todo rm
             except TypeError:
                 raise HTTPException(400, 'lineage_system_name required')
         case _:
             raise HTTPException(400, 'name not recognized')
 
     out = {
-        'populated':  cache.populated,
+        'populated': cache.populated,
         'populating': cache.populating
     }
 

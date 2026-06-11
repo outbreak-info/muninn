@@ -50,6 +50,7 @@ class DefaultGffFeaturesByRegion:
 class LineageSystemNames:
     usda_genoflu = 'usda_genoflu'
     freyja_demixed = 'freyja_demixed'
+    pango = 'PANGO'
 
 
 class DateBinOpt(Enum):
@@ -96,11 +97,6 @@ class StandardPhenoMetricNames:
     mouse_sera_escape = 'mouse_sera_escape'
     entry_in_sa26_and_sa23_293t_cells = 'entry_in_sa26_and_sa23_293t_cells'
     mutdiffsel = 'mutdiffsel'
-
-
-class StandardLineageSystemNames:
-    genoflu = 'usda_genoflu'
-    sc2 = 'PANGO'
 
 
 class PgIdentifiers(object):

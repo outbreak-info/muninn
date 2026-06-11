@@ -11,7 +11,7 @@ from DB.inserts.lineages import find_or_insert_lineage
 from DB.inserts.samples import get_sample_id_by_accession
 from DB.inserts.samples_lineages import insert_sample_lineage
 from DB.models import LineageSystem, Lineage, SampleLineage
-from utils.constants import StandardColumnNames, StandardLineageSystemNames
+from utils.constants import StandardColumnNames, LineageSystemNames
 from utils.csv_helpers import get_value
 from utils.errors import NotFoundError
 
@@ -118,7 +118,7 @@ class SimpleLineageParser(FileParser):
 
 class GenofluLineageParser(SimpleLineageParser):
     def __init__(self, filename: str):
-        super().__init__(filename, '\t', StandardLineageSystemNames.genoflu)
+        super().__init__(filename, '\t', LineageSystemNames.usda_genoflu)
 
     async def parse_and_insert(self):
         await super().parse_and_insert()
@@ -131,7 +131,7 @@ class GenofluLineageParser(SimpleLineageParser):
 
 class Sc2LineageParser(SimpleLineageParser):
     def __init__(self, filename: str):
-        super().__init__(filename, ',', StandardLineageSystemNames.sc2)
+        super().__init__(filename, ',', LineageSystemNames.pango)
 
     async def parse_and_insert(self):
         await super().parse_and_insert()

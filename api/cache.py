@@ -30,7 +30,7 @@ class AlleleIncidenceByLineageCache:
         self.populating = True
 
         lineage_sample_counts = await count_samples_by_lineage(self.lineage_system_name)
-        lineages_to_cache = [lsc['lineage_name'] for lsc in lineage_sample_counts if lsc['n_samples'] > 10000]
+        lineages_to_cache = [lsc['lineage_name'] for lsc in lineage_sample_counts if lsc['n_samples'] > 0] # todo
         for lineage in lineages_to_cache:
             result = await get_mutation_incidence(
                 lineage,
