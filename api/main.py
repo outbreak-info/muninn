@@ -1,3 +1,4 @@
+import logging
 from asyncio import create_task
 from typing import List, Annotated, Dict
 from datetime import date
@@ -503,8 +504,8 @@ async def get_mutation_incidence(
                 prevalence_threshold,
                 match_reference
             )
-        except KeyError:
-            pass
+        except KeyError as e:
+            print(f'KeyError: {e}') # todo rm
 
     try:
         return await DB.queries.lineages.get_mutation_incidence(
@@ -709,14 +710,14 @@ async def get_annotations_by_mutations_and_amino_acid_position(
 
 
 @app.get('/v0/cache:populate', response_model=bool)
-async def populate_cache(name: str, lineage_system: str | None = None) -> bool:
+async def populate_cache(name: str, lineage_system_name: str | None = None) -> bool:
     cache = None
     match name:
         case 'AlleleIncidenceByLineage':
             try:
-                cache = AlleleIncidenceByLineageCache.get_cache(lineage_system)
+                cache = AlleleIncidenceByLineageCache.get_cache(lineage_system_name)
             except TypeError:
-                raise HTTPException(400, 'lineage system required')
+                raise HTTPException(400, 'lineage_system_name required')
         case _:
             raise HTTPException(400, 'name not recognized')
 
@@ -731,18 +732,23 @@ async def populate_cache(name: str, lineage_system: str | None = None) -> bool:
 
 
 @app.get('/v0/cache:status', response_model=Dict)
-async def populate_cache(name: str, lineage_system: str | None = None) -> dict:
+async def populate_cache(name: str, lineage_system_name: str | None = None, show_contents: bool = False) -> dict:
     cache = None
     match name:
         case 'AlleleIncidenceByLineage':
             try:
-                cache = AlleleIncidenceByLineageCache.get_cache(lineage_system)
+                cache = AlleleIncidenceByLineageCache.get_cache(lineage_system_name)
             except TypeError:
-                raise HTTPException(400, 'lineage system required')
+                raise HTTPException(400, 'lineage_system_name required')
         case _:
             raise HTTPException(400, 'name not recognized')
 
-    return {
+    out = {
         'populated':  cache.populated,
         'populating': cache.populating
     }
+
+    if show_contents:
+        out['cache_contents'] = cache.data
+
+    return out
