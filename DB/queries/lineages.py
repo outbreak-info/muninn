@@ -324,21 +324,18 @@ async def get_mutation_incidence(
     async with get_async_session() as session:
         sample_count = await session.scalar(
             text(
-                f'''
-                select count(*)
-                from samples s
-                left join samples_lineages sl on sl.sample_id = s.id
-                left join lineages l on l.id = sl.lineage_id
-                left join lineage_systems ls on ls.id = l.lineage_system_id 
-                WHERE l.lineage_name = :input_lineage and ls.lineage_system_name = :input_lineage_system_name
-                {user_where_clause}
-                '''
+                f'select count(*)\n'
+                f'from samples s\n'
+                f'left join samples_lineages sl on sl.sample_id = s.id\n'
+                f'left join lineages l on l.id = sl.lineage_id\n'
+                f'left join lineage_systems ls on ls.id = l.lineage_system_id \n'
+                f'WHERE l.lineage_name = :input_lineage and ls.lineage_system_name = :input_lineage_system_name\n'
+                f'{user_where_clause}'
             ), {
                 'input_lineage': lineage,
                 'input_lineage_system_name': lineage_system_name
             }
         )
-        sample_count = float(sample_count)
 
         sample_subset_query = f"""
         select s.sequence_id, s.id from samples s
@@ -356,42 +353,43 @@ async def get_mutation_incidence(
 
             res = await session.execute(
                 text(
-                    f'''
-                    WITH sample_subset as (
-                        {sample_subset_query}
-                    ) SELECT ref_nt, position_nt, alt_nt, region, count(*) as mutation_count, count(*) / {sample_count} as mutation_prevalence from sample_subset
-                    inner join mutations m ON m.sequence_id = sample_subset.sequence_id
-                    inner join alleles a on a.id = m.allele_id
-                    {not_reference}
-                    group by ref_nt, position_nt, alt_nt, region
-                    having count(*) / {sample_count} >= {prevalence_threshold};
-                    '''
+                    f'WITH sample_subset as (\n'
+                    f'    {sample_subset_query}\n'
+                    f') SELECT ref_nt,\n'
+                    f'         position_nt,\n'
+                    f'         alt_nt,\n'
+                    f'         region,\n'
+                    f'         count(*) as mutation_count,\n'
+                    f'         count(*) / {sample_count}::decimal as mutation_prevalence \n'
+                    f'from sample_subset\n'
+                    f'inner join mutations m ON m.sequence_id = sample_subset.sequence_id\n'
+                    f'inner join alleles a on a.id = m.allele_id\n'
+                    f'{not_reference}\n'
+                    f'group by ref_nt, position_nt, alt_nt, region\n'
+                    f'having count(*) / {sample_count}::decimal >= {prevalence_threshold};'
                 )
             )
         else:
-            # todo: fix for new schema
             not_reference = 'where ref_aa <> alt_aa'
             if match_reference:
                 not_reference = ''
             res = await session.execute(
                 text(
-                    f'''
-                    WITH sample_subset as (
-                        {sample_subset_query}
-                    ),
-                    sample_aa AS (
-                    SELECT DISTINCT m.sample_id,
-                                    t.amino_acid_id
-                    FROM   mutations    m
-                    JOIN   {TableNames.mutation_translations} t ON t.{StandardColumnNames.mutation_id} = m.id
-                    ) SELECT ref_aa, position_aa, alt_aa, gff_feature, count(*) as mutation_count, count(*) / {sample_count} as mutation_prevalence
-                    from sample_subset
-                    inner join sample_aa ON sample_aa.sample_id = sample_subset.id
-                    inner join amino_acids aa on aa.id = sample_aa.amino_acid_id
-                    {not_reference}
-                    group by ref_aa, position_aa, alt_aa, gff_feature
-                    having count(*) / {sample_count} >= {prevalence_threshold};
-                    '''
+                    f'with sample_subset as (\n'
+                    f'    {sample_subset_query}\n'
+                    f')\n'
+                    f'select ref_aa,\n'
+                    f'       position_aa,\n'
+                    f'       alt_aa,\n'
+                    f'       gff_feature,\n'
+                    f'       count(*) as mutation_count,\n'
+                    f'       count(*) / {sample_count}::decimal as mutation_prevalence\n'
+                    f'from sample_subset\n'
+                    f'inner join mutation_translations mt on mt.sequence_id = sample_subset.sequence_id\n'
+                    f'inner join amino_acids aa on aa.id = mt.amino_acid_id\n'
+                    f'{not_reference}\n'
+                    f'group by ref_aa, position_aa, alt_aa, gff_feature\n'
+                    f'having count(*) / {sample_count}::decimal >= {prevalence_threshold}'
                 )
             )
 
