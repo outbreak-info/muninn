@@ -479,7 +479,6 @@ async def get_mutation_incidence_from_cache(
             }
         )
 
-
     rows = res.all()
     if len(rows) == 0:
         raise NotFoundError(f'Not found in cache: {lineage_system_name} {lineage}')

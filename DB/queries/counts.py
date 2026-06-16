@@ -318,7 +318,7 @@ async def count_lineages_by_collection_date(
 ) -> Dict[str, Dict[str, Dict[str, int]]]:
     user_where_clause = ''
     if raw_query is not None:
-        user_where_clause = f'where {parser.parse(raw_query)}'
+        user_where_clause = f'and {parser.parse(raw_query)}'
 
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(
@@ -330,33 +330,27 @@ async def count_lineages_by_collection_date(
     async with get_async_session() as session:
         res = await session.execute(
             text(
-                f'''
-                select
-                {extract_clause},
-                lineage_name,
-                lineage_system_name,
-                count(*)
-                from (
-                    select
-                    *,
-                    {MID_COLLECTION_DATE_CALCULATION}
-                    from (
-                        select
-                        lineage_name,
-                        lineage_system_name,
-                        collection_start_date,
-                        collection_end_date,
-                        collection_end_date - collection_start_date as collection_span
-                        from samples_lineages sl
-                        inner join lineages l on l.id = sl.lineage_id
-                        inner join lineage_systems ls on ls.id = l.lineage_system_id
-                        inner join samples s on s.id = sl.sample_id
-                        {user_where_clause}
-                    )
-                    where collection_span <= {max_span_days}
+               f'''
+               with lin_samp_date as (
+                    select lineage_name,
+                           lineage_system_name,
+                           collection_start_date,
+                           collection_end_date,
+                           collection_end_date - collection_start_date as collection_span,
+                           {MID_COLLECTION_DATE_CALCULATION}
+                    from samples_lineages sl
+                    inner join lineages l on l.id = sl.lineage_id
+                    inner join lineage_systems ls on ls.id = l.lineage_system_id
+                    inner join samples s on s.id = sl.sample_id
+                    where collection_end_date - collection_start_date <= {max_span_days} {user_where_clause}
                 )
-               {group_by_clause}
-               {order_by_clause}
+                select {extract_clause},
+                       lineage_name,
+                       lineage_system_name,
+                       count(*)
+                from lin_samp_date
+                {group_by_clause}
+                {order_by_clause};
                 '''
             )
         )
