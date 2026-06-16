@@ -1,49 +1,31 @@
-from asyncio import create_task
-from contextlib import asynccontextmanager
 from typing import List, Annotated, Dict
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import ProgrammingError
 
+import DB.queries.annotations
 import DB.queries.counts
+import DB.queries.helpers
 import DB.queries.lineages
 import DB.queries.mutations
 import DB.queries.phenotype_metrics
 import DB.queries.prevalence
 import DB.queries.samples
-import DB.queries.wastewater
 import DB.queries.variants
 import DB.queries.variants_mutations
-import DB.queries.annotations
-import DB.queries.helpers
+import DB.queries.wastewater
 from DB.models import Mutation, IntraHostVariant
-from api.cache import AlleleIncidenceByLineageCache
 from api.models import LineageAbundanceWithSampleInfo, VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, \
     VariantCountPhenoScoreInfo, \
     MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo, \
     LineageInfo, VariantMutationLagInfo, RegionAndGffFeatureInfo, MutationProfileInfo, AverageLineageAbundanceInfo
 from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, SIMPLE_DATE_FIELDS, NtOrAa, \
     DEFAULT_MAX_SPAN_DAYS, COLLECTION_DATE, DEFAULT_DAYS, COMMA_SEP_WORDLIKE_PATTERN, LINEAGE, \
-    DEFAULT_PREVALENCE_THRESHOLD, MIN_PREVALENCE_THRESHOLD, LineageSystemNames
-from utils.errors import ParsingError
+    DEFAULT_PREVALENCE_THRESHOLD, MIN_PREVALENCE_THRESHOLD
+from utils.errors import ParsingError, NotFoundError
 
-background_tasks = set()
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    for v in LineageSystemNames.__dict__.keys():
-        if v[:2] != '__':
-            lineage_system_name = getattr(LineageSystemNames, v)
-            cache = AlleleIncidenceByLineageCache.get_cache(lineage_system_name)
-            task = create_task(cache.populate())
-            background_tasks.add(task)
-            task.add_done_callback(background_tasks.discard)
-    yield
-
-
-app = FastAPI(lifespan=lifespan)
+app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
@@ -511,15 +493,15 @@ async def get_mutation_incidence(
 
     if change_bin == NtOrAa.nt and q is None:
         try:
-            AlleleIncidenceByLineageCache.answer_from_cache(
-                lineage_system_name,
+            return await DB.queries.lineages.get_mutation_incidence_from_cache(
                 lineage,
+                lineage_system_name,
                 prevalence_threshold,
                 match_reference
             )
-        except KeyError as e:
-            print(f'KeyError: {e}')  # todo rm
-
+        except NotFoundError:
+            # not in cache, continue to normal query
+            pass
     try:
         return await DB.queries.lineages.get_mutation_incidence(
             lineage,
@@ -720,27 +702,3 @@ async def get_annotations_by_mutations_and_amino_acid_position(
     q: str | None = None
 ) -> Dict:
     return await DB.queries.annotations.get_annotations_by_mutations_and_amino_acid_position(effect_detail, q)
-
-
-@app.get('/v0/cache:status', response_model=Dict)
-async def get_cache_status(name: str, lineage_system_name: str | None = None, show_contents: bool = False) -> dict:
-    cache = None
-    match name:
-        case 'AlleleIncidenceByLineage':
-            try:
-                cache = AlleleIncidenceByLineageCache.get_cache(lineage_system_name)
-                print(cache)  # todo rm
-            except TypeError:
-                raise HTTPException(400, 'lineage_system_name required')
-        case _:
-            raise HTTPException(400, 'name not recognized')
-
-    out = {
-        'populated': cache.populated,
-        'populating': cache.populating
-    }
-
-    if show_contents:
-        out['cache_contents'] = cache.data
-
-    return out

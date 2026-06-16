@@ -12,6 +12,7 @@ from api.models import LineageCountInfo, LineageAbundanceInfo, LineageInfo, Line
     MutationProfileInfo
 from parser.parser import parser
 from utils.constants import DateBinOpt, NtOrAa, NUCLEOTIDE_CHARACTERS, TableNames, StandardColumnNames, COLLECTION_DATE
+from utils.errors import NotFoundError
 
 
 async def get_all_lineages_by_lineage_system(lineage_system_name: str) -> List[LineageInfo]:
@@ -442,21 +443,55 @@ async def get_mutation_profile(
     return out_data
 
 
-async def count_samples_by_lineage(lineage_system_name: str) -> List[Dict]:
+
+
+async def get_mutation_incidence_from_cache(
+    lineage: str,
+    lineage_system_name: str,
+    prevalence_threshold: float,
+    match_reference: bool,
+):
+    reference_filter = 'and a.ref_nt <> a.alt_nt'
+    if match_reference:
+        reference_filter = ''
+
     async with get_async_session() as session:
         res = await session.execute(
             text(
-                'select lineage_name, count(*) as n_samples\n'
-                'from lineages l\n'
-                'inner join samples_lineages sl on sl.lineage_id = l.id\n'
-                'inner join samples s on s.id = sl.sample_id\n'
-                'inner join lineage_systems ls on ls.id = l.lineage_system_id\n'
-                'where ls.lineage_system_name = :lineage_system_name\n'
-                'group by lineage_name\n'
-                'order by n_samples desc;'
+                f'select a.region,\n'
+                f'       a.ref_nt,\n'
+                f'       a.position_nt,\n'
+                f'       a.alt_nt,\n'
+                f'       incidence,\n'
+                f'       n_samples,\n'
+                f'       incidence / n_samples::decimal as prevalence\n'
+                f'from lineages l\n'
+                f'inner join lineage_systems ls on ls.id = l.lineage_system_id\n'
+                f'inner join cache_allele_prevalence_by_lineage cache on cache.lineage_id = l.id\n'
+                f'inner join alleles a on a.id = cache.allele_id\n'
+                f'where l.lineage_name = :input_lineage_name '
+                f'      and ls.lineage_system_name = :input_system_name\n'
+                f'      and incidence / n_samples::decimal >= :input_threshold\n'
+                f'      {reference_filter}'
             ),
             {
-                'lineage_system_name': lineage_system_name
+                'input_system_name': lineage_system_name,
+                'input_lineage_name': lineage,
+                'input_threshold': prevalence_threshold
             }
         )
-    return [{'lineage_name': r[0], 'n_samples': r[1]} for r in res]
+
+
+    rows = res.all()
+    if len(rows) == 0:
+        raise NotFoundError(f'Not found in cache: {lineage_system_name} {lineage}')
+
+    out = defaultdict(list)
+    sample_count = None
+    for region, ref, pos, alt, incidence, n_samples, prevalence in rows:
+        out[region].append({"ref": ref, "alt": alt, "pos": pos, "count": incidence, "prevalence": prevalence})
+        if sample_count is not None and n_samples != sample_count:
+            raise ValueError('Mismatch in n_samples in response from cached mutation incidence by lineage.')
+        elif sample_count is None:
+            sample_count = n_samples
+    return {'sample_count': sample_count, 'mutation_counts': out}

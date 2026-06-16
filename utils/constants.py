@@ -132,6 +132,7 @@ class TableNames(PgIdentifiers):
     mutation_translations = 'mutation_translations'
     intra_host_translations = 'intra_host_translations'
     sequences = 'sequences'
+    cache_allele_prevalence_by_lineage = 'cache_allele_prevalence_by_lineage'
 
 
 class StandardColumnNames(PgIdentifiers):
