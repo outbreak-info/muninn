@@ -65,7 +65,6 @@ class VariantsMutationsCombinedParser(FileParser):
 
         print(f'{self._get_timestamp()} insert mutations')
         await self._stage_mutations()
-        await self._drop_mutations_indexes()
         await self._insert_mutations()
         await self._restore_mutations_indexes()
 
@@ -475,26 +474,14 @@ class VariantsMutationsCombinedParser(FileParser):
         async with get_async_write_session() as session:
             await session.execute(
                 text(
-                    'create unlogged table tmp_mutations_staging\n'
-                    'as\n'
-                    'select s.sequence_id as sequence_id, a.id as allele_id\n'
+                    'create unlogged table tmp_mutations_staging as\n'
+                    'select a.id as allele_id,\n'
+                    '       rb_build(array_agg(s.sequence_id)) as s_present\n'
                     'from tmp_mutations tmut\n'
                     'inner join alleles a on a.region = tmut.region and a.position_nt = tmut.position_nt and a.alt_nt = tmut.alt_nt\n'
-                    'inner join samples s on s.accession = tmut.accession;'
+                    'inner join samples s on s.accession = tmut.accession\n'
+                    'group by a.id;'
                 )
-            )
-            await session.execute(
-                text(
-                    'delete from tmp_mutations_staging\n'
-                    'where (sequence_id, allele_id) in\n'
-                    '      (\n'
-                    '          select sequence_id, allele_id\n'
-                    '          from mutations\n'
-                    '      );'
-                )
-            )
-            await session.execute(
-                text('create index idx_mutations_staging on tmp_mutations_staging (sequence_id, allele_id);')
             )
             await session.commit()
 
@@ -503,11 +490,11 @@ class VariantsMutationsCombinedParser(FileParser):
         async with get_async_write_session() as session:
             await session.execute(
                 text(
-                    'insert into mutations (\n'
-                    '    sequence_id, allele_id\n'
-                    ')\n'
-                    'select distinct on (sequence_id, allele_id) sequence_id, allele_id\n'
-                    'from tmp_mutations_staging;'
+                    f'insert into mutations as target (allele_id, sequences_present)\n'
+                    f'select allele_id, s_present\n'
+                    f'from tmp_mutations_staging\n'
+                    f'on conflict on constraint {ConstraintNames.pk_mutations}\n'
+                    f'do update set sequences_present = target.sequences_present | excluded.sequences_present;'
                 )
             )
             await session.commit()
@@ -866,8 +853,6 @@ class VariantsMutationsCombinedParser(FileParser):
             ]
         )
 
-
-
     async def _drop_intra_host_variants_indexes(self):
         await self.index_constraint_manager.drop_names(
             [
@@ -887,21 +872,9 @@ class VariantsMutationsCombinedParser(FileParser):
             ]
         )
 
-    async def _drop_mutations_indexes(self):
-        await self.index_constraint_manager.drop_names(
-            [
-                ConstraintNames.pk_mutations,
-                ConstraintNames.fk_mutations_sequence_id_sequences,
-                IndexNames.ix_mutations_allele_id_sequence_id
-            ]
-        )
-
     async def _restore_mutations_indexes(self):
         await self.index_constraint_manager.restore_names(
             [
-                ConstraintNames.pk_mutations,
-                IndexNames.ix_mutations_allele_id_sequence_id,
-                ConstraintNames.fk_mutations_sequence_id_sequences,
                 ConstraintNames.fk_mutations_allele_id_alleles,
             ]
         )
