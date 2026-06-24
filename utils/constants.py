@@ -214,6 +214,9 @@ class StandardColumnNames(PgIdentifiers):
     pval = 'pval'
     pass_qc = 'pass_qc'
 
+    # mutations
+    sequences_present = 'sequences_present'
+
     # geo locations
     country_name = 'country_name'
     admin1_name = 'admin1_name'

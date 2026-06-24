@@ -17,4 +17,5 @@ ADD --chown=muninn:muninn utils ./utils
 ADD --chown=muninn:muninn parser ./parser
 COPY --chown=muninn:muninn alembic.ini ./
 COPY --chown=muninn:muninn runinserts.py ./
+COPY --chown=muninn:muninn switch_to_bitmap_mutations.py ./
 COPY --chown=muninn:muninn containers/server/bin/* /bin/
