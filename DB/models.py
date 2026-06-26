@@ -675,6 +675,15 @@ class AnnotationAminoAcid(Base):
     r_annotation: Mapped['Annotation'] = relationship(back_populates='r_annotations_amino_acids')
     r_amino_acid: Mapped['AminoAcid'] = relationship(back_populates='r_annotations_amino_acids')
 
+class structural_annotations(Base):
+    __tablename__ = TableNames.structural_annotations
+
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+
+    sequential_site: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    structural_note: Mapped[str] = mapped_column(sa.Text, nullable=False)
+
+
 
 class SqlSnippets:
     create_view_lineages_deep_children = f'''
