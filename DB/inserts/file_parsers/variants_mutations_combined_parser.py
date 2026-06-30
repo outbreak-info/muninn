@@ -76,7 +76,6 @@ class VariantsMutationsCombinedParser(FileParser):
 
         print(f'{self._get_timestamp()} insert mutation translations')
         await self._stage_mutation_translations()
-        await self._drop_mutation_translations_indexes()
         await self._insert_mutation_translations()
         await self._restore_mutation_translations_indexes()
 
@@ -592,7 +591,7 @@ class VariantsMutationsCombinedParser(FileParser):
             # create a partial index on tmp_mutations to help with distinct in the next step
             await session.execute(
                 text(
-                    'create index ix_tmp_mutations_sample_allele_aa\n'
+                    'create index ix_tmp_mutations_sample_aa\n'
                     '    on tmp_mutations (accession, gff_feature, position_aa, alt_aa, alt_codon)\n'
                     '    where gff_feature is not null\n'
                     '        and position_aa is not null\n'
@@ -604,42 +603,21 @@ class VariantsMutationsCombinedParser(FileParser):
             # create staging table
             await session.execute(
                 text(
-                    'create unlogged table tmp_mutation_translations_staging as (\n'
-                    '    with base as (\n'
-                    '        select distinct on (accession, gff_feature, position_aa, alt_aa, alt_codon) *\n'
-                    '        from tmp_mutations tmut\n'
-                    '        where tmut.gff_feature is not null\n'
-                    '          and tmut.position_aa is not null\n'
-                    '          and tmut.alt_aa is not null\n'
-                    '          and tmut.ref_aa is not null\n'
-                    '    )\n'
-                    '    select s.sequence_id as sequence_id, aa.id as amino_acid_id\n'
-                    '    from base tmut\n'
-                    '    left join amino_acids aa\n'
-                    '              on aa.gff_feature = tmut.gff_feature\n'
-                    '                  and aa.position_aa = tmut.position_aa\n'
-                    '                  and aa.alt_aa = tmut.alt_aa\n'
-                    '                  and aa.alt_codon = tmut.alt_codon\n'
-                    '    left join samples s on s.accession = tmut.accession\n'
-                    ');\n'
-                )
-            )
-
-            # delete existing records from staging
-            await session.execute(
-                text(
-                    'delete from tmp_mutation_translations_staging\n'
-                    'where (sequence_id, amino_acid_id) in\n'
-                    '      (\n'
-                    '          select sequence_id, amino_acid_id\n'
-                    '          from mutation_translations\n'
-                    '      );'
-                )
-            )
-
-            await session.execute(
-                text(
-                    'create index ix_mutation_translations_staging on tmp_mutation_translations_staging (sequence_id, amino_acid_id);'
+                    'create unlogged table tmp_mutation_translations_staging as\n'
+                    'select aa.id as amino_acid_id,\n'
+                    '       rb_build(array_agg(s.sequence_id)) as s_present\n'
+                    'from tmp_mutations tmut\n'
+                    'inner join amino_acids aa on\n'
+                    '        aa.gff_feature = tmut.gff_feature\n'
+                    '            and aa.position_aa = tmut.position_aa\n'
+                    '            and aa.alt_aa = tmut.alt_aa\n'
+                    '            and aa.alt_codon = tmut.alt_codon\n'
+                    'inner join samples s on s.accession = tmut.accession\n'
+                    'where tmut.gff_feature is not null\n'
+                    '  and tmut.position_aa is not null\n'
+                    '  and tmut.alt_aa is not null\n'
+                    '  and tmut.ref_aa is not null\n'
+                    'group by aa.id;'
                 )
             )
 
@@ -650,13 +628,11 @@ class VariantsMutationsCombinedParser(FileParser):
         async with get_async_write_session() as session:
             await session.execute(
                 text(
-                    'insert into mutation_translations (\n'
-                    '    sequence_id, amino_acid_id\n'
-                    ')\n'
-                    'select distinct on (sequence_id, amino_acid_id)\n'
-                    '       sequence_id,\n'
-                    '       amino_acid_id\n'
-                    'from tmp_mutation_translations_staging;'
+                    'insert into mutation_translations as target (amino_acid_id, sequences_present)\n'
+                    'select amino_acid_id, s_present\n'
+                    'from tmp_mutation_translations_staging\n'
+                    'on conflict on constraint pk_mutation_translations\n'
+                    '    do update set sequences_present = target.sequences_present | excluded.sequences_present;'
                 )
             )
             await session.commit()
@@ -898,22 +874,10 @@ class VariantsMutationsCombinedParser(FileParser):
             ]
         )
 
-    async def _drop_mutation_translations_indexes(self):
-        await self.index_constraint_manager.drop_names(
-            [
-                ConstraintNames.pk_mutation_translations,
-                IndexNames.ix_mutation_translations_amino_acid_id_sequence_id,
-                ConstraintNames.fk_mutation_translations_sequence_id_sequences,
-            ]
-        )
-
     async def _restore_mutation_translations_indexes(self):
         await self.index_constraint_manager.restore_names(
             [
-                ConstraintNames.pk_mutation_translations,
                 ConstraintNames.fk_mutation_translations_amino_acid_id_amino_acids,
-                ConstraintNames.fk_mutation_translations_sequence_id_sequences,
-                IndexNames.ix_mutation_translations_amino_acid_id_sequence_id
             ]
         )
 
