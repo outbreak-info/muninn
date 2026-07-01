@@ -19,7 +19,7 @@ from DB.inserts.file_parsers.sarscov2_parsers.sc2_sd_samples_parser import SC2SD
 from DB.inserts.file_parsers.simple_lineage_parser import GenofluLineageParser, Sc2LineageParser
 from DB.inserts.file_parsers.variants_mutations_combined_parser import VariantsMutationsCombinedParser, \
     VariantsMutationsCombinedParserBig
-
+from DB.inserts.file_parsers.structural_annotations_parser import StructuralAnnotationsCsvParser
 
 def main():
     # define allowed formats, give names and point to parsers
@@ -44,6 +44,7 @@ def main():
         'flumut_tsv': FlumutTsvParser,
         'dms_tmp_csv': HaRegionDmsCsvParserNewData,
         'freyja_demixed_hierarchy_yaml': FreyjaDemixedLineageHierarchyYamlParser,
+        'structural_annotations_csv': StructuralAnnotationsCsvParser,
     }
 
     ## Parse and verify args ##

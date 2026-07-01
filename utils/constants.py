@@ -137,6 +137,7 @@ class TableNames(PgIdentifiers):
     lineages_deep_children = 'lineages_deep_children'  # actually a view.
     mutation_translations = 'mutation_translations'
     intra_host_translations = 'intra_host_translations'
+    structural_annotations = 'structural_annotations'
 
 
 class StandardColumnNames(PgIdentifiers):

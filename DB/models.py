@@ -675,7 +675,7 @@ class AnnotationAminoAcid(Base):
     r_annotation: Mapped['Annotation'] = relationship(back_populates='r_annotations_amino_acids')
     r_amino_acid: Mapped['AminoAcid'] = relationship(back_populates='r_annotations_amino_acids')
 
-class structural_annotations(Base):
+class StructuralAnnotation(Base):
     __tablename__ = TableNames.structural_annotations
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
