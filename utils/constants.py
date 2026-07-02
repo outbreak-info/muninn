@@ -272,6 +272,7 @@ class ConstraintNames(PgIdentifiers):
     # samples
     uq_samples_accession = 'uq_samples_accession'
     fk_samples_sequence_id_sequences = 'fk_samples_sequence_id_sequences'
+    fk_samples_geo_location_id_geo_locations = 'fk_samples_geo_location_id_geo_locations'
     ck_samples_retraction_values_existence_in_harmony = 'ck_samples_retraction_values_existence_in_harmony'
     ck_samples_collection_start_and_end_both_absent_or_both_present = 'ck_samples_collection_start_and_end_both_absent_or_both_present'
     ck_samples_collection_start_not_after_collection_end = 'ck_samples_collection_start_not_after_collection_end'

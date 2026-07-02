@@ -1,0 +1,1 @@
+alter table samples add constraint uq_samples_accession unique (accession);

@@ -719,6 +719,7 @@ class AnnotationAminoAcid(Base):
 
 
 class SqlSnippets:
+    # language=SQL
     create_view_lineages_deep_children = f'''
     create or replace view {TableNames.lineages_deep_children} as
     with recursive deep_children(parent_id, child_id) as (

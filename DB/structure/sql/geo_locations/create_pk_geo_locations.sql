@@ -1,0 +1,1 @@
+alter table geo_locations add constraint pk_geo_locations primary key (id);

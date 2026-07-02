@@ -1,0 +1,1 @@
+alter table samples add constraint fk_samples_geo_location_id_geo_locations
