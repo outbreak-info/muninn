@@ -189,7 +189,7 @@ async def get_abundance_summaries_by_simple_date(
         res = await session.execute(
             text(
                 f'''
-                select 
+                select
                 {extract_clause},
                 l.lineage_name,
                 ls.lineage_system_name,
@@ -200,11 +200,11 @@ async def get_abundance_summaries_by_simple_date(
                 percentile_cont(0.75) within group (order by sl.abundance) as q3,
                 max(sl.abundance) as max
                 from samples_lineages sl
-                inner join lineages l on l.id = sl.lineage_id 
-                inner join lineage_systems ls on ls.id = l.lineage_system_id 
-                inner join samples s on s.id = sl.sample_id 
-                left join geo_locations gl on gl.id = s.geo_location_id 
-                where sl.is_consensus_call = false {user_where_clause} 
+                inner join lineages l on l.id = sl.lineage_id
+                inner join lineage_systems ls on ls.id = l.lineage_system_id
+                inner join samples s on s.id = sl.sample_id
+                left join geo_locations gl on gl.id = s.geo_location_id
+                where sl.is_consensus_call = false {user_where_clause}
                 {group_by_clause}
                 {order_by_clause}
                 '''
@@ -252,7 +252,7 @@ async def get_abundance_summaries_by_collection_date(
         res = await session.execute(
             text(
                 f'''
-                select 
+                select
                 {extract_clause},
                 lineage_name,
                 lineage_system_name,
@@ -261,13 +261,13 @@ async def get_abundance_summaries_by_collection_date(
                 percentile_cont(0.25) within group (order by abundance) as q1,
                 percentile_cont(0.5) within group (order by abundance) as median,
                 percentile_cont(0.75) within group (order by abundance) as q3,
-                max(abundance) as max 
+                max(abundance) as max
                 from(
                     select
                     *,
                     {MID_COLLECTION_DATE_CALCULATION}
                     from(
-                        select 
+                        select
                         l.lineage_name,
                         ls.lineage_system_name,
                         sl.abundance,
@@ -275,12 +275,12 @@ async def get_abundance_summaries_by_collection_date(
                         collection_end_date,
                         collection_end_date - collection_start_date as collection_span
                         from samples_lineages sl
-                        inner join lineages l on l.id = sl.lineage_id 
-                        inner join lineage_systems ls on ls.id = l.lineage_system_id 
-                        inner join samples s on s.id = sl.sample_id 
-                        left join geo_locations gl on gl.id = s.geo_location_id 
+                        inner join lineages l on l.id = sl.lineage_id
+                        inner join lineage_systems ls on ls.id = l.lineage_system_id
+                        inner join samples s on s.id = sl.sample_id
+                        left join geo_locations gl on gl.id = s.geo_location_id
                         where sl.is_consensus_call = false {user_where_clause}
-                        
+
                     )
                     where collection_span <= {max_span_days}
                 )
@@ -324,7 +324,7 @@ async def get_mutation_incidence(
     async with get_async_session() as session:
         sample_count = await session.scalar(
             text(
-                f'select count(*)\n'
+                f'select count(distinct s.sequence_id)\n'
                 f'from samples s\n'
                 f'left join samples_lineages sl on sl.sample_id = s.id\n'
                 f'left join lineages l on l.id = sl.lineage_id\n'
@@ -352,21 +352,29 @@ async def get_mutation_incidence(
                 not_reference = ''
 
             res = await session.execute(
-                text(
-                    f'WITH sample_subset as (\n'
-                    f'    {sample_subset_query}\n'
-                    f') SELECT ref_nt,\n'
-                    f'         position_nt,\n'
-                    f'         alt_nt,\n'
-                    f'         region,\n'
-                    f'         count(*) as mutation_count,\n'
-                    f'         count(*) / {sample_count}::decimal as mutation_prevalence \n'
-                    f'from sample_subset\n'
-                    f'inner join mutations m ON m.sequence_id = sample_subset.sequence_id\n'
-                    f'inner join alleles a on a.id = m.allele_id\n'
-                    f'{not_reference}\n'
-                    f'group by ref_nt, position_nt, alt_nt, region\n'
-                    f'having count(*) / {sample_count}::decimal >= {prevalence_threshold};'
+                text(f'''
+                explain(analyze, buffers, verbose, format json)
+                with sample_subset as (
+                    {sample_subset_query}
+                ),
+                sample_subset_bm as (
+                    select rb_build_agg(sequence_id) as bm from sample_subset
+                ),
+                counted as (
+                    select  a.ref_nt,
+                            a.position_nt,
+                            a.alt_nt,
+                            a.region,
+                            rb_and_cardinality(m.sequences_present, (select bm from sample_subset_bm)) as mutation_count
+                    from {TableNames.mutations} m
+                    inner join {TableNames.alleles} a on a.id = m.allele_id
+                    {not_reference}
+                )
+                select *,
+                        mutation_count / {sample_count}::decimal as mutation_prevalence
+                from counted
+                where mutation_count >= {prevalence_threshold} * {sample_count}
+                '''
                 )
             )
         else:
@@ -382,17 +390,16 @@ async def get_mutation_incidence(
                     f'       position_aa,\n'
                     f'       alt_aa,\n'
                     f'       gff_feature,\n'
-                    f'       count(*) as mutation_count,\n'
-                    f'       count(*) / {sample_count}::decimal as mutation_prevalence\n'
+                    f'       count(distinct sample_subset.sequence_id) as mutation_count,\n'
+                    f'       count(distinct sample_subset.sequence_id) / {sample_count}::decimal as mutation_prevalence\n'
                     f'from sample_subset\n'
                     f'inner join mutation_translations mt on mt.sequence_id = sample_subset.sequence_id\n'
                     f'inner join amino_acids aa on aa.id = mt.amino_acid_id\n'
                     f'{not_reference}\n'
                     f'group by ref_aa, position_aa, alt_aa, gff_feature\n'
-                    f'having count(*) / {sample_count}::decimal >= {prevalence_threshold}'
+                    f'having count(distinct sample_subset.sequence_id) / {sample_count}::decimal >= {prevalence_threshold}'
                 )
             )
-
     out = defaultdict(list)
     for ref, pos, alt, region_or_gff, count, prevalence in res:
         out[region_or_gff].append({"ref": ref, "alt": alt, "pos": pos, "count": count, "prevalence": prevalence})
