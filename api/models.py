@@ -307,3 +307,18 @@ class MutationProfileInfo(BaseModel):
     alt_nt: str
     region: str
     count: int
+
+class MutationWithCountInfo(BaseModel):
+    mutation: str
+    sample_count: int
+
+class StructuralAnnotationMutationsInfo(BaseModel):
+    sequential_site: int
+    mutations: List[MutationWithCountInfo]
+class MutationWithCountInfo(BaseModel):
+    mutation: str
+    sample_count: int
+
+class StructuralAnnotationMutationsInfo(BaseModel):
+    sequential_site: int
+    mutations: List[MutationWithCountInfo]

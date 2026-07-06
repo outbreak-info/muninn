@@ -16,14 +16,14 @@ import DB.queries.variants
 import DB.queries.variants_mutations
 import DB.queries.annotations
 import DB.queries.helpers
+import DB.queries.structural_annotations
 from DB.models import Mutation, IntraHostVariant
-from api.models import LineageAbundanceWithSampleInfo, VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
+from api.models import LineageAbundanceWithSampleInfo, StructuralAnnotationMutationsInfo, VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
     MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo, \
     LineageInfo, VariantMutationLagInfo, RegionAndGffFeatureInfo, MutationProfileInfo, AverageLineageAbundanceInfo
 from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, SIMPLE_DATE_FIELDS, NtOrAa, \
     DEFAULT_MAX_SPAN_DAYS, COLLECTION_DATE, DEFAULT_DAYS, COMMA_SEP_WORDLIKE_PATTERN, LINEAGE, DEFAULT_PREVALENCE_THRESHOLD
 from utils.errors import ParsingError
-
 app = FastAPI()
 
 app.add_middleware(
@@ -636,3 +636,8 @@ async def get_annotations_by_mutations_and_amino_acid_position(
     q: str | None = None
 ) -> Dict:
     return await DB.queries.annotations.get_annotations_by_mutations_and_amino_acid_position(effect_detail, q)
+
+@app.get('/structural_annotations/{sequential_site}/mutations', response_model=StructuralAnnotationMutationsInfo)
+async def get_mutations_at_structural_annotation(sequential_site: int):
+    """Get all mutations at a given sequential site with sample counts."""
+    return await DB.queries.structural_annotations.get_mutations_by_sequential_site(sequential_site)
