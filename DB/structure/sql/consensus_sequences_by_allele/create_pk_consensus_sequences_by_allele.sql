@@ -1,0 +1,2 @@
+alter table consensus_sequences_by_allele add constraint pk_consensus_sequences_by_allele
+primary key (allele_id);

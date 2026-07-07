@@ -1,0 +1,2 @@
+alter table consensus_sequences_by_amino_acid add constraint pk_consensus_sequences_by_amino_acid
+primary key (amino_acid_id);

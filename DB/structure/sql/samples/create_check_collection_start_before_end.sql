@@ -1,2 +1,2 @@
 alter table samples add constraint ck_samples_collection_start_not_after_collection_end
-check collection_start_date <= collection_end_date;
+check (collection_start_date <= collection_end_date);

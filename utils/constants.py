@@ -298,6 +298,11 @@ class ConstraintNames(PgIdentifiers):
     fk_mutations_sequence_id_sequences = 'fk_mutations_sequence_id_sequences'
     fk_mutations_allele_id_alleles = 'fk_mutations_allele_id_alleles'
 
+    # consensus alleles sequences
+    pk_consensus_sequences_by_allele = 'pk_consensus_sequences_by_allele'
+    fk_consensus_sequences_by_allele_allele_id_alleles = 'fk_consensus_sequences_by_allele_allele_id_alleles'
+
+
     # mutation translations
     fk_mutation_translations_amino_acid_id_amino_acids = 'fk_mutation_translations_amino_acid_id_amino_acids'
     fk_mutation_translations_sequence_id_sequences = 'fk_mutation_translations_sequence_id_sequences'

@@ -1,2 +1,2 @@
 alter table amino_acids add constraint ck_amino_acids_ref_aa_not_empty
-check ref_aa <> '';
+check (ref_aa <> '');

@@ -1,0 +1,2 @@
+alter table phenotype_metric_values add constraint uq_phenotype_metric_values_metric_and_amino_acid
+unique (phenotype_metric_id, amino_acid_id);

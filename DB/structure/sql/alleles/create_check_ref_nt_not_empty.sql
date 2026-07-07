@@ -1,1 +1,1 @@
-alter table alleles add constraint ck_alleles_ref_nt_not_empty check ref_nt <> '';
+alter table alleles add constraint ck_alleles_ref_nt_not_empty check (ref_nt <> '');

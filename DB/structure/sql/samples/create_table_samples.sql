@@ -1,5 +1,5 @@
 create table samples (
-	id bigserial primary key,
+	id bigserial not null,
 	accession text not null,
 	sequence_id bigint not null,
 
@@ -22,13 +22,13 @@ create table samples (
 	library_source text,
 	organism text,
 	is_retracted boolean not null,
-	retraction_detected_date timestamp with timezone,
+	retraction_detected_date timestamp with time zone,
 	isolation_source text,
 
 	collection_start_date date,
 	collection_end_date date,
-	release_date timestamp with timezone,
-	creation_date timestamp with timezone,
+	release_date timestamp with time zone,
+	creation_date timestamp with time zone,
 
 	version text,
 	sample_name text,

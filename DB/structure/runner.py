@@ -1,7 +1,6 @@
-from sqlalchemy.sql.expression import text
-
-from DB.engine import get_async_write_session
-from DB.structure import sequences, samples, geo_locations, alleles, amino_acids
+from DB.structure import sequences, samples, geo_locations, alleles, amino_acids, phenotype_metrics, \
+    phenotype_metric_values, consensus_sequences_by_allele, consensus_sequences_by_amino_acid, lineage_systems, \
+    lineages, samples_lineages, lineages_immediate_children, lineages_deep_children
 
 
 async def set_up_db():
@@ -11,10 +10,14 @@ async def set_up_db():
     await alleles.create_all()
     await amino_acids.create_all()
 
+    await consensus_sequences_by_allele.create_all()
+    await consensus_sequences_by_amino_acid.create_all()
 
-async def run_sql_file(filename: str):
-    with open(filename, 'r') as f:
-        query = ''.join(f.readlines())
-    async with get_async_write_session() as session:
-        await session.execute(text(query))
-        await session.commit()
+    await phenotype_metrics.create_all()
+    await phenotype_metric_values.create_all()
+
+    await lineage_systems.create_all()
+    await lineages.create_all()
+    await samples_lineages.create_all()
+    await lineages_immediate_children.create_all()
+    await lineages_deep_children.create_all()

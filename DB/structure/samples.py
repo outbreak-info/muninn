@@ -1,8 +1,8 @@
-from DB.structure.runner import run_sql_file
+from DB.structure.utils import run_sql_file
 
 
 async def create_all():
-    await run_sql_file('sql/samples/create_samples_table.sql')
+    await run_sql_file('sql/samples/create_table_samples.sql')
     await run_sql_file('sql/samples/create_pk_samples.sql')
     await run_sql_file('sql/samples/create_uq_accession.sql')
     await run_sql_file('sql/samples/create_fk_sequence_id.sql')

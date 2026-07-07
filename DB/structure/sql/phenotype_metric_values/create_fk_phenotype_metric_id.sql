@@ -1,0 +1,2 @@
+alter table phenotype_metric_values add constraint fk_phenotype_metric_values_phenotype_metric_id_pheno_metrics
+foreign key (phenotype_metric_id) references phenotype_metrics (id);
