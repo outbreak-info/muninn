@@ -10,7 +10,7 @@ from DB.models import Base
 from DB.engine import get_async_write_session, get_async_session
 from DB.index_constraint_manager import IndexAndConstraintManager
 from DB.inserts.file_parsers.file_parser import FileParser
-from utils.constants import StandardColumnNames, CONTAINER_DATA_DIRECTORY, Env, ConstraintNames, IndexNames
+from utils.constants import ColumnNames, CONTAINER_DATA_DIRECTORY, Env, ConstraintNames, IndexNames
 
 AMINO_ACID_REF_CONFLICTS_FILE = '/tmp/amino_acid_ref_conflicts.csv'
 ALLELE_REF_CONFLICTS_FILE = '/tmp/allele_ref_conflicts.csv'
@@ -882,41 +882,41 @@ class VariantsMutationsCombinedParser(FileParser):
         )
 
     variants_column_mapping = {
-        StandardColumnNames.region: 'REGION',
-        StandardColumnNames.position_nt: 'POS',
-        StandardColumnNames.ref_nt: 'REF',
-        StandardColumnNames.alt_nt: 'ALT',
-        StandardColumnNames.position_aa: 'POS_AA',
-        StandardColumnNames.ref_aa: 'REF_AA',
-        StandardColumnNames.alt_aa: 'ALT_AA',
-        StandardColumnNames.gff_feature: 'GFF_FEATURE',
-        StandardColumnNames.ref_codon: 'REF_CODON',
-        StandardColumnNames.alt_codon: 'ALT_CODON',
-        StandardColumnNames.accession: 'SRA',
-        StandardColumnNames.pval: 'PVAL',
-        StandardColumnNames.ref_dp: 'REF_DP',
-        StandardColumnNames.ref_rv: 'REF_RV',
-        StandardColumnNames.ref_qual: 'REF_QUAL',
-        StandardColumnNames.alt_dp: 'ALT_DP',
-        StandardColumnNames.alt_rv: 'ALT_RV',
-        StandardColumnNames.alt_qual: 'ALT_QUAL',
-        StandardColumnNames.pass_qc: 'PASS',
-        StandardColumnNames.alt_freq: 'ALT_FREQ',
-        StandardColumnNames.total_dp: 'TOTAL_DP',
+        ColumnNames.region: 'REGION',
+        ColumnNames.position_nt: 'POS',
+        ColumnNames.ref_nt: 'REF',
+        ColumnNames.alt_nt: 'ALT',
+        ColumnNames.position_aa: 'POS_AA',
+        ColumnNames.ref_aa: 'REF_AA',
+        ColumnNames.alt_aa: 'ALT_AA',
+        ColumnNames.gff_feature: 'GFF_FEATURE',
+        ColumnNames.ref_codon: 'REF_CODON',
+        ColumnNames.alt_codon: 'ALT_CODON',
+        ColumnNames.accession: 'SRA',
+        ColumnNames.pval: 'PVAL',
+        ColumnNames.ref_dp: 'REF_DP',
+        ColumnNames.ref_rv: 'REF_RV',
+        ColumnNames.ref_qual: 'REF_QUAL',
+        ColumnNames.alt_dp: 'ALT_DP',
+        ColumnNames.alt_rv: 'ALT_RV',
+        ColumnNames.alt_qual: 'ALT_QUAL',
+        ColumnNames.pass_qc: 'PASS',
+        ColumnNames.alt_freq: 'ALT_FREQ',
+        ColumnNames.total_dp: 'TOTAL_DP',
     }
 
     mutations_column_mapping = {
-        StandardColumnNames.accession: 'sra',
-        StandardColumnNames.position_nt: 'pos',
-        StandardColumnNames.ref_nt: 'ref',
-        StandardColumnNames.alt_nt: 'alt',
-        StandardColumnNames.region: 'region',
-        StandardColumnNames.gff_feature: 'GFF_FEATURE',
-        StandardColumnNames.ref_codon: 'ref_codon',
-        StandardColumnNames.alt_codon: 'alt_codon',
-        StandardColumnNames.ref_aa: 'ref_aa',
-        StandardColumnNames.alt_aa: 'alt_aa',
-        StandardColumnNames.position_aa: 'pos_aa',
+        ColumnNames.accession: 'sra',
+        ColumnNames.position_nt: 'pos',
+        ColumnNames.ref_nt: 'ref',
+        ColumnNames.alt_nt: 'alt',
+        ColumnNames.region: 'region',
+        ColumnNames.gff_feature: 'GFF_FEATURE',
+        ColumnNames.ref_codon: 'ref_codon',
+        ColumnNames.alt_codon: 'alt_codon',
+        ColumnNames.ref_aa: 'ref_aa',
+        ColumnNames.alt_aa: 'alt_aa',
+        ColumnNames.position_aa: 'pos_aa',
     }
 
     class InputFile:

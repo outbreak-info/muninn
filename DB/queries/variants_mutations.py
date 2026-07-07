@@ -5,7 +5,7 @@ from sqlalchemy import text
 
 from DB.engine import get_async_session
 from api.models import VariantMutationLagInfo
-from utils.constants import TableNames, StandardColumnNames
+from utils.constants import TableNames, ColumnNames
 
 
 async def get_mutations_before_variants(
@@ -53,7 +53,7 @@ async def _get_lag_variants_mutations(
                     SELECT MIN(ss.collection_start_date) as start_date, aa.ref_aa, aa.position_aa, aa.alt_aa, aa.gff_feature
                     FROM samples_subset ss
                     INNER JOIN intra_host_variants ihv ON ihv.sample_id = ss.id
-                    INNER JOIN {TableNames.intra_host_translations} t ON t.{StandardColumnNames.intra_host_variant_id} = ihv.id
+                    INNER JOIN {TableNames.intra_host_translations} t ON t.{ColumnNames.intra_host_variant_id} = ihv.id
                     INNER JOIN amino_acids aa ON t.amino_acid_id = aa.id
                     WHERE ihv.alt_freq >= 0.1
                     GROUP BY aa.ref_aa, aa.position_aa, aa.alt_aa, aa.gff_feature
@@ -62,7 +62,7 @@ async def _get_lag_variants_mutations(
                     SELECT MIN(ss.collection_start_date) as start_date, aa.ref_aa, aa.position_aa, aa.alt_aa, aa.gff_feature
                     FROM samples_subset ss
                     INNER JOIN mutations m ON m.sample_id = ss.id
-                    INNER JOIN {TableNames.mutation_translations} t ON t.{StandardColumnNames.mutation_id} = m.id
+                    INNER JOIN {TableNames.mutation_translations} t ON t.{ColumnNames.mutation_id} = m.id
                     INNER JOIN amino_acids aa ON t.amino_acid_id = aa.id
                     GROUP BY aa.ref_aa, aa.position_aa, aa.alt_aa, aa.gff_feature
                 )

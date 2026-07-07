@@ -9,7 +9,7 @@ from DB.queries.date_count_helpers import get_extract_clause, get_group_by_claus
     MID_COLLECTION_DATE_CALCULATION
 from api.models import VariantInfo
 from parser.parser import parser
-from utils.constants import StandardColumnNames, DateBinOpt, TableNames, COLLECTION_DATE
+from utils.constants import ColumnNames, DateBinOpt, TableNames, COLLECTION_DATE
 
 
 async def get_variants(query: str) -> List['VariantInfo']:
@@ -72,10 +72,10 @@ async def get_aa_variant_frequency_by_collection_date(
     group_by_clause = get_group_by_clause(
         date_bin,
         prefix_cols=[
-            StandardColumnNames.gff_feature,
-            StandardColumnNames.ref_aa,
-            StandardColumnNames.position_aa,
-            StandardColumnNames.alt_aa
+            ColumnNames.gff_feature,
+            ColumnNames.ref_aa,
+            ColumnNames.position_aa,
+            ColumnNames.alt_aa
         ]
     )
     order_by_clause = get_order_by_cause(date_bin)
@@ -116,7 +116,7 @@ async def get_aa_variant_frequency_by_collection_date(
                             collection_end_date - collection_start_date as collection_span
                         from samples s
                         inner join intra_host_variants ihv on ihv.sample_id = s.id
-                        inner join {TableNames.intra_host_translations} t on t.{StandardColumnNames.intra_host_variant_id} = ihv.id
+                        inner join {TableNames.intra_host_translations} t on t.{ColumnNames.intra_host_variant_id} = ihv.id
                         inner join amino_acids aa on aa.id = t.amino_acid_id
                         left join samples_lineages sl on sl.sample_id = s.id
                         left join lineages l on l.id = sl.lineage_id

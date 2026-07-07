@@ -10,7 +10,7 @@ from DB.inserts.lineage_children import batch_delete_lineage_children, copy_inse
 from DB.inserts.lineage_systems import find_or_insert_lineage_system
 from DB.inserts.lineages import copy_insert_lineages, get_all_lineages_by_lineage_system_as_pl_df
 from DB.models import LineageSystem
-from utils.constants import StandardColumnNames, LineageSystemNames
+from utils.constants import ColumnNames, LineageSystemNames
 
 PARENT_NAME = 'parent_name'
 CHILD_NAME = 'child_name'
@@ -42,25 +42,25 @@ class FreyjaDemixedLineageHierarchyYamlParser(FileParser):
         missing_lineages = (
             relationships
             .select(PARENT_NAME)
-            .rename({PARENT_NAME: StandardColumnNames.lineage_name})
+            .rename({PARENT_NAME: ColumnNames.lineage_name})
             .join(
-                existing_lineages.select(StandardColumnNames.lineage_name),
+                existing_lineages.select(ColumnNames.lineage_name),
                 how='anti',
-                on=StandardColumnNames.lineage_name
+                on=ColumnNames.lineage_name
             )
             .vstack(
                 relationships
                 .select(CHILD_NAME)
-                .rename({CHILD_NAME: StandardColumnNames.lineage_name})
+                .rename({CHILD_NAME: ColumnNames.lineage_name})
                 .join(
-                    existing_lineages.select(StandardColumnNames.lineage_name),
+                    existing_lineages.select(ColumnNames.lineage_name),
                     how='anti',
-                    on=StandardColumnNames.lineage_name
+                    on=ColumnNames.lineage_name
                 )
             )
             .unique()
             .with_columns(
-                pl.lit(lineage_system_id).alias(StandardColumnNames.lineage_system_id)
+                pl.lit(lineage_system_id).alias(ColumnNames.lineage_system_id)
             )
         )
 
@@ -75,19 +75,19 @@ class FreyjaDemixedLineageHierarchyYamlParser(FileParser):
             existing_lineages,
             how='left',
             left_on=pl.col(PARENT_NAME),
-            right_on=pl.col(StandardColumnNames.lineage_name)
+            right_on=pl.col(ColumnNames.lineage_name)
         ).rename(
             {
-                StandardColumnNames.lineage_id: StandardColumnNames.parent_id
+                ColumnNames.lineage_id: ColumnNames.parent_id
             }
         ).join(
             existing_lineages,
             how='left',
             left_on=pl.col(CHILD_NAME),
-            right_on=pl.col(StandardColumnNames.lineage_name)
+            right_on=pl.col(ColumnNames.lineage_name)
         ).rename(
             {
-                StandardColumnNames.lineage_id: StandardColumnNames.child_id
+                ColumnNames.lineage_id: ColumnNames.child_id
             }
         ).unique()
 
@@ -100,7 +100,7 @@ class FreyjaDemixedLineageHierarchyYamlParser(FileParser):
         dropped_relationships = existing_relationships.join(
             relationships,
             how='anti',
-            on=[StandardColumnNames.parent_id, StandardColumnNames.child_id]
+            on=[ColumnNames.parent_id, ColumnNames.child_id]
         )
         print(f'Deleting {len(dropped_relationships)} defunct relationships.')
         await batch_delete_lineage_children(dropped_relationships)
@@ -109,7 +109,7 @@ class FreyjaDemixedLineageHierarchyYamlParser(FileParser):
         new_relationships = relationships.join(
             existing_relationships,
             how='anti',
-            on=[StandardColumnNames.parent_id, StandardColumnNames.child_id]
+            on=[ColumnNames.parent_id, ColumnNames.child_id]
         )
         relationships_added = await copy_insert_lineage_children(new_relationships)
         print(f'New relationships added: {relationships_added}')

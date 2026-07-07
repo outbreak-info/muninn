@@ -12,7 +12,7 @@ from DB.inserts.samples import copy_insert_samples, batch_upsert_samples, get_sa
     get_samples_accession_id_and_seq_id_as_pl_df
 from DB.inserts.sequences import insert_sequences_for_row_numbers
 from DB.models import GeoLocation
-from utils.constants import StandardColumnNames, COLLECTION_DATE, GEO_LOCATION
+from utils.constants import ColumnNames, COLLECTION_DATE, GEO_LOCATION
 from utils.dates_and_times import parse_collection_start_and_end
 
 
@@ -51,7 +51,7 @@ class Sc2SamplesParser(FileParser):
         existing_samples = await get_samples_accession_id_and_seq_id_as_pl_df()
 
         sequence_id_by_accession = await self._handle_sequences(
-            samples_input.select(pl.col(StandardColumnNames.accession)).collect(),
+            samples_input.select(pl.col(ColumnNames.accession)).collect(),
             existing_samples
         )
 
@@ -67,11 +67,11 @@ class Sc2SamplesParser(FileParser):
             )
             .with_columns(
                 pl.col(COLLECTION_DATE).list.to_struct(
-                    fields=[StandardColumnNames.collection_start_date, StandardColumnNames.collection_end_date]
+                    fields=[ColumnNames.collection_start_date, ColumnNames.collection_end_date]
                 )
             )
             .unnest(COLLECTION_DATE)
-            .join(sequence_id_by_accession.lazy(), on=pl.col(StandardColumnNames.accession), how='left', validate='1:1')
+            .join(sequence_id_by_accession.lazy(), on=pl.col(ColumnNames.accession), how='left', validate='1:1')
             .collect()
         )
         setup_elapsed = perf_counter() - start
@@ -96,20 +96,20 @@ class Sc2SamplesParser(FileParser):
                 pl.col(GEO_LOCATION).str.split(self.geo_location_levels_delimiter).list.to_struct(
                     n_field_strategy="max_width",
                     fields=[
-                        StandardColumnNames.country_name,
-                        StandardColumnNames.admin1_name,
-                        StandardColumnNames.admin2_name,
-                        StandardColumnNames.admin3_name
+                        ColumnNames.country_name,
+                        ColumnNames.admin1_name,
+                        ColumnNames.admin2_name,
+                        ColumnNames.admin3_name
                     ]
                 )
                 .alias('tmp_geo_struct')
             )
             .unnest('tmp_geo_struct')
             .with_columns([
-                pl.col(StandardColumnNames.country_name).str.strip_chars(),
-                pl.col(StandardColumnNames.admin1_name).str.strip_chars(),
-                pl.col(StandardColumnNames.admin2_name).str.strip_chars(),
-                pl.col(StandardColumnNames.admin3_name).str.strip_chars(),
+                pl.col(ColumnNames.country_name).str.strip_chars(),
+                pl.col(ColumnNames.admin1_name).str.strip_chars(),
+                pl.col(ColumnNames.admin2_name).str.strip_chars(),
+                pl.col(ColumnNames.admin3_name).str.strip_chars(),
             ])
             .collect()
         )
@@ -119,10 +119,10 @@ class Sc2SamplesParser(FileParser):
             ids.append(
                 await find_or_insert_geo_location(
                     GeoLocation(
-                        country_name=row[StandardColumnNames.country_name],
-                        admin1_name=row[StandardColumnNames.admin1_name],
-                        admin2_name=row[StandardColumnNames.admin2_name],
-                        admin3_name=row[StandardColumnNames.admin3_name]
+                        country_name=row[ColumnNames.country_name],
+                        admin1_name=row[ColumnNames.admin1_name],
+                        admin2_name=row[ColumnNames.admin2_name],
+                        admin3_name=row[ColumnNames.admin3_name]
                     )
                 )
             )
@@ -130,14 +130,14 @@ class Sc2SamplesParser(FileParser):
         geo_locations = (
             geo_locations
             .select(pl.col(GEO_LOCATION))
-            .with_columns(pl.Series(ids).alias(StandardColumnNames.geo_location_id))
+            .with_columns(pl.Series(ids).alias(ColumnNames.geo_location_id))
         )
         print(f'geo locations took {round(time.perf_counter() - start, 2)}s')
         return geo_locations
 
     def _parse_unique_seqs_pl(self) -> pl.DataFrame:
         if self.unique_seqs_filename is None:
-            uq = pl.DataFrame(schema={StandardColumnNames.accession: str, 'row_number': int})
+            uq = pl.DataFrame(schema={ColumnNames.accession: str, 'row_number': int})
         else:
             uq = (
                 pl.read_csv(
@@ -156,7 +156,7 @@ class Sc2SamplesParser(FileParser):
                 .select(['row_number', 'concat_accessions'])
                 .with_columns(pl.col('concat_accessions').str.split(self.unique_seqs_within_field_delimiter))
                 .explode('concat_accessions')
-                .rename({'concat_accessions': StandardColumnNames.accession})
+                .rename({'concat_accessions': ColumnNames.accession})
             )
         return uq
 
@@ -179,15 +179,15 @@ class Sc2SamplesParser(FileParser):
 
         existing_plus_row_number = (
             existing_samples
-            .join(uq_seqs_input, on=pl.col(StandardColumnNames.accession), how='left', validate='1:1')
+            .join(uq_seqs_input, on=pl.col(ColumnNames.accession), how='left', validate='1:1')
         )
 
         if not (
                 existing_plus_row_number
                         .filter(pl.col('row_number').is_not_null())
                         .select(
-                    (pl.col(StandardColumnNames.sequence_id).n_unique().over('row_number') == 1) &
-                    (pl.col('row_number').n_unique().over(StandardColumnNames.sequence_id) == 1)
+                    (pl.col(ColumnNames.sequence_id).n_unique().over('row_number') == 1) &
+                    (pl.col('row_number').n_unique().over(ColumnNames.sequence_id) == 1)
                 ).to_series().all()
         ):
             raise ValueError(f'New unique sequence data does not match up with existing. Unable to continue.')
@@ -200,7 +200,7 @@ class Sc2SamplesParser(FileParser):
             max_row_number = 0
         samples_input_plus_row_numbers = (
             samples_input
-            .join(uq_seqs_input, on=pl.col(StandardColumnNames.accession), how='left', validate='1:1')
+            .join(uq_seqs_input, on=pl.col(ColumnNames.accession), how='left', validate='1:1')
             .with_row_index('alt_row_number')
             .with_columns(pl.col('row_number').fill_null(pl.col('alt_row_number') + max_row_number + 1))
             .drop('alt_row_number')
@@ -210,10 +210,10 @@ class Sc2SamplesParser(FileParser):
         # to find seq ids for groups that already exist.
         enriched_row_numbers_plus_existing = samples_input_plus_row_numbers.join(
             existing_samples,
-            on=pl.col(StandardColumnNames.accession),
+            on=pl.col(ColumnNames.accession),
             how="left",
             validate='1:1'
-        ).select(pl.col('row_number'), pl.col(StandardColumnNames.sequence_id)).unique()
+        ).select(pl.col('row_number'), pl.col(ColumnNames.sequence_id)).unique()
 
         # and join back into input samples data. This fills in seq ids for groups that already exist.
         samples_uq_seqs = samples_input_plus_row_numbers.join(
@@ -226,7 +226,7 @@ class Sc2SamplesParser(FileParser):
         # add new sequences for new groups
         row_numbers_for_new_seqs: list[int] = (
             samples_uq_seqs
-            .filter(pl.col(StandardColumnNames.sequence_id).is_null())
+            .filter(pl.col(ColumnNames.sequence_id).is_null())
             .select(pl.col('row_number'))
             .unique()
             .to_series().to_list()
@@ -241,7 +241,7 @@ class Sc2SamplesParser(FileParser):
                 .replace_strict(new_seq_ids_by_row_number, default=None)
                 .alias('new_sequence_id')
             )
-            .with_columns(pl.col(StandardColumnNames.sequence_id).fill_null(pl.col('new_sequence_id')))
+            .with_columns(pl.col(ColumnNames.sequence_id).fill_null(pl.col('new_sequence_id')))
             .drop(pl.col('new_sequence_id'))
         )
 
@@ -250,29 +250,29 @@ class Sc2SamplesParser(FileParser):
             existing_samples
             .join(
                 samples_uq_seqs_complete.select(
-                    pl.col(StandardColumnNames.accession),
-                    pl.col(StandardColumnNames.sequence_id).alias('new_sequence_id')
+                    pl.col(ColumnNames.accession),
+                    pl.col(ColumnNames.sequence_id).alias('new_sequence_id')
                 ),
-                on=pl.col(StandardColumnNames.accession),
+                on=pl.col(ColumnNames.accession),
                 how='inner',
                 validate='1:1'
             )
-            .filter(pl.col(StandardColumnNames.sequence_id) != pl.col('new_sequence_id'))
+            .filter(pl.col(ColumnNames.sequence_id) != pl.col('new_sequence_id'))
         )
         if not altered_seq_ids.is_empty():
             print(altered_seq_ids)
             raise ValueError('An existing sample has had its sequence id changed. This is forbidden.')
 
         return samples_uq_seqs_complete.select(
-            pl.col(StandardColumnNames.accession),
-            pl.col(StandardColumnNames.sequence_id)
+            pl.col(ColumnNames.accession),
+            pl.col(ColumnNames.sequence_id)
         )
 
     @staticmethod
     async def _insert_new_samples(samples_finished: pl.DataFrame, existing_samples: pl.DataFrame):
         new_samples = samples_finished.join(
             existing_samples,
-            on=pl.col(StandardColumnNames.accession),
+            on=pl.col(ColumnNames.accession),
             how='anti'
         )
         copy_status = await copy_insert_samples(new_samples)
@@ -282,7 +282,7 @@ class Sc2SamplesParser(FileParser):
     async def _update_existing_samples(samples_finished: pl.DataFrame, existing_samples: pl.DataFrame):
         updated_samples = samples_finished.join(
             existing_samples,
-            on=pl.col(StandardColumnNames.accession),
+            on=pl.col(ColumnNames.accession),
             how='inner'
         )
         await batch_upsert_samples(updated_samples)
@@ -314,13 +314,13 @@ class Sc2SdSamplesParser(Sc2SamplesParser):
 
     def fill_missing_required_cols(self, samples_input: pl.LazyFrame) -> pl.LazyFrame:
         return samples_input.with_columns(
-            pl.lit("NA").alias(StandardColumnNames.organism),
-            pl.lit(False).alias(StandardColumnNames.is_retracted)
+            pl.lit("NA").alias(ColumnNames.organism),
+            pl.lit(False).alias(ColumnNames.is_retracted)
         )
 
     column_name_map = {
-        StandardColumnNames.accession: 'ID',
-        StandardColumnNames.host: 'host',
+        ColumnNames.accession: 'ID',
+        ColumnNames.host: 'host',
         COLLECTION_DATE: 'collection_date',
         GEO_LOCATION: 'location'
     }
@@ -337,25 +337,25 @@ class Sc2WastewaterSamplesParser(Sc2SamplesParser):
 
     def fill_missing_required_cols(self, samples_input: pl.LazyFrame) -> pl.LazyFrame:
         return samples_input.with_columns(
-            pl.lit(False).alias(StandardColumnNames.is_retracted)
+            pl.lit(False).alias(ColumnNames.is_retracted)
         )
 
     column_name_map = {
-        StandardColumnNames.accession: 'Accession',
-        StandardColumnNames.bio_project: 'Bioprojects',
-        StandardColumnNames.bio_sample: 'Biosample',
-        StandardColumnNames.host: 'Host_OrganismName',
-        StandardColumnNames.isolate: 'Isolate_Name',
-        StandardColumnNames.organism: 'Virus_OrganismName',
-        StandardColumnNames.isolation_source: 'Isolate_Source',
+        ColumnNames.accession: 'Accession',
+        ColumnNames.bio_project: 'Bioprojects',
+        ColumnNames.bio_sample: 'Biosample',
+        ColumnNames.host: 'Host_OrganismName',
+        ColumnNames.isolate: 'Isolate_Name',
+        ColumnNames.organism: 'Virus_OrganismName',
+        ColumnNames.isolation_source: 'Isolate_Source',
         COLLECTION_DATE: 'Collection_Date',
         GEO_LOCATION: 'Geographic_Location',
-        StandardColumnNames.census_region: 'census_region',
-        StandardColumnNames.bases: 'Length',
-        StandardColumnNames.ww_viral_load: 'viral_load',
-        StandardColumnNames.ww_catchment_population: 'population',
-        StandardColumnNames.ww_site_id: 'site_id',
-        StandardColumnNames.ww_collected_by: 'collected_by',
+        ColumnNames.census_region: 'census_region',
+        ColumnNames.bases: 'Length',
+        ColumnNames.ww_viral_load: 'viral_load',
+        ColumnNames.ww_catchment_population: 'population',
+        ColumnNames.ww_site_id: 'site_id',
+        ColumnNames.ww_collected_by: 'collected_by',
     }
 
 class Sc2NcbiSamplesParser(Sc2SamplesParser):
@@ -364,26 +364,26 @@ class Sc2NcbiSamplesParser(Sc2SamplesParser):
 
     def fill_missing_required_cols(self, samples_input: pl.LazyFrame) -> pl.LazyFrame:
         return samples_input.with_columns(
-            pl.lit("NA").alias(StandardColumnNames.organism),
-            pl.lit(False).alias(StandardColumnNames.is_retracted)
+            pl.lit("NA").alias(ColumnNames.organism),
+            pl.lit(False).alias(ColumnNames.is_retracted)
         )
 
     column_name_map = {
-        StandardColumnNames.accession: 'Accession',
-        StandardColumnNames.bio_project: 'Bioprojects',
-        StandardColumnNames.bio_sample: 'Biosample',
-        StandardColumnNames.host: 'Host_OrganismName',
-        StandardColumnNames.isolate: 'Isolate_Name',
-        StandardColumnNames.organism: 'Virus_OrganismName',
-        StandardColumnNames.isolation_source: 'Isolate_Source',
+        ColumnNames.accession: 'Accession',
+        ColumnNames.bio_project: 'Bioprojects',
+        ColumnNames.bio_sample: 'Biosample',
+        ColumnNames.host: 'Host_OrganismName',
+        ColumnNames.isolate: 'Isolate_Name',
+        ColumnNames.organism: 'Virus_OrganismName',
+        ColumnNames.isolation_source: 'Isolate_Source',
         COLLECTION_DATE: 'Collection_Date',
         GEO_LOCATION: 'Geographic_Location',
-        StandardColumnNames.census_region: 'census_region',
-        StandardColumnNames.bases: 'Length',
-        StandardColumnNames.ww_viral_load: 'viral_load',
-        StandardColumnNames.ww_catchment_population: 'population',
-        StandardColumnNames.ww_site_id: 'site_id',
-        StandardColumnNames.ww_collected_by: 'collected_by',
+        ColumnNames.census_region: 'census_region',
+        ColumnNames.bases: 'Length',
+        ColumnNames.ww_viral_load: 'viral_load',
+        ColumnNames.ww_catchment_population: 'population',
+        ColumnNames.ww_site_id: 'site_id',
+        ColumnNames.ww_collected_by: 'collected_by',
     }
 
     unique_seqs_accession_columns = {

@@ -1,14 +1,14 @@
 from sqlalchemy.sql.expression import text
 
 from DB.engine import get_async_write_session
-from utils.constants import StandardColumnNames, TableNames, ConstraintNames
+from utils.constants import ColumnNames, TableNames, ConstraintNames
 
 
 async def drop_existing_mutations():
     async with get_async_write_session() as session:
         test_id = (await session.execute(
             text(
-                f'select {StandardColumnNames.allele_id} from mutations limit 1;'
+                f'select {ColumnNames.allele_id} from mutations limit 1;'
             )
         )).scalar()
         if test_id is not None:
@@ -27,14 +27,14 @@ async def create_bitmap_mutations_table():
         await session.execute(
             text(
                 f'create table {TableNames.mutations} (\n'
-                f'{StandardColumnNames.allele_id} integer,\n'
-                f'{StandardColumnNames.sequences_present} roaringbitmap storage extended not null\n'
+                f'{ColumnNames.allele_id} integer,\n'
+                f'{ColumnNames.sequences_present} roaringbitmap storage extended not null\n'
                 f');'
             )
         )
         await session.execute(text(
             f'alter table mutations add constraint {ConstraintNames.pk_mutations}\n'
-            f'primary key ({StandardColumnNames.allele_id});'
+            f'primary key ({ColumnNames.allele_id});'
         ))
 
         await session.execute(text(

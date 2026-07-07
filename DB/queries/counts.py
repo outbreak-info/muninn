@@ -10,7 +10,7 @@ from DB.queries.date_count_helpers import get_extract_clause, get_group_by_claus
     MID_COLLECTION_DATE_CALCULATION
 from DB.queries.helpers import get_appropriate_translations_table_and_id
 from parser.parser import parser
-from utils.constants import DateBinOpt, NtOrAa, StandardColumnNames, COLLECTION_DATE
+from utils.constants import DateBinOpt, NtOrAa, ColumnNames, COLLECTION_DATE
 
 
 async def count_samples_by_column(by_col: str):
@@ -193,7 +193,7 @@ async def _count_variants_or_mutations_by_collection_date(
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(
         date_bin,
-        [StandardColumnNames.gff_feature, f'ref_{change_bin}', f'position_{change_bin}', f'alt_{change_bin}']
+        [ColumnNames.gff_feature, f'ref_{change_bin}', f'position_{change_bin}', f'alt_{change_bin}']
     )
     order_by_clause = get_order_by_cause(date_bin)
 
@@ -263,7 +263,7 @@ async def count_lineages_by_simple_date(
     extract_clause = get_extract_clause(group_by, date_bin, days)
     group_by_clause = get_group_by_clause(
         date_bin,
-        [StandardColumnNames.lineage_name, StandardColumnNames.lineage_system_name]
+        [ColumnNames.lineage_name, ColumnNames.lineage_system_name]
     )
     order_by_clause = get_order_by_cause(date_bin)
 
@@ -323,7 +323,7 @@ async def count_lineages_by_collection_date(
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(
         date_bin,
-        [StandardColumnNames.lineage_name, StandardColumnNames.lineage_system_name]
+        [ColumnNames.lineage_name, ColumnNames.lineage_system_name]
     )
     order_by_clause = get_order_by_cause(date_bin)
 

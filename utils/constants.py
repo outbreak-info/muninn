@@ -135,7 +135,7 @@ class TableNames(PgIdentifiers):
     cache_allele_prevalence_by_lineage = 'cache_allele_prevalence_by_lineage'
 
 
-class StandardColumnNames(PgIdentifiers):
+class ColumnNames(PgIdentifiers):
     # ids
     sample_id = 'sample_id'
     allele_id = 'allele_id'
