@@ -25,7 +25,11 @@ from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, SIMPLE
     DEFAULT_PREVALENCE_THRESHOLD, MIN_PREVALENCE_THRESHOLD
 from utils.errors import ParsingError, NotFoundError
 
-app = FastAPI()
+app = FastAPI(
+    title='Muninn API',
+    description='API for querying Muninn database',
+    version='0.1.0'
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -35,8 +39,16 @@ app.add_middleware(
     allow_headers=['*']
 )
 
+# Tag names used to group the endpoints in the auto-generated docs at /docs.
+TAG_SAMPLES = 'Samples'
+TAG_VARIANTS = 'Variants'
+TAG_MUTATIONS = 'Mutations'
+TAG_LINEAGES = 'Lineages'
+TAG_WASTEWATER = 'Wastewater'
+TAG_PHENOTYPE = 'Phenotype Metrics'
+TAG_ANNOTATIONS = 'Annotations'
 
-@app.get('/sample/{sample_id}', response_model=SampleInfo)
+@app.get('/v0/sample/{sample_id}', response_model=SampleInfo, tags=[TAG_SAMPLES], summary='Get sample metadata by sample ID')
 async def get_sample_by_id(sample_id: int):
     sample = await DB.queries.samples.get_sample_by_id(sample_id)
     if sample is None:
@@ -44,12 +56,12 @@ async def get_sample_by_id(sample_id: int):
     return sample
 
 
-@app.get('/phenotype_metrics', response_model=List[PhenotypeMetricInfo])
+@app.get('/v0/phenotype_metrics', response_model=List[PhenotypeMetricInfo], tags=[TAG_PHENOTYPE], summary='Get all available phenotype metrics')
 async def get_all_phenotype_metrics():
     return await DB.queries.phenotype_metrics.get_all_pheno_metrics()
 
 
-@app.get('/samples', response_model=List[SampleInfo])
+@app.get('/samples', response_model=List[SampleInfo], tags=[TAG_SAMPLES], summary='Get samples matching a query')
 async def get_samples_query(q: str):
     try:
         return await DB.queries.samples.get_samples(q)
@@ -57,7 +69,7 @@ async def get_samples_query(q: str):
         raise HTTPException(status_code=400, detail=e.message)
 
 
-@app.get('/samples:collectionReleaseLag', response_model=List[Dict])
+@app.get('/samples:collectionReleaseLag', response_model=List[Dict], tags=[TAG_SAMPLES], summary='Get sample collection to release lag statistics')
 async def get_samples_query(max_span_days: int = DEFAULT_MAX_SPAN_DAYS):
     try:
         return await DB.queries.samples.get_sample_collection_release_lag(max_span_days)
@@ -65,7 +77,7 @@ async def get_samples_query(max_span_days: int = DEFAULT_MAX_SPAN_DAYS):
         raise HTTPException(status_code=400, detail=e.message)
 
 
-@app.get('/variants', response_model=List[VariantInfo])
+@app.get('/variants', response_model=List[VariantInfo], tags=[TAG_VARIANTS], summary='Get variants matching a query')
 async def get_variants_query(q: str):
     try:
         return await DB.queries.variants.get_variants(q)
@@ -73,7 +85,7 @@ async def get_variants_query(q: str):
         raise HTTPException(status_code=400, detail=e.message)
 
 
-@app.get('/mutations', response_model=List[MutationInfo])
+@app.get('/mutations', response_model=List[MutationInfo], tags=[TAG_MUTATIONS], summary='Get mutations matching a query')
 async def get_mutations_query(q: str):
     try:
         return await DB.queries.mutations.get_mutations(q)
@@ -81,12 +93,12 @@ async def get_mutations_query(q: str):
         raise HTTPException(status_code=400, detail=e.message)
 
 
-@app.get('/lineages', response_model=List[LineageInfo])
+@app.get('/lineages', response_model=List[LineageInfo], tags=[TAG_LINEAGES], summary='Get lineages matching a query')
 async def get_lineages_by_lineage_system(lineage_system_name: str):
     return await DB.queries.lineages.get_all_lineages_by_lineage_system(lineage_system_name)
 
 
-@app.get('/variants/by/sample', response_model=List[VariantInfo])
+@app.get('/variants/by/sample', response_model=List[VariantInfo], tags=[TAG_VARIANTS], summary='Get variants for samples matching a query')
 async def get_variants_by_sample(q: str):
     try:
         return await DB.queries.variants.get_variants_for_sample(q)
@@ -94,7 +106,7 @@ async def get_variants_by_sample(q: str):
         raise HTTPException(status_code=400, detail=e.message)
 
 
-@app.get('/mutations/by/sample', response_model=List[MutationInfo])
+@app.get('/mutations/by/sample', response_model=List[MutationInfo], tags=[TAG_MUTATIONS], summary='Get mutations for samples matching a query')
 async def get_mutations_by_sample(q: str):
     try:
         return await DB.queries.mutations.get_mutations_by_sample(q)
@@ -102,7 +114,7 @@ async def get_mutations_by_sample(q: str):
         raise HTTPException(status_code=400, detail=e.message)
 
 
-@app.get('/samples/by/mutation', response_model=List[SampleInfo])
+@app.get('/samples/by/mutation', response_model=List[SampleInfo], tags=[TAG_SAMPLES], summary='Get samples carrying a mutation matching a query')
 async def get_samples_by_mutation(q: str):
     try:
         return await DB.queries.samples.get_samples_by_mutation(q)
@@ -110,7 +122,7 @@ async def get_samples_by_mutation(q: str):
         raise HTTPException(status_code=400, detail=e.message)
 
 
-@app.get('/samples/by/variant', response_model=List[SampleInfo])
+@app.get('/samples/by/variant', response_model=List[SampleInfo], tags=[TAG_SAMPLES], summary='Get samples carrying a variant matching a query')
 async def get_samples_by_variant(q: str):
     try:
         return await DB.queries.samples.get_samples_by_variant(q)
@@ -118,7 +130,7 @@ async def get_samples_by_variant(q: str):
         raise HTTPException(status_code=400, detail=e.message)
 
 
-@app.get('/count/{x}/by/{y}', response_model=Dict[str, int])
+@app.get('/count/{x}/by/{y}', response_model=Dict[str, int], tags=[TAG_SAMPLES, TAG_VARIANTS, TAG_MUTATIONS], summary='Count rows of a table grouped by a column')
 async def get_count_x_by_y(x: str, y: str):
     if x is None or y is None:
         raise HTTPException(status_code=400, detail='Provide target table and by-column')
@@ -141,7 +153,7 @@ async def get_count_x_by_y(x: str, y: str):
         raise HTTPException(status_code=400, detail=short_message)
 
 
-@app.get('/variants/frequency', response_model=List[VariantFreqInfo])
+@app.get('/variants/frequency', response_model=List[VariantFreqInfo], tags=[TAG_VARIANTS], summary='Get per-sample variant frequency for a given mutation')
 async def get_variant_frequency(
     aa: Annotated[
         str | None, Query(regex=CHANGE_PATTERN)
@@ -159,7 +171,7 @@ async def get_variant_frequency(
 
 
 # todo: actually a count
-@app.get('/mutations/frequency', response_model=List[MutationCountInfo])
+@app.get('/mutations/frequency', response_model=List[MutationCountInfo], tags=[TAG_MUTATIONS], summary='Count samples carrying a given mutation')
 async def get_mutation_sample_count(
     aa: Annotated[
         str | None, Query(regex=CHANGE_PATTERN)
@@ -178,7 +190,7 @@ async def get_mutation_sample_count(
 
 # todo: actually a count
 #  /count/samples/pheno_scores/variants
-@app.get('/variants/frequency/score', response_model=List[VariantCountPhenoScoreInfo])
+@app.get('/variants/frequency/score', response_model=List[VariantCountPhenoScoreInfo], tags=[TAG_VARIANTS], summary='Count samples per variant alongside a phenotype metric value')
 async def get_variant_counts_by_phenotype_score(
     region: str,
     metric: str,
@@ -196,7 +208,7 @@ async def get_variant_counts_by_phenotype_score(
 
 # todo: actually a count
 #  /count/samples/pheno_scores/mutations
-@app.get('/mutations/frequency/score', response_model=List[VariantCountPhenoScoreInfo])
+@app.get('/mutations/frequency/score', response_model=List[VariantCountPhenoScoreInfo], tags=[TAG_MUTATIONS], summary='Count samples per mutation alongside a phenotype metric value')
 async def get_mutation_counts_by_phenotype_score(
     region: str,
     metric: str,
@@ -212,7 +224,8 @@ async def get_mutation_counts_by_phenotype_score(
     return await DB.queries.prevalence.get_pheno_values_and_mutation_counts(metric, region, include_refs, q)
 
 
-@app.get('/count/samples/lineages', response_model=List[LineageCountInfo])
+# deprecated: use /v0/samples:count?group_by=lineage
+@app.get('/count/samples/lineages', response_model=List[LineageCountInfo], tags=[TAG_LINEAGES], deprecated=True)
 async def get_sample_counts_per_lineage(q: str | None = None):
     """
     :param q: A query to be run against samples. If provided, only samples matching the query will be counted.
@@ -223,7 +236,8 @@ async def get_sample_counts_per_lineage(q: str | None = None):
         raise HTTPException(status_code=400, detail=e.message)
 
 
-@app.get('/lineages/abundances', response_model=List[LineageAbundanceInfo])
+# deprecated: use /v0/lineages:abundance?summary=false
+@app.get('/lineages/abundances', response_model=List[LineageAbundanceInfo], tags=[TAG_LINEAGES], deprecated=True)
 async def get_lineage_abundance_info(q: str | None = None):
     """
     :param q: a query to be run against lineages and samples.
@@ -235,7 +249,7 @@ async def get_lineage_abundance_info(q: str | None = None):
         raise HTTPException(status_code=400, detail=e.message)
 
 
-@app.get('/v0/wastewater/lineages:averageAbundancesByLocation', response_model=List[AverageLineageAbundanceInfo])
+@app.get('/v0/wastewater/lineages:averageAbundancesByLocation', response_model=List[AverageLineageAbundanceInfo], tags=[TAG_WASTEWATER], summary='Get population-weighted average lineage abundances by location and week')
 async def get_average_lineage_abundances_by_location(
     q: str | None = None,
     geo_bin: str = "admin1_name",
@@ -244,10 +258,10 @@ async def get_average_lineage_abundances_by_location(
 ):
     """
     Get average lineage abundances by location.
-    
+
     :param q: A query to be run against lineages and samples.
     :param geo_bin: The geographic bin to group by.
-    :param lineage: Optional lineage name. If it ends with '*', returns abundances for 
+    :param lineage: Optional lineage name. If it ends with '*', returns abundances for
                     the parent lineage and all its children aggregated together.
                     If not provided or doesn't end with '*', returns abundances for all lineages.
     :param max_span_days: The maximum span between collection start and end dates.
@@ -260,7 +274,7 @@ async def get_average_lineage_abundances_by_location(
         raise HTTPException(status_code=400, detail=e.message)
 
 
-@app.get('/v0/wastewater/lineages:abundancesBySample', response_model=List[LineageAbundanceWithSampleInfo])
+@app.get('/v0/wastewater/lineages:abundancesBySample', response_model=List[LineageAbundanceWithSampleInfo], tags=[TAG_WASTEWATER], summary='Get per-sample wastewater lineage abundances')
 async def get_lineage_abundances_by_sample(
     q: str | None = None,
 ):
@@ -273,7 +287,7 @@ async def get_lineage_abundances_by_sample(
         raise HTTPException(status_code=400, detail=e.message)
 
 
-@app.get('/v0/wastewater/latestSample', response_model=List[SampleInfo])
+@app.get('/v0/wastewater/latestSample', response_model=List[SampleInfo], tags=[TAG_WASTEWATER], summary='Get the most recently collected sample(s)')
 async def get_latest_sample(q: str | None = None):
     """
     :param q: A query to be run against samples.
@@ -284,7 +298,8 @@ async def get_latest_sample(q: str | None = None):
         raise HTTPException(status_code=400, detail=e.message)
 
 
-@app.get('/lineages/abundances/summary_stats', response_model=List[LineageAbundanceSummaryInfo])
+# deprecated: use /v0/lineages:abundance (summary=true, the default)
+@app.get('/lineages/abundances/summary_stats', response_model=List[LineageAbundanceSummaryInfo], tags=[TAG_LINEAGES], summary='Get lineage abundance summary statistics', deprecated=True)
 async def get_lineage_abundance_summary_stats(q: str | None = None):
     try:
         return await DB.queries.lineages.get_abundance_summaries(q)
@@ -294,7 +309,9 @@ async def get_lineage_abundance_summary_stats(q: str | None = None):
 
 @app.get(
     '/v0/samples:count',
-    response_model=Dict[str, int] | Dict[str, Dict[str, Dict[str, int]]] | List[LineageCountInfo]
+    response_model=Dict[str, int] | Dict[str, Dict[str, Dict[str, int]]] | List[LineageCountInfo],
+    tags=[TAG_SAMPLES],
+    summary='Count samples grouped by field, date, and/or lineage'
 )
 async def get_sample_counts(
     group_by: Annotated[str, Query(regex=COMMA_SEP_WORDLIKE_PATTERN.pattern)],
@@ -330,7 +347,7 @@ async def get_sample_counts(
             return await DB.queries.counts.count_samples_by_column(group_by)
 
 
-@app.get('/v0/variants:count', response_model=Dict[str, Dict[str, int]] | Dict[str, int])
+@app.get('/v0/variants:count', response_model=Dict[str, Dict[str, int]] | Dict[str, int], tags=[TAG_VARIANTS], summary='Count variants grouped by field or collection date')
 async def get_variant_counts(
     group_by: Annotated[str, Query(regex=WORDLIKE_PATTERN.pattern)],
     date_bin: DateBinOpt = DateBinOpt.month,
@@ -363,7 +380,7 @@ async def get_variant_counts(
         return await DB.queries.counts.count_variants_by_column(group_by)
 
 
-@app.get('/v0/variants:freqByCollectionDate', response_model=List[Dict])
+@app.get('/v0/variants:freqByCollectionDate', response_model=List[Dict], tags=[TAG_VARIANTS], summary='Get variant alt-frequency quartiles by collection date')
 async def get_aa_variant_frequency_by_collection_date(
     date_bin: DateBinOpt = DateBinOpt.month,
     days: int = DEFAULT_DAYS,
@@ -378,7 +395,7 @@ async def get_aa_variant_frequency_by_collection_date(
     )
 
 
-@app.get('/v0/mutations:count', response_model=Dict[str, Dict[str, int]] | Dict[str, int])
+@app.get('/v0/mutations:count', response_model=Dict[str, Dict[str, int]] | Dict[str, int], tags=[TAG_MUTATIONS], summary='Count mutations grouped by field or collection date')
 async def get_mutation_counts(
     group_by: Annotated[str, Query(regex=WORDLIKE_PATTERN.pattern)],
     date_bin: DateBinOpt = DateBinOpt.month,
@@ -401,32 +418,45 @@ async def get_mutation_counts(
         return await DB.queries.counts.count_mutations_by_column(group_by)
 
 
-@app.get('/v0/mutations:countByCollectionDateAndLineage', response_model=List[Dict])
+@app.get('/v0/mutations:countByCollectionDateAndLineage', response_model=List[Dict], tags=[TAG_MUTATIONS], summary='Count samples with a specific mutation by collection date and lineage')
 async def get_aa_variant_frequency_by_collection_date(
-    position_aa: int,
-    alt_aa: str,
-    gff_feature: str,
+    change_bin: NtOrAa,
+    position: int,
+    alt: str,
+    region: str,
     date_bin: DateBinOpt = DateBinOpt.month,
     days: int = DEFAULT_DAYS,
     q: str | None = None,
     max_span_days: int = DEFAULT_MAX_SPAN_DAYS
 ):
-    return await DB.queries.mutations.get_aa_mutation_count_by_collection_date(
-        date_bin,
-        position_aa,
-        alt_aa,
-        gff_feature,
-        days,
-        max_span_days,
-        q
-    )
+    if change_bin == NtOrAa.nt:
+        return await DB.queries.mutations.get_nt_mutation_count_by_collection_date(
+            date_bin,
+            position,
+            alt,
+            region,
+            days,
+            max_span_days,
+            q
+        )
+    else:
+        return await DB.queries.mutations.get_aa_mutation_count_by_collection_date(
+            date_bin,
+            position,
+            alt,
+            region,
+            days,
+            max_span_days,
+            q
+        )
 
 
 # todo: I'm not crazy about this name.
 #  We're not counting lineages here, we're counting how often they show up
 #  Maybe this should be moved to
 #  /v0/samples:count?group_by=lineage,release_date
-@app.get('/v0/lineages:count', response_model=Dict[str, Dict[str, Dict[str, int]]] | List[LineageCountInfo])
+# deprecated: use /v0/samples:count?group_by=lineage[,<date>]
+@app.get('/v0/lineages:count', response_model=Dict[str, Dict[str, Dict[str, int]]] | List[LineageCountInfo], tags=[TAG_LINEAGES], summary='Count samples per lineage, optionally binned by date', deprecated=True)
 async def get_lineage_counts(
     group_by: Annotated[str, Query(regex=WORDLIKE_PATTERN.pattern)] | None = None,
     date_bin: DateBinOpt = DateBinOpt.month,
@@ -446,7 +476,9 @@ async def get_lineage_counts(
     '/v0/lineages:abundance',
     response_model=Dict[str, List[LineageAbundanceSummaryInfo]]
                    | List[LineageAbundanceInfo]
-                   | List[LineageAbundanceSummaryInfo]
+                   | List[LineageAbundanceSummaryInfo],
+    tags=[TAG_LINEAGES],
+    summary='Get lineage abundances or abundance summary stats'
 )
 async def get_lineage_abundance(
     group_by: Annotated[str, Query(regex=WORDLIKE_PATTERN.pattern)] | None = None,
@@ -479,7 +511,7 @@ async def get_lineage_abundance(
             return await DB.queries.lineages.get_abundances(q)
 
 
-@app.get('/v0/lineages:mutationIncidence')
+@app.get('/v0/lineages:mutationIncidence', tags=[TAG_LINEAGES], summary='Get mutations prevalent within a lineage above a threshold')
 async def get_mutation_incidence(
     lineage: str,
     lineage_system_name: str,
@@ -515,12 +547,12 @@ async def get_mutation_incidence(
         raise HTTPException(status_code=400, detail=e.message)
 
 
-@app.get('/v0/lineages:mutationProfile', response_model=List[MutationProfileInfo])
+@app.get('/v0/lineages:mutationProfile', response_model=List[MutationProfileInfo], tags=[TAG_LINEAGES], summary="Get a lineage's nucleotide mutation spectrum")
 async def get_mutation_profile(lineage: str, lineage_system_name: str, q: str = None) -> List[MutationProfileInfo]:
     return await DB.queries.lineages.get_mutation_profile(lineage, lineage_system_name, q)
 
 
-@app.get('/variants:mutationLag', response_model=Dict[str, List[VariantMutationLagInfo]])
+@app.get('/variants:mutationLag', response_model=Dict[str, List[VariantMutationLagInfo]], tags=[TAG_VARIANTS], summary='Get changes seen as variants before becoming consensus mutations')
 async def get_variants_before_mutations(lineage: str, lineage_system_name: str) -> List[VariantMutationLagInfo]:
     try:
         return await DB.queries.variants_mutations.get_variants_before_mutations(lineage, lineage_system_name)
@@ -528,7 +560,7 @@ async def get_variants_before_mutations(lineage: str, lineage_system_name: str) 
         raise HTTPException(status_code=400, detail=e.message)
 
 
-@app.get('/variants:regionAndGffFeature', response_model=List[RegionAndGffFeatureInfo])
+@app.get('/variants:regionAndGffFeature', response_model=List[RegionAndGffFeatureInfo], tags=[TAG_VARIANTS], summary='List region and GFF-feature pairs present in variants')
 async def get_region_and_gff_features() -> List[RegionAndGffFeatureInfo]:
     try:
         return await DB.queries.helpers.get_region_and_gff_features(IntraHostVariant)
@@ -536,7 +568,7 @@ async def get_region_and_gff_features() -> List[RegionAndGffFeatureInfo]:
         raise HTTPException(status_code=400, detail=e.message)
 
 
-@app.get('/mutations:variantLag', response_model=Dict[str, List[VariantMutationLagInfo]])
+@app.get('/mutations:variantLag', response_model=Dict[str, List[VariantMutationLagInfo]], tags=[TAG_MUTATIONS], summary='Get changes seen as consensus mutations before intra-host variants')
 async def get_variants_before_mutations(lineage: str, lineage_system_name: str) -> List[VariantMutationLagInfo]:
     try:
         return await DB.queries.variants_mutations.get_mutations_before_variants(lineage, lineage_system_name)
@@ -544,7 +576,7 @@ async def get_variants_before_mutations(lineage: str, lineage_system_name: str) 
         raise HTTPException(status_code=400, detail=e.message)
 
 
-@app.get('/mutations:regionAndGffFeature', response_model=List[RegionAndGffFeatureInfo])
+@app.get('/mutations:regionAndGffFeature', response_model=List[RegionAndGffFeatureInfo], tags=[TAG_MUTATIONS], summary='List region and GFF-feature pairs present in mutations')
 async def get_region_and_gff_features() -> List[RegionAndGffFeatureInfo]:
     try:
         return await DB.queries.helpers.get_region_and_gff_features(Mutation)
@@ -552,7 +584,7 @@ async def get_region_and_gff_features() -> List[RegionAndGffFeatureInfo]:
         raise HTTPException(status_code=400, detail=e.message)
 
 
-@app.get('/v0/phenotype_metric_values:countMutationsByCollectionDate', response_model=List[Dict])
+@app.get('/v0/phenotype_metric_values:countMutationsByCollectionDate', response_model=List[Dict], tags=[TAG_PHENOTYPE], summary='Count mutations at/above a phenotype threshold by collection date')
 async def get_phenotype_metric_counts(
     phenotype_metric_name: str,
     phenotype_metric_value_threshold: str,
@@ -572,7 +604,7 @@ async def get_phenotype_metric_counts(
     )
 
 
-@app.get('/v0/phenotype_metric_values:countVariantsByCollectionDate', response_model=List[Dict])
+@app.get('/v0/phenotype_metric_values:countVariantsByCollectionDate', response_model=List[Dict], tags=[TAG_PHENOTYPE], summary='Count variants at/above a phenotype threshold by collection date')
 async def get_phenotype_metric_counts(
     phenotype_metric_name: str,
     phenotype_metric_value_threshold: float,
@@ -592,7 +624,7 @@ async def get_phenotype_metric_counts(
     )
 
 
-@app.get('/v0/phenotype_metric_values:forMutationsAggregateBySampleAndCollectionDate', response_model=List[Dict])
+@app.get('/v0/phenotype_metric_values:forMutationsAggregateBySampleAndCollectionDate', response_model=List[Dict], tags=[TAG_PHENOTYPE], summary='Get per-sample summed mutation phenotype values, summarized by collection date')
 async def get_phenotype_metric_counts(
     phenotype_metric_name: str,
     date_bin: DateBinOpt = DateBinOpt.month,
@@ -609,7 +641,7 @@ async def get_phenotype_metric_counts(
     )
 
 
-@app.get('/v0/phenotype_metric_values:forVariantsAggregateBySampleAndCollectionDate', response_model=List[Dict])
+@app.get('/v0/phenotype_metric_values:forVariantsAggregateBySampleAndCollectionDate', response_model=List[Dict], tags=[TAG_PHENOTYPE], summary='Get per-sample summed variant phenotype values, summarized by collection date')
 async def get_phenotype_metric_counts(
     phenotype_metric_name: str,
     date_bin: DateBinOpt = DateBinOpt.month,
@@ -626,7 +658,7 @@ async def get_phenotype_metric_counts(
     )
 
 
-@app.get('/v0/phenotype_metric_values:byMutationsQuantile', response_model=Dict[str, float])
+@app.get('/v0/phenotype_metric_values:byMutationsQuantile', response_model=Dict[str, float], tags=[TAG_PHENOTYPE], summary='Get a phenotype metric value at a quantile across mutations')
 async def get_phenotype_metric_value_by_mutation_quantile(phenotype_metric_name: str, quantile: float) -> Dict[
     str, float]:
     return await DB.queries.phenotype_metrics.get_phenotype_metric_value_by_mutation_quantile(
@@ -635,7 +667,7 @@ async def get_phenotype_metric_value_by_mutation_quantile(phenotype_metric_name:
     )
 
 
-@app.get('/v0/phenotype_metric_values:byVariantsQuantile', response_model=Dict[str, float])
+@app.get('/v0/phenotype_metric_values:byVariantsQuantile', response_model=Dict[str, float], tags=[TAG_PHENOTYPE], summary='Get a phenotype metric value at a quantile across variants')
 async def get_phenotype_metric_value_by_variant_quantile(phenotype_metric_name: str, quantile: float) -> Dict[
     str, float]:
     return await DB.queries.phenotype_metrics.get_phenotype_metric_value_by_variant_quantile(
@@ -644,12 +676,12 @@ async def get_phenotype_metric_value_by_variant_quantile(phenotype_metric_name: 
     )
 
 
-@app.get('/v0/phenotype_metric_values:getMinAndMaxValues', response_model=List)
+@app.get('/v0/phenotype_metric_values:getMinAndMaxValues', response_model=List, tags=[TAG_PHENOTYPE], summary='Get the min and max values of a phenotype metric')
 async def get_phenotype_metric_value_min_and_max(phenotype_metric_name: str) -> List:
     return await DB.queries.phenotype_metrics.get_min_max_pheno_metric_value(phenotype_metric_name)
 
 
-@app.get('/v0/annotations:byMutationsAndCollectionDate', response_model=List[Dict])
+@app.get('/v0/annotations:byMutationsAndCollectionDate', response_model=List[Dict], tags=[TAG_ANNOTATIONS], summary='Get the proportion of mutations with an annotation effect by collection date')
 async def get_annotations_by_mutations_and_collection_date(
     effect_detail: str,
     date_bin: DateBinOpt = DateBinOpt.month,
@@ -666,7 +698,7 @@ async def get_annotations_by_mutations_and_collection_date(
     )
 
 
-@app.get('/v0/annotations:byVariantsAndCollectionDate', response_model=List[Dict])
+@app.get('/v0/annotations:byVariantsAndCollectionDate', response_model=List[Dict], tags=[TAG_ANNOTATIONS], summary='Get the proportion of variants with an annotation effect by collection date')
 async def get_annotations_by_variants_and_collection_date(
     effect_detail: str,
     date_bin: DateBinOpt = DateBinOpt.month,
@@ -683,12 +715,12 @@ async def get_annotations_by_variants_and_collection_date(
     )
 
 
-@app.get('/v0/annotationEffects', response_model=List[str])
+@app.get('/v0/annotationEffects', response_model=List[str], tags=[TAG_ANNOTATIONS], summary='List all annotation effect types')
 async def get_annotations_by_mutations_and_collection_date() -> List[str]:
     return await DB.queries.annotations.get_all_annotation_effects()
 
 
-@app.get('/v0/annotations:byVariantsAndAminoAcidPosition', response_model=Dict)
+@app.get('/v0/annotations:byVariantsAndAminoAcidPosition', response_model=Dict, tags=[TAG_ANNOTATIONS], summary='Get annotated variant positions for an effect')
 async def get_annotations_by_variants_and_amino_acid_position(
     effect_detail: str,
     q: str | None = None
@@ -696,7 +728,7 @@ async def get_annotations_by_variants_and_amino_acid_position(
     return await DB.queries.annotations.get_annotations_by_variants_and_amino_acid_position(effect_detail, q)
 
 
-@app.get('/v0/annotations:byMutationsAndAminoAcidPosition', response_model=Dict)
+@app.get('/v0/annotations:byMutationsAndAminoAcidPosition', response_model=Dict, tags=[TAG_ANNOTATIONS], summary='Get annotated mutation positions for an effect')
 async def get_annotations_by_mutations_and_amino_acid_position(
     effect_detail: str,
     q: str | None = None
