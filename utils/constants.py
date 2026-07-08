@@ -114,7 +114,7 @@ class TableNames(PgIdentifiers):
     samples = 'samples'
     alleles = 'alleles'
     amino_acids = 'amino_acids'
-    mutations = 'mutations'
+    consensus_sequences_by_allele = 'consensus_sequences_by_allele'
     intra_host_variants = 'intra_host_variants'
     geo_locations = 'geo_locations'
     phenotype_metrics = 'phenotype_metrics'
@@ -129,10 +129,9 @@ class TableNames(PgIdentifiers):
     annotations_amino_acids = 'annotations_amino_acids'
     lineages_immediate_children = 'lineages_immediate_children'
     lineages_deep_children = 'lineages_deep_children'  # actually a view.
-    mutation_translations = 'mutation_translations'
+    consensus_sequences_by_amino_acid = 'consensus_sequences_by_amino_acid'
     intra_host_translations = 'intra_host_translations'
     sequences = 'sequences'
-    cache_allele_prevalence_by_lineage = 'cache_allele_prevalence_by_lineage'
 
 
 class ColumnNames(PgIdentifiers):
@@ -251,7 +250,7 @@ class ConstraintNames(PgIdentifiers):
     pk_samples = f'pk_{TableNames.samples}'
     pk_alleles = f'pk_{TableNames.alleles}'
     pk_amino_acids = f'pk_{TableNames.amino_acids}'
-    pk_mutations = f'pk_{TableNames.mutations}'
+    pk_consensus_sequences_by_allele = f'pk_{TableNames.consensus_sequences_by_allele}'
     pk_intra_host_variants = f'pk_{TableNames.intra_host_variants}'
     pk_geo_locations = f'pk_{TableNames.geo_locations}'
     pk_phenotype_metrics = f'pk_{TableNames.phenotype_metrics}'
@@ -265,7 +264,7 @@ class ConstraintNames(PgIdentifiers):
     pk_annotations_papers = f'pk_{TableNames.annotations_papers}'
     pk_annotations_amino_acids = f'pk_{TableNames.annotations_amino_acids}'
     pk_lineages_immediate_children = f'pk_{TableNames.lineages_immediate_children}'
-    pk_mutation_translations = f'pk_{TableNames.mutation_translations}'
+    pk_consensus_sequences_by_amino_acid = f'pk_{TableNames.consensus_sequences_by_amino_acid}'
     pk_intra_host_translations = f'pk_{TableNames.intra_host_translations}'
     pk_sequences = f'pk_{TableNames.sequences}'
 
@@ -294,18 +293,11 @@ class ConstraintNames(PgIdentifiers):
     fk_intra_host_variants_allele_id_alleles = 'fk_intra_host_variants_allele_id_alleles'
     fk_intra_host_variants_sequence_id_sequences = 'fk_intra_host_variants_sequence_id_sequences'
 
-    # mutations
-    fk_mutations_sequence_id_sequences = 'fk_mutations_sequence_id_sequences'
-    fk_mutations_allele_id_alleles = 'fk_mutations_allele_id_alleles'
-
-    # consensus alleles sequences
-    pk_consensus_sequences_by_allele = 'pk_consensus_sequences_by_allele'
+    # consensus sequences by allele
     fk_consensus_sequences_by_allele_allele_id_alleles = 'fk_consensus_sequences_by_allele_allele_id_alleles'
 
-
-    # mutation translations
-    fk_mutation_translations_amino_acid_id_amino_acids = 'fk_mutation_translations_amino_acid_id_amino_acids'
-    fk_mutation_translations_sequence_id_sequences = 'fk_mutation_translations_sequence_id_sequences'
+    # consensus sequences by amino acid
+    fk_mutation_translations_amino_acid_id_amino_acids = 'fk_consensus_sequences_by_amino_acid_amino_acid_id_amino_acids'
 
     # intra host translations
     fk_intra_host_translations_amino_acid_id_amino_acids = 'fk_intra_host_translations_amino_acid_id_amino_acids'

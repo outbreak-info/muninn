@@ -1,3 +1,3 @@
 create table sequences (
-	id bigserial not null
+	id serial not null
 );

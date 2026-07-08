@@ -10,7 +10,7 @@ from DB.models import Base
 from DB.engine import get_async_write_session, get_async_session
 from DB.index_constraint_manager import IndexAndConstraintManager
 from DB.inserts.file_parsers.file_parser import FileParser
-from utils.constants import ColumnNames, CONTAINER_DATA_DIRECTORY, Env, ConstraintNames, IndexNames
+from utils.constants import ColumnNames, CONTAINER_DATA_DIRECTORY, Env, ConstraintNames, IndexNames, TableNames
 
 AMINO_ACID_REF_CONFLICTS_FILE = '/tmp/amino_acid_ref_conflicts.csv'
 ALLELE_REF_CONFLICTS_FILE = '/tmp/allele_ref_conflicts.csv'
@@ -489,10 +489,10 @@ class VariantsMutationsCombinedParser(FileParser):
         async with get_async_write_session() as session:
             await session.execute(
                 text(
-                    f'insert into mutations as target (allele_id, sequences_present)\n'
+                    f'insert into {TableNames.consensus_sequences_by_allele} as target (allele_id, sequences_present)\n'
                     f'select allele_id, s_present\n'
                     f'from tmp_mutations_staging\n'
-                    f'on conflict on constraint {ConstraintNames.pk_mutations}\n'
+                    f'on conflict on constraint {ConstraintNames.pk_consensus_sequences_by_allele}\n'
                     f'do update set sequences_present = target.sequences_present | excluded.sequences_present;'
                 )
             )
@@ -628,11 +628,11 @@ class VariantsMutationsCombinedParser(FileParser):
         async with get_async_write_session() as session:
             await session.execute(
                 text(
-                    'insert into mutation_translations as target (amino_acid_id, sequences_present)\n'
-                    'select amino_acid_id, s_present\n'
-                    'from tmp_mutation_translations_staging\n'
-                    'on conflict on constraint pk_mutation_translations\n'
-                    '    do update set sequences_present = target.sequences_present | excluded.sequences_present;'
+                    f'insert into {TableNames.consensus_sequences_by_amino_acid} as target (amino_acid_id, sequences_present)\n'
+                    f'select amino_acid_id, s_present\n'
+                    f'from tmp_mutation_translations_staging\n'
+                    f'on conflict on constraint {ConstraintNames.pk_consensus_sequences_by_amino_acid}\n'
+                    f'    do update set sequences_present = target.sequences_present | excluded.sequences_present;'
                 )
             )
             await session.commit()
@@ -778,7 +778,7 @@ class VariantsMutationsCombinedParser(FileParser):
     async def _drop_fks_using_allele_id(self):
         await self.index_constraint_manager.drop_names(
             [
-                ConstraintNames.fk_mutations_allele_id_alleles,
+                ConstraintNames.fk_consensus_sequences_by_allele_allele_id_alleles,
                 ConstraintNames.fk_intra_host_variants_allele_id_alleles,
             ]
         )
@@ -801,7 +801,7 @@ class VariantsMutationsCombinedParser(FileParser):
                 ConstraintNames.fk_intra_host_translations_amino_acid_id_amino_acids,
                 ConstraintNames.fk_mutation_translations_amino_acid_id_amino_acids,
                 ConstraintNames.fk_phenotype_metric_values_amino_acid_id_amino_acids,
-                ConstraintNames.fk_annotations_amino_acids_amino_acid_id_amino_acids,
+                # ConstraintNames.fk_annotations_amino_acids_amino_acid_id_amino_acids, todo
             ]
         )
 
@@ -825,7 +825,7 @@ class VariantsMutationsCombinedParser(FileParser):
         await self.index_constraint_manager.restore_names(
             [
                 ConstraintNames.fk_phenotype_metric_values_amino_acid_id_amino_acids,
-                ConstraintNames.fk_annotations_amino_acids_amino_acid_id_amino_acids,
+                # ConstraintNames.fk_annotations_amino_acids_amino_acid_id_amino_acids, todo
             ]
         )
 
@@ -851,7 +851,7 @@ class VariantsMutationsCombinedParser(FileParser):
     async def _restore_mutations_indexes(self):
         await self.index_constraint_manager.restore_names(
             [
-                ConstraintNames.fk_mutations_allele_id_alleles,
+                ConstraintNames.fk_consensus_sequences_by_allele_allele_id_alleles,
             ]
         )
 

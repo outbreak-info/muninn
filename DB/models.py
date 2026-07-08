@@ -279,14 +279,14 @@ class AminoAcid(Base):
 
 
 class Mutation(Base):
-    __tablename__ = TableNames.mutations
+    __tablename__ = TableNames.consensus_sequences_by_allele
 
     sequence_id: Mapped[int] = mapped_column(
         sa.ForeignKey(f'{TableNames.sequences}.id', name=ConstraintNames.fk_mutations_sequence_id_sequences),
         nullable=False
     )
     allele_id: Mapped[int] = mapped_column(
-        sa.ForeignKey(f'{TableNames.alleles}.id', name=ConstraintNames.fk_mutations_allele_id_alleles),
+        sa.ForeignKey(f'{TableNames.alleles}.id', name=ConstraintNames.fk_consensus_sequences_by_allele_allele_id_alleles),
         nullable=False
     )
 
@@ -295,7 +295,7 @@ class Mutation(Base):
             PrimaryKeyConstraint(
                 ColumnNames.sequence_id,
                 ColumnNames.allele_id,
-                name=ConstraintNames.pk_mutations
+                name=ConstraintNames.pk_consensus_sequences_by_allele
             ),
             Index(
                 IndexNames.ix_mutations_allele_id_sequence_id,
@@ -363,7 +363,7 @@ class IntraHostVariant(Base):
 
 
 class MutationTranslation(Base):
-    __tablename__ = TableNames.mutation_translations
+    __tablename__ = TableNames.consensus_sequences_by_amino_acid
 
     sequence_id: Mapped[int] = mapped_column(
         sa.ForeignKey(
@@ -382,7 +382,7 @@ class MutationTranslation(Base):
 
     __table_args__ = tuple(
         [
-            PrimaryKeyConstraint(sequence_id, amino_acid_id, name=ConstraintNames.pk_mutation_translations),
+            PrimaryKeyConstraint(sequence_id, amino_acid_id, name=ConstraintNames.pk_consensus_sequences_by_amino_acid),
             Index(IndexNames.ix_mutation_translations_amino_acid_id_sequence_id, amino_acid_id, sequence_id)
         ]
     )
@@ -429,9 +429,6 @@ class GeoLocation(Base):
     admin2_name: Mapped[str] = mapped_column(sa.Text, nullable=True)
     # Town, locality, etc.
     admin3_name: Mapped[str] = mapped_column(sa.Text, nullable=True)
-
-    geo_center_lon: Mapped[float] = mapped_column(sa.Double, nullable=True)
-    geo_center_lat: Mapped[float] = mapped_column(sa.Double, nullable=True)
 
     __table_args__ = tuple(
         [

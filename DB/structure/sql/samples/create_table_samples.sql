@@ -1,7 +1,7 @@
 create table samples (
 	id bigserial not null,
 	accession text not null,
-	sequence_id bigint not null,
+	sequence_id integer not null,
 
 	bio_project text,
 	bio_sample text,

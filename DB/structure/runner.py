@@ -1,6 +1,7 @@
 from DB.structure import sequences, samples, geo_locations, alleles, amino_acids, phenotype_metrics, \
     phenotype_metric_values, consensus_sequences_by_allele, consensus_sequences_by_amino_acid, lineage_systems, \
-    lineages, samples_lineages, lineages_immediate_children, lineages_deep_children
+    lineages, samples_lineages, lineages_immediate_children, lineages_deep_children, intra_host_variants, \
+    intra_host_translations
 
 
 async def set_up_db():
@@ -9,6 +10,9 @@ async def set_up_db():
     await samples.create_all()
     await alleles.create_all()
     await amino_acids.create_all()
+
+    await intra_host_variants.create_all()
+    await intra_host_translations.create_all()
 
     await consensus_sequences_by_allele.create_all()
     await consensus_sequences_by_amino_acid.create_all()

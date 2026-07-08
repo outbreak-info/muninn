@@ -36,7 +36,7 @@ def get_appropriate_translations_table_and_id(table: Type[IntraHostVariant] | Ty
 
     if table is IntraHostVariant or table == TableNames.intra_host_variants:
         return TableNames.intra_host_translations, ColumnNames.intra_host_variant_id
-    elif table is Mutation or table == TableNames.mutations:
-        return TableNames.mutation_translations, ColumnNames.mutation_id
+    elif table is Mutation or table == TableNames.consensus_sequences_by_allele:
+        return TableNames.consensus_sequences_by_amino_acid, ColumnNames.mutation_id
     else:
         raise ValueError

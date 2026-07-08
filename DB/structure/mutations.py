@@ -16,7 +16,7 @@ async def drop_existing_mutations():
 
         await session.execute(
             text(
-                f'drop table if exists {TableNames.mutations}'
+                f'drop table if exists {TableNames.consensus_sequences_by_allele}'
             )
         )
         await session.commit()
@@ -26,19 +26,19 @@ async def create_bitmap_mutations_table():
     async with get_async_write_session() as session:
         await session.execute(
             text(
-                f'create table {TableNames.mutations} (\n'
+                f'create table {TableNames.consensus_sequences_by_allele} (\n'
                 f'{ColumnNames.allele_id} integer,\n'
                 f'{ColumnNames.sequences_present} roaringbitmap storage extended not null\n'
                 f');'
             )
         )
         await session.execute(text(
-            f'alter table mutations add constraint {ConstraintNames.pk_mutations}\n'
+            f'alter table mutations add constraint {ConstraintNames.pk_consensus_sequences_by_allele}\n'
             f'primary key ({ColumnNames.allele_id});'
         ))
 
         await session.execute(text(
-            f'alter table mutations add constraint {ConstraintNames.fk_mutations_allele_id_alleles}\n'
+            f'alter table mutations add constraint {ConstraintNames.fk_consensus_sequences_by_allele_allele_id_alleles}\n'
             f'foreign key (allele_id) references alleles (id);'
         ))
         await session.commit()
