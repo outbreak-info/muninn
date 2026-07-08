@@ -20,10 +20,11 @@ import DB.queries.structural_annotations
 from DB.models import Mutation, IntraHostVariant
 from api.models import LineageAbundanceWithSampleInfo, StructuralAnnotationMutationsInfo, VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
     MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo, \
-    LineageInfo, VariantMutationLagInfo, RegionAndGffFeatureInfo, MutationProfileInfo, AverageLineageAbundanceInfo
+    LineageInfo, VariantMutationLagInfo, RegionAndGffFeatureInfo, MutationProfileInfo, AverageLineageAbundanceInfo, StructuralAnnotationMutationsTimelineInfo, StructuralAnnotationIntraHostVariantsTimelineInfo 
 from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, SIMPLE_DATE_FIELDS, NtOrAa, \
     DEFAULT_MAX_SPAN_DAYS, COLLECTION_DATE, DEFAULT_DAYS, COMMA_SEP_WORDLIKE_PATTERN, LINEAGE, DEFAULT_PREVALENCE_THRESHOLD
 from utils.errors import ParsingError
+
 app = FastAPI()
 
 app.add_middleware(
@@ -646,3 +647,24 @@ async def get_mutations_at_structural_annotation(sequential_site: int, gff_featu
         gff_feature: The gene identifier (default: XAJ25415.1 for HA)
     """
     return await DB.queries.structural_annotations.get_mutations_by_sequential_site(sequential_site, gff_feature)
+
+@app.get('/structural_annotations/{sequential_site}/mutations/timeline', response_model=StructuralAnnotationMutationsTimelineInfo)
+async def get_mutations_timeline_at_structural_annotation(sequential_site: int, gff_feature: str = 'XAJ25415.1'):
+    """Get all mutations at a given sequential site with dates they were observed.
+    
+    Args:
+        sequential_site: The amino acid position
+        gff_feature: The gene identifier (default: XAJ25415.1 for HA)
+    """
+    return await DB.queries.structural_annotations.get_mutations_timeline_by_sequential_site(sequential_site, gff_feature)
+
+
+@app.get('/structural_annotations/{sequential_site}/intra_host_variants/timeline', response_model=StructuralAnnotationIntraHostVariantsTimelineInfo)
+async def get_intra_host_variants_timeline_at_structural_annotation(sequential_site: int, gff_feature: str = 'XAJ25415.1'):
+    """Get all intra_host_variants at a given sequential site with dates they were observed.
+    
+    Args:
+        sequential_site: The amino acid position
+        gff_feature: The gene identifier (default: XAJ25415.1 for HA)
+    """
+    return await DB.queries.structural_annotations.get_intra_host_variants_timeline_by_sequential_site(sequential_site, gff_feature)

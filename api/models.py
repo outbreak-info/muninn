@@ -322,3 +322,18 @@ class MutationWithCountInfo(BaseModel):
 class StructuralAnnotationMutationsInfo(BaseModel):
     sequential_site: int
     mutations: List[MutationWithCountInfo]
+
+class MutationTimelineInfo(BaseModel):
+    mutation: str
+    sample_count: int
+    observed_dates: List[str]
+
+class StructuralAnnotationMutationsTimelineInfo(BaseModel):
+    sequential_site: int
+    gff_feature: str
+    mutations: List[MutationTimelineInfo]
+
+class StructuralAnnotationIntraHostVariantsTimelineInfo(BaseModel):
+    sequential_site: int
+    gff_feature: str
+    intra_host_variants: List[MutationTimelineInfo]
