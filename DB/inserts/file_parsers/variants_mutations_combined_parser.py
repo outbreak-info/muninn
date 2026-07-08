@@ -801,7 +801,7 @@ class VariantsMutationsCombinedParser(FileParser):
                 ConstraintNames.fk_intra_host_translations_amino_acid_id_amino_acids,
                 ConstraintNames.fk_cns_samples_by_amino_acid_amino_acid_id_amino_acids,
                 ConstraintNames.fk_phenotype_metric_values_amino_acid_id_amino_acids,
-                # ConstraintNames.fk_annotations_amino_acids_amino_acid_id_amino_acids, todo
+                ConstraintNames.fk_annotations_amino_acids_amino_acid_id_amino_acids,
             ]
         )
 
@@ -825,7 +825,7 @@ class VariantsMutationsCombinedParser(FileParser):
         await self.index_constraint_manager.restore_names(
             [
                 ConstraintNames.fk_phenotype_metric_values_amino_acid_id_amino_acids,
-                # ConstraintNames.fk_annotations_amino_acids_amino_acid_id_amino_acids, todo
+                ConstraintNames.fk_annotations_amino_acids_amino_acid_id_amino_acids,
             ]
         )
 
