@@ -638,6 +638,11 @@ async def get_annotations_by_mutations_and_amino_acid_position(
     return await DB.queries.annotations.get_annotations_by_mutations_and_amino_acid_position(effect_detail, q)
 
 @app.get('/structural_annotations/{sequential_site}/mutations', response_model=StructuralAnnotationMutationsInfo)
-async def get_mutations_at_structural_annotation(sequential_site: int):
-    """Get all mutations at a given sequential site with sample counts."""
-    return await DB.queries.structural_annotations.get_mutations_by_sequential_site(sequential_site)
+async def get_mutations_at_structural_annotation(sequential_site: int, gff_feature: str = 'XAJ25415.1'):
+    """Get all mutations at a given sequential site with sample counts. 
+    
+    Args:
+        sequential_site: The amino acid position
+        gff_feature: The gene identifier (default: XAJ25415.1 for HA)
+    """
+    return await DB.queries.structural_annotations.get_mutations_by_sequential_site(sequential_site, gff_feature)
