@@ -1,3 +1,4 @@
+from encodings.punycode import T
 from typing import List, Annotated, Dict
 
 from fastapi import FastAPI, HTTPException, Query
@@ -115,9 +116,9 @@ async def get_mutations_by_sample(q: str):
 
 
 @app.get('/samples/by/mutation', response_model=List[SampleInfo], tags=[TAG_SAMPLES], summary='Get samples carrying a mutation matching a query')
-async def get_samples_by_mutation(q: str):
+async def get_samples_by_mutation(change_bin: NtOrAa = NtOrAa.aa, q: str = ""):
     try:
-        return await DB.queries.samples.get_samples_by_mutation(q)
+        return await DB.queries.samples.get_samples_by_mutation(change_bin, q)
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
@@ -576,7 +577,15 @@ async def get_variants_before_mutations(lineage: str, lineage_system_name: str) 
         raise HTTPException(status_code=400, detail=e.message)
 
 
-@app.get('/mutations:regionAndGffFeature', response_model=List[RegionAndGffFeatureInfo], tags=[TAG_MUTATIONS], summary='List region and GFF-feature pairs present in mutations')
+@app.get('/mutations:gffFeature', response_model=List[RegionAndGffFeatureInfo], tags=[TAG_MUTATIONS], summary='List region and GFF-feature pairs present in mutations')
+async def get_gff_features() -> List[str]:
+    try:
+        return await DB.queries.helpers.get_gff_features()
+    except ParsingError as e:
+        raise HTTPException(status_code=400, detail=e.message)
+
+
+@app.get('/mutations:regionAndGffFeature', response_model=List[RegionAndGffFeatureInfo], tags=[TAG_MUTATIONS], summary='List region and GFF-feature pairs present in mutations', deprecated=True)
 async def get_region_and_gff_features() -> List[RegionAndGffFeatureInfo]:
     try:
         return await DB.queries.helpers.get_region_and_gff_features(Mutation)

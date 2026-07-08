@@ -8,7 +8,7 @@ from DB.models import Sample, Mutation, GeoLocation, Allele, AminoAcid, IntraHos
     IntraHostTranslation
 from api.models import SampleInfo
 from parser.parser import parser
-from utils.constants import DateBinOpt
+from utils.constants import DateBinOpt, NtOrAa, TableNames, StandardColumnNames
 
 
 async def get_sample_by_id(sample_id: int) -> SampleInfo | None:
@@ -42,32 +42,38 @@ async def get_samples(query: str) -> List['SampleInfo']:
     return out_data
 
 
-async def get_samples_by_mutation(query: str) -> List['SampleInfo']:
+async def get_samples_by_mutation(change_bin: NtOrAa = NtOrAa.aa, query: str = "") -> List['SampleInfo']:
     user_defined_query = parser.parse(query)
+
+    if change_bin == NtOrAa.nt:
+        matching_sequences = f'''
+            select seqs.sequence_id
+            from {TableNames.mutations} m
+            inner join {TableNames.alleles} a on a.id = m.{StandardColumnNames.allele_id}
+            cross join lateral unnest(rb_to_array(m.sequences_present)) as seqs(sequence_id)
+            where {user_defined_query}
+        '''
+    else:
+        matching_sequences = f'''
+            select seqs.sequence_id
+            from {TableNames.mutation_translations} mt
+            inner join {TableNames.amino_acids} aa on aa.id = mt.{StandardColumnNames.amino_acid_id}
+            cross join lateral unnest(rb_to_array(mt.sequences_present)) as seqs(sequence_id)
+            where {user_defined_query}
+        '''
 
     samples_query = (
         select(Sample, GeoLocation)
         .join(GeoLocation, Sample.geo_location_id == GeoLocation.id, isouter=True)
         .options(contains_eager(Sample.r_geo_location))
         .where(
-            Sample.id.in_(
-                select(Mutation.sample_id)
-                .join(Allele, Allele.id == Mutation.allele_id, isouter=True)
-                .join(MutationTranslation, MutationTranslation.mutation_id== Mutation.id, isouter=True)
-                .join(AminoAcid, AminoAcid.id == MutationTranslation.amino_acid_id, isouter=True)
-                .where(text(user_defined_query))
-
-            )
+            Sample.sequence_id.in_(text(matching_sequences))
         )
     )
 
     async with get_async_session() as session:
         samples = await session.scalars(samples_query)
-        out_data = []
-        for s in samples.unique():
-            out_data.append(
-                SampleInfo.from_db_object(s)
-            )
+        out_data = [SampleInfo.from_db_object(s) for s in samples.unique()]
     return out_data
 
 
@@ -143,4 +149,3 @@ async def get_sample_collection_release_lag(max_span_days: int) -> List[Dict]:
             }
             for row in rows
         ]
-

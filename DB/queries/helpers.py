@@ -8,6 +8,18 @@ from api.models import RegionAndGffFeatureInfo
 from utils.constants import TableNames, StandardColumnNames
 
 
+async def get_gff_features() -> List[str]:
+    async with get_async_session() as session:
+        res = await session.execute(
+            text(
+                f'''
+                select distinct {StandardColumnNames.gff_feature} from {TableNames.amino_acids}
+                '''
+            )
+        )
+    return [row[0] for row in res.all()]
+
+
 async def get_region_and_gff_features(
     intermediate: Type[Mutation] | Type[IntraHostVariant],
 ) -> List['RegionAndGffFeatureInfo']:
@@ -16,7 +28,7 @@ async def get_region_and_gff_features(
         res = await session.execute(
             text(
                 f'''
-                select distinct gff_feature, region 
+                select distinct gff_feature, region
                 from {TableNames.amino_acids} aa
                 inner join {translations_table} t on t.{StandardColumnNames.amino_acid_id} = aa.id
                 inner join {intermediate.__tablename__} inter on inter.id = t.{translations_join_id}

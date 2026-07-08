@@ -17,7 +17,7 @@ class Env:
     MUNINN_SERVER_DATA_INPUT_DIR = os.environ['MUNINN_SERVER_DATA_INPUT_DIR']
 
 
-CHANGE_PATTERN = r'^([\w-]+):([a-zA-Z])(\d+)([a-zA-Z\-+]+)'
+CHANGE_PATTERN = r'^([\w.-]+):([a-zA-Z])(\d+)([a-zA-Z\-+]+)'
 WORDLIKE_PATTERN = re.compile(r'\w+')
 COMMA_SEP_WORDLIKE_PATTERN = re.compile(r'(\w+,)*\w+')
 # these dates are "simple" b/c they are a single timestamp and not null

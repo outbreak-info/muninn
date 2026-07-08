@@ -66,7 +66,7 @@ async def count_variants_or_mutations_gte_pheno_value_by_collection_date(
                 count(distinct aa_id) filter (where value >= {phenotype_metric_value_threshold}) as n_gte,
                 count(distinct aa_id) as n
                 from(
-                    select 
+                    select
                     value,
                     aa_id,
                     {MID_COLLECTION_DATE_CALCULATION}
@@ -86,8 +86,8 @@ async def count_variants_or_mutations_gte_pheno_value_by_collection_date(
                         left join amino_acids aa on aa.id = t.amino_acid_id
                         inner join phenotype_metric_values pmv ON pmv.amino_acid_id = aa.id
                         inner join phenotype_metrics pm on pm.id = pmv.phenotype_metric_id
-                        where num_nulls(collection_end_date, collection_start_date) = 0 
-                        and pm.{StandardColumnNames.phenotype_metric_name} = :pm_name 
+                        where num_nulls(collection_end_date, collection_start_date) = 0
+                        and pm.{StandardColumnNames.phenotype_metric_name} = :pm_name
                         {user_where_clause}
                     )
                     where collection_span <= {max_span_days}
@@ -144,7 +144,7 @@ async def _get_phenotype_metric_value_quantile(
                 INNER JOIN lineage_systems ls on ls.id = l.lineage_system_id
                 INNER JOIN phenotype_metric_values pmv ON pmv.amino_acid_id = aa.id
                 INNER JOIN phenotype_metrics pm on pm.id = pmv.phenotype_metric_id
-            WHERE pm.{StandardColumnNames.phenotype_metric_name} = :pm_name 
+            WHERE pm.{StandardColumnNames.phenotype_metric_name} = :pm_name
             AND pmv.value != 0;
             """
     async with get_async_session() as session:
@@ -166,6 +166,9 @@ async def get_pheno_value_for_variants_by_sample_and_collection_date(
     max_span_days: int,
     raw_query: str
 ):
+    raise NotImplementedError(
+        "This function is not implemented yet."
+    )
     return await _pheno_value_for_mutations_or_variants_by_sample_and_collection_date(
         date_bin,
         phenotype_metric_name,
@@ -209,12 +212,15 @@ async def _pheno_value_for_mutations_or_variants_by_sample_and_collection_date(
     group_by_clause = get_group_by_clause(date_bin)
     order_by_clause = get_order_by_cause(date_bin)
 
-    translations_table, translations_join_col = get_appropriate_translations_table_and_id(table)
+    # Todo fix for intrahost variants, this is currently only for mutations
+    translations_table, translations_join_col = (
+        get_appropriate_translations_table_and_id(table)
+    )
 
     async with get_async_session() as session:
         res = await session.execute(
             text(
-                f'''
+                f"""
                 select
                 {extract_clause},
                 percentile_cont(0.25) within group (order by aggregate_value) as q1,
@@ -224,29 +230,29 @@ async def _pheno_value_for_mutations_or_variants_by_sample_and_collection_date(
                 percentile_cont(0.5) within group (order by n_amino_acid_mutations) as median_aa,
                 percentile_cont(0.75) within group (order by n_amino_acid_mutations) as q3_aa
                 from(
-                    select 
+                    select
                     SUM(value) as aggregate_value,
                     count(distinct aa_id) as n_amino_acid_mutations,
                     {MID_COLLECTION_DATE_CALCULATION}
                     from (
-                        select 
+                        select
                         pmv.value as value,
                         s.id as sample_id,
                         aa.id as aa_id,
                         collection_start_date, collection_end_date,
                         collection_end_date - collection_start_date as collection_span
-                        from samples s
-                        left join geo_locations gl on gl.id = s.geo_location_id
-                        inner join {table.__tablename__} VM on VM.sample_id = s.id
-                        inner join samples_lineages sl on sl.sample_id = s.id
-                        inner join lineages l ON l.id = sl.lineage_id
-                        inner join lineage_systems ls on ls.id = l.lineage_system_id
-                        left join {translations_table} t on t.{translations_join_col} = VM.id
-                        left join amino_acids aa on aa.id = t.amino_acid_id
-                        inner join phenotype_metric_values pmv ON pmv.amino_acid_id = aa.id
+                        from mutation_translations mt
+                        inner join amino_acids aa on aa.id = mt.amino_acid_id
+                        inner join phenotype_metric_values pmv on pmv.amino_acid_id = aa.id
                         inner join phenotype_metrics pm on pm.id = pmv.phenotype_metric_id
-                        where num_nulls(collection_end_date, collection_start_date) = 0 
-                        and pm.{StandardColumnNames.phenotype_metric_name}=:pm_name 
+                        cross join lateral unnest(rb_to_array(mt.sequences_present)) as seqs(sequence_id)
+                        inner join samples s on s.sequence_id = seqs.sequence_id
+                        left join geo_locations gl on gl.id = s.geo_location_id
+                        inner join samples_lineages sl on sl.sample_id = s.id
+                        inner join lineages l on l.id = sl.lineage_id
+                        inner join lineage_systems ls on ls.id = l.lineage_system_id
+                        where num_nulls(collection_end_date, collection_start_date) = 0
+                        and pm.{StandardColumnNames.phenotype_metric_name} = :pm_name
                         {user_where_clause}
                     )
                     where collection_span <= {max_span_days}
@@ -254,11 +260,9 @@ async def _pheno_value_for_mutations_or_variants_by_sample_and_collection_date(
                 )
                 {group_by_clause}
                 {order_by_clause}
-                '''
+                """
             ),
-            {
-                'pm_name': phenotype_metric_name
-            }
+            {"pm_name": phenotype_metric_name},
         )
     out_data = []
     for r in res:
