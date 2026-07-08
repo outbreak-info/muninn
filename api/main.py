@@ -577,10 +577,11 @@ async def get_variants_before_mutations(lineage: str, lineage_system_name: str) 
         raise HTTPException(status_code=400, detail=e.message)
 
 
-@app.get('/mutations:gffFeature', response_model=List[RegionAndGffFeatureInfo], tags=[TAG_MUTATIONS], summary='List region and GFF-feature pairs present in mutations')
+@app.get('/mutations:gffFeature', response_model=List[str], tags=[TAG_MUTATIONS], summary='List region and GFF-feature pairs present in mutations')
 async def get_gff_features() -> List[str]:
     try:
-        return await DB.queries.helpers.get_gff_features()
+        gff_features = await DB.queries.helpers.get_gff_features()
+        return gff_features
     except ParsingError as e:
         raise HTTPException(status_code=400, detail=e.message)
 
