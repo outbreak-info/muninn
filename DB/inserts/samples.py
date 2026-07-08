@@ -56,7 +56,6 @@ async def batch_upsert_samples(samples: pl.DataFrame):
         ColumnNames.collection_end_date,
         ColumnNames.host,
         ColumnNames.geo_location_id,
-        ColumnNames.sequence_id
     ]
     # this is just the columns expected to be null in the SC2 data
     # if there are errors because another col is showing up as null, it may need to be added
@@ -130,13 +129,6 @@ async def get_sample_id_by_accession(accession: str) -> int:
 async def get_samples_accession_and_id_as_pl_df() -> pl.DataFrame:
     return pl.read_database_uri(
         query=f'select id, accession from samples;',
-        uri=get_uri_for_polars()
-    ).rename({'id': ColumnNames.sample_id})
-
-
-async def get_samples_accession_id_and_seq_id_as_pl_df() -> pl.DataFrame:
-    return pl.read_database_uri(
-        query=f'select id, accession, sequence_id from samples;',
         uri=get_uri_for_polars()
     ).rename({'id': ColumnNames.sample_id})
 
