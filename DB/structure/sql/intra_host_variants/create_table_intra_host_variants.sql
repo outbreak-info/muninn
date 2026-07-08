@@ -1,5 +1,5 @@
 create table intra_host_variants (
-	sequence_id integer not null,
+	sample_id integer not null,
 	allele_id integer not null,
 	ref_dp bigint not null,
     alt_dp bigint not null,

@@ -475,7 +475,7 @@ class VariantsMutationsCombinedParser(FileParser):
                 text(
                     'create unlogged table tmp_mutations_staging as\n'
                     'select a.id as allele_id,\n'
-                    '       rb_build(array_agg(s.sequence_id)) as s_present\n'
+                    '       rb_build_agg(s.id) as s_present\n'
                     'from tmp_mutations tmut\n'
                     'inner join alleles a on a.region = tmut.region and a.position_nt = tmut.position_nt and a.alt_nt = tmut.alt_nt\n'
                     'inner join samples s on s.accession = tmut.accession\n'
@@ -489,11 +489,11 @@ class VariantsMutationsCombinedParser(FileParser):
         async with get_async_write_session() as session:
             await session.execute(
                 text(
-                    f'insert into {TableNames.consensus_sequences_by_allele} as target (allele_id, sequences_present)\n'
+                    f'insert into {TableNames.cns_samples_by_allele} as target ({ColumnNames.allele_id}, {ColumnNames.samples_present})\n'
                     f'select allele_id, s_present\n'
                     f'from tmp_mutations_staging\n'
-                    f'on conflict on constraint {ConstraintNames.pk_consensus_sequences_by_allele}\n'
-                    f'do update set sequences_present = target.sequences_present | excluded.sequences_present;'
+                    f'on conflict on constraint {ConstraintNames.pk_cns_samples_by_allele}\n'
+                    f'do update set {ColumnNames.samples_present} = target.{ColumnNames.samples_present} | excluded.{ColumnNames.samples_present};'
                 )
             )
             await session.commit()
@@ -505,49 +505,49 @@ class VariantsMutationsCombinedParser(FileParser):
             # which is good because we won't be enforcing fk constraints on the insert.
             await session.execute(
                 text(
-                    'create unlogged table tmp_variants_staging as\n'
-                    'select s.sequence_id as sequence_id,\n'
-                    '       a.id as allele_id,\n'
-                    '       tvar.ref_dp,\n'
-                    '       tvar.alt_dp,\n'
-                    '       tvar.alt_freq,\n'
-                    '       tvar.ref_rv,\n'
-                    '       tvar.alt_rv,\n'
-                    '       tvar.ref_qual,\n'
-                    '       tvar.alt_qual,\n'
-                    '       tvar.total_dp,\n'
-                    '       tvar.pval,\n'
-                    '       tvar.pass_qc\n'
-                    'from tmp_variants tvar\n'
-                    'inner join alleles a on a.region = tvar.region and a.position_nt = tvar.position_nt and a.alt_nt = tvar.alt_nt\n'
-                    'inner join samples s on s.accession = tvar.accession;'
+                    f'create unlogged table tmp_variants_staging as\n'
+                    f'select s.id as {ColumnNames.sample_id},\n'
+                    f'       a.id as {ColumnNames.allele_id},\n'
+                    f'       tvar.ref_dp,\n'
+                    f'       tvar.alt_dp,\n'
+                    f'       tvar.alt_freq,\n'
+                    f'       tvar.ref_rv,\n'
+                    f'       tvar.alt_rv,\n'
+                    f'       tvar.ref_qual,\n'
+                    f'       tvar.alt_qual,\n'
+                    f'       tvar.total_dp,\n'
+                    f'       tvar.pval,\n'
+                    f'       tvar.pass_qc\n'
+                    f'from tmp_variants tvar\n'
+                    f'inner join alleles a on a.region = tvar.region and a.position_nt = tvar.position_nt and a.alt_nt = tvar.alt_nt\n'
+                    f'inner join samples s on s.accession = tvar.accession;'
                 )
             )
             # delete existing records. Note: this means no updates.
             await session.execute(
                 text(
-                    'delete\n'
-                    'from tmp_variants_staging\n'
-                    'where (sequence_id, allele_id) in (\n'
-                    '    select sequence_id, allele_id\n'
-                    '    from intra_host_variants\n'
-                    ');'
+                    f'delete\n'
+                    f'from tmp_variants_staging\n'
+                    f'where ({ColumnNames.sample_id}, {ColumnNames.allele_id}) in (\n'
+                    f'    select {ColumnNames.sample_id}, {ColumnNames.allele_id}\n'
+                    f'    from intra_host_variants\n'
+                    f');'
                 )
             )
             await session.execute(
-                text('create index ix_variants_staging on tmp_variants_staging (sequence_id, allele_id);')
+                text('create index ix_variants_staging on tmp_variants_staging (sample_id, allele_id);')
             )
 
             # check for duplicated sample-allele pairs and warn if found
             res = await session.execute(
                 text(
-                    'select *\n'
-                    'from (\n'
-                    '    select sequence_id, allele_id, count(*) as count\n'
-                    '    from tmp_variants_staging\n'
-                    '    group by sequence_id, allele_id\n'
-                    ') _\n'
-                    'where count > 1;'
+                    f'select *\n'
+                    f'from (\n'
+                    f'    select {ColumnNames.sample_id}, allele_id, count(*) as count\n'
+                    f'    from tmp_variants_staging\n'
+                    f'    group by {ColumnNames.sample_id}, allele_id\n'
+                    f') _\n'
+                    f'where count > 1;'
                 )
             )
             conflicts = res.mappings().all()
@@ -564,23 +564,23 @@ class VariantsMutationsCombinedParser(FileParser):
         async with get_async_write_session() as session:
             await session.execute(
                 text(
-                    'insert into intra_host_variants(\n'
-                    '    sequence_id, allele_id, ref_dp, alt_dp, alt_freq, ref_rv, alt_rv, ref_qual, alt_qual, total_dp, pval, pass_qc\n'
-                    ')\n'
-                    'select distinct on (sequence_id, allele_id) \n'
-                    '    sequence_id,\n'
-                    '    allele_id,\n'
-                    '    ref_dp,\n'
-                    '    alt_dp,\n'
-                    '    alt_freq,\n'
-                    '    ref_rv,\n'
-                    '    alt_rv,\n'
-                    '    ref_qual,\n'
-                    '    alt_qual,\n'
-                    '    total_dp,\n'
-                    '    pval,\n'
-                    '    pass_qc\n'
-                    'from tmp_variants_staging;'
+                    f'insert into intra_host_variants(\n'
+                    f'    {ColumnNames.sample_id}, allele_id, ref_dp, alt_dp, alt_freq, ref_rv, alt_rv, ref_qual, alt_qual, total_dp, pval, pass_qc\n'
+                    f')\n'
+                    f'select distinct on ({ColumnNames.sample_id}, allele_id) \n'
+                    f'    {ColumnNames.sample_id},\n'
+                    f'    allele_id,\n'
+                    f'    ref_dp,\n'
+                    f'    alt_dp,\n'
+                    f'    alt_freq,\n'
+                    f'    ref_rv,\n'
+                    f'    alt_rv,\n'
+                    f'    ref_qual,\n'
+                    f'    alt_qual,\n'
+                    f'    total_dp,\n'
+                    f'    pval,\n'
+                    f'    pass_qc\n'
+                    f'from tmp_variants_staging;'
                 )
             )
             await session.commit()
@@ -605,7 +605,7 @@ class VariantsMutationsCombinedParser(FileParser):
                 text(
                     'create unlogged table tmp_mutation_translations_staging as\n'
                     'select aa.id as amino_acid_id,\n'
-                    '       rb_build(array_agg(s.sequence_id)) as s_present\n'
+                    '       rb_build_agg(s.id) as s_present\n'
                     'from tmp_mutations tmut\n'
                     'inner join amino_acids aa on\n'
                     '        aa.gff_feature = tmut.gff_feature\n'
@@ -628,11 +628,11 @@ class VariantsMutationsCombinedParser(FileParser):
         async with get_async_write_session() as session:
             await session.execute(
                 text(
-                    f'insert into {TableNames.consensus_sequences_by_amino_acid} as target (amino_acid_id, sequences_present)\n'
+                    f'insert into {TableNames.cns_samples_by_amino_acid} as target (amino_acid_id, {ColumnNames.samples_present})\n'
                     f'select amino_acid_id, s_present\n'
                     f'from tmp_mutation_translations_staging\n'
-                    f'on conflict on constraint {ConstraintNames.pk_consensus_sequences_by_amino_acid}\n'
-                    f'    do update set sequences_present = target.sequences_present | excluded.sequences_present;'
+                    f'on conflict on constraint {ConstraintNames.pk_cns_samples_by_amino_acid}\n'
+                    f'    do update set {ColumnNames.samples_present} = target.{ColumnNames.samples_present} | excluded.{ColumnNames.samples_present};'
                 )
             )
             await session.commit()
@@ -661,7 +661,7 @@ class VariantsMutationsCombinedParser(FileParser):
                     '          and tvar.alt_aa is not null\n'
                     '          and tvar.ref_aa is not null\n'
                     '    )\n'
-                    '    select s.sequence_id as sequence_id, aa.id as amino_acid_id\n'
+                    '    select s.id as sample_id, aa.id as amino_acid_id\n'
                     '    from base tvar\n'
                     '    left join amino_acids aa\n'
                     '              on aa.gff_feature = tvar.gff_feature\n'
@@ -675,16 +675,16 @@ class VariantsMutationsCombinedParser(FileParser):
             await session.execute(
                 text(
                     'delete from tmp_intra_host_translations_staging\n'
-                    'where (sequence_id, amino_acid_id) in\n'
+                    'where (sample_id, amino_acid_id) in\n'
                     '      (\n'
-                    '          select sequence_id, amino_acid_id\n'
+                    '          select sample_id, amino_acid_id\n'
                     '          from intra_host_translations\n'
                     '      );'
                 )
             )
             await session.execute(
                 text(
-                    'create index ix_intrahost_translations_staging on tmp_intra_host_translations_staging (sequence_id, amino_acid_id);'
+                    'create index ix_intrahost_translations_staging on tmp_intra_host_translations_staging (sample_id, amino_acid_id);'
                 )
             )
             await session.commit()
@@ -695,10 +695,10 @@ class VariantsMutationsCombinedParser(FileParser):
             await session.execute(
                 text(
                     'insert into intra_host_translations (\n'
-                    '    sequence_id, amino_acid_id\n'
+                    '    sample_id, amino_acid_id\n'
                     ')\n'
-                    'select distinct on (sequence_id, amino_acid_id)\n'
-                    '       sequence_id,\n'
+                    'select distinct on (sample_id, amino_acid_id)\n'
+                    '       sample_id,\n'
                     '       amino_acid_id\n'
                     'from tmp_intra_host_translations_staging;'
                 )
@@ -778,7 +778,7 @@ class VariantsMutationsCombinedParser(FileParser):
     async def _drop_fks_using_allele_id(self):
         await self.index_constraint_manager.drop_names(
             [
-                ConstraintNames.fk_consensus_sequences_by_allele_allele_id_alleles,
+                ConstraintNames.fk_cns_samples_by_allele_allele_id_alleles,
                 ConstraintNames.fk_intra_host_variants_allele_id_alleles,
             ]
         )
@@ -799,7 +799,7 @@ class VariantsMutationsCombinedParser(FileParser):
         await self.index_constraint_manager.drop_names(
             [
                 ConstraintNames.fk_intra_host_translations_amino_acid_id_amino_acids,
-                ConstraintNames.fk_mutation_translations_amino_acid_id_amino_acids,
+                ConstraintNames.fk_cns_samples_by_amino_acid_amino_acid_id_amino_acids,
                 ConstraintNames.fk_phenotype_metric_values_amino_acid_id_amino_acids,
                 # ConstraintNames.fk_annotations_amino_acids_amino_acid_id_amino_acids, todo
             ]
@@ -833,8 +833,8 @@ class VariantsMutationsCombinedParser(FileParser):
         await self.index_constraint_manager.drop_names(
             [
                 ConstraintNames.pk_intra_host_variants,
-                ConstraintNames.fk_intra_host_variants_sequence_id_sequences,
-                IndexNames.ix_intra_host_variants_allele_id_sequence_id,
+                ConstraintNames.fk_intra_host_variants_sample_id_samples,
+                IndexNames.ix_intra_host_variants_allele_id_sample_id,
             ]
         )
 
@@ -842,8 +842,8 @@ class VariantsMutationsCombinedParser(FileParser):
         await self.index_constraint_manager.restore_names(
             [
                 ConstraintNames.pk_intra_host_variants,
-                ConstraintNames.fk_intra_host_variants_sequence_id_sequences,
-                IndexNames.ix_intra_host_variants_allele_id_sequence_id,
+                ConstraintNames.fk_intra_host_variants_sample_id_samples,
+                IndexNames.ix_intra_host_variants_allele_id_sample_id,
                 ConstraintNames.fk_intra_host_variants_allele_id_alleles
             ]
         )
@@ -851,7 +851,7 @@ class VariantsMutationsCombinedParser(FileParser):
     async def _restore_mutations_indexes(self):
         await self.index_constraint_manager.restore_names(
             [
-                ConstraintNames.fk_consensus_sequences_by_allele_allele_id_alleles,
+                ConstraintNames.fk_cns_samples_by_allele_allele_id_alleles,
             ]
         )
 
@@ -859,8 +859,8 @@ class VariantsMutationsCombinedParser(FileParser):
         await self.index_constraint_manager.drop_names(
             [
                 ConstraintNames.pk_intra_host_translations,
-                ConstraintNames.fk_intra_host_translations_sequence_id_sequences,
-                IndexNames.ix_intra_host_translations_amino_acid_id_sequence_id,
+                ConstraintNames.fk_intra_host_translations_sample_id_samples,
+                IndexNames.ix_intra_host_translations_amino_acid_id_sample_id,
             ]
         )
 
@@ -868,8 +868,8 @@ class VariantsMutationsCombinedParser(FileParser):
         await self.index_constraint_manager.restore_names(
             [
                 ConstraintNames.pk_intra_host_translations,
-                IndexNames.ix_intra_host_translations_amino_acid_id_sequence_id,
-                ConstraintNames.fk_intra_host_translations_sequence_id_sequences,
+                IndexNames.ix_intra_host_translations_amino_acid_id_sample_id,
+                ConstraintNames.fk_intra_host_translations_sample_id_samples,
                 ConstraintNames.fk_intra_host_translations_amino_acid_id_amino_acids
             ]
         )
@@ -877,7 +877,7 @@ class VariantsMutationsCombinedParser(FileParser):
     async def _restore_mutation_translations_indexes(self):
         await self.index_constraint_manager.restore_names(
             [
-                ConstraintNames.fk_mutation_translations_amino_acid_id_amino_acids,
+                ConstraintNames.fk_cns_samples_by_amino_acid_amino_acid_id_amino_acids,
             ]
         )
 

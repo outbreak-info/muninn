@@ -2,6 +2,7 @@ import re
 import os
 from datetime import datetime
 from enum import Enum
+from warnings import deprecated
 
 from utils.dates_and_times import format_iso_month, format_iso_week, format_iso_interval
 
@@ -114,7 +115,7 @@ class TableNames(PgIdentifiers):
     samples = 'samples'
     alleles = 'alleles'
     amino_acids = 'amino_acids'
-    consensus_sequences_by_allele = 'consensus_sequences_by_allele'
+    cns_samples_by_allele = 'cns_samples_by_allele'
     intra_host_variants = 'intra_host_variants'
     geo_locations = 'geo_locations'
     phenotype_metrics = 'phenotype_metrics'
@@ -129,7 +130,7 @@ class TableNames(PgIdentifiers):
     annotations_amino_acids = 'annotations_amino_acids'
     lineages_immediate_children = 'lineages_immediate_children'
     lineages_deep_children = 'lineages_deep_children'  # actually a view.
-    consensus_sequences_by_amino_acid = 'consensus_sequences_by_amino_acid'
+    cns_samples_by_amino_acid = 'cns_samples_by_amino_acid'
     intra_host_translations = 'intra_host_translations'
     sequences = 'sequences'
 
@@ -213,8 +214,8 @@ class ColumnNames(PgIdentifiers):
     pval = 'pval'
     pass_qc = 'pass_qc'
 
-    # mutations
-    sequences_present = 'sequences_present'
+    # variants / mutations bitmap
+    samples_present = 'samples_present'
 
     # geo locations
     country_name = 'country_name'
@@ -250,7 +251,7 @@ class ConstraintNames(PgIdentifiers):
     pk_samples = f'pk_{TableNames.samples}'
     pk_alleles = f'pk_{TableNames.alleles}'
     pk_amino_acids = f'pk_{TableNames.amino_acids}'
-    pk_consensus_sequences_by_allele = f'pk_{TableNames.consensus_sequences_by_allele}'
+    pk_cns_samples_by_allele = f'pk_{TableNames.cns_samples_by_allele}'
     pk_intra_host_variants = f'pk_{TableNames.intra_host_variants}'
     pk_geo_locations = f'pk_{TableNames.geo_locations}'
     pk_phenotype_metrics = f'pk_{TableNames.phenotype_metrics}'
@@ -264,7 +265,7 @@ class ConstraintNames(PgIdentifiers):
     pk_annotations_papers = f'pk_{TableNames.annotations_papers}'
     pk_annotations_amino_acids = f'pk_{TableNames.annotations_amino_acids}'
     pk_lineages_immediate_children = f'pk_{TableNames.lineages_immediate_children}'
-    pk_consensus_sequences_by_amino_acid = f'pk_{TableNames.consensus_sequences_by_amino_acid}'
+    pk_cns_samples_by_amino_acid = f'pk_{TableNames.cns_samples_by_amino_acid}'
     pk_intra_host_translations = f'pk_{TableNames.intra_host_translations}'
     pk_sequences = f'pk_{TableNames.sequences}'
 
@@ -291,17 +292,17 @@ class ConstraintNames(PgIdentifiers):
 
     # intra host variants
     fk_intra_host_variants_allele_id_alleles = 'fk_intra_host_variants_allele_id_alleles'
-    fk_intra_host_variants_sequence_id_sequences = 'fk_intra_host_variants_sequence_id_sequences'
+    fk_intra_host_variants_sample_id_samples = 'fk_intra_host_variants_sample_id_samples'
 
     # consensus sequences by allele
-    fk_consensus_sequences_by_allele_allele_id_alleles = 'fk_consensus_sequences_by_allele_allele_id_alleles'
+    fk_cns_samples_by_allele_allele_id_alleles = 'fk_cns_samples_by_allele_allele_id_alleles'
 
     # consensus sequences by amino acid
-    fk_mutation_translations_amino_acid_id_amino_acids = 'fk_consensus_sequences_by_amino_acid_amino_acid_id_amino_acids'
+    fk_cns_samples_by_amino_acid_amino_acid_id_amino_acids = 'fk_cns_samples_by_amino_acid_amino_acid_id_amino_acids'
 
     # intra host translations
     fk_intra_host_translations_amino_acid_id_amino_acids = 'fk_intra_host_translations_amino_acid_id_amino_acids'
-    fk_intra_host_translations_sequence_id_sequences = 'fk_intra_host_translations_sequence_id_sequences'
+    fk_intra_host_translations_sample_id_samples = 'fk_intra_host_translations_sample_id_samples'
 
     # phenotype metrics tables
     uq_phenotype_metrics_name = 'uq_phenotype_metrics_name'
@@ -332,16 +333,16 @@ class ConstraintNames(PgIdentifiers):
 
 class IndexNames(PgIdentifiers):
     # mutations
-    ix_mutations_allele_id_sequence_id = 'ix_mutations_allele_id_sequence_id'
+    ix_mutations_allele_id_sequence_id = 'ix_mutations_allele_id_sequence_id' # todo rm
 
     # mutation translations
-    ix_mutation_translations_amino_acid_id_sequence_id = 'ix_mutation_translations_amino_acid_id_sequence_id'
+    ix_mutation_translations_amino_acid_id_sequence_id = 'ix_mutation_translations_amino_acid_id_sequence_id' # todo rm
 
     # variants
-    ix_intra_host_variants_allele_id_sequence_id = 'ix_intra_host_variants_allele_id_sequence_id'
+    ix_intra_host_variants_allele_id_sample_id = 'ix_intra_host_variants_allele_id_sample_id'
 
     # intra-host translations
-    ix_intra_host_translations_amino_acid_id_sequence_id = 'ix_intra_host_translations_amino_acid_id_sequence_id'
+    ix_intra_host_translations_amino_acid_id_sample_id = 'ix_intra_host_translations_amino_acid_id_sample_id'
 
     # samples lineages
     ix_samples_lineages_lineage_id = 'ix_samples_lineages_lineage_id'

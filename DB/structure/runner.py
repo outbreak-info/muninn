@@ -1,11 +1,10 @@
-from DB.structure import sequences, samples, geo_locations, alleles, amino_acids, phenotype_metrics, \
+from DB.structure import samples, geo_locations, alleles, amino_acids, phenotype_metrics, \
     phenotype_metric_values, consensus_sequences_by_allele, consensus_sequences_by_amino_acid, lineage_systems, \
     lineages, samples_lineages, lineages_immediate_children, lineages_deep_children, intra_host_variants, \
     intra_host_translations
 
 
 async def set_up_db():
-    await sequences.create_all()
     await geo_locations.create_all()
     await samples.create_all()
     await alleles.create_all()
