@@ -116,6 +116,7 @@ class TableNames(PgIdentifiers):
     alleles = 'alleles'
     amino_acids = 'amino_acids'
     cns_samples_by_allele = 'cns_samples_by_allele'
+    cns_alleles_by_sample = 'cns_alleles_by_sample'
     intra_host_variants = 'intra_host_variants'
     geo_locations = 'geo_locations'
     phenotype_metrics = 'phenotype_metrics'

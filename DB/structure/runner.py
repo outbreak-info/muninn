@@ -1,7 +1,8 @@
 from DB.structure import samples, geo_locations, alleles, amino_acids, phenotype_metrics, \
     phenotype_metric_values, cns_samples_by_allele, cns_samples_by_amino_acid, lineage_systems, \
     lineages, samples_lineages, lineages_immediate_children, lineages_deep_children, intra_host_variants, \
-    intra_host_translations, effects, papers, annotations, annotations_papers, annotations_amino_acids
+    intra_host_translations, effects, papers, annotations, annotations_papers, annotations_amino_acids, \
+    cns_alleles_by_sample
 
 
 async def set_up_db():
@@ -14,6 +15,7 @@ async def set_up_db():
     await intra_host_translations.create_all()
 
     await cns_samples_by_allele.create_all()
+    await cns_alleles_by_sample.create_all()
     await cns_samples_by_amino_acid.create_all()
 
     await phenotype_metrics.create_all()
