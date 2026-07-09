@@ -34,7 +34,7 @@ create table samples (
 	sra_study text,
 	serotype text,
 
-	geo_location_id bigint,
+	geo_location_id integer,
 	assay_type text,
 	avg_spot_length double precision,
 	bases bigint,

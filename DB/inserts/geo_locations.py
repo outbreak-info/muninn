@@ -10,9 +10,9 @@ async def find_or_insert_geo_location(gl: GeoLocation) -> int:
         id_ = await session.scalar(text(
             f'select id from {TableNames.geo_locations}\n'
             f'where {ColumnNames.country_name} = :country_name\n'
-            f'and {ColumnNames.admin1_name} = :admin1_name\n'
-            f'and {ColumnNames.admin2_name} = :admin2_name\n'
-            f'and {ColumnNames.admin3_name} = :admin3_name;'
+            f'and ({ColumnNames.admin1_name} = :admin1_name or num_nulls({ColumnNames.admin1_name}, :admin1_name) = 2)\n'
+            f'and ({ColumnNames.admin2_name} = :admin2_name or num_nulls({ColumnNames.admin2_name}, :admin2_name) = 2)\n'
+            f'and ({ColumnNames.admin3_name} = :admin3_name or num_nulls({ColumnNames.admin3_name}, :admin3_name) = 2);\n'
         ),
             {
                 'country_name': gl.country_name,

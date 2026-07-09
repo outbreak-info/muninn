@@ -1,5 +1,5 @@
 create table geo_locations (
-	id serial,
+	id serial not null,
 	country_name text not null,
 	admin1_name text,
 	admin2_name text,
