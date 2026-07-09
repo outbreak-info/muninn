@@ -217,6 +217,7 @@ class ColumnNames(PgIdentifiers):
 
     # variants / mutations bitmap
     samples_present = 'samples_present'
+    alleles_present = 'alleles_present'
 
     # geo locations
     country_name = 'country_name'
@@ -269,6 +270,7 @@ class ConstraintNames(PgIdentifiers):
     pk_cns_samples_by_amino_acid = f'pk_{TableNames.cns_samples_by_amino_acid}'
     pk_intra_host_translations = f'pk_{TableNames.intra_host_translations}'
     pk_sequences = f'pk_{TableNames.sequences}'
+    pk_cns_alleles_by_sample = f'pk_{TableNames.cns_alleles_by_sample}'
 
     # samples
     uq_samples_accession = 'uq_samples_accession'

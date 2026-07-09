@@ -82,6 +82,9 @@ class VariantsMutationsCombinedParser(FileParser):
         print(f'{self._get_timestamp()} clean up tmp tables')
         await self._clean_up_tmp_tables()
 
+        print(f'{self._get_timestamp()} transpose consensus alleles')
+        await self._transpose_cns_alleles()
+
         print(f'Finished at {self._get_timestamp()}')
 
     async def _read_mutations_input(self):
@@ -703,6 +706,24 @@ class VariantsMutationsCombinedParser(FileParser):
                     'from tmp_intra_host_translations_staging;'
                 )
             )
+            await session.commit()
+
+
+    @staticmethod
+    async def _transpose_cns_alleles():
+        async with get_async_write_session() as session:
+            await session.execute(text(
+                f'insert into {TableNames.cns_alleles_by_sample} as target ({ColumnNames.sample_id}, {ColumnNames.alleles_present}) (\n'
+                f'    with pairs as (\n'
+                f'    select {ColumnNames.allele_id}, unnest(rb_to_array({ColumnNames.samples_present})) as {ColumnNames.sample_id} from {TableNames.cns_samples_by_allele}\n'
+                f'    )\n'
+                f'    select {ColumnNames.sample_id}, rb_build_agg({ColumnNames.allele_id})\n'
+                f'    from pairs\n'
+                f'    group by {ColumnNames.sample_id}\n'
+                f')\n'
+                f'on conflict on constraint {ConstraintNames.pk_cns_alleles_by_sample} do update\n'
+                f'set {ColumnNames.alleles_present} = target.{ColumnNames.alleles_present} | excluded.{ColumnNames.alleles_present};'
+            ))
             await session.commit()
 
     @staticmethod
