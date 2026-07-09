@@ -85,6 +85,9 @@ class VariantsMutationsCombinedParser(FileParser):
         print(f'{self._get_timestamp()} transpose consensus alleles')
         await self._transpose_cns_alleles()
 
+        print(f'{self._get_timestamp()} transpose consensus amino acids')
+        await self._transpose_cns_amino_acids()
+
         print(f'Finished at {self._get_timestamp()}')
 
     async def _read_mutations_input(self):
@@ -708,22 +711,42 @@ class VariantsMutationsCombinedParser(FileParser):
             )
             await session.commit()
 
-
     @staticmethod
     async def _transpose_cns_alleles():
         async with get_async_write_session() as session:
-            await session.execute(text(
-                f'insert into {TableNames.cns_alleles_by_sample} as target ({ColumnNames.sample_id}, {ColumnNames.alleles_present}) (\n'
-                f'    with pairs as (\n'
-                f'    select {ColumnNames.allele_id}, unnest(rb_to_array({ColumnNames.samples_present})) as {ColumnNames.sample_id} from {TableNames.cns_samples_by_allele}\n'
-                f'    )\n'
-                f'    select {ColumnNames.sample_id}, rb_build_agg({ColumnNames.allele_id})\n'
-                f'    from pairs\n'
-                f'    group by {ColumnNames.sample_id}\n'
-                f')\n'
-                f'on conflict on constraint {ConstraintNames.pk_cns_alleles_by_sample} do update\n'
-                f'set {ColumnNames.alleles_present} = target.{ColumnNames.alleles_present} | excluded.{ColumnNames.alleles_present};'
-            ))
+            await session.execute(
+                text(
+                    f'insert into {TableNames.cns_alleles_by_sample} as target ({ColumnNames.sample_id}, {ColumnNames.alleles_present}) (\n'
+                    f'    with pairs as (\n'
+                    f'    select {ColumnNames.allele_id}, unnest(rb_to_array({ColumnNames.samples_present})) as {ColumnNames.sample_id} from {TableNames.cns_samples_by_allele}\n'
+                    f'    )\n'
+                    f'    select {ColumnNames.sample_id}, rb_build_agg({ColumnNames.allele_id})\n'
+                    f'    from pairs\n'
+                    f'    group by {ColumnNames.sample_id}\n'
+                    f')\n'
+                    f'on conflict on constraint {ConstraintNames.pk_cns_alleles_by_sample} do update\n'
+                    f'set {ColumnNames.alleles_present} = target.{ColumnNames.alleles_present} | excluded.{ColumnNames.alleles_present};'
+                )
+            )
+            await session.commit()
+
+    @staticmethod
+    async def _transpose_cns_amino_acids():
+        async with get_async_write_session() as session:
+            await session.execute(
+                text(
+                    f'insert into {TableNames.cns_amino_acids_by_sample} as target ({ColumnNames.sample_id}, {ColumnNames.amino_acids_present}) (\n'
+                    f'    with pairs as (\n'
+                    f'    select {ColumnNames.amino_acid_id}, unnest(rb_to_array({ColumnNames.samples_present})) as {ColumnNames.sample_id} from {TableNames.cns_samples_by_amino_acid}\n'
+                    f'    )\n'
+                    f'    select {ColumnNames.sample_id}, rb_build_agg({ColumnNames.amino_acid_id})\n'
+                    f'    from pairs\n'
+                    f'    group by {ColumnNames.sample_id}\n'
+                    f')\n'
+                    f'on conflict on constraint {ConstraintNames.pk_cns_amino_acids_by_sample} do update\n'
+                    f'set {ColumnNames.amino_acids_present} = target.{ColumnNames.amino_acids_present} | excluded.{ColumnNames.amino_acids_present};'
+                )
+            )
             await session.commit()
 
     @staticmethod

@@ -132,6 +132,7 @@ class TableNames(PgIdentifiers):
     lineages_immediate_children = 'lineages_immediate_children'
     lineages_deep_children = 'lineages_deep_children'  # actually a view.
     cns_samples_by_amino_acid = 'cns_samples_by_amino_acid'
+    cns_amino_acids_by_sample = 'cns_amino_acids_by_sample'
     intra_host_translations = 'intra_host_translations'
     sequences = 'sequences'
 
@@ -218,6 +219,7 @@ class ColumnNames(PgIdentifiers):
     # variants / mutations bitmap
     samples_present = 'samples_present'
     alleles_present = 'alleles_present'
+    amino_acids_present = 'amino_acids_present'
 
     # geo locations
     country_name = 'country_name'
@@ -271,6 +273,7 @@ class ConstraintNames(PgIdentifiers):
     pk_intra_host_translations = f'pk_{TableNames.intra_host_translations}'
     pk_sequences = f'pk_{TableNames.sequences}'
     pk_cns_alleles_by_sample = f'pk_{TableNames.cns_alleles_by_sample}'
+    pk_cns_amino_acids_by_sample = f'pk_{TableNames.cns_amino_acids_by_sample}'
 
     # samples
     uq_samples_accession = 'uq_samples_accession'
@@ -297,11 +300,14 @@ class ConstraintNames(PgIdentifiers):
     fk_intra_host_variants_allele_id_alleles = 'fk_intra_host_variants_allele_id_alleles'
     fk_intra_host_variants_sample_id_samples = 'fk_intra_host_variants_sample_id_samples'
 
-    # consensus sequences by allele
+    # consensus samples by allele
     fk_cns_samples_by_allele_allele_id_alleles = 'fk_cns_samples_by_allele_allele_id_alleles'
 
-    # consensus sequences by amino acid
+    # consensus samples by amino acid
     fk_cns_samples_by_amino_acid_amino_acid_id_amino_acids = 'fk_cns_samples_by_amino_acid_amino_acid_id_amino_acids'
+
+    # consensus amino acids by sample
+    fk_cns_amino_acids_by_sample_sample_id_samples = 'fk_cns_amino_acids_by_sample_sample_id_samples'
 
     # intra host translations
     fk_intra_host_translations_amino_acid_id_amino_acids = 'fk_intra_host_translations_amino_acid_id_amino_acids'
@@ -336,10 +342,10 @@ class ConstraintNames(PgIdentifiers):
 
 class IndexNames(PgIdentifiers):
     # mutations
-    ix_mutations_allele_id_sequence_id = 'ix_mutations_allele_id_sequence_id' # todo rm
+    ix_mutations_allele_id_sequence_id = 'ix_mutations_allele_id_sequence_id'  # todo rm
 
     # mutation translations
-    ix_mutation_translations_amino_acid_id_sequence_id = 'ix_mutation_translations_amino_acid_id_sequence_id' # todo rm
+    ix_mutation_translations_amino_acid_id_sequence_id = 'ix_mutation_translations_amino_acid_id_sequence_id'  # todo rm
 
     # variants
     ix_intra_host_variants_allele_id_sample_id = 'ix_intra_host_variants_allele_id_sample_id'
