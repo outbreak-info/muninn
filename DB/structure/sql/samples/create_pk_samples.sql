@@ -1,0 +1,1 @@
+alter table samples add constraint pk_samples primary key (id);

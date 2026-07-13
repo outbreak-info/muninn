@@ -5,7 +5,7 @@ from sqlalchemy import text
 from DB.engine import get_async_session
 from DB.models import Mutation, IntraHostVariant
 from api.models import RegionAndGffFeatureInfo
-from utils.constants import TableNames, StandardColumnNames
+from utils.constants import TableNames, ColumnNames
 
 
 async def get_gff_features() -> List[str]:
@@ -30,9 +30,9 @@ async def get_region_and_gff_features(
                 f'''
                 select distinct gff_feature, region
                 from {TableNames.amino_acids} aa
-                inner join {translations_table} t on t.{StandardColumnNames.amino_acid_id} = aa.id
+                inner join {translations_table} t on t.{ColumnNames.amino_acid_id} = aa.id
                 inner join {intermediate.__tablename__} inter on inter.id = t.{translations_join_id}
-                inner join {TableNames.alleles} a on a.id = inter.{StandardColumnNames.allele_id}
+                inner join {TableNames.alleles} a on a.id = inter.{ColumnNames.allele_id}
                 '''
             )
         )
@@ -47,8 +47,8 @@ def get_appropriate_translations_table_and_id(table: Type[IntraHostVariant] | Ty
     """
 
     if table is IntraHostVariant or table == TableNames.intra_host_variants:
-        return TableNames.intra_host_translations, StandardColumnNames.intra_host_variant_id
-    elif table is Mutation or table == TableNames.mutations:
-        return TableNames.mutation_translations, StandardColumnNames.mutation_id
+        return TableNames.intra_host_translations, ColumnNames.intra_host_variant_id
+    elif table is Mutation or table == TableNames.cns_samples_by_allele:
+        return TableNames.cns_samples_by_amino_acid, ColumnNames.mutation_id
     else:
         raise ValueError

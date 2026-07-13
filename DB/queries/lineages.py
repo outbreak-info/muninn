@@ -11,7 +11,7 @@ from DB.queries.date_count_helpers import get_extract_clause, get_group_by_claus
 from api.models import LineageCountInfo, LineageAbundanceInfo, LineageInfo, LineageAbundanceSummaryInfo, \
     MutationProfileInfo
 from parser.parser import parser
-from utils.constants import DateBinOpt, NtOrAa, NUCLEOTIDE_CHARACTERS, TableNames, StandardColumnNames, COLLECTION_DATE
+from utils.constants import DateBinOpt, NtOrAa, NUCLEOTIDE_CHARACTERS, TableNames, ColumnNames, COLLECTION_DATE
 from utils.errors import NotFoundError
 
 
@@ -181,7 +181,7 @@ async def get_abundance_summaries_by_simple_date(
     extract_clause = get_extract_clause(group_by, date_bin, days)
     group_by_clause = get_group_by_clause(
         date_bin,
-        [StandardColumnNames.lineage_name, StandardColumnNames.lineage_system_name]
+        [ColumnNames.lineage_name, ColumnNames.lineage_system_name]
     )
     order_by_clause = get_order_by_cause(date_bin)
 
@@ -244,7 +244,7 @@ async def get_abundance_summaries_by_collection_date(
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(
         date_bin,
-        [StandardColumnNames.lineage_name, StandardColumnNames.lineage_system_name]
+        [ColumnNames.lineage_name, ColumnNames.lineage_system_name]
     )
     order_by_clause = get_order_by_cause(date_bin)
 

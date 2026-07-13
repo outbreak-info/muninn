@@ -6,7 +6,7 @@ from DB.inserts.phenotype_measurement_results import insert_pheno_measurement_re
 from DB.inserts.phenotype_metrics import find_or_insert_metric
 from DB.models import AminoAcid, PhenotypeMetric, PhenotypeMetricValues
 from DB.inserts.amino_acids import find_equivalent_amino_acids
-from utils.constants import PhenotypeMetricAssayTypes, StandardColumnNames
+from utils.constants import PhenotypeMetricAssayTypes, ColumnNames
 from utils.csv_helpers import get_value, clean_up_gff_feature
 from utils.errors import NotFoundError
 
@@ -41,12 +41,12 @@ class DmsFileParser(FileParser):
                 try:
                     position_aa = get_value(
                         row,
-                        self.required_column_name_map[StandardColumnNames.position_aa],
+                        self.required_column_name_map[ColumnNames.position_aa],
                         transform=int
                     )
-                    ref_aa = get_value(row, self.required_column_name_map[StandardColumnNames.ref_aa])
-                    alt_aa = get_value(row, self.required_column_name_map[StandardColumnNames.alt_aa])
-                    gff_feature = get_value(row, self.required_column_name_map[StandardColumnNames.gff_feature])
+                    ref_aa = get_value(row, self.required_column_name_map[ColumnNames.ref_aa])
+                    alt_aa = get_value(row, self.required_column_name_map[ColumnNames.alt_aa])
+                    gff_feature = get_value(row, self.required_column_name_map[ColumnNames.gff_feature])
                 except ValueError:
                     debug_info['skipped_aas_info_missing'] += 1
                     continue
@@ -135,10 +135,10 @@ class DmsFileParser(FileParser):
 
     # these can be overridden as required in subclasses
     required_column_name_map = {
-        StandardColumnNames.position_aa: 'position',
-        StandardColumnNames.ref_aa: 'wildtype',
-        StandardColumnNames.alt_aa: 'mutant',
-        StandardColumnNames.gff_feature: 'GFF_FEATURE',
+        ColumnNames.position_aa: 'position',
+        ColumnNames.ref_aa: 'wildtype',
+        ColumnNames.alt_aa: 'mutant',
+        ColumnNames.gff_feature: 'GFF_FEATURE',
     }
 
 class Sc2DmsTsvParser(DmsFileParser):

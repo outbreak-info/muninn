@@ -1,4 +1,3 @@
 #! /bin/bash
-LOG="/home/muninn/db_setup.log"
-alembic upgrade head &>> "$LOG"
-python3 switch_to_bitmap_mutations.py &>> "$LOG"
+LOG="/home/muninn/data/db_setup.log"
+python3 create_db.py &> "$LOG"

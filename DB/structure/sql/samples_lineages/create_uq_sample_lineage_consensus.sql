@@ -1,0 +1,2 @@
+alter table samples_lineages add constraint uq_samples_lineages_sample_id_lineage_id_is_consensus_call
+unique (sample_id, lineage_id, is_consensus_call);
