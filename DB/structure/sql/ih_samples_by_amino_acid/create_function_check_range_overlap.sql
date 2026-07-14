@@ -1,0 +1,18 @@
+create or replace function check_freq_range_overlap_ih_samples_by_amino_acid()
+	returns trigger as
+$$
+declare
+	n_overlaps int;
+begin
+	select count(*)
+	into n_overlaps
+	from ih_samples_by_amino_acid isa
+	where isa.amino_acid_id = new.amino_acid_id
+		and isa.alt_freq_range && new.alt_freq_range;
+	if n_overlaps > 0 then
+		raise exception 'alt_freq_range overlaps existing record with same amino_acid_id';
+	end if;
+	return new;
+end;
+$$
+	language plpgsql;

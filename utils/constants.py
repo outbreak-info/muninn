@@ -135,6 +135,8 @@ class TableNames(PgIdentifiers):
     cns_amino_acids_by_sample = 'cns_amino_acids_by_sample'
     intra_host_translations = 'intra_host_translations'
     sequences = 'sequences'
+    ih_samples_by_allele = 'ih_samples_by_allele'
+    ih_samples_by_amino_acid = 'ih_samples_by_amino_acid'
 
 
 class ColumnNames(PgIdentifiers):
@@ -274,6 +276,8 @@ class ConstraintNames(PgIdentifiers):
     pk_sequences = f'pk_{TableNames.sequences}'
     pk_cns_alleles_by_sample = f'pk_{TableNames.cns_alleles_by_sample}'
     pk_cns_amino_acids_by_sample = f'pk_{TableNames.cns_amino_acids_by_sample}'
+    pk_ih_samples_by_allele = f'pk_{TableNames.ih_samples_by_allele}'
+    pk_ih_samples_by_amino_acid = f'pk_{TableNames.ih_samples_by_amino_acid}'
 
     # samples
     uq_samples_accession = 'uq_samples_accession'
@@ -302,7 +306,9 @@ class ConstraintNames(PgIdentifiers):
 
     # intrahost samples by allele
     fk_ih_samples_by_allele_allele_id_alleles = 'fk_ih_samples_by_allele_allele_id_alleles' # todo add do drops in ingestion
-    uq_ih_samples_by_allele_allele_id_alt_freq_range = 'uq_ih_samples_by_allele_allele_id_alt_freq_range'
+
+    # intrahost samples by amino acid
+    fk_ih_samples_by_amino_acid_amino_acid_id_amino_acids = 'fk_ih_samples_by_amino_acid_amino_acid_id_amino_acids'
 
     # consensus samples by allele
     fk_cns_samples_by_allele_allele_id_alleles = 'fk_cns_samples_by_allele_allele_id_alleles'
