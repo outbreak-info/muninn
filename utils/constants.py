@@ -300,6 +300,10 @@ class ConstraintNames(PgIdentifiers):
     fk_intra_host_variants_allele_id_alleles = 'fk_intra_host_variants_allele_id_alleles'
     fk_intra_host_variants_sample_id_samples = 'fk_intra_host_variants_sample_id_samples'
 
+    # intrahost samples by allele
+    fk_ih_samples_by_allele_allele_id_alleles = 'fk_ih_samples_by_allele_allele_id_alleles' # todo add do drops in ingestion
+    uq_ih_samples_by_allele_allele_id_alt_freq_range = 'uq_ih_samples_by_allele_allele_id_alt_freq_range'
+
     # consensus samples by allele
     fk_cns_samples_by_allele_allele_id_alleles = 'fk_cns_samples_by_allele_allele_id_alleles'
 
