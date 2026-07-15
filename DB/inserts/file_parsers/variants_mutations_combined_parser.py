@@ -8,8 +8,8 @@ from sqlalchemy.sql.expression import text
 
 from DB.models import Base
 from DB.engine import get_async_write_session, get_async_session
-from DB.index_constraint_manager import IndexAndConstraintManager
 from DB.inserts.file_parsers.file_parser import FileParser
+from DB.structure.constraint_manager import ConstraintManager
 from utils.constants import ColumnNames, CONTAINER_DATA_DIRECTORY, Env, ConstraintNames, IndexNames, TableNames
 
 AMINO_ACID_REF_CONFLICTS_FILE = '/tmp/amino_acid_ref_conflicts.csv'
@@ -30,8 +30,6 @@ class VariantsMutationsCombinedParser(FileParser):
             VariantsMutationsCombinedParser.InputFile(name, delimiter=self.delimiter) for name in filenames
             if len(name.strip()) > 0
         ]
-
-        self.index_constraint_manager = IndexAndConstraintManager(Base)
 
     async def parse_and_insert(self):
         print(f'{self._get_timestamp()} read mutations')
@@ -819,107 +817,124 @@ class VariantsMutationsCombinedParser(FileParser):
     def _get_timestamp():
         return datetime.now().isoformat(timespec='seconds')
 
-    async def _drop_fks_using_allele_id(self):
-        await self.index_constraint_manager.drop_names(
+    @staticmethod
+    async def _drop_fks_using_allele_id():
+        await ConstraintManager.drop_constraints(
             [
                 ConstraintNames.fk_cns_samples_by_allele_allele_id_alleles,
                 ConstraintNames.fk_intra_host_variants_allele_id_alleles,
+                ConstraintNames.fk_ih_samples_by_allele_allele_id_alleles,
             ]
         )
 
-    async def _drop_alleles_indexes(self):
-        await self.index_constraint_manager.drop_names(
+    @staticmethod
+    async def _drop_alleles_indexes():
+        await ConstraintManager.drop_constraints(
             [
                 ConstraintNames.uq_alleles_nt_values,
                 ConstraintNames.pk_alleles
             ]
         )
 
-    async def _restore_alleles_indexes(self):
-        await self.index_constraint_manager.restore_constraint(ConstraintNames.pk_alleles)
-        await self.index_constraint_manager.restore_constraint(ConstraintNames.uq_alleles_nt_values)
+    @staticmethod
+    async def _restore_alleles_indexes():
+        await ConstraintManager.restore_constraints(
+            [
+                ConstraintNames.pk_alleles,
+                ConstraintNames.uq_alleles_nt_values,
+            ]
+        )
 
-    async def _drop_fks_using_amino_acid_id(self):
-        await self.index_constraint_manager.drop_names(
+    @staticmethod
+    async def _drop_fks_using_amino_acid_id():
+        await ConstraintManager.drop_constraints(
             [
                 ConstraintNames.fk_intra_host_translations_amino_acid_id_amino_acids,
                 ConstraintNames.fk_cns_samples_by_amino_acid_amino_acid_id_amino_acids,
                 ConstraintNames.fk_phenotype_metric_values_amino_acid_id_amino_acids,
                 ConstraintNames.fk_annotations_amino_acids_amino_acid_id_amino_acids,
+                ConstraintNames.fk_ih_samples_by_amino_acid_amino_acid_id_amino_acids,
             ]
         )
 
-    async def _drop_amino_acids_indexes(self):
-        await self.index_constraint_manager.drop_names(
+    @staticmethod
+    async def _drop_amino_acids_indexes():
+        await ConstraintManager.drop_constraints(
             [
                 ConstraintNames.uq_amino_acids_gff_feature_position_alt_aa_alt_codon,
                 ConstraintNames.pk_amino_acids,
             ]
         )
 
-    async def _restore_amino_acids_indexes(self):
-        await self.index_constraint_manager.restore_names(
+    @staticmethod
+    async def _restore_amino_acids_indexes():
+        await ConstraintManager.restore_constraints(
             [
                 ConstraintNames.pk_amino_acids,
                 ConstraintNames.uq_amino_acids_gff_feature_position_alt_aa_alt_codon
             ]
         )
 
-    async def _restore_fks_using_amino_acid_id(self):
-        await self.index_constraint_manager.restore_names(
+    @staticmethod
+    async def _restore_fks_using_amino_acid_id():
+        await ConstraintManager.restore_constraints(
             [
                 ConstraintNames.fk_phenotype_metric_values_amino_acid_id_amino_acids,
                 ConstraintNames.fk_annotations_amino_acids_amino_acid_id_amino_acids,
             ]
         )
 
-    async def _drop_intra_host_variants_indexes(self):
-        await self.index_constraint_manager.drop_names(
+    @staticmethod
+    async def _drop_intra_host_variants_indexes():
+        await ConstraintManager.drop_constraints(
             [
                 ConstraintNames.pk_intra_host_variants,
                 ConstraintNames.fk_intra_host_variants_sample_id_samples,
-                IndexNames.ix_intra_host_variants_allele_id_sample_id,
             ]
         )
 
-    async def _restore_intra_host_variants_indexes(self):
-        await self.index_constraint_manager.restore_names(
+    @staticmethod
+    async def _restore_intra_host_variants_indexes():
+        await ConstraintManager.restore_constraints(
             [
                 ConstraintNames.pk_intra_host_variants,
                 ConstraintNames.fk_intra_host_variants_sample_id_samples,
-                IndexNames.ix_intra_host_variants_allele_id_sample_id,
-                ConstraintNames.fk_intra_host_variants_allele_id_alleles
+                ConstraintNames.fk_intra_host_variants_allele_id_alleles,
+                ConstraintNames.fk_ih_samples_by_allele_allele_id_alleles,
             ]
         )
 
-    async def _restore_mutations_indexes(self):
-        await self.index_constraint_manager.restore_names(
+    @staticmethod
+    async def _restore_mutations_indexes():
+        await ConstraintManager.restore_constraints(
             [
                 ConstraintNames.fk_cns_samples_by_allele_allele_id_alleles,
             ]
         )
 
-    async def _drop_intra_host_translations_indexes(self):
-        await self.index_constraint_manager.drop_names(
+    @staticmethod
+    async def _drop_intra_host_translations_indexes():
+        await ConstraintManager.drop_constraints(
             [
                 ConstraintNames.pk_intra_host_translations,
                 ConstraintNames.fk_intra_host_translations_sample_id_samples,
-                IndexNames.ix_intra_host_translations_amino_acid_id_sample_id,
             ]
         )
 
-    async def _restore_intra_host_translations_indexes(self):
-        await self.index_constraint_manager.restore_names(
+    @staticmethod
+    async def _restore_intra_host_translations_indexes():
+        await ConstraintManager.restore_constraints(
             [
                 ConstraintNames.pk_intra_host_translations,
-                IndexNames.ix_intra_host_translations_amino_acid_id_sample_id,
                 ConstraintNames.fk_intra_host_translations_sample_id_samples,
-                ConstraintNames.fk_intra_host_translations_amino_acid_id_amino_acids
+                ConstraintNames.fk_intra_host_translations_amino_acid_id_amino_acids,
+                ConstraintNames.fk_ih_samples_by_amino_acid_amino_acid_id_amino_acids,
             ]
         )
 
-    async def _restore_mutation_translations_indexes(self):
-        await self.index_constraint_manager.restore_names(
+    @staticmethod
+    async def _restore_mutation_translations_indexes():
+        await ConstraintManager.restore_constraints(
             [
                 ConstraintNames.fk_cns_samples_by_amino_acid_amino_acid_id_amino_acids,
             ]

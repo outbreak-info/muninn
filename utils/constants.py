@@ -305,7 +305,7 @@ class ConstraintNames(PgIdentifiers):
     fk_intra_host_variants_sample_id_samples = 'fk_intra_host_variants_sample_id_samples'
 
     # intrahost samples by allele
-    fk_ih_samples_by_allele_allele_id_alleles = 'fk_ih_samples_by_allele_allele_id_alleles' # todo add do drops in ingestion
+    fk_ih_samples_by_allele_allele_id_alleles = 'fk_ih_samples_by_allele_allele_id_alleles'
 
     # intrahost samples by amino acid
     fk_ih_samples_by_amino_acid_amino_acid_id_amino_acids = 'fk_ih_samples_by_amino_acid_amino_acid_id_amino_acids'
