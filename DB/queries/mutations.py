@@ -1,63 +1,110 @@
 from typing import List
 
-from sqlalchemy import select, text
-from sqlalchemy.orm import contains_eager
+from sqlalchemy import text
 
 from DB.engine import get_async_session
-from DB.models import Mutation, Allele, AminoAcid, Sample, GeoLocation, MutationTranslation
 from DB.queries.date_count_helpers import get_extract_clause, MID_COLLECTION_DATE_CALCULATION, get_order_by_cause, \
     get_group_by_clause
-from api.models import MutationInfo
+from api.models import MutationNucleotideInfo, MutationAminoAcidInfo
 from parser.parser import parser
-from utils.constants import ColumnNames, DateBinOpt, TableNames, COLLECTION_DATE
+from utils.constants import ColumnNames, DateBinOpt, TableNames, COLLECTION_DATE, NtOrAa
 
 
-async def get_mutations(query: str) -> List['MutationInfo']:
-    user_query = parser.parse(query)
+async def get_mutations(
+    change_bin: NtOrAa = NtOrAa.nt,
+    filter: str = ""
+) -> List['MutationNucleotideInfo'] | List['MutationAminoAcidInfo']:
+    user_defined_filter = parser.parse(filter)
 
-    mutations_query = (
-        select(Mutation, Allele, MutationTranslation, AminoAcid)
-        .join(Allele, Mutation.allele_id == Allele.id, isouter=True)
-        .options(contains_eager(Mutation.r_allele))
-        .join(MutationTranslation, MutationTranslation.mutation_id == Mutation.id, isouter=True)
-        .options(contains_eager(Mutation.r_translations))
-        .join(AminoAcid, AminoAcid.id == MutationTranslation.amino_acid_id, isouter=True)
-        .options(contains_eager(MutationTranslation.r_amino_acid))
-        .where(
-            text(user_query)
-        )
-    )
+    if change_bin == NtOrAa.nt:
+        mutations_query = f'''
+            select
+                samps.sample_id,
+                m.{ColumnNames.allele_id},
+                a.region,
+                a.position_nt,
+                a.ref_nt,
+                a.alt_nt
+            from {TableNames.cns_samples_by_allele} m
+            inner join {TableNames.alleles} a on a.id = m.{ColumnNames.allele_id}
+            cross join lateral unnest(rb_to_array(m.{ColumnNames.samples_present})) as samps(sample_id)
+            where {user_defined_filter}
+        '''
+        async with get_async_session() as session:
+            result = await session.execute(text(mutations_query))
+            return [MutationNucleotideInfo(**row) for row in result.mappings().all()]
+    else:
+        mutations_query = f'''
+            select
+                samps.sample_id,
+                aa.position_aa,
+                aa.ref_aa,
+                aa.alt_aa,
+                aa.gff_feature,
+                aa.ref_codon,
+                aa.alt_codon
+            from {TableNames.cns_samples_by_amino_acid} mt
+            inner join {TableNames.amino_acids} aa on aa.id = mt.{ColumnNames.amino_acid_id}
+            cross join lateral unnest(rb_to_array(mt.{ColumnNames.samples_present})) as samps(sample_id)
+            where {user_defined_filter}
+        '''
+        async with get_async_session() as session:
+            result = await session.execute(text(mutations_query))
+            return [MutationAminoAcidInfo(**row) for row in result.mappings().all()]
 
-    async with get_async_session() as session:
-        results = await session.scalars(mutations_query)
-        out_data = [MutationInfo.from_db_object(m) for m in results.unique()]
-    return out_data
 
+async def get_mutations_by_sample(
+    change_bin: NtOrAa = NtOrAa.nt,
+    filter: str = ""
+) -> List['MutationNucleotideInfo'] | List['MutationAminoAcidInfo']:
+    user_defined_filter = parser.parse(filter)
 
-async def get_mutations_by_sample(query: str) -> List['MutationInfo']:
-    user_query = parser.parse(query)
+    matching_samples = f'''
+        select s.id
+        from {TableNames.samples} s
+        left join {TableNames.geo_locations} g on g.id = s.{ColumnNames.geo_location_id}
+        where {user_defined_filter}
+    '''
 
-    mutations_query = (
-        select(Mutation, Allele, MutationTranslation, AminoAcid)
-        .join(Allele, Mutation.allele_id == Allele.id, isouter=True)
-        .options(contains_eager(Mutation.r_allele))
-        .join(MutationTranslation, MutationTranslation.mutation_id == Mutation.id, isouter=True)
-        .options(contains_eager(Mutation.r_translations))
-        .join(AminoAcid, AminoAcid.id == MutationTranslation.amino_acid_id, isouter=True)
-        .options(contains_eager(MutationTranslation.r_amino_acid))
-        .where(
-            Mutation.sample_id.in_(
-                select(Sample.id)
-                .join(GeoLocation, GeoLocation.id == Sample.geo_location_id, isouter=True)
-                .where(text(user_query))
+    if change_bin == NtOrAa.nt:
+        mutations_query = f'''
+            select
+                cabs.{ColumnNames.sample_id},
+                alls.allele_id,
+                a.region,
+                a.position_nt,
+                a.ref_nt,
+                a.alt_nt
+            from {TableNames.cns_alleles_by_sample} cabs
+            cross join lateral unnest(rb_to_array(cabs.{ColumnNames.alleles_present})) as alls(allele_id)
+            inner join {TableNames.alleles} a on a.id = alls.allele_id
+            where cabs.{ColumnNames.sample_id} in (
+                {matching_samples}
             )
-        )
-    )
-
-    async with get_async_session() as session:
-        results = await session.scalars(mutations_query)
-        out_data = [MutationInfo.from_db_object(m) for m in results.unique()]
-    return out_data
+        '''
+        async with get_async_session() as session:
+            result = await session.execute(text(mutations_query))
+            return [MutationNucleotideInfo(**row) for row in result.mappings().all()]
+    else:
+        mutations_query = f'''
+            select
+                caabs.{ColumnNames.sample_id},
+                aa.position_aa,
+                aa.ref_aa,
+                aa.alt_aa,
+                aa.gff_feature,
+                aa.ref_codon,
+                aa.alt_codon
+            from {TableNames.cns_amino_acids_by_sample} caabs
+            cross join lateral unnest(rb_to_array(caabs.{ColumnNames.amino_acids_present})) as aas(amino_acid_id)
+            inner join {TableNames.amino_acids} aa on aa.id = aas.amino_acid_id
+            where caabs.{ColumnNames.sample_id} in (
+                {matching_samples}
+            )
+        '''
+        async with get_async_session() as session:
+            result = await session.execute(text(mutations_query))
+            return [MutationAminoAcidInfo(**row) for row in result.mappings().all()]
 
 
 async def get_aa_mutation_count_by_collection_date(
@@ -67,11 +114,11 @@ async def get_aa_mutation_count_by_collection_date(
     gff_feature: str,
     days: int,
     max_span_days: int,
-    raw_query: str
+    filter: str | None = None
 ):
-    user_where_clause = ''
-    if raw_query is not None:
-        user_where_clause = f'where ({parser.parse(raw_query)})'
+    user_defined_filter = ''
+    if filter is not None:
+        user_defined_filter = f'where ({parser.parse(filter)})'
 
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(
@@ -90,16 +137,16 @@ async def get_aa_mutation_count_by_collection_date(
         res = await session.execute(
             text(
                 f'''
-                with translation_sequences as (
+                with translation_samples as (
                     select
                         aa.gff_feature,
                         aa.ref_aa,
                         aa.position_aa,
                         aa.alt_aa,
-                        seqs.sequence_id as target_sequence_id
+                        samps.{ColumnNames.sample_id} as target_sample_id
                     from {TableNames.amino_acids} aa
-                    inner join {TableNames.mutation_translations} t on t.{StandardColumnNames.amino_acid_id} = aa.id
-                    cross join lateral unnest(rb_to_array(t.{StandardColumnNames.sequences_present})) as seqs(sequence_id)
+                    inner join {TableNames.cns_samples_by_amino_acid} t on t.{ColumnNames.amino_acid_id} = aa.id
+                    cross join lateral unnest(rb_to_array(t.{ColumnNames.samples_present})) as samps({ColumnNames.sample_id})
                     where aa.position_aa = {position_aa} and aa.alt_aa = :alt_aa and aa.gff_feature = :gff_feature
                 )
                 select
@@ -130,11 +177,11 @@ async def get_aa_mutation_count_by_collection_date(
                             s.collection_end_date,
                             l.lineage_name,
                             collection_end_date - collection_start_date as collection_span
-                        from translation_sequences ts
-                        inner join {TableNames.cns_samples_by_amino_acid} s on s.{ColumnNames.sequence_id} = ts.target_sequence_id
+                        from translation_samples ts
+                        inner join {TableNames.samples} s on s.id = ts.target_sample_id
                         inner join {TableNames.samples_lineages} sl on sl.sample_id = s.id
                         inner join {TableNames.lineages} l on l.id = sl.lineage_id
-                        {user_where_clause}
+                        {user_defined_filter}
                     )
                     where collection_span <= {max_span_days}
                 )
@@ -171,21 +218,21 @@ async def get_nt_mutation_count_by_collection_date(
     region: str,
     days: int,
     max_span_days: int,
-    raw_query: str | None = None
+    filter: str | None = None
 ):
-    user_where_clause = ''
-    if raw_query is not None:
-        user_where_clause = f'where ({parser.parse(raw_query)})'
+    user_defined_filter = ''
+    if filter is not None:
+        user_defined_filter = f'where ({parser.parse(filter)})'
 
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(
         date_bin,
         prefix_cols=[
-            StandardColumnNames.region,
-            StandardColumnNames.position_nt,
-            StandardColumnNames.alt_nt,
-            StandardColumnNames.ref_nt,
-            StandardColumnNames.lineage_name
+            ColumnNames.region,
+            ColumnNames.position_nt,
+            ColumnNames.alt_nt,
+            ColumnNames.ref_nt,
+            ColumnNames.lineage_name
         ]
     )
     order_by_clause = get_order_by_cause(date_bin)
@@ -194,16 +241,16 @@ async def get_nt_mutation_count_by_collection_date(
         res = await session.execute(
             text(
                 f'''
-                with mutation_sequences as (
+                with mutation_samples as (
                     select
                         a.region,
                         a.ref_nt,
                         a.position_nt,
                         a.alt_nt,
-                        seqs.sequence_id as target_sequence_id
+                        samps.{ColumnNames.sample_id} as target_sample_id
                     from {TableNames.alleles} a
-                    inner join {TableNames.mutations} m on m.{StandardColumnNames.allele_id} = a.id
-                    cross join lateral unnest(rb_to_array(m.{StandardColumnNames.sequences_present})) as seqs(sequence_id)
+                    inner join {TableNames.cns_samples_by_allele} m on m.{ColumnNames.allele_id} = a.id
+                    cross join lateral unnest(rb_to_array(m.{ColumnNames.samples_present})) as samps({ColumnNames.sample_id})
                     where a.position_nt = {position_nt} and a.alt_nt = :alt_nt and a.region = :region
                 )
                 select
@@ -234,11 +281,11 @@ async def get_nt_mutation_count_by_collection_date(
                             s.collection_end_date,
                             l.lineage_name,
                             collection_end_date - collection_start_date as collection_span
-                        from mutation_sequences ms
-                        inner join {TableNames.samples} s on s.{StandardColumnNames.sequence_id} = ms.target_sequence_id
+                        from mutation_samples ms
+                        inner join {TableNames.samples} s on s.id = ms.target_sample_id
                         inner join {TableNames.samples_lineages} sl on sl.sample_id = s.id
                         inner join {TableNames.lineages} l on l.id = sl.lineage_id
-                        {user_where_clause}
+                        {user_defined_filter}
                     )
                     where collection_span <= {max_span_days}
                 )

@@ -19,8 +19,8 @@ class Env:
 
 
 CHANGE_PATTERN = r'^([\w.-]+):([a-zA-Z])(\d+)([a-zA-Z\-+]+)'
-WORDLIKE_PATTERN = re.compile(r'\w+')
-COMMA_SEP_WORDLIKE_PATTERN = re.compile(r'(\w+,)*\w+')
+WORDLIKE_PATTERN = re.compile(r'^\w+$')
+COMMA_SEP_WORDLIKE_PATTERN = re.compile(r'^(\w+,)*\w+$')
 # these dates are "simple" b/c they are a single timestamp and not null
 SIMPLE_DATE_FIELDS = {'release_date', 'creation_date'}
 # Unlike the simple dates, collection date is a range, and may be null

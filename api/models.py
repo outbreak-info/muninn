@@ -1,9 +1,9 @@
 from datetime import date, datetime
-from typing import List, Optional
+from typing import List, Optional, Dict
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from DB.models import IntraHostVariant, Sample, AminoAcid, Mutation, PhenotypeMetric, MutationTranslation, \
+from DB.models import IntraHostVariant, Sample, AminoAcid, Mutation, MutationTranslation, \
     IntraHostTranslation
 
 """
@@ -39,129 +39,100 @@ class AminoAcidInfo(BaseModel):
         )
 
 
-class VariantInfo(BaseModel):
-    id: int
-    sample_id: int
-    allele_id: int
-    ref_dp: int
-    alt_dp: int
-    alt_freq: float
+class VariantNucleotideInfo(BaseModel):
+    sample_id: int = Field(description="ID of the sample carrying this intra-host variant")
+    allele_id: int = Field(description="ID of the allele (nt change) in the alleles table")
 
-    # Include allele info
-    region: str
-    position_nt: int
-    ref_nt: str
-    alt_nt: str
+    # allele (nt) info
+    region: str = Field(description="Genomic region / segment the allele falls in")
+    position_nt: int = Field(description="1-based nucleotide position of the change within the region")
+    ref_nt: str = Field(description="Reference nucleotide(s) at this position")
+    alt_nt: str = Field(description="Alternate (variant) nucleotide(s) at this position")
 
-    amino_acid_mutations: List['AminoAcidInfo']
+    # intra-host variant metrics
+    ref_dp: int = Field(description="Read depth supporting the reference allele")
+    alt_dp: int = Field(description="Read depth supporting the alternate allele")
+    alt_freq: float = Field(description="Intra-host alternate-allele frequency (alt_dp / total depth)")
 
-    @classmethod
-    def from_db_object(cls, dbo: 'IntraHostVariant'):
-        return VariantInfo(
-            id=dbo.id,
-            sample_id=dbo.sample_id,
-            allele_id=dbo.allele_id,
-            ref_dp=dbo.ref_dp,
-            alt_dp=dbo.alt_dp,
-            alt_freq=dbo.alt_freq,
-            region=dbo.r_allele.region,
-            position_nt=dbo.r_allele.position_nt,
-            ref_nt=dbo.r_allele.ref_nt,
-            alt_nt=dbo.r_allele.alt_nt,
-            amino_acid_mutations=[AminoAcidInfo.from_db_object(t) for t in dbo.r_translations]
-        )
+
+class VariantAminoAcidInfo(BaseModel):
+    sample_id: int = Field(description="ID of the sample carrying this intra-host amino-acid variant")
+    position_aa: int = Field(description="1-based amino-acid position of the change within the feature")
+    ref_aa: str = Field(description="Reference amino acid at this position")
+    alt_aa: str = Field(description="Alternate (variant) amino acid at this position")
+    gff_feature: str = Field(description="GFF feature (gene/product) the amino-acid change falls in")
+    ref_codon: str = Field(description="Reference codon")
+    alt_codon: str = Field(description="Alternate (variant) codon")
 
 
 class SampleInfo(BaseModel):
-    id: int
-    accession: str
-    bio_project: str | None
-    bio_sample: str | None
-    bio_sample_accession: str | None
-    bio_sample_model: str | None
-    center_name: str | None
-    experiment: str | None
-    host: str | None
-    instrument: str | None
-    platform: str | None
-    isolate: str | None
-    library_name: str | None
-    library_layout: str | None
-    library_selection: str | None
-    library_source: str | None
-    organism: str
-    is_retracted: bool
-    retraction_detected_date: datetime | None
-    isolation_source: str | None
-    release_date: datetime | None
-    creation_date: datetime | None
-    version: str | None
-    sample_name: str | None
-    sra_study: str | None
-    serotype: str | None
-    assay_type: str | None
-    avg_spot_length: float | None
-    bases: int | None
-    collection_start_date: date | None
-    collection_end_date: date | None
-    geo_location_id: int | None
+    id: int = Field(description="Muninn internal sample ID (primary key of the samples table)")
 
-    # geo data
-    geo_country_name: str | None
-    geo_admin1_name: str | None
-    geo_admin2_name: str | None
-    geo_admin3_name: str | None
+    # columns from ncbi
+    accession: str = Field(description="SRA run accession")
+    bio_project: str | None = Field(description="BioProject accession")
+    bio_sample: str | None = Field(description="BioSample ID")
+    bio_sample_accession: str | None = Field(description="BioSample accession")
+    bio_sample_model: str | None = Field(description="BioSample model")
+    center_name: str | None = Field(description="Sequencing center name")
+    experiment: str | None = Field(description="SRA experiment accession")
+    host: str | None = Field(description="Host organism")
+    instrument: str | None = Field(description="Sequencing instrument")
+    platform: str | None = Field(description="Sequencing platform")
+    isolate: str | None = Field(description="Isolate identifier")
+    library_name: str | None = Field(description="Library name")
+    library_layout: str | None = Field(description="Library layout, e.g. single/paired")
+    library_selection: str | None = Field(description="Library selection method")
+    library_source: str | None = Field(description="Library source")
+    organism: str = Field(description="Organism name")
+    is_retracted: bool = Field(description="Whether the record has been retracted")
+    retraction_detected_date: datetime | None = Field(description="Date retraction was detected")
+    isolation_source: str | None = Field(description="Isolation source")
+    release_date: datetime | None = Field(description="SRA release date")
+    creation_date: datetime | None = Field(description="SRA record creation date")
+    version: str | None = Field(description="Record version")
+    sample_name: str | None = Field(description="Sample name")
+    sra_study: str | None = Field(description="SRA study accession")
+    serotype: str | None = Field(description="Serotype")
+    assay_type: str | None = Field(description="Assay type")
+    avg_spot_length: float | None = Field(description="Average spot length")
+    bases: int | None = Field(description="Total base count")
+    collection_start_date: date | None = Field(description="Sample collection start date")
+    collection_end_date: date | None = Field(description="Sample collection end date")
+    geo_location_id: int | None = Field(description="Foreign key to the geo_locations table (derived from NCBI geographic location)")
 
-    # wastewater-specific columns
-    ww_viral_load: float | None
-    ww_catchment_population: int | None
-    ww_site_id: str | None
-    ww_collected_by: str | None
+    # geo data (from the joined geo_locations table)
+    geo_country_name: str | None = Field(description="Country name")
+    geo_admin1_name: str | None = Field(description="Admin level 1 name, e.g. state/province")
+    geo_admin2_name: str | None = Field(description="Admin level 2 name, e.g. county ")
+    geo_admin3_name: str | None = Field(description="Admin level 3 name")
 
-    @classmethod
-    def from_db_object(cls, dbo: 'Sample') -> 'SampleInfo':
-        return SampleInfo(
-            id=dbo.id,
-            accession=dbo.accession,
-            bio_project=dbo.bio_project,
-            bio_sample=dbo.bio_sample,
-            bio_sample_accession=dbo.bio_sample_accession,
-            bio_sample_model=dbo.bio_sample_model,
-            center_name=dbo.center_name,
-            experiment=dbo.experiment,
-            host=dbo.host,
-            instrument=dbo.instrument,
-            platform=dbo.platform,
-            isolate=dbo.isolate,
-            library_name=dbo.library_name,
-            library_layout=dbo.library_layout,
-            library_selection=dbo.library_selection,
-            library_source=dbo.library_source,
-            organism=dbo.organism,
-            is_retracted=dbo.is_retracted,
-            retraction_detected_date=dbo.retraction_detected_date,
-            isolation_source=dbo.isolation_source,
-            release_date=dbo.release_date,
-            creation_date=dbo.creation_date,
-            version=dbo.version,
-            sample_name=dbo.sample_name,
-            sra_study=dbo.sra_study,
-            serotype=dbo.serotype,
-            assay_type=dbo.assay_type,
-            avg_spot_length=dbo.avg_spot_length,
-            bases=dbo.bases,
-            collection_start_date=dbo.collection_start_date,
-            collection_end_date=dbo.collection_end_date,
-            geo_location_id=dbo.geo_location_id,
-            geo_country_name=dbo.r_geo_location.country_name,
-            geo_admin1_name=dbo.r_geo_location.admin1_name,
-            geo_admin2_name=dbo.r_geo_location.admin2_name,
-            geo_admin3_name=dbo.r_geo_location.admin3_name,
-            ww_viral_load=dbo.ww_viral_load,
-            ww_catchment_population=dbo.ww_catchment_population,
-            ww_site_id=dbo.ww_site_id,
-            ww_collected_by=dbo.ww_collected_by,
-        )
+    # wastewater-specific columns (from wastewater surveillance data, not NCBI)
+    ww_viral_load: float | None = Field(description="Wastewater viral load")
+    ww_catchment_population: int | None = Field(description="Catchment population served by the sampling site")
+    ww_site_id: str | None = Field(description="Wastewater sampling site identifier")
+    ww_collected_by: str | None = Field(description="Organization that collected the wastewater sample")
+
+
+class MutationNucleotideInfo(BaseModel):
+    sample_id: int = Field(description="ID of the sample carrying this consensus mutation")
+    allele_id: int = Field(description="ID of the allele (nt change) in the alleles table")
+
+    # allele (nt) info
+    region: str = Field(description="Genomic region / segment the allele falls in")
+    position_nt: int = Field(description="1-based nucleotide position of the change within the region")
+    ref_nt: str = Field(description="Reference nucleotide(s) at this position")
+    alt_nt: str = Field(description="Alternate (mutant) nucleotide(s) at this position")
+
+
+class MutationAminoAcidInfo(BaseModel):
+    sample_id: int = Field(description="ID of the sample carrying this consensus amino-acid mutation")
+    position_aa: int = Field(description="1-based amino-acid position of the change within the feature")
+    ref_aa: str = Field(description="Reference amino acid at this position")
+    alt_aa: str = Field(description="Alternate (mutant) amino acid at this position")
+    gff_feature: str = Field(description="GFF feature (gene/product) the amino-acid change falls in")
+    ref_codon: str = Field(description="Reference codon")
+    alt_codon: str = Field(description="Alternate (mutant) codon")
 
 
 class MutationInfo(BaseModel):
@@ -192,17 +163,9 @@ class MutationInfo(BaseModel):
 
 
 class PhenotypeMetricInfo(BaseModel):
-    id: int
-    name: str
-    assay_type: str
-
-    @classmethod
-    def from_db_object(cls, dbo: 'PhenotypeMetric') -> 'PhenotypeMetricInfo':
-        return PhenotypeMetricInfo(
-            id=dbo.id,
-            name=dbo.phenotype_metric_name,
-            assay_type=dbo.phenotype_metric_assay_type
-        )
+    id: int = Field(description="Muninn internal phenotype-metric ID (primary key of the phenotype_metrics table)")
+    name: str = Field(description="Phenotype metric name (phenotype_metrics.phenotype_metric_name), e.g. an antibody/assay identifier")
+    assay_type: str = Field(description="Assay type the metric was measured with (phenotype_metrics.phenotype_metric_assay_type)")
 
 
 class VariantFreqInfo(BaseModel):
@@ -214,36 +177,36 @@ class VariantFreqInfo(BaseModel):
 
 
 class MutationCountInfo(BaseModel):
-    sample_count: int
-    amino_sub_id: int | None
+    sample_count: int = Field(description="Number of samples carrying this consensus mutation")
+    amino_sub_id: int | None = Field(description="amino_acids.id of the matched amino-acid change for aa lookups; null for nt lookups")
 
 
 class VariantCountPhenoScoreInfo(BaseModel):
-    ref_aa: str
-    alt_aa: str
-    position_aa: int
-    pheno_value: float
-    count: int
+    ref_aa: str = Field(description="Reference amino acid at this position")
+    alt_aa: str = Field(description="Alternate (mutant) amino acid at this position")
+    position_aa: int = Field(description="1-based amino-acid position of the change within the GFF feature")
+    pheno_value: float = Field(description="Value of the requested phenotype metric for this amino-acid change")
+    count: int = Field(description="Number of distinct samples carrying this amino-acid change (after any sample filter)")
 
 
 class LineageCountInfo(BaseModel):
-    count: int
-    lineage_system: str | None
-    lineage: str | None
+    count: int = Field(description="Number of distinct samples assigned to this lineage")
+    lineage_system: str | None = Field(description="Name of the lineage nomenclature system; null when the lineage has no associated system")
+    lineage: str | None = Field(description="Lineage name; null when the count is not attributed to a named lineage")
 
 
 class LineageInfo(BaseModel):
-    lineage_id: int
-    lineage_name: str
-    lineage_system_id: int
-    lineage_system_name: str
+    lineage_id: int = Field(description="Lineage ID")
+    lineage_name: str = Field(description="Lineage name within its nomenclature system (e.g. a Pango lineage like 'BA.2')")
+    lineage_system_id: int = Field(description="Lineage nomenclature system ID")
+    lineage_system_name: str = Field(description="Name of the lineage nomenclature system this lineage belongs to (e.g. 'PANGO')")
 
 
 class LineageAbundanceInfo(BaseModel):
-    lineage_info: 'LineageInfo'
-    sample_id: int
-    accession: str
-    abundance: float
+    lineage_info: 'LineageInfo' = Field(description="The lineage this abundance is for, and its nomenclature system")
+    sample_id: int = Field(description="Sample ID this abundance was measured in")
+    accession: str = Field(description="SRA run accession of the sample")
+    abundance: float = Field(description="Relative abundance of the lineage in the sample (0-1), from abundance-based (non-consensus) lineage calls")
 
 
 # wastewater-specific
@@ -276,23 +239,23 @@ class AverageLineageAbundanceInfo(BaseModel):
 
 
 class LineageAbundanceSummaryInfo(BaseModel):
-    lineage_name: str
-    lineage_system_name: str
-    sample_count: int
-    abundance_min: float
-    abundance_q1: float
-    abundance_median: float
-    abundance_q3: float
-    abundance_max: float
+    lineage_name: str = Field(description="Lineage name within its nomenclature system")
+    lineage_system_name: str = Field(description="Name of the lineage nomenclature system (e.g. 'PANGO')")
+    sample_count: int = Field(description="Number of (abundance-based) samples aggregated into this row")
+    abundance_min: float = Field(description="Minimum lineage abundance across the aggregated samples (0-1)")
+    abundance_q1: float = Field(description="First quartile (25th percentile) of lineage abundance across the aggregated samples")
+    abundance_median: float = Field(description="Median (50th percentile) of lineage abundance across the aggregated samples")
+    abundance_q3: float = Field(description="Third quartile (75th percentile) of lineage abundance across the aggregated samples")
+    abundance_max: float = Field(description="Maximum lineage abundance across the aggregated samples (0-1)")
 
 
 class VariantMutationLagInfo(BaseModel):
-    variants_start_date: date
-    mutations_start_date: date
-    lag: int
-    ref: str
-    pos: int
-    alt: str
+    variants_start_date: date = Field(description="Earliest sample collection-start date on which this amino-acid change was observed as an intra-host variant within the queried lineage")
+    mutations_start_date: date = Field(description="Earliest sample collection-start date on which this amino-acid change was observed as a consensus mutation within the queried lineage")
+    lag: int = Field(description="Number of days between the first-variant and first-mutation dates (always >= 0; which change type leads is fixed by the endpoint: :variantLag = mutation seen first, :mutationLag = variant seen first)")
+    ref: str = Field(description="Reference amino acid of the change")
+    pos: int = Field(description="1-based amino-acid position of the change within the GFF feature")
+    alt: str = Field(description="Alternate (mutant) amino acid of the change")
 
 
 class RegionAndGffFeatureInfo(BaseModel):
@@ -301,7 +264,42 @@ class RegionAndGffFeatureInfo(BaseModel):
 
 
 class MutationProfileInfo(BaseModel):
-    ref_nt: str
-    alt_nt: str
-    region: str
-    count: int
+    ref_nt: str = Field(description="Reference nucleotide of the substitution (one of A/C/G/T)")
+    alt_nt: str = Field(description="Alternate (mutated) nucleotide of the substitution (one of A/C/G/T)")
+    region: str = Field(description="Genomic region / segment the substitution falls in")
+    count: int = Field(description="Number of (sample, allele) occurrences of this ref→alt substitution class in the lineage's samples")
+
+
+class MutationIncidenceEntryInfo(BaseModel):
+    ref: str = Field(description="Reference base (nt) or amino acid (aa) at this position")
+    alt: str = Field(description="Alternate base (nt) or amino acid (aa) at this position")
+    pos: int = Field(description="1-based position of the change (nucleotide position for nt, amino-acid position for aa)")
+    count: int = Field(description="Number of samples in the lineage subset that carry this consensus mutation")
+    prevalence: float = Field(description="Fraction of the lineage subset carrying this mutation (count / sample_count)")
+
+
+class MutationIncidenceInfo(BaseModel):
+    sample_count: int = Field(description="Number of samples in the requested lineage (after applying any filter)")
+    mutation_counts: Dict[str, List[MutationIncidenceEntryInfo]] = Field(
+        description="Mutations meeting the prevalence threshold, keyed by region (nt) or GFF feature (aa); "
+                    "each value is the list of qualifying changes in that region/feature"
+    )
+
+
+class SampleCollectionReleaseLagInfo(BaseModel):
+    collection_date_bin: str = Field(
+        description="Date-bin label for the collection-window midpoint: e.g. '2024-06' (month), "
+                    "'2024-W05' (week), or a 'start/end' interval (day)."
+    )
+    lag_q1: float | None = Field(
+        description="First quartile (25th percentile) of the lag, in days, from the collection "
+                    "midpoint to the release date. Null when the bin has no released samples."
+    )
+    lag_median: float | None = Field(
+        description="Median (50th percentile) of the lag, in days, from the collection midpoint "
+                    "to the release date. Null when the bin has no released samples."
+    )
+    lag_q3: float | None = Field(
+        description="Third quartile (75th percentile) of the lag, in days, from the collection "
+                    "midpoint to the release date. Null when the bin has no released samples."
+    )

@@ -7,54 +7,108 @@ from DB.engine import get_async_session
 from DB.models import Sample, IntraHostVariant, Allele, AminoAcid, GeoLocation, IntraHostTranslation
 from DB.queries.date_count_helpers import get_extract_clause, get_group_by_clause, get_order_by_cause, \
     MID_COLLECTION_DATE_CALCULATION
-from api.models import VariantInfo
+from api.models import VariantNucleotideInfo, VariantAminoAcidInfo
 from parser.parser import parser
-from utils.constants import ColumnNames, DateBinOpt, TableNames, COLLECTION_DATE
+from utils.constants import ColumnNames, DateBinOpt, NtOrAa, TableNames, COLLECTION_DATE
 
 
-async def get_variants(query: str) -> List['VariantInfo']:
-    user_query = parser.parse(query)
+async def get_variants(
+    change_bin: NtOrAa = NtOrAa.nt,
+    filter: str = ""
+) -> List['VariantNucleotideInfo'] | List['VariantAminoAcidInfo']:
+    user_defined_filter = parser.parse(filter)
 
-    variants_query = (
-        select(IntraHostVariant, Allele, IntraHostTranslation, AminoAcid)
-        .join(Allele, IntraHostVariant.allele_id == Allele.id, isouter=True)
-        .options(contains_eager(IntraHostVariant.r_allele))
-        .join(IntraHostTranslation, IntraHostTranslation.intra_host_variant_id == IntraHostVariant.id, isouter=True)
-        .options(contains_eager(IntraHostVariant.r_translations))
-        .join(AminoAcid, AminoAcid.id == IntraHostTranslation.amino_acid_id, isouter=True)
-        .options(contains_eager(IntraHostTranslation.r_amino_acid))
-        .where(text(user_query))
-    )
+    if change_bin == NtOrAa.nt:
+        variants_query = f'''
+            select
+                ihv.{ColumnNames.sample_id},
+                ihv.{ColumnNames.allele_id},
+                a.region,
+                a.position_nt,
+                a.ref_nt,
+                a.alt_nt,
+                ihv.ref_dp,
+                ihv.alt_dp,
+                ihv.alt_freq
+            from {TableNames.intra_host_variants} ihv
+            inner join {TableNames.alleles} a on a.id = ihv.{ColumnNames.allele_id}
+            where {user_defined_filter}
+        '''
+        async with get_async_session() as session:
+            result = await session.execute(text(variants_query))
+            return [VariantNucleotideInfo(**row) for row in result.mappings().all()]
+    else:
+        variants_query = f'''
+            select
+                iht.{ColumnNames.sample_id},
+                aa.position_aa,
+                aa.ref_aa,
+                aa.alt_aa,
+                aa.gff_feature,
+                aa.ref_codon,
+                aa.alt_codon
+            from {TableNames.intra_host_translations} iht
+            inner join {TableNames.amino_acids} aa on aa.id = iht.{ColumnNames.amino_acid_id}
+            where {user_defined_filter}
+        '''
+        async with get_async_session() as session:
+            result = await session.execute(text(variants_query))
+            return [VariantAminoAcidInfo(**row) for row in result.mappings().all()]
 
-    async with get_async_session() as session:
-        variants = await session.scalars(variants_query)
-        out_data = [VariantInfo.from_db_object(v) for v in variants.unique()]
-    return out_data
 
+async def get_variants_by_sample(
+    change_bin: NtOrAa = NtOrAa.nt,
+    filter: str = ""
+) -> List['VariantNucleotideInfo'] | List['VariantAminoAcidInfo']:
+    user_defined_filter = parser.parse(filter)
 
-async def get_variants_for_sample(query: str) -> List['VariantInfo']:
-    user_query = parser.parse(query)
-    variants_query = (
-        select(IntraHostVariant, Allele, IntraHostTranslation, AminoAcid)
-        .join(Allele, IntraHostVariant.allele_id == Allele.id, isouter=True)
-        .options(contains_eager(IntraHostVariant.r_allele))
-        .join(IntraHostTranslation, IntraHostTranslation.intra_host_variant_id == IntraHostVariant.id, isouter=True)
-        .options(contains_eager(IntraHostVariant.r_translations))
-        .join(AminoAcid, AminoAcid.id == IntraHostTranslation.amino_acid_id, isouter=True)
-        .options(contains_eager(IntraHostTranslation.r_amino_acid))
-        .filter(
-            IntraHostVariant.sample_id.in_(
-                select(Sample.id)
-                .join(GeoLocation, GeoLocation.id == Sample.geo_location_id, isouter=True)
-                .where(text(user_query))
+    matching_samples = f'''
+        select s.id
+        from {TableNames.samples} s
+        left join {TableNames.geo_locations} g on g.id = s.{ColumnNames.geo_location_id}
+        where {user_defined_filter}
+    '''
+
+    if change_bin == NtOrAa.nt:
+        variants_query = f'''
+            select
+                ihv.{ColumnNames.sample_id},
+                ihv.{ColumnNames.allele_id},
+                a.region,
+                a.position_nt,
+                a.ref_nt,
+                a.alt_nt,
+                ihv.ref_dp,
+                ihv.alt_dp,
+                ihv.alt_freq
+            from {TableNames.intra_host_variants} ihv
+            inner join {TableNames.alleles} a on a.id = ihv.{ColumnNames.allele_id}
+            where ihv.{ColumnNames.sample_id} in (
+                {matching_samples}
             )
-        )
-    )
-
-    async with get_async_session() as session:
-        results = await session.scalars(variants_query)
-        out_data = [VariantInfo.from_db_object(v) for v in results.unique()]
-    return out_data
+        '''
+        async with get_async_session() as session:
+            result = await session.execute(text(variants_query))
+            return [VariantNucleotideInfo(**row) for row in result.mappings().all()]
+    else:
+        variants_query = f'''
+            select
+                iht.{ColumnNames.sample_id},
+                aa.position_aa,
+                aa.ref_aa,
+                aa.alt_aa,
+                aa.gff_feature,
+                aa.ref_codon,
+                aa.alt_codon
+            from {TableNames.intra_host_translations} iht
+            inner join {TableNames.amino_acids} aa on aa.id = iht.{ColumnNames.amino_acid_id}
+            where iht.{ColumnNames.sample_id} in (
+                {matching_samples}
+            )
+        '''
+        async with get_async_session() as session:
+            result = await session.execute(text(variants_query))
+            return [VariantAminoAcidInfo(**row) for row in result.mappings().all()]
 
 
 # TODO: Generalize this for nucleotide mutations
@@ -95,7 +149,7 @@ async def get_aa_variant_frequency_by_collection_date(
                 position_aa,
                 alt_aa
                 from(
-                    select 
+                    select
                     gff_feature,
                     ref_aa,
                     position_aa,
@@ -104,14 +158,14 @@ async def get_aa_variant_frequency_by_collection_date(
                     sample_id,
                     {MID_COLLECTION_DATE_CALCULATION}
                     from (
-                        select 
-                            aa.gff_feature, 
-                            aa.ref_aa, 
-                            aa.position_aa, 
-                            aa.alt_aa, 
-                            ihv.alt_freq, 
-                            s.id as sample_id, 
-                            s.collection_start_date, 
+                        select
+                            aa.gff_feature,
+                            aa.ref_aa,
+                            aa.position_aa,
+                            aa.alt_aa,
+                            ihv.alt_freq,
+                            s.id as sample_id,
+                            s.collection_start_date,
                             s.collection_end_date,
                             collection_end_date - collection_start_date as collection_span
                         from samples s

@@ -7,7 +7,7 @@ from DB.models import IntraHostVariant, Sample, Allele, AminoAcid, Mutation, Int
 from DB.queries.helpers import get_appropriate_translations_table_and_id
 from api.models import VariantFreqInfo, VariantCountPhenoScoreInfo, MutationCountInfo
 from parser.parser import parser
-from utils.constants import ColumnNames
+from utils.constants import ColumnNames, TableNames
 from utils.csv_helpers import parse_change_string
 
 
@@ -70,19 +70,16 @@ async def get_mutation_sample_count_by_nt(change: str) -> List[MutationCountInfo
         res = await session.execute(
             text(
                 f"""
-                  select
-                      count(distinct s.id) as sample_count
-                  from {TableNames.mutations} m
-                  inner join {TableNames.alleles} a on a.id = m.{StandardColumnNames.allele_id}
-                  cross join lateral unnest(rb_to_array(m.sequences_present)) as seqs({StandardColumnNames.sequence_id})
-                  inner join {TableNames.samples} s on s.{StandardColumnNames.sequence_id} = seqs.{StandardColumnNames.sequence_id}
-                  where a.{StandardColumnNames.region} = '{region}'
-                    and a.{StandardColumnNames.ref_nt} = '{ref_nt}'
-                    and a.{StandardColumnNames.position_nt} = {position_nt}
-                    and a.alt_nt = '{alt_nt}'
-                  group by m.allele_id
+                  select rb_cardinality(m.{ColumnNames.samples_present}) as sample_count
+                  from {TableNames.cns_samples_by_allele} m
+                  inner join {TableNames.alleles} a on a.id = m.{ColumnNames.allele_id}
+                  where a.region = :region
+                    and a.ref_nt = :ref_nt
+                    and a.position_nt = :position_nt
+                    and a.alt_nt = :alt_nt
                   """
-            )
+            ),
+            {'region': region, 'ref_nt': ref_nt, 'position_nt': position_nt, 'alt_nt': alt_nt}
         )
     return [
         MutationCountInfo(amino_sub_id=None, sample_count=r.sample_count) for r in res
@@ -97,19 +94,17 @@ async def get_mutation_sample_count_by_aa(change: str) -> List[MutationCountInfo
             text(
                 f"""
                   select
-                      mt.{StandardColumnNames.amino_acid_id} as amino_sub_id,
-                      count(distinct s.id) as sample_count
-                  from {TableNames.mutation_translations} mt
-                  inner join {TableNames.amino_acids} aa on aa.id = mt.{StandardColumnNames.amino_acid_id}
-                  cross join lateral unnest(rb_to_array(mt.sequences_present)) as seqs({StandardColumnNames.sequence_id})
-                  inner join {TableNames.samples} s on s.{StandardColumnNames.sequence_id} = seqs.{StandardColumnNames.sequence_id}
-                  where aa.{StandardColumnNames.gff_feature} = '{gff_feature}'
-                    and aa.{StandardColumnNames.ref_aa} = '{ref_aa}'
-                    and aa.{StandardColumnNames.position_aa} = {position_aa}
-                    and aa.{StandardColumnNames.alt_aa} = '{alt_aa}'
-                  group by mt.{StandardColumnNames.amino_acid_id}
+                      mt.{ColumnNames.amino_acid_id} as amino_sub_id,
+                      rb_cardinality(mt.{ColumnNames.samples_present}) as sample_count
+                  from {TableNames.cns_samples_by_amino_acid} mt
+                  inner join {TableNames.amino_acids} aa on aa.id = mt.{ColumnNames.amino_acid_id}
+                  where aa.gff_feature = :gff_feature
+                    and aa.ref_aa = :ref_aa
+                    and aa.position_aa = :position_aa
+                    and aa.alt_aa = :alt_aa
                   """
-            )
+            ),
+            {'gff_feature': gff_feature, 'ref_aa': ref_aa, 'position_aa': position_aa, 'alt_aa': alt_aa}
         )
     return [
         MutationCountInfo(amino_sub_id=r.amino_sub_id, sample_count=r.sample_count)
@@ -117,39 +112,52 @@ async def get_mutation_sample_count_by_aa(change: str) -> List[MutationCountInfo
     ]
 
 async def get_pheno_values_and_mutation_counts(
-    pheno_metric_name: str, region: str, include_refs: bool, samples_query: str | None
+    pheno_metric_name: str, region: str, include_refs: bool, filter: str | None
 ) -> List["VariantCountPhenoScoreInfo"]:
     no_refs_filter = "and aas.ref_aa <> aas.alt_aa"
     if include_refs:
         no_refs_filter = ""
 
-    samples_query_addin = (
-        "" if samples_query is None else f"and {parser.parse(samples_query)}"
-    )
+    if filter is None:
+        query = f"""
+            select aas.ref_aa, aas.position_aa, aas.alt_aa, pmv.value,
+                   rb_cardinality(rb_or_agg(m.{ColumnNames.samples_present})) as count
+            from {TableNames.cns_samples_by_amino_acid} m
+            inner join {TableNames.amino_acids} aas on aas.id = m.{ColumnNames.amino_acid_id}
+            inner join {TableNames.phenotype_metric_values} pmv on pmv.{ColumnNames.amino_acid_id} = aas.id
+            inner join {TableNames.phenotype_metrics} pm on pm.id = pmv.{ColumnNames.phenotype_metric_id}
+            where aas.gff_feature = :region
+            and pm.{ColumnNames.phenotype_metric_name} = :pm_name
+            {no_refs_filter}
+            group by aas.ref_aa, aas.position_aa, aas.alt_aa, pmv.value
+            order by count desc;
+        """
+    else:
+        user_defined_filter = parser.parse(filter)
+        query = f"""
+            select aas.ref_aa, aas.position_aa, aas.alt_aa, pmv.value,
+                   count(distinct caas.{ColumnNames.sample_id}) as count
+            from {TableNames.cns_amino_acids_by_sample} caas
+            cross join lateral unnest(rb_to_array(caas.{ColumnNames.amino_acids_present})) as u({ColumnNames.amino_acid_id})
+            inner join {TableNames.amino_acids} aas on aas.id = u.{ColumnNames.amino_acid_id}
+            inner join {TableNames.phenotype_metric_values} pmv on pmv.{ColumnNames.amino_acid_id} = aas.id
+            inner join {TableNames.phenotype_metrics} pm on pm.id = pmv.{ColumnNames.phenotype_metric_id}
+            where caas.{ColumnNames.sample_id} in (
+                select s.id
+                from {TableNames.samples} s
+                left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
+                where {user_defined_filter}
+            )
+            and aas.gff_feature = :region
+            and pm.{ColumnNames.phenotype_metric_name} = :pm_name
+            {no_refs_filter}
+            group by aas.ref_aa, aas.position_aa, aas.alt_aa, pmv.value
+            order by count desc;
+        """
 
-    # Consensus AA changes live in mutation_translations (one row per amino_acid, with a
-    # `sequences_present` bitmap). Filter amino_acids/phenotype values first, then expand
-    # only the matching bitmaps to sequences and count the distinct samples carrying each.
     async with get_async_session() as session:
         res = await session.execute(
-            text(
-                f"""
-                select aas.ref_aa, aas.position_aa, aas.alt_aa, pmv.value, count(distinct s.id) as count
-                from mutation_translations mt
-                inner join amino_acids aas on aas.id = mt.amino_acid_id
-                inner join phenotype_metric_values pmv on pmv.amino_acid_id = aas.id
-                inner join phenotype_metrics pm on pm.id = pmv.phenotype_metric_id
-                cross join lateral unnest(rb_to_array(mt.sequences_present)) as seqs(sequence_id)
-                inner join samples s on s.sequence_id = seqs.sequence_id
-                left join geo_locations gl on gl.id = s.geo_location_id
-                where aas.gff_feature = :region
-                and pm.{ColumnNames.phenotype_metric_name} = :pm_name
-                {no_refs_filter}
-                {samples_query_addin}
-                group by aas.ref_aa, aas.position_aa, aas.alt_aa, pmv.value
-                order by count desc;
-                """
-            ),
+            text(query),
             {"region": region, "pm_name": pheno_metric_name},
         )
 
@@ -212,7 +220,7 @@ async def _get_pheno_values_and_counts(
                 left join phenotype_metrics pm on pm.id = pmv.phenotype_metric_id
                 left join geo_locations gl on gl.id = s.geo_location_id
                 where aas.gff_feature = :region
-                and pm.{StandardColumnNames.phenotype_metric_name} = :pm_name
+                and pm.{ColumnNames.phenotype_metric_name} = :pm_name
                 {no_refs_filter}
                 {samples_query_addin}
                 group by aas.ref_aa, aas.position_aa, aas.alt_aa, pmv.value

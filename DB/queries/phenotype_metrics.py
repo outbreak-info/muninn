@@ -5,37 +5,41 @@ from sqlalchemy import select, text, func
 from DB.engine import get_async_session
 from DB.models import PhenotypeMetric, IntraHostVariant, Mutation, PhenotypeMetricValues
 from DB.queries.date_count_helpers import get_extract_clause, get_group_by_clause, get_order_by_cause, \
-    MID_COLLECTION_DATE_CALCULATION
+    MID_COLLECTION_DATE_CALCULATION, YEAR, CHUNK, BIN_START, BIN_END
 from DB.queries.helpers import get_appropriate_translations_table_and_id
 from api.models import PhenotypeMetricInfo
 from parser.parser import parser
-from utils.constants import DateBinOpt, COLLECTION_DATE, ColumnNames
+from utils.constants import DateBinOpt, COLLECTION_DATE, ColumnNames, TableNames
 
 
 async def get_all_pheno_metrics() -> List[PhenotypeMetricInfo]:
+    query = f'''
+        select
+            id,
+            {ColumnNames.phenotype_metric_name} as name,
+            {ColumnNames.phenotype_metric_assay_type} as assay_type
+        from {TableNames.phenotype_metrics}
+    '''
     async with get_async_session() as session:
-        res = await session.scalars(
-            select(PhenotypeMetric)
-        )
-        out_data = [PhenotypeMetricInfo.from_db_object(pm) for pm in res]
+        res = await session.execute(text(query))
+        out_data = [PhenotypeMetricInfo(**row) for row in res.mappings().all()]
     return out_data
 
 
 async def get_min_max_pheno_metric_value(phenotype_metric_name: str) -> List:
+    query = f"""
+        select min(pmv.value) as min_value, max(pmv.value) as max_value
+        from {TableNames.phenotype_metric_values} pmv
+        inner join {TableNames.phenotype_metrics} pm on pm.id = pmv.{ColumnNames.phenotype_metric_id}
+        where pm.{ColumnNames.phenotype_metric_name} = :pm_name
+    """
     async with get_async_session() as session:
-        res = await session.execute(
-            select(
-                func.min(PhenotypeMetricValues.value),
-                func.max(PhenotypeMetricValues.value)
-            )
-            .join(PhenotypeMetric, PhenotypeMetricValues.phenotype_metric_id == PhenotypeMetric.id)
-            .where(PhenotypeMetric.phenotype_metric_name == phenotype_metric_name)
-        )
+        res = await session.execute(text(query), {'pm_name': phenotype_metric_name})
         row = res.one_or_none()
-        if row is None:
-            return [None, None]
-        min_val, max_val = row
-        return [min_val, max_val]
+    if row is None:
+        return [None, None]
+    min_val, max_val = row
+    return [min_val, max_val]
 
 
 async def count_variants_or_mutations_gte_pheno_value_by_collection_date(
@@ -113,6 +117,164 @@ async def count_variants_or_mutations_gte_pheno_value_by_collection_date(
     return out_data
 
 
+async def count_mutations_gte_pheno_value_by_collection_date(
+    date_bin: DateBinOpt,
+    phenotype_metric_name: str,
+    phenotype_metric_value_threshold: float,
+    days: int,
+    max_span_days: int,
+    filter: str | None,
+) -> List[Dict]:
+    user_defined_filter = ''
+    if filter is not None:
+        user_defined_filter = f'and ({parser.parse(filter)})'
+
+    extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
+    group_by_clause = get_group_by_clause(date_bin)
+    order_by_clause = get_order_by_cause(date_bin)
+
+    match date_bin:
+        case DateBinOpt.week | DateBinOpt.month:
+            bin_select_cols = f'{YEAR}, {CHUNK}'
+        case DateBinOpt.day:
+            bin_select_cols = f'{BIN_END}, {BIN_START}'
+        case _:
+            raise NotImplementedError
+
+    query = f'''
+        with binned_samples as (
+            select s.id as sample_id,
+                {MID_COLLECTION_DATE_CALCULATION}
+            from {TableNames.samples} s
+            left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
+            inner join {TableNames.samples_lineages} sl on sl.{ColumnNames.sample_id} = s.id
+            inner join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id}
+            inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
+            where num_nulls({ColumnNames.collection_end_date}, {ColumnNames.collection_start_date}) = 0
+              and ({ColumnNames.collection_end_date} - {ColumnNames.collection_start_date}) <= :max_span_days
+              {user_defined_filter}
+        ),
+        bins as (
+            select {extract_clause},
+                   rb_build_agg(sample_id) as bm
+            from binned_samples
+            {group_by_clause}
+        ),
+        scored as (
+            select pmv.{ColumnNames.amino_acid_id} as aa_id, pmv.value as value
+            from {TableNames.phenotype_metric_values} pmv
+            inner join {TableNames.phenotype_metrics} pm on pm.id = pmv.{ColumnNames.phenotype_metric_id}
+            where pm.{ColumnNames.phenotype_metric_name} = :pm_name
+        ),
+        per as (
+            select {bin_select_cols},
+                   sc.value as value,
+                   rb_and_cardinality(m.{ColumnNames.samples_present}, b.bm) as card
+            from bins b
+            cross join scored sc
+            inner join {TableNames.cns_samples_by_amino_acid} m on m.{ColumnNames.amino_acid_id} = sc.aa_id
+        )
+        select {bin_select_cols},
+               count(*) filter (where card > 0 and value >= :threshold) as n_gte,
+               count(*) filter (where card > 0) as n
+        from per
+        {group_by_clause}
+        having count(*) filter (where card > 0) > 0
+        {order_by_clause}
+    '''
+    async with get_async_session() as session:
+        res = await session.execute(
+            text(query),
+            {
+                'pm_name': phenotype_metric_name,
+                'threshold': phenotype_metric_value_threshold,
+                'max_span_days': max_span_days,
+            }
+        )
+        rows = res.all()
+    out_data = []
+    for r in rows:
+        date = date_bin.format_iso_chunk(r[0], r[1])
+        out_data.append(
+            {
+                "date": date,
+                "n_gte": r[2],
+                "n": r[3]
+            }
+        )
+    return out_data
+
+
+async def count_variants_gte_pheno_value_by_collection_date(
+    date_bin: DateBinOpt,
+    phenotype_metric_name: str,
+    phenotype_metric_value_threshold: float,
+    days: int,
+    max_span_days: int,
+    filter: str | None,
+) -> List[Dict]:
+    user_defined_filter = ''
+    if filter is not None:
+        user_defined_filter = f'and ({parser.parse(filter)})'
+
+    extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
+    group_by_clause = get_group_by_clause(date_bin)
+    order_by_clause = get_order_by_cause(date_bin)
+
+    query = f'''
+        select
+        {extract_clause},
+        count(distinct aa_id) filter (where value >= :threshold) as n_gte,
+        count(distinct aa_id) as n
+        from (
+            select value, aa_id, {MID_COLLECTION_DATE_CALCULATION}
+            from (
+                select
+                pmv.value as value,
+                aa.id as aa_id,
+                {ColumnNames.collection_start_date}, {ColumnNames.collection_end_date},
+                {ColumnNames.collection_end_date} - {ColumnNames.collection_start_date} as collection_span
+                from {TableNames.samples} s
+                left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
+                inner join {TableNames.intra_host_translations} iht on iht.{ColumnNames.sample_id} = s.id
+                inner join {TableNames.amino_acids} aa on aa.id = iht.{ColumnNames.amino_acid_id}
+                inner join {TableNames.samples_lineages} sl on sl.{ColumnNames.sample_id} = s.id
+                inner join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id}
+                inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
+                inner join {TableNames.phenotype_metric_values} pmv on pmv.{ColumnNames.amino_acid_id} = aa.id
+                inner join {TableNames.phenotype_metrics} pm on pm.id = pmv.{ColumnNames.phenotype_metric_id}
+                where num_nulls({ColumnNames.collection_end_date}, {ColumnNames.collection_start_date}) = 0
+                and pm.{ColumnNames.phenotype_metric_name} = :pm_name
+                {user_defined_filter}
+            )
+            where collection_span <= :max_span_days
+        )
+        {group_by_clause}
+        {order_by_clause}
+    '''
+    async with get_async_session() as session:
+        res = await session.execute(
+            text(query),
+            {
+                'pm_name': phenotype_metric_name,
+                'threshold': phenotype_metric_value_threshold,
+                'max_span_days': max_span_days,
+            }
+        )
+        rows = res.all()
+    out_data = []
+    for r in rows:
+        date = date_bin.format_iso_chunk(r[0], r[1])
+        out_data.append(
+            {
+                "date": date,
+                "n_gte": r[2],
+                "n": r[3]
+            }
+        )
+    return out_data
+
+
 async def get_phenotype_metric_value_by_variant_quantile(
     phenotype_metric_name: str,
     quantile: float
@@ -123,8 +285,23 @@ async def get_phenotype_metric_value_by_variant_quantile(
 async def get_phenotype_metric_value_by_mutation_quantile(
     phenotype_metric_name: str,
     quantile: float
-) -> Dict[str, float]:
-    return await _get_phenotype_metric_value_quantile(phenotype_metric_name, quantile, Mutation)
+) -> Dict[str, float | None]:
+    query = f"""
+        select percentile_disc(:quantile) within group (order by pmv.value)
+        from {TableNames.phenotype_metric_values} pmv
+        inner join {TableNames.phenotype_metrics} pm on pm.id = pmv.{ColumnNames.phenotype_metric_id}
+        where pm.{ColumnNames.phenotype_metric_name} = :pm_name and pmv.value != 0
+    """
+    async with get_async_session() as session:
+        res = await session.scalars(
+            text(query),
+            {'pm_name': phenotype_metric_name, 'quantile': quantile}
+        )
+        value = res.first()
+    return {
+        "quantile": quantile,
+        "phenotype_metric_value": value
+    }
 
 
 async def _get_phenotype_metric_value_quantile(
@@ -184,16 +361,83 @@ async def get_pheno_value_for_mutations_by_sample_and_collection_date(
     phenotype_metric_name: str,
     days: int,
     max_span_days: int,
-    raw_query: str
-):
-    return await _pheno_value_for_mutations_or_variants_by_sample_and_collection_date(
-        date_bin,
-        phenotype_metric_name,
-        days,
-        max_span_days,
-        raw_query,
-        Mutation
-    )
+    filter: str | None,
+) -> List[Dict]:
+    user_defined_filter = ''
+    if filter is not None:
+        user_defined_filter = f'and ({parser.parse(filter)})'
+
+    extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
+    group_by_clause = get_group_by_clause(date_bin)
+    order_by_clause = get_order_by_cause(date_bin)
+
+    query = f'''
+        with matching_samples as (
+            select s.id as sample_id,
+                   s.{ColumnNames.collection_start_date} as collection_start_date,
+                   s.{ColumnNames.collection_end_date} as collection_end_date
+            from {TableNames.samples} s
+            left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
+            inner join {TableNames.samples_lineages} sl on sl.{ColumnNames.sample_id} = s.id
+            inner join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id}
+            inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
+            where num_nulls(s.{ColumnNames.collection_end_date}, s.{ColumnNames.collection_start_date}) = 0
+              and (s.{ColumnNames.collection_end_date} - s.{ColumnNames.collection_start_date}) <= :max_span_days
+              {user_defined_filter}
+            group by s.id, s.{ColumnNames.collection_start_date}, s.{ColumnNames.collection_end_date}
+        ),
+        scored as (
+            select pmv.{ColumnNames.amino_acid_id} as aa_id, pmv.value as value
+            from {TableNames.phenotype_metric_values} pmv
+            inner join {TableNames.phenotype_metrics} pm on pm.id = pmv.{ColumnNames.phenotype_metric_id}
+            where pm.{ColumnNames.phenotype_metric_name} = :pm_name
+        )
+        select
+        {extract_clause},
+        percentile_cont(0.25) within group (order by aggregate_value) as q1,
+        percentile_cont(0.5) within group (order by aggregate_value) as median,
+        percentile_cont(0.75) within group (order by aggregate_value) as q3,
+        percentile_cont(0.25) within group (order by n_amino_acid_mutations) as q1_aa,
+        percentile_cont(0.5) within group (order by n_amino_acid_mutations) as median_aa,
+        percentile_cont(0.75) within group (order by n_amino_acid_mutations) as q3_aa
+        from (
+            select
+            sum(sc.value) as aggregate_value,
+            count(distinct sc.aa_id) as n_amino_acid_mutations,
+            {MID_COLLECTION_DATE_CALCULATION}
+            from matching_samples ms
+            inner join {TableNames.cns_amino_acids_by_sample} caas on caas.{ColumnNames.sample_id} = ms.sample_id
+            cross join lateral unnest(rb_to_array(caas.{ColumnNames.amino_acids_present})) as u({ColumnNames.amino_acid_id})
+            inner join scored sc on sc.aa_id = u.{ColumnNames.amino_acid_id}
+            group by ms.sample_id, ms.collection_start_date, ms.collection_end_date
+        ) per_sample
+        {group_by_clause}
+        {order_by_clause}
+    '''
+    async with get_async_session() as session:
+        res = await session.execute(
+            text(query),
+            {
+                'pm_name': phenotype_metric_name,
+                'max_span_days': max_span_days,
+            }
+        )
+        rows = res.all()
+    out_data = []
+    for r in rows:
+        date = date_bin.format_iso_chunk(r[0], r[1])
+        out_data.append(
+            {
+                "date": date,
+                "aggregate_value_q1": r[2],
+                "aggregate_value_median": r[3],
+                "aggregate_value_q3": r[4],
+                "n_aa_q1": r[5],
+                "n_aa_median": r[6],
+                "n_aa_q3": r[7],
+            }
+        )
+    return out_data
 
 
 async def _pheno_value_for_mutations_or_variants_by_sample_and_collection_date(

@@ -13,7 +13,7 @@ async def get_gff_features() -> List[str]:
         res = await session.execute(
             text(
                 f'''
-                select distinct {StandardColumnNames.gff_feature} from {TableNames.amino_acids}
+                select distinct {ColumnNames.gff_feature} from {TableNames.amino_acids}
                 '''
             )
         )

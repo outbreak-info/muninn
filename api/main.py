@@ -17,7 +17,7 @@ import DB.queries.variants
 import DB.queries.variants_mutations
 import DB.queries.wastewater
 from DB.models import Mutation, IntraHostVariant
-from api.models import LineageAbundanceWithSampleInfo, VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, \
+from api.models import LineageAbundanceWithSampleInfo, VariantNucleotideInfo, SampleInfo, MutationInfo, VariantFreqInfo, \
     VariantCountPhenoScoreInfo, \
     MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo, \
     LineageInfo, VariantMutationLagInfo, RegionAndGffFeatureInfo, MutationProfileInfo, AverageLineageAbundanceInfo
@@ -78,7 +78,7 @@ async def get_samples_query(max_span_days: int = DEFAULT_MAX_SPAN_DAYS):
         raise HTTPException(status_code=400, detail=e.message)
 
 
-@app.get('/variants', response_model=List[VariantInfo], tags=[TAG_VARIANTS], summary='Get variants matching a query')
+@app.get('/variants', response_model=List[VariantNucleotideInfo], tags=[TAG_VARIANTS], summary='Get variants matching a query')
 async def get_variants_query(q: str):
     try:
         return await DB.queries.variants.get_variants(q)
@@ -99,7 +99,7 @@ async def get_lineages_by_lineage_system(lineage_system_name: str):
     return await DB.queries.lineages.get_all_lineages_by_lineage_system(lineage_system_name)
 
 
-@app.get('/variants/by/sample', response_model=List[VariantInfo], tags=[TAG_VARIANTS], summary='Get variants for samples matching a query')
+@app.get('/variants/by/sample', response_model=List[VariantNucleotideInfo], tags=[TAG_VARIANTS], summary='Get variants for samples matching a query')
 async def get_variants_by_sample(q: str):
     try:
         return await DB.queries.variants.get_variants_for_sample(q)
@@ -524,17 +524,6 @@ async def get_mutation_incidence(
     if prevalence_threshold < MIN_PREVALENCE_THRESHOLD:
         raise HTTPException(400, f'minimum allowed prevalence threshold is {MIN_PREVALENCE_THRESHOLD}')
 
-    if change_bin == NtOrAa.nt and q is None:
-        try:
-            return await DB.queries.lineages.get_mutation_incidence_from_cache(
-                lineage,
-                lineage_system_name,
-                prevalence_threshold,
-                match_reference
-            )
-        except NotFoundError:
-            # not in cache, continue to normal query
-            pass
     try:
         return await DB.queries.lineages.get_mutation_incidence(
             lineage,

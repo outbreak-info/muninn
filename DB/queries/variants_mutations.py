@@ -52,18 +52,16 @@ async def _get_lag_variants_mutations(
                 first_variants AS (
                     SELECT MIN(ss.collection_start_date) as start_date, aa.ref_aa, aa.position_aa, aa.alt_aa, aa.gff_feature
                     FROM samples_subset ss
-                    INNER JOIN intra_host_variants ihv ON ihv.sample_id = ss.id
-                    INNER JOIN {TableNames.intra_host_translations} t ON t.{ColumnNames.intra_host_variant_id} = ihv.id
-                    INNER JOIN amino_acids aa ON t.amino_acid_id = aa.id
-                    WHERE ihv.alt_freq >= 0.1
+                    INNER JOIN {TableNames.intra_host_translations} iht ON iht.{ColumnNames.sample_id} = ss.id
+                    INNER JOIN {TableNames.amino_acids} aa ON aa.id = iht.{ColumnNames.amino_acid_id}
                     GROUP BY aa.ref_aa, aa.position_aa, aa.alt_aa, aa.gff_feature
                 ),
                 first_mutations AS (
                     SELECT MIN(ss.collection_start_date) as start_date, aa.ref_aa, aa.position_aa, aa.alt_aa, aa.gff_feature
                     FROM samples_subset ss
-                    INNER JOIN mutations m ON m.sample_id = ss.id
-                    INNER JOIN {TableNames.cns_samples_by_amino_acid} t ON t.{ColumnNames.mutation_id} = m.id
-                    INNER JOIN amino_acids aa ON t.amino_acid_id = aa.id
+                    INNER JOIN {TableNames.cns_amino_acids_by_sample} caas ON caas.{ColumnNames.sample_id} = ss.id
+                    CROSS JOIN LATERAL unnest(rb_to_array(caas.{ColumnNames.amino_acids_present})) AS u({ColumnNames.amino_acid_id})
+                    INNER JOIN {TableNames.amino_acids} aa ON aa.id = u.{ColumnNames.amino_acid_id}
                     GROUP BY aa.ref_aa, aa.position_aa, aa.alt_aa, aa.gff_feature
                 )
                 SELECT fv.start_date as variants_start_date, fm.start_date as mutations_start_date, ({lag_calculation}) as lag, fv.ref_aa, fv.position_aa, fv.alt_aa, fv.gff_feature from
