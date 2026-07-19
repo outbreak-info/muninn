@@ -5,7 +5,7 @@ from sqlalchemy import text
 from DB.engine import get_async_session
 from DB.models import Mutation, IntraHostVariant
 from api.models import RegionAndGffFeatureInfo
-from utils.constants import TableNames, ColumnNames
+from utils.constants import TableNames, ColumnNames, DistinctValueField
 
 
 async def get_gff_features() -> List[str]:
@@ -14,6 +14,45 @@ async def get_gff_features() -> List[str]:
             text(
                 f'''
                 select distinct {ColumnNames.gff_feature} from {TableNames.amino_acids}
+                '''
+            )
+        )
+    return [row[0] for row in res.all()]
+
+
+# Maps each enumerable field to the (table, column) it lives in. Both identifiers come from our own
+# constants (never from user input), so interpolating them into the query below is injection-safe;
+# the field itself is validated by FastAPI against the DistinctValueField enum.
+_DISTINCT_VALUE_SOURCES: dict[DistinctValueField, tuple[str, str]] = {
+    DistinctValueField.host: (TableNames.samples, ColumnNames.host),
+    DistinctValueField.organism: (TableNames.samples, ColumnNames.organism),
+    DistinctValueField.serotype: (TableNames.samples, ColumnNames.serotype),
+    DistinctValueField.platform: (TableNames.samples, ColumnNames.platform),
+    DistinctValueField.instrument: (TableNames.samples, ColumnNames.instrument),
+    DistinctValueField.assay_type: (TableNames.samples, ColumnNames.assay_type),
+    DistinctValueField.library_selection: (TableNames.samples, ColumnNames.library_selection),
+    DistinctValueField.library_source: (TableNames.samples, ColumnNames.library_source),
+    DistinctValueField.library_layout: (TableNames.samples, ColumnNames.library_layout),
+    DistinctValueField.isolation_source: (TableNames.samples, ColumnNames.isolation_source),
+    DistinctValueField.center_name: (TableNames.samples, ColumnNames.center_name),
+    DistinctValueField.bio_project: (TableNames.samples, ColumnNames.bio_project),
+    DistinctValueField.country_name: (TableNames.geo_locations, ColumnNames.country_name),
+    DistinctValueField.admin1_name: (TableNames.geo_locations, ColumnNames.admin1_name),
+    DistinctValueField.admin2_name: (TableNames.geo_locations, ColumnNames.admin2_name),
+    DistinctValueField.admin3_name: (TableNames.geo_locations, ColumnNames.admin3_name),
+    DistinctValueField.region: (TableNames.alleles, ColumnNames.region),
+    DistinctValueField.gff_feature: (TableNames.amino_acids, ColumnNames.gff_feature),
+    DistinctValueField.lineage_system_name: (TableNames.lineage_systems, ColumnNames.lineage_system_name),
+}
+
+
+async def get_distinct_values(field: DistinctValueField) -> List[str]:
+    table, column = _DISTINCT_VALUE_SOURCES[field]
+    async with get_async_session() as session:
+        res = await session.execute(
+            text(
+                f'''
+                select distinct {column} from {table} where {column} is not null order by {column}
                 '''
             )
         )

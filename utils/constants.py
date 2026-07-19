@@ -32,6 +32,18 @@ DEFAULT_DAYS = 5
 DEFAULT_PREVALENCE_THRESHOLD = 0.75
 MIN_PREVALENCE_THRESHOLD = 0.01
 ASYNCPG_MAX_QUERY_ARGS = 32767
+
+FILTER_SYNTAX_HELP = (
+    'Filter mini-language: combine terms with ^ (AND) and | (OR); negate a single term with a prefix '
+    '! (NOT is unary, so write AND-NOT as a ^ !b, not as a ! b); group with (); '
+    'compare with = != > < >= <= (the ordered operators > < >= <= require a number or a YYYY-MM-DD date). '
+    'String values are written bare/unquoted (e.g. host = Homo sapiens); numbers and dates are bare too. '
+    'The words "and"/"or"/"not" are NOT operators and will raise a 400 error. There is no IN operator and '
+    'no null test OR the alternatives instead. Which column names are accepted depends on the endpoint '
+    '(see the columns listed above); enumerate the valid values for a column with GET /v1/distinctValues. '
+    'Example: bases > 1000 ^ host = Homo sapiens . '
+    'When placed in a URL, percent-encode the operators (space -> %20, ^ -> %5E, | -> %7C, ! -> %21, > -> %3E).'
+)
 NUCLEOTIDE_CHARACTERS = ['A', 'C', 'G', 'T']
 # https://en.wikipedia.org/wiki/Nucleic_acid_notation
 NUCLEOTIDE_CHARACTERS_AMBIGUOUS = ['A', 'C', 'G', 'T', 'M', 'R', 'W', 'S', 'Y', 'K', 'B', 'D', 'H', 'V', 'N']
@@ -83,6 +95,40 @@ class DateBinOpt(Enum):
 class NtOrAa(Enum):
     nt = 'nt'
     aa = 'aa'
+
+    def __str__(self):
+        return str(self.value)
+
+
+class DistinctValueField(Enum):
+    """
+    Whitelist of columns whose distinct values can be enumerated via GET /v1/distinctValues.
+    These are the high-value, bounded-cardinality string columns an LLM/user needs when building
+    a `filter` query. The value <-> (table, column) mapping lives in DB.queries.helpers.
+    """
+    # samples metadata
+    host = 'host'
+    organism = 'organism'
+    serotype = 'serotype'
+    platform = 'platform'
+    instrument = 'instrument'
+    assay_type = 'assay_type'
+    library_selection = 'library_selection'
+    library_source = 'library_source'
+    library_layout = 'library_layout'
+    isolation_source = 'isolation_source'
+    center_name = 'center_name'
+    bio_project = 'bio_project'
+    # geo_locations (joined onto samples)
+    country_name = 'country_name'
+    admin1_name = 'admin1_name'
+    admin2_name = 'admin2_name'
+    admin3_name = 'admin3_name'
+    # genomic change dimensions
+    region = 'region'
+    gff_feature = 'gff_feature'
+    # lineage nomenclature
+    lineage_system_name = 'lineage_system_name'
 
     def __str__(self):
         return str(self.value)

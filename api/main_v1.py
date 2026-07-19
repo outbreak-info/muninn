@@ -23,14 +23,58 @@ from api.models import VariantNucleotideInfo, VariantAminoAcidInfo, SampleInfo, 
     SampleCollectionReleaseLagInfo, MutationIncidenceInfo
 from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, NtOrAa, \
     DEFAULT_MAX_SPAN_DAYS, COLLECTION_DATE, DEFAULT_DAYS, COMMA_SEP_WORDLIKE_PATTERN, \
-    DEFAULT_PREVALENCE_THRESHOLD, MIN_PREVALENCE_THRESHOLD
+    DEFAULT_PREVALENCE_THRESHOLD, MIN_PREVALENCE_THRESHOLD, FILTER_SYNTAX_HELP, DistinctValueField
 from utils.errors import ParsingError
+
+# Tag names used to group the endpoints in the auto-generated docs at /docs.
+TAG_SAMPLES = 'Samples'
+TAG_VARIANTS = 'Variants'
+TAG_MUTATIONS = 'Mutations'
+TAG_LINEAGES = 'Lineages'
+TAG_WASTEWATER = 'Wastewater'
+TAG_PHENOTYPE = 'Phenotype Metrics'
+TAG_ANNOTATIONS = 'Annotations'
+TAG_DISCOVERY = 'Discovery'
+
+API_DESCRIPTION = (
+    'API for querying the Muninn database of viral sequencing samples, their consensus mutations, '
+    'intra-host variants, lineage assignments/abundances, phenotype metrics and annotations.\n\n'
+    '**Filtering.** Many endpoints take a `filter` query parameter written in a small filter '
+    'language. ' + FILTER_SYNTAX_HELP + '\n\n'
+    'The *columns* you may reference in a filter differ per endpoint and are listed in each '
+    "endpoint's `filter` description. To discover the valid *values* for a column, call "
+    '`GET /v1/distinctValues` (grouped under the **Discovery** tag).'
+)
+
+TAGS_METADATA = [
+    {'name': TAG_SAMPLES, 'description': 'Sample (sequencing run) metadata and sample-level counts/aggregates.'},
+    {'name': TAG_VARIANTS, 'description': 'Intra-host (sub-consensus) variants: within-sample minority alleles and their metrics.'},
+    {'name': TAG_MUTATIONS, 'description': 'Consensus mutations: changes fixed in a sample\'s consensus sequence, and their counts.'},
+    {'name': TAG_LINEAGES, 'description': 'Lineage assignments, abundances, and per-lineage mutation incidence/profiles.'},
+    {'name': TAG_PHENOTYPE, 'description': 'Phenotype metrics (e.g. DMS/EVEscape scores) and mutation/variant counts scored by them.'},
+    {'name': TAG_ANNOTATIONS, 'description': 'Literature/effect annotations attached to amino-acid changes.'},
+    {'name': TAG_DISCOVERY, 'description': 'Endpoints that enumerate the valid values/keys used to build filter queries (start here before filtering).'},
+]
 
 app = FastAPI(
     title='Muninn API',
-    description='API for querying Muninn database',
-    version='0.1.0'
+    description=API_DESCRIPTION,
+    version='0.1.0',
+    openapi_tags=TAGS_METADATA,
 )
+
+
+def filter_query(columns_help: str, *, required: bool = True) -> Query:
+    """
+    Build the OpenAPI `Query` for a `filter` parameter. `columns_help` describes the columns that
+    are filterable *for this endpoint*; the shared filter-language grammar (FILTER_SYNTAX_HELP) is
+    appended automatically so every filter parameter documents the syntax inline. This keeps the
+    grammar in one place and ensures it survives even when the spec is split into per-endpoint tools.
+    """
+    return Query(
+        ... if required else None,
+        description=f'{columns_help}\n\n{FILTER_SYNTAX_HELP}',
+    )
 
 app.add_middleware(
     CORSMiddleware,
@@ -71,14 +115,28 @@ async def handle_parsing_error(request: Request, exc: ParsingError):
     return JSONResponse(status_code=400, content={'detail': exc.message})
 
 
-# Tag names used to group the endpoints in the auto-generated docs at /docs.
-TAG_SAMPLES = 'Samples'
-TAG_VARIANTS = 'Variants'
-TAG_MUTATIONS = 'Mutations'
-TAG_LINEAGES = 'Lineages'
-TAG_WASTEWATER = 'Wastewater'
-TAG_PHENOTYPE = 'Phenotype Metrics'
-TAG_ANNOTATIONS = 'Annotations'
+#############
+# DISCOVERY #
+#############
+
+@app.get(
+    '/v1/distinctValues',
+    response_model=List[str],
+    tags=[TAG_DISCOVERY],
+    summary='List the distinct values present for a filterable column (to help build filter queries)'
+)
+async def get_distinct_values(
+    field: DistinctValueField = Query(
+        ...,
+        description='The column to enumerate distinct, non-null values for. These are the high-value, '
+                    'bounded-cardinality string columns most useful when constructing a `filter`: sample '
+                    'metadata (host, organism, serotype, platform, instrument, assay_type, library_*, '
+                    'isolation_source, center_name, bio_project), geography (country_name, admin1_name, '
+                    'admin2_name, admin3_name), genomic change dimensions (region, gff_feature) and lineage '
+                    'nomenclature (lineage_system_name). Values are returned sorted ascending.'
+    ),
+):
+    return await DB.queries.helpers.get_distinct_values(field)
 
 ###########
 # SAMPLES #
@@ -92,7 +150,7 @@ async def get_sample_by_id(sample_id: int = Path(..., description='The ID of the
     return sample
 
 @app.get('/v1/samples', response_model=List[SampleInfo], tags=[TAG_SAMPLES], summary='Get samples matching a query')
-async def get_samples_query(filter: str = Query(..., description='Filter query (Muninn syntax) over all columns of the `samples` table, plus the joined `geo_locations` columns (use their raw names, e.g. admin1_name, country_name, not the geo_* response names).')):
+async def get_samples_query(filter: str = filter_query('Over all columns of the `samples` table, plus the joined `geo_locations` columns (use their raw names, e.g. admin1_name, country_name, not the geo_* response names).')):
     return await DB.queries.samples.get_samples(filter)
 
 @app.get('/v1/samples:collectionReleaseLag', response_model=List[SampleCollectionReleaseLagInfo], tags=[TAG_SAMPLES], summary='Get collection-to-release lag quartiles, binned by collection-midpoint date')
@@ -106,14 +164,14 @@ async def get_sample_collection_release_lag(
 @app.get('/v1/samples:byMutation', response_model=List[SampleInfo], tags=[TAG_SAMPLES], summary='Get samples carrying a consensus mutation matching a query')
 async def get_samples_by_mutation(
     change_bin: NtOrAa = Query(NtOrAa.aa, description='Whether the query filters on nucleotide (nt) allele columns or amino-acid (aa) columns'),
-    filter: str = Query(..., description='Filter query (Muninn syntax) over consensus-mutation columns. change_bin=nt: all columns of the `alleles` table (region, position_nt, ref_nt, alt_nt); change_bin=aa: all columns of the `amino_acids` table (position_aa, ref_aa, alt_aa, gff_feature, ref_codon, alt_codon).'),
+    filter: str = filter_query('Over consensus-mutation columns. change_bin=nt: all columns of the `alleles` table (region, position_nt, ref_nt, alt_nt); change_bin=aa: all columns of the `amino_acids` table (position_aa, ref_aa, alt_aa, gff_feature, ref_codon, alt_codon).'),
 ):
     return await DB.queries.samples.get_samples_by_mutation(change_bin, filter)
 
 @app.get('/v1/samples:byVariant', response_model=List[SampleInfo], tags=[TAG_SAMPLES], summary='Get samples carrying an intra-host variant matching a query')
 async def get_samples_by_variant(
     change_bin: NtOrAa = Query(NtOrAa.aa, description='Whether the query filters on nucleotide (nt) allele columns or amino-acid (aa) columns'),
-    filter: str = Query(..., description='Filter query (Muninn syntax) over intra-host variant columns. change_bin=nt: all columns of the `alleles` (region, position_nt, ref_nt, alt_nt) and `intra_host_variants` (ref_dp, alt_dp, alt_freq, total_dp, pval, pass_qc, ...) tables; change_bin=aa: all columns of the `amino_acids` table (position_aa, ref_aa, alt_aa, gff_feature, ref_codon, alt_codon).'),
+    filter: str = filter_query('Over intra-host variant columns. change_bin=nt: all columns of the `alleles` (region, position_nt, ref_nt, alt_nt) and `intra_host_variants` (ref_dp, alt_dp, alt_freq, total_dp, pval, pass_qc, ...) tables; change_bin=aa: all columns of the `amino_acids` table (position_aa, ref_aa, alt_aa, gff_feature, ref_codon, alt_codon).'),
 ):
     return await DB.queries.samples.get_samples_by_variant(change_bin, filter)
 
@@ -127,7 +185,7 @@ async def get_sample_counts(
     group_by: Annotated[str, Query(pattern=COMMA_SEP_WORDLIKE_PATTERN.pattern, description='Column to group counts by: a date field (collection_date, release_date, creation_date), "lineage", or any sample column. Optionally "lineage,<date_field>" to also bin by date.')],
     date_bin: DateBinOpt = Query(DateBinOpt.month, description='Granularity of date bins when grouping by a date field: month, week, or day'),
     days: int = Query(DEFAULT_DAYS, description='Bin width in days when date_bin=day'),
-    filter: str | None = Query(None, description='Optional filter query (Muninn syntax) over all columns of the `samples` table, plus the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names).'),
+    filter: str | None = filter_query('Optional: over all columns of the `samples` table, plus the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names).', required=False),
     max_span_days: int = Query(DEFAULT_MAX_SPAN_DAYS, description='Exclude samples whose collection window (end - start) exceeds this many days (collection_date grouping only)'),
 ):
     try:
@@ -149,7 +207,7 @@ async def get_sample_counts(
 )
 async def get_variants_query(
     change_bin: NtOrAa = Query(NtOrAa.nt, description='Whether the query filters on (and returns) nucleotide (nt) allele variants or amino-acid (aa) variants'),
-    filter: str = Query(..., description='Filter query (Muninn syntax) over intra-host variant columns. change_bin=nt: all columns of the `alleles` (region, position_nt, ref_nt, alt_nt) and `intra_host_variants` (ref_dp, alt_dp, alt_freq, total_dp, pval, pass_qc, ...) tables; change_bin=aa: all columns of the `amino_acids` table (position_aa, ref_aa, alt_aa, gff_feature, ref_codon, alt_codon).'),
+    filter: str = filter_query('Over intra-host variant columns. change_bin=nt: all columns of the `alleles` (region, position_nt, ref_nt, alt_nt) and `intra_host_variants` (ref_dp, alt_dp, alt_freq, total_dp, pval, pass_qc, ...) tables; change_bin=aa: all columns of the `amino_acids` table (position_aa, ref_aa, alt_aa, gff_feature, ref_codon, alt_codon).'),
 ):
     return await DB.queries.variants.get_variants(change_bin, filter)
 
@@ -161,7 +219,7 @@ async def get_variants_query(
 )
 async def get_variants_by_sample(
     change_bin: NtOrAa = Query(NtOrAa.nt, description='Whether to return nucleotide (nt) allele variants or amino-acid (aa) variants'),
-    filter: str = Query(..., description='Filter query (Muninn syntax) that selects which samples to return variants for: over all columns of the `samples` table, plus the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names).'),
+    filter: str = filter_query('Selects which samples to return variants for: over all columns of the `samples` table, plus the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names).'),
 ):
     return await DB.queries.variants.get_variants_by_sample(change_bin, filter)
 
@@ -177,7 +235,7 @@ async def get_variants_by_sample(
 )
 async def get_mutations_query(
     change_bin: NtOrAa = Query(NtOrAa.nt, description='Whether the query filters on (and returns) nucleotide (nt) allele mutations or amino-acid (aa) mutations'),
-    filter: str = Query(..., description='Filter query (Muninn syntax) over consensus-mutation columns. change_bin=nt: all columns of the `alleles` table (region, position_nt, ref_nt, alt_nt); change_bin=aa: all columns of the `amino_acids` table (position_aa, ref_aa, alt_aa, gff_feature, ref_codon, alt_codon).'),
+    filter: str = filter_query('Over consensus-mutation columns. change_bin=nt: all columns of the `alleles` table (region, position_nt, ref_nt, alt_nt); change_bin=aa: all columns of the `amino_acids` table (position_aa, ref_aa, alt_aa, gff_feature, ref_codon, alt_codon).'),
 ):
     return await DB.queries.mutations.get_mutations(change_bin, filter)
 
@@ -189,7 +247,7 @@ async def get_mutations_query(
 )
 async def get_mutations_by_sample(
     change_bin: NtOrAa = Query(NtOrAa.nt, description='Whether to return nucleotide (nt) allele mutations or amino-acid (aa) mutations'),
-    filter: str = Query(..., description='Filter query (Muninn syntax) that selects which samples to return mutations for: over all columns of the `samples` table, plus the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names).'),
+    filter: str = filter_query('Selects which samples to return mutations for: over all columns of the `samples` table, plus the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names).'),
 ):
     return await DB.queries.mutations.get_mutations_by_sample(change_bin, filter)
 
@@ -232,7 +290,7 @@ async def get_mutation_counts(
     date_bin: DateBinOpt = Query(DateBinOpt.month, description='Granularity of date bins when group_by=collection_date: month, week, or day'),
     days: int = Query(DEFAULT_DAYS, description='Bin width in days when date_bin=day'),
     max_span_days: int = Query(DEFAULT_MAX_SPAN_DAYS, description='Exclude samples whose collection window (end - start) exceeds this many days (collection_date grouping only)'),
-    filter: str | None = Query(None, description='Optional filter (Muninn syntax), applied to the collection_date grouping only: over all samples + joined geo_locations columns, the change columns (nt: region, ref_nt, position_nt, alt_nt; aa: gff_feature, ref_aa, position_aa, alt_aa, ref_codon, alt_codon), and lineage columns (lineage_name, lineage_system_name).'),
+    filter: str | None = filter_query('Optional, applied to the collection_date grouping only: over all samples + joined geo_locations columns, the change columns (nt: region, ref_nt, position_nt, alt_nt; aa: gff_feature, ref_aa, position_aa, alt_aa, ref_codon, alt_codon), and lineage columns (lineage_name, lineage_system_name).', required=False),
 ):
     if group_by == COLLECTION_DATE:
         return await DB.queries.counts.count_mutations_by_collection_date(date_bin, change_bin, days, max_span_days, filter)
@@ -260,7 +318,7 @@ async def get_mutation_counts_by_phenotype_score(
     region: str = Query(..., description='GFF feature (gene/product) to restrict amino-acid mutations to'),
     metric: str = Query(..., description='Phenotype metric name whose value is reported per amino-acid change'),
     include_refs: bool = Query(False, description='If true, also include changes where reference amino acid equals alternative amino acid; default false excludes them'),
-    filter: str | None = Query(None, description='Optional filter (Muninn syntax) restricting which samples are counted: over all columns of the `samples` table, plus the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names).'),
+    filter: str | None = filter_query('Optional, restricting which samples are counted: over all columns of the `samples` table, plus the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names).', required=False),
 ):
     return await DB.queries.prevalence.get_pheno_values_and_mutation_counts(metric, region, include_refs, filter)
 
@@ -277,7 +335,7 @@ async def get_mutation_count_by_collection_date_and_lineage(
     region: str = Query(..., description='For change_bin=nt: the genomic region/segment (alleles.region). For change_bin=aa: the GFF feature / gene (amino_acids.gff_feature).'),
     date_bin: DateBinOpt = Query(DateBinOpt.month, description='Granularity of date bins: month, week, or day'),
     days: int = Query(DEFAULT_DAYS, description='Bin width in days when date_bin=day'),
-    filter: str | None = Query(None, description='Optional filter (Muninn syntax) restricting which samples are counted: over all columns of the `samples` table, plus the joined `lineages` columns (e.g. lineage_name). No geo columns are joined here.'),
+    filter: str | None = filter_query('Optional, restricting which samples are counted: over all columns of the `samples` table, plus the joined `lineages` columns (e.g. lineage_name). No geo columns are joined here.', required=False),
     max_span_days: int = Query(DEFAULT_MAX_SPAN_DAYS, description='Exclude samples whose collection window (end - start) exceeds this many days'),
 ):
     if change_bin == NtOrAa.nt:
@@ -311,7 +369,7 @@ async def get_lineage_abundance(
     group_by: Annotated[str | None, Query(pattern=WORDLIKE_PATTERN.pattern, description='Optional date field to bin summaries by: only "collection_date" is supported. Omit to aggregate/list over all samples.')] = None,
     date_bin: DateBinOpt = Query(DateBinOpt.month, description='Granularity of date bins when group_by=collection_date: month, week, or day'),
     days: int = Query(DEFAULT_DAYS, description='Bin width in days when date_bin=day'),
-    filter: str | None = Query(None, description='Optional filter (Muninn syntax) over all `samples` columns, plus joined `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name) and `samples_lineages` (abundance); geo columns join in via their raw names too. Only abundance-based (non-consensus) lineage calls are ever included.'),
+    filter: str | None = filter_query('Optional: over all `samples` columns, plus joined `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name) and `samples_lineages` (abundance); geo columns join in via their raw names too. Only abundance-based (non-consensus) lineage calls are ever included.', required=False),
     summary: bool = Query(True, description='If true (default) return per-lineage abundance summary stats; if false return per-sample abundance rows (only supported when group_by is omitted)'),
     max_span_days: int = Query(DEFAULT_MAX_SPAN_DAYS, description='Exclude samples whose collection window (end - start) exceeds this many days (collection_date binning only)'),
 ):
@@ -336,7 +394,7 @@ async def get_mutation_incidence(
     change_bin: NtOrAa = Query(..., description='Report nucleotide (nt) or amino-acid (aa) consensus mutations'),
     prevalence_threshold: float = Query(DEFAULT_PREVALENCE_THRESHOLD, description=f'Minimum fraction of the lineage samples carrying a mutation for it to be returned (minimum allowed: {MIN_PREVALENCE_THRESHOLD})'),
     match_reference: bool = Query(False, description='If false (default) exclude changes where ref == alt; if true include them'),
-    filter: str | None = Query(None, description='Optional filter (Muninn syntax) over all `samples` columns plus the joined `lineages`/`lineage_systems`/`samples_lineages` columns (e.g. lineage_name, lineage_system_name). Note: geo_locations columns are NOT joined here and cannot be filtered on.'),
+    filter: str | None = filter_query('Optional: over all `samples` columns plus the joined `lineages`/`lineage_systems`/`samples_lineages` columns (e.g. lineage_name, lineage_system_name). Note: geo_locations columns are NOT joined here and cannot be filtered on.', required=False),
 ):
     if prevalence_threshold < MIN_PREVALENCE_THRESHOLD:
         raise HTTPException(status_code=400, detail=f'minimum allowed prevalence threshold is {MIN_PREVALENCE_THRESHOLD}')
@@ -359,7 +417,7 @@ async def get_mutation_incidence(
 async def get_mutation_profile(
     lineage: str = Query(..., description='Lineage name to compute the mutation spectrum for, matched against lineages.lineage_name (e.g. BA.2)'),
     lineage_system_name: str = Query(..., description='Lineage nomenclature system the lineage belongs to, matched against lineage_systems.lineage_system_name (e.g. PANGO)'),
-    filter: str | None = Query(None, description='Optional filter (Muninn syntax) over all `samples` columns plus the joined `lineages`/`lineage_systems`/`samples_lineages` columns (e.g. lineage_name, lineage_system_name). Note: geo_locations and alleles columns are NOT joined here and cannot be filtered on.'),
+    filter: str | None = filter_query('Optional: over all `samples` columns plus the joined `lineages`/`lineage_systems`/`samples_lineages` columns (e.g. lineage_name, lineage_system_name). Note: geo_locations and alleles columns are NOT joined here and cannot be filtered on.', required=False),
 ):
     return await DB.queries.lineages.get_mutation_profile(lineage, lineage_system_name, filter)
 
@@ -388,7 +446,7 @@ async def get_phenotype_metric_count_mutations_by_collection_date(
     phenotype_metric_value_threshold: float = Query(..., description='Threshold on the metric value; n_gte counts scored amino-acid changes whose value is >= this'),
     date_bin: DateBinOpt = Query(DateBinOpt.month, description='Granularity of collection-date bins: month, week, or day'),
     days: int = Query(DEFAULT_DAYS, description='Bin width in days when date_bin=day'),
-    filter: str | None = Query(None, description='Optional filter (Muninn syntax) over all `samples` columns plus the joined `geo_locations` columns (raw names, e.g. admin1_name/country_name) and `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name). alleles/amino_acids columns are NOT joined and cannot be filtered on.'),
+    filter: str | None = filter_query('Optional: over all `samples` columns plus the joined `geo_locations` columns (raw names, e.g. admin1_name/country_name) and `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name). alleles/amino_acids columns are NOT joined and cannot be filtered on.', required=False),
     max_span_days: int = Query(DEFAULT_MAX_SPAN_DAYS, description='Exclude samples whose collection window (end - start) exceeds this many days'),
 ):
     return await DB.queries.phenotype_metrics.count_mutations_gte_pheno_value_by_collection_date(
@@ -411,7 +469,7 @@ async def get_phenotype_metric_count_variants_by_collection_date(
     phenotype_metric_value_threshold: float = Query(..., description='Threshold on the metric value; n_gte counts scored amino-acid changes whose value is >= this'),
     date_bin: DateBinOpt = Query(DateBinOpt.month, description='Granularity of collection-date bins: month, week, or day'),
     days: int = Query(DEFAULT_DAYS, description='Bin width in days when date_bin=day'),
-    filter: str | None = Query(None, description='Optional filter (Muninn syntax). Unlike the sibling :countMutationsByCollectionDate (whose filter is restricted to samples/geo/lineage), here the filter is evaluated alongside the variant joins, so it can reference all `samples` columns, the joined `geo_locations` columns (raw names, e.g. admin1_name/country_name), `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name), and the `amino_acids` columns (gff_feature, ref_aa, position_aa, alt_aa, ref_codon, alt_codon) reached via intra_host_translations.'),
+    filter: str | None = filter_query('Optional. Unlike the sibling :countMutationsByCollectionDate (whose filter is restricted to samples/geo/lineage), here the filter is evaluated alongside the variant joins, so it can reference all `samples` columns, the joined `geo_locations` columns (raw names, e.g. admin1_name/country_name), `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name), and the `amino_acids` columns (gff_feature, ref_aa, position_aa, alt_aa, ref_codon, alt_codon) reached via intra_host_translations.', required=False),
     max_span_days: int = Query(DEFAULT_MAX_SPAN_DAYS, description='Exclude samples whose collection window (end - start) exceeds this many days'),
 ):
     return await DB.queries.phenotype_metrics.count_variants_gte_pheno_value_by_collection_date(
@@ -433,7 +491,7 @@ async def get_phenotype_metric_values_for_mutations_by_sample_and_collection_dat
     phenotype_metric_name: str = Query(..., description='Phenotype metric to score amino-acid changes by, matched against phenotype_metrics.phenotype_metric_name (e.g. delta_bind)'),
     date_bin: DateBinOpt = Query(DateBinOpt.month, description='Granularity of collection-date bins: month, week, or day'),
     days: int = Query(DEFAULT_DAYS, description='Bin width in days when date_bin=day'),
-    filter: str | None = Query(None, description='Optional filter (Muninn syntax) over all `samples` columns plus the joined `geo_locations` columns (raw names, e.g. admin1_name/country_name) and `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name). alleles/amino_acids columns are NOT joined and cannot be filtered on.'),
+    filter: str | None = filter_query('Optional: over all `samples` columns plus the joined `geo_locations` columns (raw names, e.g. admin1_name/country_name) and `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name). alleles/amino_acids columns are NOT joined and cannot be filtered on.', required=False),
     max_span_days: int = Query(DEFAULT_MAX_SPAN_DAYS, description='Exclude samples whose collection window (end - start) exceeds this many days'),
 ):
     return await DB.queries.phenotype_metrics.get_pheno_value_for_mutations_by_sample_and_collection_date(
@@ -454,7 +512,7 @@ async def get_phenotype_metric_values_for_variants_by_sample_and_collection_date
     phenotype_metric_name: str = Query(..., description='Phenotype metric to score amino-acid changes by, matched against phenotype_metrics.phenotype_metric_name (e.g. delta_bind)'),
     date_bin: DateBinOpt = Query(DateBinOpt.month, description='Granularity of collection-date bins: month, week, or day'),
     days: int = Query(DEFAULT_DAYS, description='Bin width in days when date_bin=day'),
-    filter: str | None = Query(None, description='Optional filter (Muninn syntax) over all `samples` columns plus the joined `geo_locations` columns (raw names, e.g. admin1_name/country_name) and `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name).'),
+    filter: str | None = filter_query('Optional: over all `samples` columns plus the joined `geo_locations` columns (raw names, e.g. admin1_name/country_name) and `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name).', required=False),
     max_span_days: int = Query(DEFAULT_MAX_SPAN_DAYS, description='Exclude samples whose collection window (end - start) exceeds this many days'),
 ):
     # v0 deliberately left this unimplemented (raise NotImplementedError). Preserve that choice as a
@@ -520,7 +578,7 @@ async def get_annotations_by_mutations_and_collection_date(
     date_bin: DateBinOpt = Query(DateBinOpt.month, description='Granularity of collection-date bins: month, week, or day'),
     days: int = Query(DEFAULT_DAYS, description='Bin width in days when date_bin=day'),
     max_span_days: int = Query(DEFAULT_MAX_SPAN_DAYS, description='Exclude samples whose collection window (end - start) exceeds this many days'),
-    filter: str | None = Query(None, description='Optional filter (Muninn syntax) over all `samples` columns plus the joined `geo_locations` columns (raw names, e.g. admin1_name/country_name) and `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name). alleles/amino_acids columns are NOT joined and cannot be filtered on.'),
+    filter: str | None = filter_query('Optional: over all `samples` columns plus the joined `geo_locations` columns (raw names, e.g. admin1_name/country_name) and `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name). alleles/amino_acids columns are NOT joined and cannot be filtered on.', required=False),
 ):
     return await DB.queries.annotations.get_annotations_by_mutations_and_collection_date(
         effect_detail,
@@ -541,7 +599,7 @@ async def get_annotations_by_variants_and_collection_date(
     date_bin: DateBinOpt = Query(DateBinOpt.month, description='Granularity of collection-date bins: month, week, or day'),
     days: int = Query(DEFAULT_DAYS, description='Bin width in days when date_bin=day'),
     max_span_days: int = Query(DEFAULT_MAX_SPAN_DAYS, description='Exclude samples whose collection window (end - start) exceeds this many days'),
-    filter: str | None = Query(None, description='Optional filter (Muninn syntax) over samples/geo/lineage columns.'),
+    filter: str | None = filter_query('Optional: over samples/geo/lineage columns.', required=False),
 ):
     # Not implemented (deferred): the intra-host-variant path is unverifiable on SC2 (intra_host_translations
     # is empty). Returns a clean 501; a working version would mirror :byMutationsAndCollectionDate over
@@ -565,7 +623,7 @@ async def get_annotation_effects() -> List[str]:
 )
 async def get_annotations_by_variants_and_amino_acid_position(
     effect_detail: str = Query(..., description='Annotation effect to match, compared against effects.detail'),
-    filter: str | None = Query(None, description='Optional filter (Muninn syntax) over samples/geo/lineage columns.'),
+    filter: str | None = filter_query('Optional: over samples/geo/lineage columns.', required=False),
 ):
     # Not implemented (deferred): the intra-host-variant path is unverifiable on SC2 (intra_host_translations
     # is empty). Returns a clean 501; a working version would mirror :byMutationsAndAminoAcidPosition over
@@ -580,7 +638,7 @@ async def get_annotations_by_variants_and_amino_acid_position(
 )
 async def get_annotations_by_mutations_and_amino_acid_position(
     effect_detail: str = Query(..., description='Annotation effect to match, compared against effects.detail'),
-    filter: str | None = Query(None, description='Optional filter (Muninn syntax) over all `samples` columns plus the joined `geo_locations` columns (raw names, e.g. admin1_name/country_name) and `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name). alleles/amino_acids columns are NOT joined and cannot be filtered on.'),
+    filter: str | None = filter_query('Optional: over all `samples` columns plus the joined `geo_locations` columns (raw names, e.g. admin1_name/country_name) and `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name). alleles/amino_acids columns are NOT joined and cannot be filtered on.', required=False),
 ):
     return await DB.queries.annotations.get_annotations_by_mutations_and_amino_acid_position(
         effect_detail,
