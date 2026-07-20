@@ -376,3 +376,23 @@ async def count_lineages_by_collection_date(
             elif system not in out_data[date].keys():
                 out_data[date][system] = {lineage: count}
     return out_data
+
+async def count_sites_by_region() -> Dict[str, int]:
+    """Count how many annotation sites are in each region (HA1, HA2, etc.)"""
+    async with get_async_session() as session:
+        res = await session.execute(
+            text(
+                '''
+                select
+                    structural_note->>'region' as region,
+                    count(*) as site_count
+                from structural_annotations
+                where structural_note is not null
+                group by structural_note->>'region'
+                order by structural_note->>'region'
+                '''
+            )
+        )
+        rows = res.fetchall()
+    
+    return {row[0]: row[1] for row in rows}

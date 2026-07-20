@@ -668,3 +668,8 @@ async def get_intra_host_variants_timeline_at_structural_annotation(sequential_s
         gff_feature: The gene identifier (default: XAJ25415.1 for HA)
     """
     return await DB.queries.structural_annotations.get_intra_host_variants_timeline_by_sequential_site(sequential_site, gff_feature)
+
+@app.get('/sites/by-region', response_model=Dict[str, int])
+async def get_sites_by_region():
+    """Return count of sites in each region"""
+    return await DB.queries.counts.count_sites_by_region()
