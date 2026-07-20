@@ -4,6 +4,7 @@ from typing import Set
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.structural_annotations import insert_structural_annotation
 from DB.models import StructuralAnnotation
+from utils.constants import DefaultGffFeaturesByRegion
 
 
 class StructuralAnnotationsCsvParser(FileParser):
@@ -20,19 +21,14 @@ class StructuralAnnotationsCsvParser(FileParser):
             reader = csv.DictReader(f, delimiter=self.delimiter)
             for row in reader:
                 try:
-                    sequential_site = row['sequential_site']
-                    note_parts = [
-                        f"reference_site={row['reference_site']}",
-                        f"reference_H1_site={row['reference_H1_site']}",
-                        f"mature_H5_site={row['mature_H5_site']}",
-                        f"HA1_HA2_H5_site={row['HA1_HA2_H5_site']}",
-                        f"region={row['region']}",
-                    ]
-                    structural_note = '; '.join(note_parts)
+                    sequential_site = int(row['sequential_site'])
+                    not_notes = {'sequential_site'}
+                    structural_note = {k: v for k, v in row.items() if k not in not_notes}
 
                     await insert_structural_annotation(
                         StructuralAnnotation(
                             sequential_site=sequential_site,
+                            protein_name=DefaultGffFeaturesByRegion.HA,
                             structural_note=structural_note
                         )
                     )

@@ -680,8 +680,17 @@ class StructuralAnnotation(Base):
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
 
-    sequential_site: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    structural_note: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    sequential_site: Mapped[int] = mapped_column(sa.Integer, nullable=False)
+    protein_name: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    structural_note: Mapped[str] = mapped_column(sa.JSON, nullable=False)
+
+    __table_args__ = tuple([
+        UniqueConstraint(
+            'sequential_site',
+            'protein_name',
+            name='uq_structural_annotations_protein_site'
+        )
+    ])
 
 
 
