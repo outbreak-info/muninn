@@ -1,6 +1,6 @@
 from typing import List, Annotated, Dict
 
-from fastapi import FastAPI, HTTPException, Path, Query, Request
+from fastapi import APIRouter, FastAPI, HTTPException, Path, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import DBAPIError
@@ -64,6 +64,9 @@ app = FastAPI(
 )
 
 
+router = APIRouter(prefix='/v1')
+
+
 def filter_query(columns_help: str, *, required: bool = True) -> Query:
     """
     Build the OpenAPI `Query` for a `filter` parameter. `columns_help` describes the columns that
@@ -119,8 +122,8 @@ async def handle_parsing_error(request: Request, exc: ParsingError):
 # DISCOVERY #
 #############
 
-@app.get(
-    '/v1/distinctValues',
+@router.get(
+    '/distinctValues',
     response_model=List[str],
     tags=[TAG_DISCOVERY],
     summary='List the distinct values present for a filterable column (to help build filter queries)'
@@ -142,18 +145,18 @@ async def get_distinct_values(
 # SAMPLES #
 ###########
 
-@app.get('/v1/sample/{sample_id}', response_model=SampleInfo, tags=[TAG_SAMPLES], summary='Get sample metadata by sample ID')
+@router.get('/sample/{sample_id}', response_model=SampleInfo, tags=[TAG_SAMPLES], summary='Get sample metadata by sample ID')
 async def get_sample_by_id(sample_id: int = Path(..., description='The ID of the sample to retrieve')):
     sample = await DB.queries.samples.get_sample_by_id(sample_id)
     if sample is None:
         raise HTTPException(status_code=404)
     return sample
 
-@app.get('/v1/samples', response_model=List[SampleInfo], tags=[TAG_SAMPLES], summary='Get samples matching a query')
+@router.get('/samples', response_model=List[SampleInfo], tags=[TAG_SAMPLES], summary='Get samples matching a query')
 async def get_samples_query(filter: str = filter_query('Over all columns of the `samples` table, plus the joined `geo_locations` columns (use their raw names, e.g. admin1_name, country_name, not the geo_* response names).')):
     return await DB.queries.samples.get_samples(filter)
 
-@app.get('/v1/samples:collectionReleaseLag', response_model=List[SampleCollectionReleaseLagInfo], tags=[TAG_SAMPLES], summary='Get collection-to-release lag quartiles, binned by collection-midpoint date')
+@router.get('/samples:collectionReleaseLag', response_model=List[SampleCollectionReleaseLagInfo], tags=[TAG_SAMPLES], summary='Get collection-to-release lag quartiles, binned by collection-midpoint date')
 async def get_sample_collection_release_lag(
     date_bin: DateBinOpt = Query(DateBinOpt.month, description='Granularity of the date bins: month, week, or day'),
     days: int = Query(DEFAULT_DAYS, description='Bin width in days when date_bin=day'),
@@ -161,22 +164,22 @@ async def get_sample_collection_release_lag(
 ):
     return await DB.queries.samples.get_sample_collection_release_lag(max_span_days, date_bin, days)
 
-@app.get('/v1/samples:byMutation', response_model=List[SampleInfo], tags=[TAG_SAMPLES], summary='Get samples carrying a consensus mutation matching a query')
+@router.get('/samples:byMutation', response_model=List[SampleInfo], tags=[TAG_SAMPLES], summary='Get samples carrying a consensus mutation matching a query')
 async def get_samples_by_mutation(
     change_bin: NtOrAa = Query(NtOrAa.aa, description='Whether the query filters on nucleotide (nt) allele columns or amino-acid (aa) columns'),
     filter: str = filter_query('Over consensus-mutation columns. change_bin=nt: all columns of the `alleles` table (region, position_nt, ref_nt, alt_nt); change_bin=aa: all columns of the `amino_acids` table (position_aa, ref_aa, alt_aa, gff_feature, ref_codon, alt_codon).'),
 ):
     return await DB.queries.samples.get_samples_by_mutation(change_bin, filter)
 
-@app.get('/v1/samples:byVariant', response_model=List[SampleInfo], tags=[TAG_SAMPLES], summary='Get samples carrying an intra-host variant matching a query')
+@router.get('/samples:byVariant', response_model=List[SampleInfo], tags=[TAG_SAMPLES], summary='Get samples carrying an intra-host variant matching a query')
 async def get_samples_by_variant(
     change_bin: NtOrAa = Query(NtOrAa.aa, description='Whether the query filters on nucleotide (nt) allele columns or amino-acid (aa) columns'),
     filter: str = filter_query('Over intra-host variant columns. change_bin=nt: all columns of the `alleles` (region, position_nt, ref_nt, alt_nt) and `intra_host_variants` (ref_dp, alt_dp, alt_freq, total_dp, pval, pass_qc, ...) tables; change_bin=aa: all columns of the `amino_acids` table (position_aa, ref_aa, alt_aa, gff_feature, ref_codon, alt_codon).'),
 ):
     return await DB.queries.samples.get_samples_by_variant(change_bin, filter)
 
-@app.get(
-    '/v1/samples:count',
+@router.get(
+    '/samples:count',
     response_model=Dict[str, int] | Dict[str, Dict[str, Dict[str, int]]] | List[LineageCountInfo],
     tags=[TAG_SAMPLES],
     summary='Count samples grouped by field, date, and/or lineage'
@@ -199,8 +202,8 @@ async def get_sample_counts(
 # VARIANTS #
 ############
 
-@app.get(
-    '/v1/variants',
+@router.get(
+    '/variants',
     response_model=List[VariantNucleotideInfo] | List[VariantAminoAcidInfo],
     tags=[TAG_VARIANTS],
     summary='Get intra-host variants matching a query'
@@ -211,8 +214,8 @@ async def get_variants_query(
 ):
     return await DB.queries.variants.get_variants(change_bin, filter)
 
-@app.get(
-    '/v1/variants:bySample',
+@router.get(
+    '/variants:bySample',
     response_model=List[VariantNucleotideInfo] | List[VariantAminoAcidInfo],
     tags=[TAG_VARIANTS],
     summary='Get intra-host variants for all samples matching a sample filter'
@@ -227,8 +230,8 @@ async def get_variants_by_sample(
 # MUTATIONS #
 #############
 
-@app.get(
-    '/v1/mutations',
+@router.get(
+    '/mutations',
     response_model=List[MutationNucleotideInfo] | List[MutationAminoAcidInfo],
     tags=[TAG_MUTATIONS],
     summary='Get consensus mutations matching a query'
@@ -239,8 +242,8 @@ async def get_mutations_query(
 ):
     return await DB.queries.mutations.get_mutations(change_bin, filter)
 
-@app.get(
-    '/v1/mutations:bySample',
+@router.get(
+    '/mutations:bySample',
     response_model=List[MutationNucleotideInfo] | List[MutationAminoAcidInfo],
     tags=[TAG_MUTATIONS],
     summary='Get consensus mutations for all samples matching a sample filter'
@@ -251,8 +254,8 @@ async def get_mutations_by_sample(
 ):
     return await DB.queries.mutations.get_mutations_by_sample(change_bin, filter)
 
-@app.get(
-    '/v1/mutations:sampleCount',
+@router.get(
+    '/mutations:sampleCount',
     response_model=List[MutationCountInfo],
     tags=[TAG_MUTATIONS],
     summary='Count samples carrying a specific consensus mutation'
@@ -269,8 +272,8 @@ async def get_mutation_sample_count(
         return await DB.queries.prevalence.get_mutation_sample_count_by_nt(nt)
     raise HTTPException(status_code=400, detail='Provide an amino-acid (aa) or nucleotide (nt) change')
 
-@app.get(
-    '/v1/mutations:gffFeatures',
+@router.get(
+    '/mutations:gffFeatures',
     response_model=List[str],
     tags=[TAG_MUTATIONS],
     summary='List the distinct GFF feature (gene/product) names'
@@ -278,8 +281,8 @@ async def get_mutation_sample_count(
 async def get_mutation_gff_features():
     return await DB.queries.helpers.get_gff_features()
 
-@app.get(
-    '/v1/mutations:count',
+@router.get(
+    '/mutations:count',
     response_model=Dict[str, Dict[str, int]] | Dict[str, int],
     tags=[TAG_MUTATIONS],
     summary='Count consensus mutations grouped by a column or by collection date'
@@ -296,8 +299,8 @@ async def get_mutation_counts(
         return await DB.queries.counts.count_mutations_by_collection_date(date_bin, change_bin, days, max_span_days, filter)
     return await DB.queries.counts.count_mutations_by_column(group_by, change_bin)
 
-@app.get(
-    '/v1/mutations:variantLag',
+@router.get(
+    '/mutations:variantLag',
     response_model=Dict[str, List[VariantMutationLagInfo]],
     tags=[TAG_MUTATIONS],
     summary='Get amino-acid changes seen as consensus mutations before intra-host variants, keyed by GFF feature'
@@ -308,8 +311,8 @@ async def get_mutations_before_variants(
 ):
     return await DB.queries.variants_mutations.get_mutations_before_variants(lineage, lineage_system_name)
 
-@app.get(
-    '/v1/mutations:countByPhenotypeScore',
+@router.get(
+    '/mutations:countByPhenotypeScore',
     response_model=List[VariantCountPhenoScoreInfo],
     tags=[TAG_MUTATIONS],
     summary='Count samples per consensus amino-acid mutation alongside a phenotype metric value'
@@ -322,8 +325,8 @@ async def get_mutation_counts_by_phenotype_score(
 ):
     return await DB.queries.prevalence.get_pheno_values_and_mutation_counts(metric, region, include_refs, filter)
 
-@app.get(
-    '/v1/mutations:countByCollectionDateAndLineage',
+@router.get(
+    '/mutations:countByCollectionDateAndLineage',
     response_model=List[Dict],
     tags=[TAG_MUTATIONS],
     summary='Count samples carrying a specific consensus mutation, binned by collection date and lineage'
@@ -346,8 +349,8 @@ async def get_mutation_count_by_collection_date_and_lineage(
 # LINEAGES #
 ############
 
-@app.get(
-    '/v1/lineages',
+@router.get(
+    '/lineages',
     response_model=List[LineageInfo],
     tags=[TAG_LINEAGES],
     summary='List the lineages belonging to a lineage system'
@@ -357,8 +360,8 @@ async def get_lineages_by_lineage_system(
 ):
     return await DB.queries.lineages.get_all_lineages_by_lineage_system(lineage_system_name)
 
-@app.get(
-    '/v1/lineages:abundance',
+@router.get(
+    '/lineages:abundance',
     response_model=Dict[str, List[LineageAbundanceSummaryInfo]]
                    | List[LineageAbundanceInfo]
                    | List[LineageAbundanceSummaryInfo],
@@ -382,8 +385,31 @@ async def get_lineage_abundance(
             return await DB.queries.lineages.get_abundance_summaries(filter)
         return await DB.queries.lineages.get_abundances(filter)
 
-@app.get(
-    '/v1/lineages:mutationIncidence',
+@router.get(
+    '/lineages:count',
+    response_model=Dict[str, List[LineageCountInfo]],
+    tags=[TAG_LINEAGES],
+    summary='Per-lineage sample counts over time (collection-date binned)'
+)
+async def get_lineage_counts_over_time(
+    filter: str | None = filter_query(
+        'Optional: over `samples`, joined `geo_locations` (raw names, e.g. country_name, admin1_name) and '
+        '`lineages`/`lineage_systems` (lineage_name, lineage_system_name) columns. Counts consensus lineage '
+        'calls only (abundance/wastewater calls excluded).',
+        required=False,
+    ),
+    lineage: str | None = Query(None, description='Optional: restrict to a single lineage (lineages.lineage_name); omit for all lineages'),
+    date_bin: DateBinOpt = Query(DateBinOpt.month, description='Granularity of collection-date bins: month, week, or day'),
+    days: int = Query(DEFAULT_DAYS, description='Bin width in days when date_bin=day'),
+    max_span_days: int = Query(DEFAULT_MAX_SPAN_DAYS, description='Exclude samples whose collection window (end - start) exceeds this many days'),
+    days_before_today: int | None = Query(None, gt=0, description='Optional: only count samples whose collection midpoint is within this many days before today'),
+):
+    return await DB.queries.lineages.get_lineage_counts_over_time(
+        date_bin, days, filter, max_span_days, days_before_today, lineage
+    )
+
+@router.get(
+    '/lineages:mutationIncidence',
     response_model=MutationIncidenceInfo,
     tags=[TAG_LINEAGES],
     summary='Get consensus mutations prevalent within a lineage above a threshold'
@@ -408,8 +434,8 @@ async def get_mutation_incidence(
         filter
     )
 
-@app.get(
-    '/v1/lineages:mutationProfile',
+@router.get(
+    '/lineages:mutationProfile',
     response_model=List[MutationProfileInfo],
     tags=[TAG_LINEAGES],
     summary="Get a lineage's single-nucleotide mutation spectrum (counts per ref→alt substitution class and region)"
@@ -426,8 +452,8 @@ async def get_mutation_profile(
 # PHENOTYPE METRICS #
 ####################
 
-@app.get(
-    '/v1/phenotypeMetrics',
+@router.get(
+    '/phenotypeMetrics',
     response_model=List[PhenotypeMetricInfo],
     tags=[TAG_PHENOTYPE],
     summary='List all available phenotype metrics'
@@ -435,8 +461,8 @@ async def get_mutation_profile(
 async def get_all_phenotype_metrics():
     return await DB.queries.phenotype_metrics.get_all_pheno_metrics()
 
-@app.get(
-    '/v1/phenotypeMetricValues:countMutationsByCollectionDate',
+@router.get(
+    '/phenotypeMetricValues:countMutationsByCollectionDate',
     response_model=List[Dict],
     tags=[TAG_PHENOTYPE],
     summary='Count phenotype-scored consensus mutations at/above a threshold, binned by collection date'
@@ -458,8 +484,8 @@ async def get_phenotype_metric_count_mutations_by_collection_date(
         filter,
     )
 
-@app.get(
-    '/v1/phenotypeMetricValues:countVariantsByCollectionDate',
+@router.get(
+    '/phenotypeMetricValues:countVariantsByCollectionDate',
     response_model=List[Dict],
     tags=[TAG_PHENOTYPE],
     summary='Count phenotype-scored intra-host variants at/above a threshold, binned by collection date'
@@ -481,8 +507,8 @@ async def get_phenotype_metric_count_variants_by_collection_date(
         filter,
     )
 
-@app.get(
-    '/v1/phenotypeMetricValues:forMutationsAggregateBySampleAndCollectionDate',
+@router.get(
+    '/phenotypeMetricValues:forMutationsAggregateBySampleAndCollectionDate',
     response_model=List[Dict],
     tags=[TAG_PHENOTYPE],
     summary='Per-collection-date quartiles of per-sample consensus-mutation phenotype load (summed value and distinct-aa count)'
@@ -502,8 +528,8 @@ async def get_phenotype_metric_values_for_mutations_by_sample_and_collection_dat
         filter,
     )
 
-@app.get(
-    '/v1/phenotypeMetricValues:forVariantsAggregateBySampleAndCollectionDate',
+@router.get(
+    '/phenotypeMetricValues:forVariantsAggregateBySampleAndCollectionDate',
     response_model=List[Dict],
     tags=[TAG_PHENOTYPE],
     summary='Per-collection-date quartiles of per-sample intra-host-variant phenotype load (NOT IMPLEMENTED)'
@@ -520,8 +546,8 @@ async def get_phenotype_metric_values_for_variants_by_sample_and_collection_date
     # is a trivial adaptation of :forMutationsAggregate... over intra_host_translations if wanted.
     raise HTTPException(status_code=501, detail='Per-sample intra-host-variant phenotype aggregation by collection date is not implemented')
 
-@app.get(
-    '/v1/phenotypeMetricValues:byMutationsQuantile',
+@router.get(
+    '/phenotypeMetricValues:byMutationsQuantile',
     response_model=Dict[str, float | None],
     tags=[TAG_PHENOTYPE],
     summary='Get the value of a phenotype metric at a given quantile across its scored substitutions'
@@ -535,8 +561,8 @@ async def get_phenotype_metric_value_by_mutation_quantile(
         quantile,
     )
 
-@app.get(
-    '/v1/phenotypeMetricValues:byVariantsQuantile',
+@router.get(
+    '/phenotypeMetricValues:byVariantsQuantile',
     response_model=Dict[str, float],
     tags=[TAG_PHENOTYPE],
     summary='Get the value of a phenotype metric at a given quantile across intra-host variants (NOT IMPLEMENTED)'
@@ -551,8 +577,8 @@ async def get_phenotype_metric_value_by_variant_quantile(
     # would be a different, larger computation and is unverifiable on SC2 (intra-host tables empty).
     raise HTTPException(status_code=501, detail='Phenotype metric quantile across intra-host variants is not implemented')
 
-@app.get(
-    '/v1/phenotypeMetricValues:minAndMaxValues',
+@router.get(
+    '/phenotypeMetricValues:minAndMaxValues',
     response_model=List[float | None],
     tags=[TAG_PHENOTYPE],
     summary='Get the [min, max] values of a phenotype metric'
@@ -567,8 +593,8 @@ async def get_phenotype_metric_value_min_and_max(
 # ANNOTATIONS #
 ###############
 
-@app.get(
-    '/v1/annotations:byMutationsAndCollectionDate',
+@router.get(
+    '/annotations:byMutationsAndCollectionDate',
     response_model=List[Dict],
     tags=[TAG_ANNOTATIONS],
     summary='Proportion of annotated consensus-mutation amino acids carrying an annotation effect, binned by collection date'
@@ -588,8 +614,8 @@ async def get_annotations_by_mutations_and_collection_date(
         filter,
     )
 
-@app.get(
-    '/v1/annotations:byVariantsAndCollectionDate',
+@router.get(
+    '/annotations:byVariantsAndCollectionDate',
     response_model=List[Dict],
     tags=[TAG_ANNOTATIONS],
     summary='Proportion of annotated intra-host-variant amino acids carrying an annotation effect, binned by collection date (NOT IMPLEMENTED)'
@@ -606,8 +632,8 @@ async def get_annotations_by_variants_and_collection_date(
     # the flat intra_host_translations table.
     raise HTTPException(status_code=501, detail='Annotation proportion for intra-host variants by collection date is not implemented')
 
-@app.get(
-    '/v1/annotations:effects',
+@router.get(
+    '/annotations:effects',
     response_model=List[str],
     tags=[TAG_ANNOTATIONS],
     summary='List all distinct annotation effect types (effects.detail)'
@@ -615,8 +641,8 @@ async def get_annotations_by_variants_and_collection_date(
 async def get_annotation_effects() -> List[str]:
     return await DB.queries.annotations.get_all_annotation_effects()
 
-@app.get(
-    '/v1/annotations:byVariantsAndAminoAcidPosition',
+@router.get(
+    '/annotations:byVariantsAndAminoAcidPosition',
     response_model=Dict,
     tags=[TAG_ANNOTATIONS],
     summary='Annotated intra-host-variant amino-acid positions for an annotation effect (NOT IMPLEMENTED)'
@@ -630,8 +656,8 @@ async def get_annotations_by_variants_and_amino_acid_position(
     # the flat intra_host_translations table.
     raise HTTPException(status_code=501, detail='Annotated intra-host-variant positions for an effect is not implemented')
 
-@app.get(
-    '/v1/annotations:byMutationsAndAminoAcidPosition',
+@router.get(
+    '/annotations:byMutationsAndAminoAcidPosition',
     response_model=Dict,
     tags=[TAG_ANNOTATIONS],
     summary='Per-position sample counts of annotated consensus-mutation amino acids for an annotation effect'
@@ -644,3 +670,6 @@ async def get_annotations_by_mutations_and_amino_acid_position(
         effect_detail,
         filter,
     )
+
+
+app.include_router(router)

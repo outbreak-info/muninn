@@ -215,6 +215,83 @@ async def get_abundance_summaries_by_collection_date(
     return out_data
 
 
+async def get_lineage_counts_over_time(
+    date_bin: DateBinOpt,
+    days: int,
+    filter: str | None,
+    max_span_days: int,
+    days_before_today: int | None = None,
+    lineage: str | None = None,
+) -> Dict[str, List[LineageCountInfo]]:
+    """
+    Per-collection-date-bin sample counts per lineage over consensus lineage calls only, optionally
+    restricted to a single lineage and/or to samples whose collection midpoint is within the last
+    `days_before_today` days.
+    """
+    user_defined_filter = ''
+    if filter is not None:
+        user_defined_filter = f'and ({parser.parse(filter)})'
+
+    query_params = {}
+    lineage_clause = ''
+    if lineage is not None:
+        lineage_clause = f'and l.{ColumnNames.lineage_name} = :input_lineage'
+        query_params['input_lineage'] = lineage
+
+    # Recency window: keep bins whose collection midpoint is no older than `days_before_today` days.
+    # mid_collection_date is a column of the CTE, so this filters before the group-by.
+    recency_clause = ''
+    if days_before_today is not None:
+        recency_clause = f'where mid_collection_date >= current_date - {days_before_today}'
+
+    extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
+    group_by_clause = get_group_by_clause(
+        date_bin,
+        [ColumnNames.lineage_name, ColumnNames.lineage_system_name]
+    )
+    order_by_clause = get_order_by_cause(date_bin)
+
+    query = f'''
+        with with_mid_date as (
+            select
+                l.{ColumnNames.lineage_name},
+                ls.{ColumnNames.lineage_system_name},
+                {MID_COLLECTION_DATE_CALCULATION}
+            from {TableNames.samples_lineages} sl
+            inner join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id}
+            inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
+            inner join {TableNames.samples} s on s.id = sl.{ColumnNames.sample_id}
+            left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
+            where sl.{ColumnNames.is_consensus_call} = true
+                  and collection_end_date - collection_start_date <= {max_span_days}
+                  {lineage_clause} {user_defined_filter}
+        )
+        select
+            {extract_clause},
+            {ColumnNames.lineage_name},
+            {ColumnNames.lineage_system_name},
+            count(*) as cnt
+        from with_mid_date
+        {recency_clause}
+        {group_by_clause}
+        {order_by_clause}, cnt desc
+    '''
+
+    async with get_async_session() as session:
+        res = await session.execute(text(query), query_params)
+
+    out_data: Dict[str, List[LineageCountInfo]] = dict()
+    for r in res:
+        date = date_bin.format_iso_chunk(r[0], r[1])
+        info = LineageCountInfo(
+            count=r[4],
+            lineage=r[2],
+            lineage_system=r[3],
+        )
+        out_data.setdefault(date, []).append(info)
+    return out_data
+
+
 async def get_mutation_incidence(
     lineage: str,
     lineage_system_name: str,
