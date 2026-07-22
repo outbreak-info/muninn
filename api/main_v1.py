@@ -386,7 +386,7 @@ async def get_lineage_abundance(
         return await DB.queries.lineages.get_abundances(filter)
 
 @router.get(
-    '/lineages:count',
+    '/lineages:countByCollectionDate',
     response_model=Dict[str, List[LineageCountInfo]],
     tags=[TAG_LINEAGES],
     summary='Per-lineage sample counts over time (collection-date binned)'
