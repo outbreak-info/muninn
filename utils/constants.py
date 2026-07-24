@@ -251,6 +251,9 @@ class ColumnNames(PgIdentifiers):
     parent_id = 'parent_id'
     child_id = 'child_id'
 
+    # just for variants/mutations ingestion
+    gapped_freq = 'gapped_freq'
+
 
 class ConstraintNames(PgIdentifiers):
     # primary keys
@@ -392,3 +395,22 @@ EXCLUDED_SRAS = {
     'SRR29182474', 'SRR29182475', 'SRR29182476', 'SRR29182477', 'SRR29182478', 'SRR29182479',
     'SRR29182480', 'SRR29182481', 'SRR29182482', 'SRR29182483', 'SRR29182484', 'SRR29182485',
 }
+
+CODONS_AMINO_ACIDS = [
+    ('TTT', 'F'), ('TTC', 'F'), ('TTA', 'L'), ('TTG', 'L'),
+    ('CTT', 'L'), ('CTC', 'L'), ('CTA', 'L'), ('CTG', 'L'),
+    ('ATT', 'I'), ('ATC', 'I'), ('ATA', 'I'), ('ATG', 'M'),
+    ('GTT', 'V'), ('GTC', 'V'), ('GTA', 'V'), ('GTG', 'V'),
+    ('TCT', 'S'), ('TCC', 'S'), ('TCA', 'S'), ('TCG', 'S'),
+    ('CCT', 'P'), ('CCC', 'P'), ('CCA', 'P'), ('CCG', 'P'),
+    ('ACT', 'T'), ('ACC', 'T'), ('ACA', 'T'), ('ACG', 'T'),
+    ('GCT', 'A'), ('GCC', 'A'), ('GCA', 'A'), ('GCG', 'A'),
+    ('TAT', 'Y'), ('TAC', 'Y'), ('TAA', '*'), ('TAG', '*'),
+    ('CAT', 'H'), ('CAC', 'H'), ('CAA', 'Q'), ('CAG', 'Q'),
+    ('AAT', 'N'), ('AAC', 'N'), ('AAA', 'K'), ('AAG', 'K'),
+    ('GAT', 'D'), ('GAC', 'D'), ('GAA', 'E'), ('GAG', 'E'),
+    ('TGT', 'C'), ('TGC', 'C'), ('TGA', '*'), ('TGG', 'W'),
+    ('CGT', 'R'), ('CGC', 'R'), ('CGA', 'R'), ('CGG', 'R'),
+    ('AGT', 'S'), ('AGC', 'S'), ('AGA', 'R'), ('AGG', 'R'),
+    ('GGT', 'G'), ('GGC', 'G'), ('GGA', 'G'), ('GGG', 'G')
+]

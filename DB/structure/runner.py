@@ -11,9 +11,6 @@ async def set_up_db():
     await alleles.create_all()
     await amino_acids.create_all()
 
-    await intra_host_variants.create_all()
-    await intra_host_translations.create_all()
-
     await cns_samples_by_allele.create_all()
     await cns_alleles_by_sample.create_all()
     await cns_samples_by_amino_acid.create_all()
