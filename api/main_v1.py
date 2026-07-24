@@ -20,6 +20,7 @@ from api.models import VariantNucleotideInfo, VariantAminoAcidInfo, SampleInfo, 
     VariantCountPhenoScoreInfo, \
     MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo, \
     LineageInfo, VariantMutationLagInfo, MutationProfileInfo, \
+    LineageCountWithPrevalenceInfo, MutationProfileWithPrevalenceInfo, \
     SampleCollectionReleaseLagInfo, MutationIncidenceInfo
 from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, NtOrAa, \
     DEFAULT_MAX_SPAN_DAYS, COLLECTION_DATE, DEFAULT_DAYS, COMMA_SEP_WORDLIKE_PATTERN, \
@@ -387,9 +388,9 @@ async def get_lineage_abundance(
 
 @router.get(
     '/lineages:countByCollectionDate',
-    response_model=Dict[str, List[LineageCountInfo]],
+    response_model=Dict[str, List[LineageCountWithPrevalenceInfo]],
     tags=[TAG_LINEAGES],
-    summary='Per-lineage sample counts over time (collection-date binned)'
+    summary='Per-lineage sample counts and prevalence over time (collection-date binned)'
 )
 async def get_lineage_counts_over_time(
     filter: str | None = filter_query(
@@ -436,9 +437,9 @@ async def get_mutation_incidence(
 
 @router.get(
     '/lineages:mutationProfile',
-    response_model=List[MutationProfileInfo],
+    response_model=List[MutationProfileWithPrevalenceInfo],
     tags=[TAG_LINEAGES],
-    summary="Get a lineage's single-nucleotide mutation spectrum (counts per ref→alt substitution class and region)"
+    summary="Get a lineage's single-nucleotide mutation spectrum (counts and per-region prevalence per ref→alt substitution class and region)"
 )
 async def get_mutation_profile(
     lineage: str = Query(..., description='Lineage name to compute the mutation spectrum for, matched against lineages.lineage_name (e.g. BA.2)'),

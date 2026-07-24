@@ -5,9 +5,9 @@ from sqlalchemy import text
 
 from DB.engine import get_async_session
 from DB.queries.date_count_helpers import get_extract_clause, get_group_by_clause, get_order_by_cause, \
-    MID_COLLECTION_DATE_CALCULATION
+    YEAR, CHUNK, BIN_START, BIN_END, MID_COLLECTION_DATE_CALCULATION
 from api.models import LineageCountInfo, LineageAbundanceInfo, LineageInfo, LineageAbundanceSummaryInfo, \
-    MutationProfileInfo
+    MutationProfileInfo, LineageCountWithPrevalenceInfo, MutationProfileWithPrevalenceInfo
 from parser.parser import parser
 from utils.constants import DateBinOpt, NtOrAa, NUCLEOTIDE_CHARACTERS, TableNames, ColumnNames, COLLECTION_DATE
 from utils.errors import NotFoundError
@@ -222,7 +222,7 @@ async def get_lineage_counts_over_time(
     max_span_days: int,
     days_before_today: int | None = None,
     lineage: str | None = None,
-) -> Dict[str, List[LineageCountInfo]]:
+) -> Dict[str, List[LineageCountWithPrevalenceInfo]]:
     """
     Per-collection-date-bin sample counts per lineage over consensus lineage calls only, optionally
     restricted to a single lineage and/or to samples whose collection midpoint is within the last
@@ -235,7 +235,7 @@ async def get_lineage_counts_over_time(
     query_params = {}
     lineage_clause = ''
     if lineage is not None:
-        lineage_clause = f'and l.{ColumnNames.lineage_name} = :input_lineage'
+        lineage_clause = f'where {ColumnNames.lineage_name} = :input_lineage'
         query_params['input_lineage'] = lineage
 
     # Recency window: keep bins whose collection midpoint is no older than `days_before_today` days.
@@ -251,6 +251,14 @@ async def get_lineage_counts_over_time(
     )
     order_by_clause = get_order_by_cause(date_bin)
 
+    match date_bin:
+        case DateBinOpt.week | DateBinOpt.month:
+            bin_cols = f'{YEAR}, {CHUNK}'
+        case DateBinOpt.day:
+            bin_cols = f'{BIN_END}, {BIN_START}'
+        case _:
+            raise NotImplementedError
+
     query = f'''
         with with_mid_date as (
             select
@@ -264,29 +272,51 @@ async def get_lineage_counts_over_time(
             left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
             where sl.{ColumnNames.is_consensus_call} = true
                   and collection_end_date - collection_start_date <= {max_span_days}
-                  {lineage_clause} {user_defined_filter}
+                  {user_defined_filter}
+        ),
+        binned as (
+            select
+                {extract_clause},
+                {ColumnNames.lineage_name},
+                {ColumnNames.lineage_system_name},
+                count(*) as cnt
+            from with_mid_date
+            {recency_clause}
+            {group_by_clause}
+        ),
+        with_total as (
+            select
+                {bin_cols},
+                {ColumnNames.lineage_name},
+                {ColumnNames.lineage_system_name},
+                cnt,
+                sum(cnt) over (partition by {bin_cols}) as total
+            from binned
         )
         select
-            {extract_clause},
+            {bin_cols},
             {ColumnNames.lineage_name},
             {ColumnNames.lineage_system_name},
-            count(*) as cnt
-        from with_mid_date
-        {recency_clause}
-        {group_by_clause}
+            cnt,
+            total
+        from with_total
+        {lineage_clause}
         {order_by_clause}, cnt desc
     '''
 
     async with get_async_session() as session:
         res = await session.execute(text(query), query_params)
 
-    out_data: Dict[str, List[LineageCountInfo]] = dict()
+    out_data: Dict[str, List[LineageCountWithPrevalenceInfo]] = dict()
     for r in res:
         date = date_bin.format_iso_chunk(r[0], r[1])
-        info = LineageCountInfo(
+        total = r[5]
+        info = LineageCountWithPrevalenceInfo(
             count=r[4],
             lineage=r[2],
             lineage_system=r[3],
+            total=total,
+            prevalence=(r[4] / total) if total else 0.0,
         )
         out_data.setdefault(date, []).append(info)
     return out_data
@@ -405,7 +435,7 @@ async def get_mutation_profile(
     lineage: str,
     lineage_system_name: str,
     filter: str | None
-) -> List['MutationProfileInfo']:
+) -> List['MutationProfileWithPrevalenceInfo']:
     user_defined_filter = ''
     if filter is not None:
         user_defined_filter = f'and ({parser.parse(filter)})'
@@ -433,18 +463,25 @@ async def get_mutation_profile(
             from {TableNames.cns_samples_by_allele} m
             inner join {TableNames.alleles} a on a.id = m.{ColumnNames.allele_id}
             where a.{ColumnNames.ref_nt} in ({nt_list}) and a.{ColumnNames.alt_nt} in ({nt_list})
+        ),
+        grouped as (
+            select region, ref_nt, alt_nt, sum(card) as count
+            from per
+            group by region, ref_nt, alt_nt
+            having sum(card) > 0
         )
-        select region, ref_nt, alt_nt, sum(card) as count
-        from per
-        group by region, ref_nt, alt_nt
-        having sum(card) > 0
+        select
+            region, ref_nt, alt_nt, count,
+            sum(count) over (partition by region) as total,
+            count::float / nullif(sum(count) over (partition by region), 0) as prevalence
+        from grouped
     '''
     async with get_async_session() as session:
         results = await session.execute(
             text(query),
             {'input_lineage': lineage, 'input_lineage_system_name': lineage_system_name}
         )
-        out_data = [MutationProfileInfo(**row) for row in results.mappings().all()]
+        out_data = [MutationProfileWithPrevalenceInfo(**row) for row in results.mappings().all()]
     return out_data
 
 

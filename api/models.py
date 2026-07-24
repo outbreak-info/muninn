@@ -195,6 +195,11 @@ class LineageCountInfo(BaseModel):
     lineage: str | None = Field(description="Lineage name; null when the count is not attributed to a named lineage")
 
 
+class LineageCountWithPrevalenceInfo(LineageCountInfo):
+    total: int = Field(description="Total number of samples in this collection-date bin across all lineages (denominator; not affected by the `lineage` filter)")
+    prevalence: float = Field(description="Fraction of this bin's samples assigned to this lineage (count / total)")
+
+
 class LineageInfo(BaseModel):
     lineage_id: int = Field(description="Lineage ID")
     lineage_name: str = Field(description="Lineage name within its nomenclature system (e.g. a Pango lineage like 'BA.2')")
@@ -268,6 +273,11 @@ class MutationProfileInfo(BaseModel):
     alt_nt: str = Field(description="Alternate (mutated) nucleotide of the substitution (one of A/C/G/T)")
     region: str = Field(description="Genomic region / segment the substitution falls in")
     count: int = Field(description="Number of (sample, allele) occurrences of this ref→alt substitution class in the lineage's samples")
+
+
+class MutationProfileWithPrevalenceInfo(MutationProfileInfo):
+    total: int = Field(description="Total number of substitution occurrences in this region across all ref→alt classes (denominator)")
+    prevalence: float = Field(description="Fraction of this region's substitutions that are this ref→alt class (count / total); prevalences within a region sum to 1")
 
 
 class MutationIncidenceEntryInfo(BaseModel):
