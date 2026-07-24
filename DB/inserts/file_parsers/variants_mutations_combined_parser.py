@@ -67,9 +67,8 @@ class VariantsMutationsCombinedParser(FileParser):
 
         print(f'{self._get_timestamp()} insert intrahost samples - alleles')
         await self._stage_ih_samples_by_allele()
-        # todo: drop indexes
         await self._insert_ih_samples_by_allele()
-        # todo: restore indexes
+        await self._restore_ih_samples_by_allele_indexes()
 
         print(f'{self._get_timestamp()} insert consensus samples - alleles')
         await self._stage_cns_samples_by_allele()
