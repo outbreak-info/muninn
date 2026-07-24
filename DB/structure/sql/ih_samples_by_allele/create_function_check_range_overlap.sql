@@ -8,7 +8,8 @@ begin
 	into n_overlaps
 	from ih_samples_by_allele isa
 	where isa.allele_id = new.allele_id
-		and isa.alt_freq_range && new.alt_freq_range;
+		and isa.alt_freq_range && new.alt_freq_range
+		and isa.alt_freq_range <> new.alt_freq_range;
 	if n_overlaps > 0 then
 		raise exception 'alt_freq_range overlaps existing record with same allele_id';
 	end if;

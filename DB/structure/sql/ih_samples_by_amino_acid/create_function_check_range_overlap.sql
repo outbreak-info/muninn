@@ -8,7 +8,8 @@ begin
 	into n_overlaps
 	from ih_samples_by_amino_acid isa
 	where isa.amino_acid_id = new.amino_acid_id
-		and isa.alt_freq_range && new.alt_freq_range;
+		and isa.alt_freq_range && new.alt_freq_range
+		and isa.alt_freq_range <> new.alt_freq_range;
 	if n_overlaps > 0 then
 		raise exception 'alt_freq_range overlaps existing record with same amino_acid_id';
 	end if;
