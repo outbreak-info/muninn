@@ -3,6 +3,7 @@ from typing import List, Annotated, Dict
 from fastapi import APIRouter, FastAPI, HTTPException, Path, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastmcp import FastMCP
 from sqlalchemy.exc import DBAPIError
 
 import DB.queries.annotations
@@ -674,3 +675,15 @@ async def get_annotations_by_mutations_and_amino_acid_position(
 
 
 app.include_router(router)
+
+
+#######
+# MCP #
+#######
+
+mcp = FastMCP.from_fastapi(app=app, name='Muninn MCP')
+
+mcp_app = mcp.http_app(path='/')
+
+app.router.lifespan_context = mcp_app.lifespan
+app.mount('/mcp', mcp_app)
