@@ -1,0 +1,1 @@
+drop trigger check_freq_range_overlap_ih_samples_by_amino_acid on ih_samples_by_amino_acid;

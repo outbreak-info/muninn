@@ -9,6 +9,7 @@ from sqlalchemy.sql.expression import text
 
 from DB.engine import get_async_write_session, get_async_session
 from DB.inserts.file_parsers.file_parser import FileParser
+from DB.structure import ih_samples_by_allele, ih_samples_by_amino_acid
 from DB.structure.constraint_manager import ConstraintManager
 from utils.constants import ColumnNames, CONTAINER_DATA_DIRECTORY, Env, ConstraintNames, TableNames, CODONS_AMINO_ACIDS
 
@@ -67,6 +68,7 @@ class VariantsMutationsCombinedParser(FileParser):
 
         print(f'{self._get_timestamp()} insert intrahost samples - alleles')
         await self._stage_ih_samples_by_allele()
+        await self._drop_ih_samples_by_allele_indexes()
         await self._insert_ih_samples_by_allele()
         await self._restore_ih_samples_by_allele_indexes()
 
@@ -77,6 +79,7 @@ class VariantsMutationsCombinedParser(FileParser):
 
         print(f'{self._get_timestamp()} insert intrahost samples - amino acids')
         await self._stage_ih_samples_by_amino_acid()
+        await self._drop_ih_samples_by_amino_acid_indexes()
         await self._insert_ih_samples_by_amino_acid()
         await self._restore_ih_samples_by_amino_acid_indexes()
 
@@ -931,12 +934,17 @@ class VariantsMutationsCombinedParser(FileParser):
         )
 
     @staticmethod
+    async def _drop_ih_samples_by_allele_indexes():
+        await ih_samples_by_allele.drop_trigger_check_range_overlap()
+
+    @staticmethod
     async def _restore_ih_samples_by_allele_indexes():
         await ConstraintManager.restore_constraints(
             [
                 ConstraintNames.fk_ih_samples_by_allele_allele_id_alleles,
             ]
         )
+        await ih_samples_by_allele.restore_trigger_check_range_overlap()
 
     @staticmethod
     async def _restore_cns_samples_by_allele_indexes():
@@ -947,12 +955,17 @@ class VariantsMutationsCombinedParser(FileParser):
         )
 
     @staticmethod
+    async def _drop_ih_samples_by_amino_acid_indexes():
+        await ih_samples_by_amino_acid.drop_trigger_check_range_overlap()
+
+    @staticmethod
     async def _restore_ih_samples_by_amino_acid_indexes():
         await ConstraintManager.restore_constraints(
             [
                 ConstraintNames.fk_ih_samples_by_amino_acid_amino_acid_id_amino_acids,
             ]
         )
+        await ih_samples_by_amino_acid.restore_trigger_check_range_overlap()
 
     @staticmethod
     async def _restore_cns_samples_by_amino_acid_indexes():
