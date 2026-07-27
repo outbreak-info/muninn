@@ -45,24 +45,40 @@ async def count_variants_by_column(by_col: str):
         return await _package_count_by_column(res)
 
 
-async def count_mutations_by_column(by_col: str, change_bin: NtOrAa = NtOrAa.aa):
+async def count_mutations_by_column(by_col: str, change_bin: NtOrAa = NtOrAa.aa, filter: str | None = None):
     if change_bin == NtOrAa.nt:
         cns_table, join_table, join_key = 'cns_samples_by_allele', 'alleles', 'allele_id'
+        transposed_table, present_col = 'cns_alleles_by_sample', 'alleles_present'
     else:
         cns_table, join_table, join_key = 'cns_samples_by_amino_acid', 'amino_acids', 'amino_acid_id'
+        transposed_table, present_col = 'cns_amino_acids_by_sample', 'amino_acids_present'
+
+    if filter is None:
+        query = f'''
+            select {by_col}, sum(rb_cardinality(m.samples_present))::bigint as count1
+            from {cns_table} m
+            inner join {join_table} t on t.id = m.{join_key}
+            group by {by_col}
+            order by count1 desc
+            '''
+    else:
+        query = f'''
+            select {by_col}, count(*)::bigint as count1
+            from {transposed_table} cs
+            cross join lateral unnest(rb_to_array(cs.{present_col})) as u({join_key})
+            inner join {join_table} t on t.id = u.{join_key}
+            where cs.sample_id in (
+                select s.id
+                from samples s
+                left join geo_locations gl on gl.id = s.geo_location_id
+                where {parser.parse(filter)}
+            )
+            group by {by_col}
+            order by count1 desc
+            '''
 
     async with get_async_session() as session:
-        res = await session.execute(
-            text(
-                f'''
-                select {by_col}, sum(rb_cardinality(m.samples_present))::bigint as count1
-                from {cns_table} m
-                inner join {join_table} t on t.id = m.{join_key}
-                group by {by_col}
-                order by count1 desc
-                '''
-            )
-        )
+        res = await session.execute(text(query))
         return await _package_count_by_column(res)
 
 

@@ -196,7 +196,7 @@ class LineageCountInfo(BaseModel):
 
 
 class LineageCountWithPrevalenceInfo(LineageCountInfo):
-    total: int = Field(description="Total number of samples in this collection-date bin across all lineages (denominator; not affected by the `lineage` filter)")
+    total: int = Field(description="Total number of samples in this collection-date bin across all lineages (denominator; not affected by the `lineage` filter).")
     prevalence: float = Field(description="Fraction of this bin's samples assigned to this lineage (count / total)")
 
 

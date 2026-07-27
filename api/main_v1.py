@@ -299,7 +299,7 @@ async def get_mutation_counts(
 ):
     if group_by == COLLECTION_DATE:
         return await DB.queries.counts.count_mutations_by_collection_date(date_bin, change_bin, days, max_span_days, filter)
-    return await DB.queries.counts.count_mutations_by_column(group_by, change_bin)
+    return await DB.queries.counts.count_mutations_by_column(group_by, change_bin, filter)
 
 @router.get(
     '/mutations:variantLag',
