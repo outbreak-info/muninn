@@ -3,6 +3,10 @@ SECONDS=0
 LOG="/home/muninn/data/ingest_all_$(date +%Y-%m-%dT%H_%M_%S%Z).log"
 echo "begin at $(date)" >> "$LOG"
 
+# bjorn-general outputs
+BJORN_GENERAL_OUTPUT_ARCHIVE="$DATA_DIR/outputs.all.zip"
+ARCHIVE_DEST_DIR="$DATA_DIR/outputs.all"
+
 # when in auto mode, we will automatically try to find the input files within the input archive
 AUTO=false
 
@@ -33,11 +37,6 @@ while [[ $# -gt 0 ]]; do
     ;;
   esac
 done
-
-# bjorn-general outputs
-BJORN_GENERAL_OUTPUT_ARCHIVE="$DATA_DIR/outputs.all.zip"
-ARCHIVE_DEST_DIR="$DATA_DIR/outputs.all"
-
 
 if [[ "$SKIP_DECOMPRESSION" = false ]]; then
   if [[ ! "$ARCHIVE_IN_NAME" = "UNSET" ]]; then
