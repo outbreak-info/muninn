@@ -618,6 +618,7 @@ class VariantsMutationsCombinedParser(FileParser):
                     '    set samples_present = target.samples_present | excluded.samples_present;'
                 )
             )
+            await session.commit()
 
     @staticmethod
     async def _stage_cns_samples_by_amino_acid():
