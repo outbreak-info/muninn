@@ -31,6 +31,10 @@ DEFAULT_MAX_SPAN_DAYS = 366
 DEFAULT_DAYS = 1
 DEFAULT_PREVALENCE_THRESHOLD = 0.75
 MIN_PREVALENCE_THRESHOLD = 0.01
+# Below this, a fuzzy /v1/distinctValues `search` hit is noise rather than a typo of what the caller
+# meant. Measured against real values: typos land at 0.87-0.96 ('califronia'/'California' = 0.90)
+# while unrelated pairs top out around 0.56 ('cattle'/'Castor fiber' = 0.44).
+MIN_FUZZY_MATCH_SCORE = 0.7
 ASYNCPG_MAX_QUERY_ARGS = 32767
 
 FILTER_SYNTAX_HELP = (

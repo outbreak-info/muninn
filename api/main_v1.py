@@ -92,6 +92,7 @@ app.add_middleware(
 
 _USER_QUERY_SQLSTATES = frozenset({
     '42703',  # undefined_column
+    '42702',  # ambiguous_column (e.g. a bare `id` where two joined tables both have one)
     '42883',  # undefined_function / no operator matches the given types
     '42804',  # datatype_mismatch
     '22P02',  # invalid_text_representation (e.g. a non-numeric value for a numeric column)
@@ -128,7 +129,7 @@ async def handle_parsing_error(request: Request, exc: ParsingError):
     '/distinctValues',
     response_model=List[str],
     tags=[TAG_DISCOVERY],
-    summary='List the distinct values present for a filterable column (to help build filter queries)'
+    summary='List or fuzzy-search the distinct values present for a filterable column (to help build filter queries)'
 )
 async def get_distinct_values(
     field: DistinctValueField = Query(
@@ -138,10 +139,30 @@ async def get_distinct_values(
                     'metadata (host, organism, serotype, platform, instrument, assay_type, library_*, '
                     'isolation_source, center_name, bio_project), geography (country_name, admin1_name, '
                     'admin2_name, admin3_name), genomic change dimensions (region, gff_feature) and lineage '
-                    'nomenclature (lineage_system_name). Values are returned sorted ascending.'
+                    'nomenclature (lineage_system_name). Values are returned sorted ascending, unless '
+                    '`search` is given, which orders them by relevance instead.'
+    ),
+    search: str | None = Query(
+        None,
+        max_length=100,
+        description='Optional fuzzy search over the values, returning the plausible matches best-first '
+                    'instead of the whole sorted list. Case-insensitive and typo-tolerant, so '
+                    'search=califrnia finds California. It matches spelling, not meaning: searching host '
+                    'for "cattle" finds nothing, because the value is "Bos taurus".'
+    ),
+    filter: str | None = filter_query(
+        'Optional: narrows which rows contribute values, e.g. field=admin1_name with '
+        'filter=country_name = USA lists only US states. Over all columns of the `samples` table plus the '
+        'joined `geo_locations` columns (raw names, e.g. country_name, admin1_name). Only supported for the '
+        'sample-metadata and geography fields; region, gff_feature and lineage_system_name live outside '
+        'that join and return 400 if a filter is given.',
+        required=False,
     ),
 ):
-    return await DB.queries.helpers.get_distinct_values(field)
+    try:
+        return await DB.queries.helpers.get_distinct_values(field, filter, search)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 ###########
 # SAMPLES #
