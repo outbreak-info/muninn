@@ -19,14 +19,13 @@ ALLELE_REF_CONFLICTS_FILE = '/tmp/allele_ref_conflicts.csv'
 
 class RecordType(Enum):
     mutations = 1
-    variants = 2
-    ih_nts = 3
-    ih_codons = 4
+    ih_nts = 2
+    ih_codons = 3
 
 
 class VariantsMutationsCombinedParser(FileParser):
 
-    def __init__(self, filenames: List[str]):
+    def __init__(self, filenames: List[str], extras: list[str] | None = None):
         self.delimiter = '\t'
         # All validation now handled in the InputFile class
         self.input_files = [
@@ -34,6 +33,13 @@ class VariantsMutationsCombinedParser(FileParser):
             if len(name.strip()) > 0
         ]
         self.n_freq_bins = 20
+        self.ih_nt_min_depth = 10
+        self.ih_codons_min_depth = 10
+        self.ih_nt_min_freq = 0.2
+        self.ih_codons_min_freq = 0.2
+
+        if extras is not None:
+            self._parse_extra_args(extras)
 
     async def parse_and_insert(self):
         print(f'{self._get_timestamp()} setup')
@@ -121,12 +127,7 @@ class VariantsMutationsCombinedParser(FileParser):
             )
             for file in self.input_files:
                 if file.record_type == RecordType.mutations:
-                    await session.execute(
-                        text(
-                            f"copy tmp_mutations ({', '.join(file.header_order)})\n"
-                            f"from '/muninn/data/{file.relative_name}' delimiter E'{file.delimiter}' csv header;"
-                        )
-                    )
+                    await file.copy_into_table('tmp_mutations', session)
 
             await session.execute(
                 text(
@@ -191,15 +192,20 @@ class VariantsMutationsCombinedParser(FileParser):
 
             for file in self.input_files:
                 if file.record_type == RecordType.ih_nts:
-                    await session.execute(
-                        text(
-                            f"copy tmp_ih_nt ({', '.join(file.header_order)})\n"
-                            f"from '/muninn/data/{file.relative_name}' delimiter E'{file.delimiter}' csv header;"
-                        )
-                    )
+                    await file.copy_into_table('tmp_ih_nt', session)
 
             await session.execute(text('delete from tmp_ih_nt where alt_nt = ref_nt;'))
-            # todo: any more filtering? depth?
+
+            await session.execute(
+                text('delete from tmp_ih_nt where gapped_freq < :threshold;'),
+                {'threshold': self.ih_nt_min_freq}
+            )
+
+            await session.execute(
+                text('delete from tmp_ih_nt where gapped_dp < :threshold;'),
+                {'threshold': self.ih_nt_min_depth}
+            )
+
             await session.execute(
                 text(
                     'delete from tmp_ih_nt\n'
@@ -233,10 +239,20 @@ class VariantsMutationsCombinedParser(FileParser):
             )
             for file in self.input_files:
                 if file.record_type == RecordType.ih_codons:
-                    await file.copy_into_table('tmp_ih_codons', session)  # todo: if this works use it all over
+                    await file.copy_into_table('tmp_ih_codons', session)
 
             await session.execute(text('delete from tmp_ih_codons where alt_codon = ref_codon;'))
-            # todo: any more filtering? depth?
+
+            await session.execute(
+                text('delete from tmp_ih_codons where alt_freq < :threshold;'),
+                {'threshold': self.ih_codons_min_depth}
+            )
+
+            await session.execute(
+                text('delete from tmp_ih_codons where alt_dp < :threshold;'),
+                {'threshold': self.ih_codons_min_depth}
+            )
+
             await session.execute(
                 text(
                     'delete\n'
@@ -830,6 +846,24 @@ class VariantsMutationsCombinedParser(FileParser):
             raise ValueError('mutations header bad')
         return ordered_header
 
+    def _parse_extra_args(self, extra_args: list[str]):
+        for arg in extra_args:
+            try:
+                name, value = arg.split('=')
+                if name in {'n_freq_bins', 'ih_nt_min_depth', 'ih_codons_min_depth'}:
+                    value = int(value)
+                elif name in {'ih_nt_min_freq', 'ih_codons_min_freq'}:
+                    value = float(value)
+                else:
+                    # skip setting value and print a warning
+                    raise ValueError
+
+                self.__setattr__(name, value)
+                print(f'set {name} to {value}')
+
+            except ValueError:
+                print(f'Warning: unable to parse extra parameter: {arg}')
+
     @staticmethod
     def _find_relative_and_local_abs_paths(filename: str) -> tuple[str, str]:
         """
@@ -861,8 +895,9 @@ class VariantsMutationsCombinedParser(FileParser):
     @classmethod
     def get_required_column_set(cls) -> Set[str]:
         return {
-            f' variants: {", ".join(VariantsMutationsCombinedParser.variants_column_mapping.values())}',
-            f'mutations: {", ".join(VariantsMutationsCombinedParser.mutations_column_mapping.values())}'
+            f'intrahost variants: {", ".join(VariantsMutationsCombinedParser.intrahost_nts_column_mapping.values())}',
+            f'  intrahost codons: {", ".join(VariantsMutationsCombinedParser.intrahost_codons_column_mapping.values())}'
+            f'         mutations: {", ".join(VariantsMutationsCombinedParser.mutations_column_mapping.values())}'
         }
 
     @staticmethod
@@ -976,30 +1011,6 @@ class VariantsMutationsCombinedParser(FileParser):
             ]
         )
 
-    variants_column_mapping = {
-        ColumnNames.region: 'REGION',
-        ColumnNames.position_nt: 'POS',
-        ColumnNames.ref_nt: 'REF',
-        ColumnNames.alt_nt: 'ALT',
-        ColumnNames.position_aa: 'POS_AA',
-        ColumnNames.ref_aa: 'REF_AA',
-        ColumnNames.alt_aa: 'ALT_AA',
-        ColumnNames.gff_feature: 'GFF_FEATURE',
-        ColumnNames.ref_codon: 'REF_CODON',
-        ColumnNames.alt_codon: 'ALT_CODON',
-        ColumnNames.accession: 'SRA',
-        ColumnNames.pval: 'PVAL',
-        ColumnNames.ref_dp: 'REF_DP',
-        ColumnNames.ref_rv: 'REF_RV',
-        ColumnNames.ref_qual: 'REF_QUAL',
-        ColumnNames.alt_dp: 'ALT_DP',
-        ColumnNames.alt_rv: 'ALT_RV',
-        ColumnNames.alt_qual: 'ALT_QUAL',
-        ColumnNames.pass_qc: 'PASS',
-        ColumnNames.alt_freq: 'ALT_FREQ',
-        ColumnNames.total_dp: 'TOTAL_DP',
-    }
-
     mutations_column_mapping = {
         ColumnNames.accession: 'sra',
         ColumnNames.position_nt: 'pos',
@@ -1035,7 +1046,7 @@ class VariantsMutationsCombinedParser(FileParser):
         ColumnNames.alt_codon: 'ALT_CODON',
         ColumnNames.alt_aa: 'ALT_AA',
         ColumnNames.position_aa: 'POS_AA',
-        ColumnNames.gapped_freq: 'GAPPED_FREQ',
+        'gapped_freq': 'GAPPED_FREQ',
         'gapped_dp': 'GAPPED_DEPTH',
         'flagged_pos': 'FLAGGED_POS',
         'amp_masked': 'AMP_MASKED',
@@ -1071,7 +1082,6 @@ class VariantsMutationsCombinedParser(FileParser):
             self.header_order: List[str] = self._get_header_order()
 
         def _choose_record_type(self):
-            variants_columns = set(VariantsMutationsCombinedParser.variants_column_mapping.values())
             mutations_columns = set(VariantsMutationsCombinedParser.mutations_column_mapping.values())
             intrahost_nts_columns = set(VariantsMutationsCombinedParser.intrahost_nts_column_mapping.values())
             intrahost_codons_columns = set(VariantsMutationsCombinedParser.intrahost_codons_column_mapping.values())
@@ -1086,16 +1096,12 @@ class VariantsMutationsCombinedParser(FileParser):
                     return RecordType.ih_codons
                 elif fieldnames == mutations_columns:
                     return RecordType.mutations
-                elif fieldnames == variants_columns:
-                    return RecordType.variants
                 else:
                     raise ValueError(f'File has an unacceptable header and cannot be processed: {self.raw_name}')
 
         def _get_header_order(self) -> List[str]:
             column_name_mapping = None
             match self.record_type:
-                case RecordType.variants:
-                    column_name_mapping = VariantsMutationsCombinedParser.variants_column_mapping
                 case RecordType.mutations:
                     column_name_mapping = VariantsMutationsCombinedParser.mutations_column_mapping
                 case RecordType.ih_nts:
@@ -1124,8 +1130,8 @@ class VariantsMutationsCombinedParser(FileParser):
 
 
 class VariantsMutationsCombinedParserBig(VariantsMutationsCombinedParser):
-    def __init__(self, filenames: List[str]):
-        super().__init__(filenames)
+    def __init__(self, filenames: List[str], extras: list[str] | None):
+        super().__init__(filenames, extras)
         self.tmp_wal_size_mb = 1024 * 20
         self.tmp_checkpoint_timeout_s = 3600
 

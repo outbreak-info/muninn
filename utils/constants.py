@@ -251,9 +251,6 @@ class ColumnNames(PgIdentifiers):
     parent_id = 'parent_id'
     child_id = 'child_id'
 
-    # just for variants/mutations ingestion
-    gapped_freq = 'gapped_freq'
-
 
 class ConstraintNames(PgIdentifiers):
     # primary keys
