@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import insert
 
 from DB.engine import get_async_write_session, get_asyncpg_connection, get_async_session, get_uri_for_polars
 from DB.models import Sample
-from utils.constants import ASYNCPG_MAX_QUERY_ARGS, StandardColumnNames, ConstraintNames
+from utils.constants import ASYNCPG_MAX_QUERY_ARGS, ColumnNames, ConstraintNames
 from utils.errors import NotFoundError
 
 
@@ -50,45 +50,45 @@ async def copy_insert_samples(samples: pl.DataFrame) -> str:
 
 async def batch_upsert_samples(samples: pl.DataFrame):
     update_columns = [
-        StandardColumnNames.organism,
-        StandardColumnNames.is_retracted,
-        StandardColumnNames.collection_start_date,
-        StandardColumnNames.collection_end_date,
-        StandardColumnNames.host,
-        StandardColumnNames.geo_location_id
+        ColumnNames.organism,
+        ColumnNames.is_retracted,
+        ColumnNames.collection_start_date,
+        ColumnNames.collection_end_date,
+        ColumnNames.host,
+        ColumnNames.geo_location_id,
     ]
     # this is just the columns expected to be null in the SC2 data
     # if there are errors because another col is showing up as null, it may need to be added
     nullable_columns = [
-        StandardColumnNames.bio_sample_accession,
-        StandardColumnNames.retraction_detected_date,
-        StandardColumnNames.serotype,
-        StandardColumnNames.avg_spot_length,
-        StandardColumnNames.bio_project,
-        StandardColumnNames.bio_sample_model,
-        StandardColumnNames.center_name,
-        StandardColumnNames.experiment,
-        StandardColumnNames.instrument,
-        StandardColumnNames.platform,
-        StandardColumnNames.isolate,
-        StandardColumnNames.library_name,
-        StandardColumnNames.library_layout,
-        StandardColumnNames.library_selection,
-        StandardColumnNames.library_source,
-        StandardColumnNames.isolation_source,
-        StandardColumnNames.release_date,
-        StandardColumnNames.creation_date,
-        StandardColumnNames.version,
-        StandardColumnNames.sample_name,
-        StandardColumnNames.sra_study,
-        StandardColumnNames.assay_type,
-        StandardColumnNames.bases
+        ColumnNames.bio_sample_accession,
+        ColumnNames.retraction_detected_date,
+        ColumnNames.serotype,
+        ColumnNames.avg_spot_length,
+        ColumnNames.bio_project,
+        ColumnNames.bio_sample_model,
+        ColumnNames.center_name,
+        ColumnNames.experiment,
+        ColumnNames.instrument,
+        ColumnNames.platform,
+        ColumnNames.isolate,
+        ColumnNames.library_name,
+        ColumnNames.library_layout,
+        ColumnNames.library_selection,
+        ColumnNames.library_source,
+        ColumnNames.isolation_source,
+        ColumnNames.release_date,
+        ColumnNames.creation_date,
+        ColumnNames.version,
+        ColumnNames.sample_name,
+        ColumnNames.sra_study,
+        ColumnNames.assay_type,
+        ColumnNames.bases
     ]
     for colname in nullable_columns:
         if colname in samples.columns:
             update_columns.append(colname)
 
-    all_columns = update_columns + [StandardColumnNames.accession]
+    all_columns = update_columns + [ColumnNames.accession]
 
     batch_size = floor(ASYNCPG_MAX_QUERY_ARGS / len(all_columns))
     slice_start = 0
@@ -130,4 +130,13 @@ async def get_samples_accession_and_id_as_pl_df() -> pl.DataFrame:
     return pl.read_database_uri(
         query=f'select id, accession from samples;',
         uri=get_uri_for_polars()
-    ).rename({'id': StandardColumnNames.sample_id})
+    ).rename({'id': ColumnNames.sample_id})
+
+
+async def get_sample_ids_by_accessions(accessions: list[str]) -> dict[str, int]:
+    async with get_async_session() as session:
+        accessions_ids = await session.execute(
+            select(Sample.accession, Sample.id)
+            .where(Sample.accession.in_(accessions))
+        )
+    return { r[0]: r[1] for r in accessions_ids.all() }

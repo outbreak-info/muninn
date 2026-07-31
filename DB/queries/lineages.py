@@ -11,7 +11,8 @@ from DB.queries.date_count_helpers import get_extract_clause, get_group_by_claus
 from api.models import LineageCountInfo, LineageAbundanceInfo, LineageInfo, LineageAbundanceSummaryInfo, \
     MutationProfileInfo
 from parser.parser import parser
-from utils.constants import DateBinOpt, NtOrAa, NUCLEOTIDE_CHARACTERS, TableNames, StandardColumnNames, COLLECTION_DATE
+from utils.constants import DateBinOpt, NtOrAa, NUCLEOTIDE_CHARACTERS, TableNames, ColumnNames, COLLECTION_DATE
+from utils.errors import NotFoundError
 
 
 async def get_all_lineages_by_lineage_system(lineage_system_name: str) -> List[LineageInfo]:
@@ -180,7 +181,7 @@ async def get_abundance_summaries_by_simple_date(
     extract_clause = get_extract_clause(group_by, date_bin, days)
     group_by_clause = get_group_by_clause(
         date_bin,
-        [StandardColumnNames.lineage_name, StandardColumnNames.lineage_system_name]
+        [ColumnNames.lineage_name, ColumnNames.lineage_system_name]
     )
     order_by_clause = get_order_by_cause(date_bin)
 
@@ -229,6 +230,7 @@ async def get_abundance_summaries_by_simple_date(
             out_data[date] = [info]
     return out_data
 
+
 async def get_abundance_summaries_by_collection_date(
     date_bin: DateBinOpt,
     days: int,
@@ -242,7 +244,7 @@ async def get_abundance_summaries_by_collection_date(
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(
         date_bin,
-        [StandardColumnNames.lineage_name, StandardColumnNames.lineage_system_name]
+        [ColumnNames.lineage_name, ColumnNames.lineage_system_name]
     )
     order_by_clause = get_order_by_cause(date_bin)
 
@@ -314,7 +316,7 @@ async def get_mutation_incidence(
     prevalence_threshold: float,
     match_reference: bool,
     raw_query: str | None
-):
+) -> Dict:
     user_where_clause = ''
     if raw_query is not None:
         user_where_clause = f'and ({parser.parse(raw_query)})'
@@ -322,24 +324,21 @@ async def get_mutation_incidence(
     async with get_async_session() as session:
         sample_count = await session.scalar(
             text(
-                f'''
-                select count(*)
-                from samples s
-                left join samples_lineages sl on sl.sample_id = s.id
-                left join lineages l on l.id = sl.lineage_id
-                left join lineage_systems ls on ls.id = l.lineage_system_id 
-                WHERE l.lineage_name = :input_lineage and ls.lineage_system_name = :input_lineage_system_name
-                {user_where_clause}
-                '''
+                f'select count(*)\n'
+                f'from samples s\n'
+                f'left join samples_lineages sl on sl.sample_id = s.id\n'
+                f'left join lineages l on l.id = sl.lineage_id\n'
+                f'left join lineage_systems ls on ls.id = l.lineage_system_id \n'
+                f'WHERE l.lineage_name = :input_lineage and ls.lineage_system_name = :input_lineage_system_name\n'
+                f'{user_where_clause}'
             ), {
                 'input_lineage': lineage,
                 'input_lineage_system_name': lineage_system_name
             }
         )
-        sample_count = float(sample_count)
 
         sample_subset_query = f"""
-        select s.id from samples s
+        select s.sequence_id, s.id from samples s
         inner join samples_lineages sl ON sl.sample_id = s.id
         inner join lineages l on l.id = sl.lineage_id
         inner join lineage_systems ls on ls.id = l.lineage_system_id
@@ -354,16 +353,20 @@ async def get_mutation_incidence(
 
             res = await session.execute(
                 text(
-                    f'''
-                    WITH sample_subset as (
-                        {sample_subset_query}
-                    ) SELECT ref_nt, position_nt, alt_nt, region, count(*) as mutation_count, count(*) / {sample_count} as mutation_prevalence from sample_subset
-                    inner join mutations m ON m.sample_id = sample_subset.id
-                    inner join alleles a on a.id = m.allele_id
-                    {not_reference}
-                    group by ref_nt, position_nt, alt_nt, region
-                    having count(*) / {sample_count} >= {prevalence_threshold};
-                    '''
+                    f'WITH sample_subset as (\n'
+                    f'    {sample_subset_query}\n'
+                    f') SELECT ref_nt,\n'
+                    f'         position_nt,\n'
+                    f'         alt_nt,\n'
+                    f'         region,\n'
+                    f'         count(*) as mutation_count,\n'
+                    f'         count(*) / {sample_count}::decimal as mutation_prevalence \n'
+                    f'from sample_subset\n'
+                    f'inner join mutations m ON m.sequence_id = sample_subset.sequence_id\n'
+                    f'inner join alleles a on a.id = m.allele_id\n'
+                    f'{not_reference}\n'
+                    f'group by ref_nt, position_nt, alt_nt, region\n'
+                    f'having count(*) / {sample_count}::decimal >= {prevalence_threshold};'
                 )
             )
         else:
@@ -372,23 +375,21 @@ async def get_mutation_incidence(
                 not_reference = ''
             res = await session.execute(
                 text(
-                    f'''
-                    WITH sample_subset as (
-                        {sample_subset_query}
-                    ),
-                    sample_aa AS (
-                    SELECT DISTINCT m.sample_id,
-                                    t.amino_acid_id
-                    FROM   mutations    m
-                    JOIN   {TableNames.mutation_translations} t ON t.{StandardColumnNames.mutation_id} = m.id
-                    ) SELECT ref_aa, position_aa, alt_aa, gff_feature, count(*) as mutation_count, count(*) / {sample_count} as mutation_prevalence
-                    from sample_subset
-                    inner join sample_aa ON sample_aa.sample_id = sample_subset.id
-                    inner join amino_acids aa on aa.id = sample_aa.amino_acid_id
-                    {not_reference}
-                    group by ref_aa, position_aa, alt_aa, gff_feature
-                    having count(*) / {sample_count} >= {prevalence_threshold};
-                    '''
+                    f'with sample_subset as (\n'
+                    f'    {sample_subset_query}\n'
+                    f')\n'
+                    f'select ref_aa,\n'
+                    f'       position_aa,\n'
+                    f'       alt_aa,\n'
+                    f'       gff_feature,\n'
+                    f'       count(*) as mutation_count,\n'
+                    f'       count(*) / {sample_count}::decimal as mutation_prevalence\n'
+                    f'from sample_subset\n'
+                    f'inner join mutation_translations mt on mt.sequence_id = sample_subset.sequence_id\n'
+                    f'inner join amino_acids aa on aa.id = mt.amino_acid_id\n'
+                    f'{not_reference}\n'
+                    f'group by ref_aa, position_aa, alt_aa, gff_feature\n'
+                    f'having count(*) / {sample_count}::decimal >= {prevalence_threshold}'
                 )
             )
 
@@ -398,8 +399,11 @@ async def get_mutation_incidence(
     return {'sample_count': sample_count, 'mutation_counts': out}
 
 
-async def get_mutation_profile(lineage: str, lineage_system_name: str, samples_raw_query: str | None) -> List[
-    'MutationProfileInfo']:
+async def get_mutation_profile(
+    lineage: str,
+    lineage_system_name: str,
+    samples_raw_query: str | None
+) -> List['MutationProfileInfo']:
     samples_query = parser.parse(samples_raw_query) if samples_raw_query else None
     query = (
         select(
@@ -435,3 +439,56 @@ async def get_mutation_profile(lineage: str, lineage_system_name: str, samples_r
         results = await session.execute(query)
         out_data = [MutationProfileInfo(**row) for row in results.mappings().all()]
     return out_data
+
+
+
+
+async def get_mutation_incidence_from_cache(
+    lineage: str,
+    lineage_system_name: str,
+    prevalence_threshold: float,
+    match_reference: bool,
+):
+    reference_filter = 'and a.ref_nt <> a.alt_nt'
+    if match_reference:
+        reference_filter = ''
+
+    async with get_async_session() as session:
+        res = await session.execute(
+            text(
+                f'select a.region,\n'
+                f'       a.ref_nt,\n'
+                f'       a.position_nt,\n'
+                f'       a.alt_nt,\n'
+                f'       incidence,\n'
+                f'       n_samples,\n'
+                f'       incidence / n_samples::decimal as prevalence\n'
+                f'from lineages l\n'
+                f'inner join lineage_systems ls on ls.id = l.lineage_system_id\n'
+                f'inner join cache_allele_prevalence_by_lineage cache on cache.lineage_id = l.id\n'
+                f'inner join alleles a on a.id = cache.allele_id\n'
+                f'where l.lineage_name = :input_lineage_name '
+                f'      and ls.lineage_system_name = :input_system_name\n'
+                f'      and incidence / n_samples::decimal >= :input_threshold\n'
+                f'      {reference_filter}'
+            ),
+            {
+                'input_system_name': lineage_system_name,
+                'input_lineage_name': lineage,
+                'input_threshold': prevalence_threshold
+            }
+        )
+
+    rows = res.all()
+    if len(rows) == 0:
+        raise NotFoundError(f'Not found in cache: {lineage_system_name} {lineage}')
+
+    out = defaultdict(list)
+    sample_count = None
+    for region, ref, pos, alt, incidence, n_samples, prevalence in rows:
+        out[region].append({"ref": ref, "alt": alt, "pos": pos, "count": incidence, "prevalence": prevalence})
+        if sample_count is not None and n_samples != sample_count:
+            raise ValueError('Mismatch in n_samples in response from cached mutation incidence by lineage.')
+        elif sample_count is None:
+            sample_count = n_samples
+    return {'sample_count': sample_count, 'mutation_counts': out}

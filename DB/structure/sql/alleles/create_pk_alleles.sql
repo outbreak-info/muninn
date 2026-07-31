@@ -1,0 +1,1 @@
+alter table alleles add constraint pk_alleles primary key (id);

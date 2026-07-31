@@ -1,14 +1,17 @@
 import csv
 from datetime import datetime
+from enum import Enum
 from os import path
 from typing import Set, List
-from enum import Enum
 
+from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.sql.expression import text
 
 from DB.engine import get_async_write_session, get_async_session
 from DB.inserts.file_parsers.file_parser import FileParser
-from utils.constants import StandardColumnNames, CONTAINER_DATA_DIRECTORY, Env, ConstraintNames, IndexNames, TableNames
+from DB.structure import ih_samples_by_allele, ih_samples_by_amino_acid
+from DB.structure.constraint_manager import ConstraintManager
+from utils.constants import ColumnNames, CONTAINER_DATA_DIRECTORY, Env, ConstraintNames, TableNames, CODONS_AMINO_ACIDS
 
 AMINO_ACID_REF_CONFLICTS_FILE = '/tmp/amino_acid_ref_conflicts.csv'
 ALLELE_REF_CONFLICTS_FILE = '/tmp/allele_ref_conflicts.csv'
@@ -16,65 +19,89 @@ ALLELE_REF_CONFLICTS_FILE = '/tmp/allele_ref_conflicts.csv'
 
 class RecordType(Enum):
     mutations = 1
-    variants = 2
+    ih_nts = 2
+    ih_codons = 3
 
 
 class VariantsMutationsCombinedParser(FileParser):
 
-    def __init__(self, filenames: List[str]):
+    def __init__(self, filenames: List[str], extras: list[str] | None = None):
         self.delimiter = '\t'
         # All validation now handled in the InputFile class
         self.input_files = [
             VariantsMutationsCombinedParser.InputFile(name, delimiter=self.delimiter) for name in filenames
+            if len(name.strip()) > 0
         ]
+        self.n_freq_bins = 20
+        self.ih_nt_min_depth = 10
+        self.ih_codons_min_depth = 10
+        self.ih_nt_min_freq = 0.2
+        self.ih_codons_min_freq = 0.2
+
+        if extras is not None:
+            self._parse_extra_args(extras)
 
     async def parse_and_insert(self):
+        print(f'{self._get_timestamp()} setup')
+        await self._set_up_codon_translation()
+        await self._set_up_freq_bins()
+
         print(f'{self._get_timestamp()} read mutations')
         await self._read_mutations_input()
 
-        print(f'{self._get_timestamp()} read variants')
-        await self._read_variants_input()
+        print(f'{self._get_timestamp()} read intrahost nt')
+        await self._read_ih_nts_input()
 
         print(f'{self._get_timestamp()} insert alleles')
         await self._stage_alleles()
         await self._write_allele_ref_conflicts()
+        await self._drop_fks_using_allele_id()
         await self._drop_alleles_indexes()
         await self._insert_alleles()
         await self._restore_alleles_indexes()
 
+        print(f'{self._get_timestamp()} read intrahost codons')
+        await self._read_ih_codons_input()
+
         print(f'{self._get_timestamp()} insert amino acids')
         await self._stage_amino_acids()
         await self._write_amino_acid_ref_conflicts()
+        await self._drop_fks_using_amino_acid_id()
         await self._drop_amino_acids_indexes()
         await self._insert_amino_acids()
         await self._restore_amino_acids_indexes()
+        await self._restore_fks_using_amino_acid_id()
 
-        print(f'{self._get_timestamp()} insert variants')
-        await self._stage_variants()
-        await self._drop_intra_host_variants_indexes()
-        await self._insert_variants()
-        await self._restore_intra_host_variants_indexes()
+        print(f'{self._get_timestamp()} insert intrahost samples - alleles')
+        await self._stage_ih_samples_by_allele()
+        await self._drop_ih_samples_by_allele_indexes()
+        await self._insert_ih_samples_by_allele()
+        await self._restore_ih_samples_by_allele_indexes()
 
-        print(f'{self._get_timestamp()} insert mutations')
-        await self._stage_mutations()
-        await self._drop_mutations_indexes()
-        await self._insert_mutations()
-        await self._restore_mutations_indexes()
+        print(f'{self._get_timestamp()} insert consensus samples - alleles')
+        await self._stage_cns_samples_by_allele()
+        await self._insert_cns_samples_by_allele()
+        await self._restore_cns_samples_by_allele_indexes()
 
-        print(f'{self._get_timestamp()} insert intra host translations')
-        await self._stage_intra_host_translations()
-        await self._drop_intra_host_translations_indexes()
-        await self._insert_intra_host_translations()
-        await self._restore_intra_host_translations_indexes()
+        print(f'{self._get_timestamp()} insert intrahost samples - amino acids')
+        await self._stage_ih_samples_by_amino_acid()
+        await self._drop_ih_samples_by_amino_acid_indexes()
+        await self._insert_ih_samples_by_amino_acid()
+        await self._restore_ih_samples_by_amino_acid_indexes()
 
-        print(f'{self._get_timestamp()} insert mutation translations')
-        await self._stage_mutation_translations()
-        await self._drop_mutation_translations_indexes()
-        await self._insert_mutation_translations()
-        await self._restore_mutation_translations_indexes()
+        print(f'{self._get_timestamp()} insert consensus samples - amino acids')
+        await self._stage_cns_samples_by_amino_acid()
+        await self._insert_cns_samples_by_amino_acid()
+        await self._restore_cns_samples_by_amino_acid_indexes()
 
         print(f'{self._get_timestamp()} clean up tmp tables')
         await self._clean_up_tmp_tables()
+
+        print(f'{self._get_timestamp()} transpose consensus alleles')
+        await self._transpose_cns_alleles()
+
+        print(f'{self._get_timestamp()} transpose consensus amino acids')
+        await self._transpose_cns_amino_acids()
 
         print(f'Finished at {self._get_timestamp()}')
 
@@ -100,12 +127,7 @@ class VariantsMutationsCombinedParser(FileParser):
             )
             for file in self.input_files:
                 if file.record_type == RecordType.mutations:
-                    await session.execute(
-                        text(
-                            f"copy tmp_mutations ({', '.join(file.header_order)})\n"
-                            f"from '/muninn/data/{file.relative_name}' delimiter E'{file.delimiter}' csv header;"
-                        )
-                    )
+                    await file.copy_into_table('tmp_mutations', session)
 
             await session.execute(
                 text(
@@ -131,55 +153,117 @@ class VariantsMutationsCombinedParser(FileParser):
 
             await session.commit()
 
-    async def _read_variants_input(self):
+    async def _read_ih_nts_input(self):
         async with get_async_write_session() as session:
             await session.execute(
                 text(
-                    'create table tmp_variants (\n'
-                    '    region      text  not null,\n'
-                    '    position_nt int   not null,\n'
-                    '    ref_nt      text  not null,\n'
-                    '    alt_nt      text  not null,\n'
-                    '    ref_dp      int   not null,\n'
-                    '    ref_rv      int   not null,\n'
-                    '    ref_qual    float not null,\n'
-                    '    alt_dp      int   not null,\n'
-                    '    alt_rv      int   not null,\n'
-                    '    alt_qual    float not null,\n'
-                    '    alt_freq    float not null,\n'
-                    '    total_dp    int   not null,\n'
-                    '    pval        float not null,\n'
-                    '    pass_qc     bool  not null,\n'
+                    'create unlogged table tmp_ih_nt (\n'
+                    '    region      text    not null,\n'
+                    '    position_nt int     not null,\n'
+                    '    ref_nt      text    not null,\n'
+                    '    alt_nt      text    not null,\n'
+                    '    ref_dp      int,\n'
+                    '    ref_rv      int,\n'
+                    '    ref_qual    float,\n'
+                    '    alt_dp      int,\n'
+                    '    alt_rv      int,\n'
+                    '    alt_qual    float,\n'
+                    '    alt_freq    float   not null,\n'
+                    '    total_dp    int,\n'
+                    '    pval        float,\n'
+                    '    pass_qc     bool,\n'
                     '    gff_feature text,\n'
                     '    ref_codon   text,\n'
                     '    ref_aa      text,\n'
                     '    alt_codon   text,\n'
                     '    alt_aa      text,\n'
-                    '    position_aa      int,\n'
-                    '    accession   text  not null\n'
+                    '    position_aa int,\n'
+                    '    gapped_freq numeric not null,\n'
+                    '    gapped_dp   int,\n'
+                    '    flagged_pos bool,\n'
+                    '    amp_masked  bool,\n'
+                    '    std_dev     float,\n'
+                    '    amp_freq    float,\n'
+                    '    amp_numbers int,\n'
+                    '    accession   text    not null\n'
                     ');'
                 )
             )
+
             for file in self.input_files:
-                if file.record_type == RecordType.variants:
-                    await session.execute(
-                        text(
-                            f"copy tmp_variants ({', '.join(file.header_order)})\n"
-                            f"from '/muninn/data/{file.relative_name}' delimiter E'{file.delimiter}' csv header;"
-                        )
-                    )
+                if file.record_type == RecordType.ih_nts:
+                    await file.copy_into_table('tmp_ih_nt', session)
+
+            await session.execute(text('delete from tmp_ih_nt where alt_nt = ref_nt;'))
+
+            await session.execute(
+                text('delete from tmp_ih_nt where gapped_freq < :threshold;'),
+                {'threshold': self.ih_nt_min_freq}
+            )
+
+            await session.execute(
+                text('delete from tmp_ih_nt where gapped_dp < :threshold;'),
+                {'threshold': self.ih_nt_min_depth}
+            )
+
             await session.execute(
                 text(
-                    'delete from tmp_variants\n'
+                    'delete from tmp_ih_nt\n'
                     'where accession not in (\n'
                     '    select accession\n'
                     '    from samples\n'
                     ');'
                 )
             )
+            await session.execute(text('create index ix_tmp_ih_nt_accession on tmp_ih_nt (accession);'))
+            await session.commit()
+
+    async def _read_ih_codons_input(self):
+        async with get_async_write_session() as session:
             await session.execute(
-                text('create index ix_tmp_variants_accession on tmp_variants (accession);')
+                text(
+                    'create unlogged table tmp_ih_codons (\n'
+                    '    gff_feature text  not null,\n'
+                    '    position_aa int   not null,\n'
+                    '    ref_codon   text  not null,\n'
+                    '    alt_codon   text  not null,\n'
+                    '    ref_dp      int   not null,\n'
+                    '    alt_dp      int   not null,\n'
+                    '    alt_freq    float not null,\n'
+                    '    position_nt text,\n'
+                    '    ref_nt      text,\n'
+                    '    alt_nt      text,\n'
+                    '    accession   text  not null\n'
+                    ');'
+                )
             )
+            for file in self.input_files:
+                if file.record_type == RecordType.ih_codons:
+                    await file.copy_into_table('tmp_ih_codons', session)
+
+            await session.execute(text('delete from tmp_ih_codons where alt_codon = ref_codon;'))
+
+            await session.execute(
+                text('delete from tmp_ih_codons where alt_freq < :threshold;'),
+                {'threshold': self.ih_codons_min_depth}
+            )
+
+            await session.execute(
+                text('delete from tmp_ih_codons where alt_dp < :threshold;'),
+                {'threshold': self.ih_codons_min_depth}
+            )
+
+            await session.execute(
+                text(
+                    'delete\n'
+                    'from tmp_ih_codons\n'
+                    'where accession not in (\n'
+                    '    select accession\n'
+                    '    from samples\n'
+                    ');'
+                )
+            )
+            await session.execute(text('create index ix_tmp_ih_codons_accession on tmp_ih_codons (accession);'))
             await session.commit()
 
     @staticmethod
@@ -201,7 +285,7 @@ class VariantsMutationsCombinedParser(FileParser):
                 text('create index ix_tmp_mutations_nt_values on tmp_mutations (region, position_nt, ref_nt, alt_nt);')
             )
             await session.execute(
-                text('create index ix_tmp_variants_nt_values on tmp_variants (region, position_nt, ref_nt, alt_nt);')
+                text('create index ix_tmp_ih_nt_nt_values on tmp_ih_nt (region, position_nt, ref_nt, alt_nt);')
             )
 
             # get allele values from mutations
@@ -215,7 +299,7 @@ class VariantsMutationsCombinedParser(FileParser):
                     'group by region, position_nt, ref_nt, alt_nt;'
                 )
             )
-            # get allele values from variants
+            # get allele values from intrahost
             # Skipping over entries already in tmp_alleles
             await session.execute(
                 text(
@@ -223,7 +307,7 @@ class VariantsMutationsCombinedParser(FileParser):
                     '    region, position_nt, ref_nt, alt_nt\n'
                     ')\n'
                     'select region, position_nt, ref_nt, alt_nt\n'
-                    'from tmp_variants\n'
+                    'from tmp_ih_nt\n'
                     'where (region, position_nt, ref_nt, alt_nt) not in (\n'
                     '    select region, position_nt, ref_nt, alt_nt\n'
                     '    from tmp_alleles\n'
@@ -271,38 +355,19 @@ class VariantsMutationsCombinedParser(FileParser):
         async with get_async_session() as session:
             res = await session.execute(
                 text(
-                    'select combo.region, combo.position_nt, combo.alt_nt, combo.ref_nt, count(*) from\n'
-                    '(\n'
-                    '    select region, position_nt, alt_nt\n'
-                    '    from (\n'
-                    '        select region, position_nt, alt_nt, count(*)\n'
-                    '        from tmp_alleles\n'
-                    '        group by region, position_nt, alt_nt\n'
-                    '    ) _\n'
-                    '    where _.count > 1\n'
-                    ') dups\n'
-                    'inner join (\n'
-                    '    (\n'
-                    '        select region, position_nt, alt_nt, ref_nt\n'
-                    '        from tmp_mutations tmut\n'
-                    '    )\n'
-                    '    union all\n'
-                    '    (\n'
-                    '        select region, position_nt, alt_nt, ref_nt\n'
-                    '        from tmp_variants tvar\n'
-                    '    )\n'
-                    ') combo on dups.region = combo.region and dups.position_nt = combo.position_nt and dups.alt_nt = combo.alt_nt\n'
-                    'group by combo.region, combo.position_nt, combo.alt_nt, combo.ref_nt ;'
+                    'select region,\n'
+                    '       position_nt,\n'
+                    '       alt_nt,\n'
+                    '       array_agg(distinct ref_nt) as ref_nts\n'
+                    'from tmp_alleles\n'
+                    'group by region, position_nt, alt_nt\n'
+                    'having cardinality(array_agg(distinct ref_nt)) > 1;'
                 )
             )
         conflicts = res.mappings().all()
         with open(ALLELE_REF_CONFLICTS_FILE, 'w+') as f:
             if len(conflicts) > 0:
-                impact = sum([c['count'] for c in conflicts])
-                print(
-                    f'Warning: {len(conflicts)} allele ref conflicts found, '
-                    f'impacting {impact} mutation/variant records. See {ALLELE_REF_CONFLICTS_FILE}'
-                )
+                print(f'Warning: {len(conflicts)} allele ref conflicts found. See {ALLELE_REF_CONFLICTS_FILE}')
                 writer = csv.DictWriter(f, fieldnames=conflicts[0].keys())
                 writer.writeheader()
                 writer.writerows(conflicts)
@@ -328,14 +393,29 @@ class VariantsMutationsCombinedParser(FileParser):
 
             await session.execute(
                 text(
-                    'create index ix_tmp_mutations_aa_values on '
-                    'tmp_mutations (gff_feature, position_aa, alt_aa, alt_codon, ref_aa, ref_codon);'
+                    'create index ix_tmp_mutations_aa_values on tmp_mutations (gff_feature, position_aa, alt_aa, alt_codon, ref_aa, ref_codon);'
                 )
             )
             await session.execute(
                 text(
-                    'create index ix_tmp_variants_aa_values on '
-                    'tmp_variants (gff_feature, position_aa, alt_aa, alt_codon, ref_aa, ref_codon);'
+                    'create index ix_tmp_ih_codons_aa_values on tmp_ih_codons (gff_feature, position_aa, alt_codon, ref_codon);'
+                )
+            )
+
+            # from intrahost codons
+            await session.execute(
+                text(
+                    'insert into tmp_amino_acids (\n'
+                    '    gff_feature, position_aa, alt_aa, alt_codon, ref_aa, ref_codon\n'
+                    ')\n'
+                    'select distinct on (gff_feature, position_aa, alt_codon, ref_codon)\n'
+                    '       gff_feature,\n'
+                    '       position_aa,\n'
+                    '       translate_codon(alt_codon) as alt_aa,\n'
+                    '       alt_codon,\n'
+                    '       translate_codon(ref_codon) as ref_aa,\n'
+                    '       ref_codon\n'
+                    'from tmp_ih_codons;\n'
                 )
             )
 
@@ -363,26 +443,30 @@ class VariantsMutationsCombinedParser(FileParser):
                     'insert into tmp_amino_acids (\n'
                     '    gff_feature, position_aa, alt_aa, alt_codon, ref_aa, ref_codon\n'
                     ')\n'
-                    'select gff_feature, position_aa, alt_aa, alt_codon, ref_aa, ref_codon\n'
-                    'from tmp_variants\n'
-                    'where gff_feature is not null \n'
-                    'and position_aa is not null\n'
-                    'and alt_aa is not null\n'
-                    'and ref_aa is not null\n'
-                    'and alt_codon is not null\n'
-                    'and ref_codon is not null\n'
-                    'and (gff_feature, position_aa, alt_aa, alt_codon, ref_aa, ref_codon) not in (\n'
+                    'select distinct on (gff_feature, position_aa, alt_aa, ref_aa, alt_codon, ref_codon)\n'
+                    '       gff_feature,\n'
+                    '       position_aa,\n'
+                    '       alt_aa,\n'
+                    '       alt_codon,\n'
+                    '       ref_aa,\n'
+                    '       ref_codon\n'
+                    'from tmp_mutations\n'
+                    'where gff_feature is not null\n'
+                    '  and position_aa is not null\n'
+                    '  and alt_aa is not null\n'
+                    '  and ref_aa is not null\n'
+                    '  and alt_codon is not null\n'
+                    '  and ref_codon is not null\n'
+                    '  and (gff_feature, position_aa, alt_aa, alt_codon, ref_aa, ref_codon) not in (\n'
                     '    select gff_feature, position_aa, alt_aa, alt_codon, ref_aa, ref_codon\n'
                     '    from tmp_amino_acids\n'
-                    ')\n'
-                    'group by gff_feature, position_aa, alt_aa, alt_codon, ref_aa, ref_codon;'
+                    ');'
                 )
             )
 
             await session.execute(
                 text(
-                    'create index ix_tmp_amino_acids on '
-                    'tmp_amino_acids (gff_feature, position_aa, alt_aa, alt_codon, ref_aa, ref_codon);'
+                    'create index ix_tmp_amino_acids on tmp_amino_acids (gff_feature, position_aa, alt_aa, alt_codon, ref_aa, ref_codon);'
                 )
             )
             # delete pre-existing values. Note: it's important to ignore ref aa and ref codon for this
@@ -425,37 +509,35 @@ class VariantsMutationsCombinedParser(FileParser):
         async with get_async_session() as session:
             res = await session.execute(
                 text(
-                    'select  combo.gff_feature, combo.position_aa,  combo.alt_aa,  combo.alt_codon, combo.ref_aa, combo.ref_codon, count(*) from\n'
-                    '(\n'
-                    'select * from (\n'
-                    'select gff_feature, position_aa, alt_aa, alt_codon, count(*)\n'
-                    'from tmp_amino_acids\n'
-                    'group by gff_feature, position_aa, alt_aa, alt_codon\n'
-                    ')_ where _.count > 1\n'
-                    ') dups\n'
-                    'inner join (\n'
-                    '(\n'
-                    '    select gff_feature, position_aa, ref_aa, alt_aa, ref_codon, alt_codon\n'
-                    '    from tmp_mutations tmut\n'
+                    'with dup_codon as (\n'
+                    '    select gff_feature,\n'
+                    '           position_aa,\n'
+                    '           alt_aa,\n'
+                    '           alt_codon,\n'
+                    '           array_agg(distinct ref_codon) as ref_codons\n'
+                    '    from tmp_amino_acids\n'
+                    '    group by gff_feature, position_aa, alt_aa, alt_codon\n'
+                    '    having cardinality(array_agg(distinct ref_codon)) > 1\n'
+                    '),\n'
+                    '     dup_aa as (\n'
+                    '    select gff_feature,\n'
+                    '           position_aa,\n'
+                    '           alt_aa,\n'
+                    '           alt_codon,\n'
+                    '           array_agg(distinct ref_aa) as ref_aas\n'
+                    '    from tmp_amino_acids\n'
+                    '    group by gff_feature, position_aa, alt_aa, alt_codon\n'
+                    '    having cardinality(array_agg(distinct ref_aa)) > 1\n'
                     ')\n'
-                    'union all\n'
-                    '(\n'
-                    '    select gff_feature, position_aa, ref_aa, alt_aa, ref_codon, alt_codon\n'
-                    '    from tmp_variants tvar\n'
-                    ')\n'
-                    ') combo on dups.gff_feature = combo.gff_feature and dups.position_aa = combo.position_aa and dups.alt_aa = combo.alt_aa and dups.alt_codon = combo.alt_codon\n'
-                    'group by combo.gff_feature, combo.position_aa, combo.alt_aa, combo.alt_codon, combo.ref_aa, combo.ref_codon\n'
-                    ';'
+                    'select *\n'
+                    'from dup_codon dc\n'
+                    'full join dup_aa daa using (gff_feature, position_aa, alt_aa, alt_codon);'
                 )
             )
         conflicts = res.mappings().all()
         with open(AMINO_ACID_REF_CONFLICTS_FILE, 'w+') as f:
             if len(conflicts) > 0:
-                impact = sum([c['count'] for c in conflicts])
-                print(
-                    f'Warning: {len(conflicts)} amino acid ref conflicts found, '
-                    f'impacting {impact} mutation/variant records. See {AMINO_ACID_REF_CONFLICTS_FILE}'
-                )
+                print(f'Warning: {len(conflicts)} amino acid ref conflicts found. See {AMINO_ACID_REF_CONFLICTS_FILE}')
                 writer = csv.DictWriter(f, fieldnames=conflicts[0].keys())
                 writer.writeheader()
                 writer.writerows(conflicts)
@@ -463,257 +545,260 @@ class VariantsMutationsCombinedParser(FileParser):
                 print('no conflicts found', file=f)
 
     @staticmethod
-    async def _stage_mutations():
+    async def _stage_cns_samples_by_allele():
         async with get_async_write_session() as session:
             await session.execute(
                 text(
-                    'create unlogged table tmp_mutations_staging\n'
-                    'as\n'
-                    'select s.id as sample_id, a.id as allele_id\n'
+                    'create unlogged table tmp_mutations_staging as\n'
+                    'select a.id as allele_id,\n'
+                    '       rb_build_agg(s.id) as s_present\n'
                     'from tmp_mutations tmut\n'
                     'inner join alleles a on a.region = tmut.region and a.position_nt = tmut.position_nt and a.alt_nt = tmut.alt_nt\n'
-                    'inner join samples s on s.accession = tmut.accession;'
-                )
-            )
-            await session.execute(
-                text(
-                    'delete from tmp_mutations_staging\n'
-                    'where (sample_id, allele_id) in\n'
-                    '      (\n'
-                    '          select sample_id, allele_id\n'
-                    '          from mutations\n'
-                    '      );'
-                )
-            )
-            await session.execute(
-                text('create index idx_mutations_staging on tmp_mutations_staging (sample_id, allele_id);')
-            )
-            await session.commit()
-
-    @staticmethod
-    async def _insert_mutations():
-        async with get_async_write_session() as session:
-            await session.execute(
-                text(
-                    'insert into mutations (\n'
-                    '    sample_id, allele_id\n'
-                    ')\n'
-                    'select sample_id, allele_id from tmp_mutations_staging\n'
-                    'group by sample_id, allele_id;'
+                    'inner join samples s on s.accession = tmut.accession\n'
+                    'group by a.id;'
                 )
             )
             await session.commit()
 
     @staticmethod
-    async def _stage_variants():
+    async def _insert_cns_samples_by_allele():
         async with get_async_write_session() as session:
-            # all the sample and allele ids from this query will be valid,
-            # which is good because we won't be enforcing fk constraints on the insert.
             await session.execute(
                 text(
-                    'create unlogged table tmp_variants_staging as\n'
-                    'select s.id as sample_id,\n'
-                    '       a.id as allele_id,\n'
-                    '       tvar.ref_dp,\n'
-                    '       tvar.alt_dp,\n'
-                    '       tvar.alt_freq,\n'
-                    '       tvar.ref_rv,\n'
-                    '       tvar.alt_rv,\n'
-                    '       tvar.ref_qual,\n'
-                    '       tvar.alt_qual,\n'
-                    '       tvar.total_dp,\n'
-                    '       tvar.pval,\n'
-                    '       tvar.pass_qc\n'
-                    'from tmp_variants tvar\n'
-                    'inner join alleles a on a.region = tvar.region and a.position_nt = tvar.position_nt and a.alt_nt = tvar.alt_nt\n'
-                    'inner join samples s on s.accession = tvar.accession;'
+                    f'insert into {TableNames.cns_samples_by_allele} as target ({ColumnNames.allele_id}, {ColumnNames.samples_present})\n'
+                    f'select allele_id, s_present\n'
+                    f'from tmp_mutations_staging\n'
+                    f'on conflict on constraint {ConstraintNames.pk_cns_samples_by_allele}\n'
+                    f'do update set {ColumnNames.samples_present} = target.{ColumnNames.samples_present} | excluded.{ColumnNames.samples_present};'
                 )
             )
-            # delete existing records. Note: this means no updates.
+            await session.commit()
+
+    async def _set_up_freq_bins(self):
+        if 1000 % self.n_freq_bins != 0:
+            raise ValueError(f'Invalid number of bins: {self.n_freq_bins}. We require 1000 % nbins == 0.')
+        width = int(1000 / self.n_freq_bins)
+        breaks = [i / 1000 for i in range(0, 1000, width)]
+
+        bin_ranges = []
+        # all but the last range, all half-open
+        for i in range(len(breaks)):
+            start = breaks[i]
+            try:
+                end = breaks[i + 1]
+            except IndexError:
+                break
+            bin_ranges.append(f'(numrange({start}, {end}))')
+        # add the last bin ending at 1 and closed
+        bin_ranges.append(f"(numrange({breaks[-1]}, 1, '[]'))")
+
+        async with get_async_write_session() as session:
             await session.execute(
                 text(
-                    'delete\n'
-                    'from tmp_variants_staging\n'
-                    'where (sample_id, allele_id) in (\n'
-                    '    select sample_id, allele_id\n'
-                    '    from intra_host_variants\n'
+                    'create unlogged table tmp_freq_bins (\n'
+                    '    bin_range numrange not null\n'
                     ');'
                 )
             )
             await session.execute(
-                text('create index ix_variants_staging on tmp_variants_staging (sample_id, allele_id);')
+                text(f'insert into tmp_freq_bins (bin_range) values {",".join(bin_ranges)};')
             )
-
-            # check for duplicated sample-allele pairs and warn if found
-            res = await session.execute(
-                text(
-                    'select *\n'
-                    'from (\n'
-                    '    select sample_id, allele_id, count(*) as count\n'
-                    '    from tmp_variants_staging\n'
-                    '    group by sample_id, allele_id\n'
-                    ') _\n'
-                    'where count > 1;'
-                )
-            )
-            conflicts = res.mappings().all()
-            if len(conflicts) > 0:
-                print(
-                    f'Warning: found {len(conflicts)} sample-allele pairs with duplicate entries. '
-                    f'Duplicates will be skipped, no guarantees are made about how we choose which entries to skip.'
-                )
 
             await session.commit()
 
     @staticmethod
-    async def _insert_variants():
+    async def _stage_ih_samples_by_allele():
         async with get_async_write_session() as session:
             await session.execute(
                 text(
-                    'insert into intra_host_variants(\n'
-                    '    sample_id, allele_id, ref_dp, alt_dp, alt_freq, ref_rv, alt_rv, ref_qual, alt_qual, total_dp, pval, pass_qc\n'
-                    ')\n'
-                    'select distinct on (sample_id, allele_id) \n'
-                    '    sample_id,\n'
-                    '    allele_id,\n'
-                    '    ref_dp,\n'
-                    '    alt_dp,\n'
-                    '    alt_freq,\n'
-                    '    ref_rv,\n'
-                    '    alt_rv,\n'
-                    '    ref_qual,\n'
-                    '    alt_qual,\n'
-                    '    total_dp,\n'
-                    '    pval,\n'
-                    '    pass_qc\n'
-                    'from tmp_variants_staging;'
+                    'create unlogged table tmp_ih_samples_alleles_staging as\n'
+                    'select a.id as allele_id, bin.bin_range as freq_bin, rb_build_agg(s.id) as s_present\n'
+                    'from tmp_ih_nt tin\n'
+                    'left join samples s using (accession)\n'
+                    'left join alleles a using (region, position_nt, alt_nt, ref_nt)\n'
+                    'left join tmp_freq_bins bin on bin.bin_range @> tin.gapped_freq::numeric\n'
+                    'group by a.id, bin.bin_range;'
                 )
             )
             await session.commit()
 
     @staticmethod
-    async def _stage_mutation_translations():
+    async def _insert_ih_samples_by_allele():
+        async with get_async_write_session() as session:
+            await session.execute(
+                text(
+                    'insert into ih_samples_by_allele as target (allele_id, alt_freq_range, samples_present)\n'
+                    'select allele_id, freq_bin, s_present\n'
+                    'from tmp_ih_samples_alleles_staging\n'
+                    'on conflict on constraint pk_ih_samples_by_allele do update\n'
+                    '    set samples_present = target.samples_present | excluded.samples_present;'
+                )
+            )
+            await session.commit()
+
+    @staticmethod
+    async def _stage_cns_samples_by_amino_acid():
         async with get_async_write_session() as session:
             # create a partial index on tmp_mutations to help with distinct in the next step
             await session.execute(
                 text(
-                    'create index ix_tmp_mutations_sample_allele_amino_acid\n'
-                    'on tmp_mutations (accession, gff_feature, position_aa, alt_aa, alt_codon, region, position_nt, alt_nt)\n'
-                    'where gff_feature is not null\n'
-                    '    and position_aa is not null\n'
-                    '    and alt_aa is not null\n'
-                    '    and ref_aa is not null;'
-                )
-            )
-
-            # create staging table
-            await session.execute(
-                text(
-                    'create unlogged table tmp_mutation_translations_staging as (\n'
-                    '    with base as (\n'
-                    '        select distinct on (accession, gff_feature, position_aa, alt_aa, alt_codon, region, position_nt, alt_nt) *\n'
-                    '        from tmp_mutations tmut\n'
-                    '        where tmut.gff_feature is not null\n'
-                    '          and tmut.position_aa is not null\n'
-                    '          and tmut.alt_aa is not null\n'
-                    '          and tmut.ref_aa is not null\n'
-                    '    )\n'
-                    '    select m.id as mutation_id, aa.id as amino_acid_id\n'
-                    '    from base tmut\n'
-                    '    left join amino_acids aa\n'
-                    '              on aa.gff_feature = tmut.gff_feature\n'
-                    '                  and aa.position_aa = tmut.position_aa\n'
-                    '                  and aa.alt_aa = tmut.alt_aa\n'
-                    '                  and aa.alt_codon = tmut.alt_codon\n'
-                    '    left join samples s on s.accession = tmut.accession\n'
-                    '    left join alleles a on a.region = tmut.region and a.position_nt = tmut.position_nt and a.alt_nt = tmut.alt_nt\n'
-                    '    left join mutations m on m.sample_id = s.id and m.allele_id = a.id\n'
-                    ');'
-                )
-            )
-
-            # delete existing records from staging
-            await session.execute(
-                text(
-                    'delete from tmp_mutation_translations_staging\n'
-                    'where (mutation_id, amino_acid_id) in (\n'
-                    '          select mutation_id, amino_acid_id\n'
-                    '          from mutation_translations\n'
-                    '      );'
-                )
-            )
-
-            await session.commit()
-
-    @staticmethod
-    async def _insert_mutation_translations():
-        async with get_async_write_session() as session:
-            await session.execute(
-                text(
-                    'insert into mutation_translations (mutation_id, amino_acid_id)\n'
-                    'select mutation_id, amino_acid_id from tmp_mutation_translations_staging;'
-                )
-            )
-            await session.commit()
-
-    @staticmethod
-    async def _stage_intra_host_translations():
-        async with get_async_write_session() as session:
-            await session.execute(
-                text(
-                    'create index ix_tmp_variants_sample_allele_aa\n'
-                    '    on tmp_variants (accession, gff_feature, position_aa, alt_aa, alt_codon, region, position_nt, alt_nt)\n'
+                    'create index ix_tmp_mutations_sample_aa\n'
+                    '    on tmp_mutations (accession, gff_feature, position_aa, alt_aa, alt_codon)\n'
                     '    where gff_feature is not null\n'
                     '        and position_aa is not null\n'
                     '        and alt_aa is not null\n'
                     '        and ref_aa is not null;'
                 )
             )
+
+            # create staging table
             await session.execute(
                 text(
-                    'create unlogged table tmp_intra_host_translations_staging as (\n'
-                    '    with base as (\n'
-                    '        select distinct on (accession, gff_feature, position_aa, alt_aa, alt_codon, region, position_nt, alt_nt) *\n'
-                    '        from tmp_variants tvar\n'
-                    '        where tvar.gff_feature is not null\n'
-                    '          and tvar.position_aa is not null\n'
-                    '          and tvar.alt_aa is not null\n'
-                    '          and tvar.ref_aa is not null\n'
-                    '    )\n'
-                    '    select ihv.id as intra_host_variant_id, aa.id as amino_acid_id\n'
-                    '    from base tvar\n'
-                    '    left join amino_acids aa\n'
-                    '              on aa.gff_feature = tvar.gff_feature\n'
-                    '                  and aa.position_aa = tvar.position_aa\n'
-                    '                  and aa.alt_aa = tvar.alt_aa\n'
-                    '                  and aa.alt_codon = tvar.alt_codon\n'
-                    '    left join samples s on s.accession = tvar.accession\n'
-                    '    left join alleles a on a.region = tvar.region and a.position_nt = tvar.position_nt and a.alt_nt = tvar.alt_nt\n'
-                    '    left join intra_host_variants ihv on ihv.sample_id = s.id and ihv.allele_id = a.id\n'
-                    ');'
+                    'create unlogged table tmp_mutation_translations_staging as\n'
+                    'select aa.id as amino_acid_id,\n'
+                    '       rb_build_agg(s.id) as s_present\n'
+                    'from tmp_mutations tmut\n'
+                    'inner join amino_acids aa on\n'
+                    '        aa.gff_feature = tmut.gff_feature\n'
+                    '            and aa.position_aa = tmut.position_aa\n'
+                    '            and aa.alt_aa = tmut.alt_aa\n'
+                    '            and aa.alt_codon = tmut.alt_codon\n'
+                    'inner join samples s on s.accession = tmut.accession\n'
+                    'where tmut.gff_feature is not null\n'
+                    '  and tmut.position_aa is not null\n'
+                    '  and tmut.alt_aa is not null\n'
+                    '  and tmut.ref_aa is not null\n'
+                    'group by aa.id;'
                 )
             )
+
+            await session.commit()
+
+    @staticmethod
+    async def _insert_cns_samples_by_amino_acid():
+        async with get_async_write_session() as session:
             await session.execute(
                 text(
-                    'delete from tmp_intra_host_translations_staging\n'
-                    'where (intra_host_variant_id, amino_acid_id) in (\n'
-                    '          select intra_host_variant_id, amino_acid_id\n'
-                    '          from intra_host_translations\n'
-                    '      );'
+                    f'insert into {TableNames.cns_samples_by_amino_acid} as target (amino_acid_id, {ColumnNames.samples_present})\n'
+                    f'select amino_acid_id, s_present\n'
+                    f'from tmp_mutation_translations_staging\n'
+                    f'on conflict on constraint {ConstraintNames.pk_cns_samples_by_amino_acid}\n'
+                    f'    do update set {ColumnNames.samples_present} = target.{ColumnNames.samples_present} | excluded.{ColumnNames.samples_present};'
                 )
             )
             await session.commit()
 
     @staticmethod
-    async def _insert_intra_host_translations():
+    async def _stage_ih_samples_by_amino_acid():
         async with get_async_write_session() as session:
             await session.execute(
                 text(
-                    'insert into intra_host_translations (\n'
-                    '    intra_host_variant_id, amino_acid_id\n'
-                    ')\n'
-                    'select intra_host_variant_id, amino_acid_id\n'
-                    'from tmp_intra_host_translations_staging;'
+                    'create unlogged table tmp_ih_samples_by_amino_acid_staging as (\n'
+                    '    select aa.id as amino_acid_id,\n'
+                    '           bin_range as alt_freq_bin,\n'
+                    '           rb_build_agg(s.id) as s_present\n'
+                    '    from tmp_ih_codons tic\n'
+                    '    left join tmp_freq_bins bins on bins.bin_range @> tic.alt_freq::numeric\n'
+                    '    left join amino_acids aa on aa.gff_feature = tic.gff_feature\n'
+                    '            and aa.position_aa = tic.position_aa\n'
+                    '            and aa.alt_codon = tic.alt_codon\n'
+                    '    left join samples s on s.accession = tic.accession\n'
+                    '    group by aa.id, bin_range\n'
+                    ');'
+                )
+            )
+            await session.commit()
+
+    @staticmethod
+    async def _insert_ih_samples_by_amino_acid():
+        async with get_async_write_session() as session:
+            await session.execute(
+                text(
+                    'insert into ih_samples_by_amino_acid as target (amino_acid_id, alt_freq_range, samples_present)\n'
+                    'select amino_acid_id, alt_freq_bin, s_present\n'
+                    'from tmp_ih_samples_by_amino_acid_staging\n'
+                    'on conflict on constraint pk_ih_samples_by_amino_acid\n'
+                    '    do update set samples_present = target.samples_present | excluded.samples_present;'
+                )
+            )
+            await session.commit()
+
+    @staticmethod
+    async def _transpose_cns_alleles():
+        async with get_async_write_session() as session:
+            await session.execute(
+                text(
+                    f'insert into {TableNames.cns_alleles_by_sample} as target ({ColumnNames.sample_id}, {ColumnNames.alleles_present}) (\n'
+                    f'    with pairs as (\n'
+                    f'    select {ColumnNames.allele_id}, unnest(rb_to_array({ColumnNames.samples_present})) as {ColumnNames.sample_id} from {TableNames.cns_samples_by_allele}\n'
+                    f'    )\n'
+                    f'    select {ColumnNames.sample_id}, rb_build_agg({ColumnNames.allele_id})\n'
+                    f'    from pairs\n'
+                    f'    group by {ColumnNames.sample_id}\n'
+                    f')\n'
+                    f'on conflict on constraint {ConstraintNames.pk_cns_alleles_by_sample} do update\n'
+                    f'set {ColumnNames.alleles_present} = target.{ColumnNames.alleles_present} | excluded.{ColumnNames.alleles_present};'
+                )
+            )
+            await session.commit()
+
+    @staticmethod
+    async def _transpose_cns_amino_acids():
+        async with get_async_write_session() as session:
+            await session.execute(
+                text(
+                    f'insert into {TableNames.cns_amino_acids_by_sample} as target ({ColumnNames.sample_id}, {ColumnNames.amino_acids_present}) (\n'
+                    f'    with pairs as (\n'
+                    f'    select {ColumnNames.amino_acid_id}, unnest(rb_to_array({ColumnNames.samples_present})) as {ColumnNames.sample_id} from {TableNames.cns_samples_by_amino_acid}\n'
+                    f'    )\n'
+                    f'    select {ColumnNames.sample_id}, rb_build_agg({ColumnNames.amino_acid_id})\n'
+                    f'    from pairs\n'
+                    f'    group by {ColumnNames.sample_id}\n'
+                    f')\n'
+                    f'on conflict on constraint {ConstraintNames.pk_cns_amino_acids_by_sample} do update\n'
+                    f'set {ColumnNames.amino_acids_present} = target.{ColumnNames.amino_acids_present} | excluded.{ColumnNames.amino_acids_present};'
+                )
+            )
+            await session.commit()
+
+    @staticmethod
+    async def _set_up_codon_translation():
+
+        async with get_async_write_session() as session:
+            await session.execute(
+                text(
+                    'create unlogged table tmp_codon_translations (\n'
+                    '    codon text not null unique,\n'
+                    '    aa    text not null\n'
+                    ');'
+                )
+            )
+            await session.execute(
+                text(
+                    f"insert into tmp_codon_translations (codon, aa)\n"
+                    f"values {','.join(str(t) for t in CODONS_AMINO_ACIDS)};"
+                )
+            )
+            await session.execute(
+                text(
+                    "create or replace function translate_codon(codon_in text)\n"
+                    "    returns text as\n"
+                    "$$\n"
+                    "declare\n"
+                    "    aa_out text;\n"
+                    "begin\n"
+                    "    if codon_in ~ '.*N.*' then\n"
+                    "        select 'X' into aa_out;\n"
+                    "    else\n"
+                    "        select aa\n"
+                    "        from tmp_codon_translations\n"
+                    "        where codon = codon_in\n"
+                    "        into aa_out;\n"
+                    "    end if;\n"
+                    "    return aa_out;\n"
+                    "end;\n"
+                    "$$\n"
+                    "    language plpgsql;"
                 )
             )
             await session.commit()
@@ -722,19 +807,31 @@ class VariantsMutationsCombinedParser(FileParser):
     async def _clean_up_tmp_tables():
         temp_tables = [
             'tmp_mutations',
-            'tmp_variants',
+            'tmp_ih_nt',
+            'tmp_ih_codons',
             'tmp_alleles',
             'tmp_amino_acids',
             'tmp_mutations_staging',
             'tmp_mutation_translations_staging',
-            'tmp_variants_staging',
+            'tmp_ih_samples_alleles_staging',
+            'tmp_cns_samples_by_amino_acid_staging',
+            'tmp_ih_samples_by_amino_acid_staging',
             'tmp_intra_host_translations_staging',
+            'tmp_codon_translations',
+            'tmp_freq_bins',
         ]
         async with get_async_write_session() as session:
             for t in temp_tables:
                 await session.execute(
                     text(f'drop table if exists {t};')
                 )
+
+            await session.execute(
+                text(
+                    'drop function if exists translate_codon(codon_in text);'
+                )
+            )
+
             await session.commit()
 
     def _get_header_order(self, filename, column_name_mapping):
@@ -749,8 +846,26 @@ class VariantsMutationsCombinedParser(FileParser):
             raise ValueError('mutations header bad')
         return ordered_header
 
+    def _parse_extra_args(self, extra_args: list[str]):
+        for arg in extra_args:
+            try:
+                name, value = arg.split('=')
+                if name in {'n_freq_bins', 'ih_nt_min_depth', 'ih_codons_min_depth'}:
+                    value = int(value)
+                elif name in {'ih_nt_min_freq', 'ih_codons_min_freq'}:
+                    value = float(value)
+                else:
+                    # skip setting value and print a warning
+                    raise ValueError
+
+                self.__setattr__(name, value)
+                print(f'set {name} to {value}')
+
+            except ValueError:
+                print(f'Warning: unable to parse extra parameter: {arg}')
+
     @staticmethod
-    def _find_relative_and_local_abs_paths(filename: str) -> (str, str):
+    def _find_relative_and_local_abs_paths(filename: str) -> tuple[str, str]:
         """
         Find absolute and relative paths for given filename
         either within container's bound data directory (if running in a container)
@@ -780,8 +895,9 @@ class VariantsMutationsCombinedParser(FileParser):
     @classmethod
     def get_required_column_set(cls) -> Set[str]:
         return {
-            f' variants: {", ".join(VariantsMutationsCombinedParser.variants_column_mapping.values())}',
-            f'mutations: {", ".join(VariantsMutationsCombinedParser.mutations_column_mapping.values())}'
+            f'intrahost variants: {", ".join(VariantsMutationsCombinedParser.intrahost_nts_column_mapping.values())}',
+            f'  intrahost codons: {", ".join(VariantsMutationsCombinedParser.intrahost_codons_column_mapping.values())}'
+            f'         mutations: {", ".join(VariantsMutationsCombinedParser.mutations_column_mapping.values())}'
         }
 
     @staticmethod
@@ -789,287 +905,170 @@ class VariantsMutationsCombinedParser(FileParser):
         return datetime.now().isoformat(timespec='seconds')
 
     @staticmethod
+    async def _drop_fks_using_allele_id():
+        await ConstraintManager.drop_constraints(
+            [
+                ConstraintNames.fk_cns_samples_by_allele_allele_id_alleles,
+                ConstraintNames.fk_ih_samples_by_allele_allele_id_alleles,
+            ]
+        )
+
+    @staticmethod
     async def _drop_alleles_indexes():
-        async with get_async_write_session() as session:
-            await session.execute(
-                text(f'alter table {TableNames.alleles} drop constraint {ConstraintNames.uq_alleles_nt_values};')
-            )
-            await session.commit()
+        await ConstraintManager.drop_constraints(
+            [
+                ConstraintNames.uq_alleles_nt_values,
+                ConstraintNames.pk_alleles
+            ]
+        )
 
     @staticmethod
     async def _restore_alleles_indexes():
-        async with get_async_write_session() as session:
-            await session.execute(
-                text(
-                    f'alter table {TableNames.alleles}\n'
-                    f'add constraint {ConstraintNames.uq_alleles_nt_values}\n'
-                    f'unique ({StandardColumnNames.region}, {StandardColumnNames.position_nt}, {StandardColumnNames.alt_nt})\n'
-                    f'include (id);'
-                )
-            )
-            await session.commit()
+        await ConstraintManager.restore_constraints(
+            [
+                ConstraintNames.pk_alleles,
+                ConstraintNames.uq_alleles_nt_values,
+            ]
+        )
+
+    @staticmethod
+    async def _drop_fks_using_amino_acid_id():
+        await ConstraintManager.drop_constraints(
+            [
+                ConstraintNames.fk_cns_samples_by_amino_acid_amino_acid_id_amino_acids,
+                ConstraintNames.fk_phenotype_metric_values_amino_acid_id_amino_acids,
+                ConstraintNames.fk_annotations_amino_acids_amino_acid_id_amino_acids,
+                ConstraintNames.fk_ih_samples_by_amino_acid_amino_acid_id_amino_acids,
+            ]
+        )
 
     @staticmethod
     async def _drop_amino_acids_indexes():
-        async with get_async_write_session() as session:
-            await session.execute(
-                text(
-                    f'alter table {TableNames.amino_acids} \n'
-                    f'drop constraint {ConstraintNames.uq_amino_acids_gff_feature_position_alt_aa_alt_codon};'
-                )
-            )
-            await session.commit()
+        await ConstraintManager.drop_constraints(
+            [
+                ConstraintNames.uq_amino_acids_gff_feature_position_alt_aa_alt_codon,
+                ConstraintNames.pk_amino_acids,
+            ]
+        )
 
     @staticmethod
     async def _restore_amino_acids_indexes():
-        async with get_async_write_session() as session:
-            await session.execute(
-                text(
-                    f'alter table {TableNames.amino_acids}\n'
-                    f'add constraint {ConstraintNames.uq_amino_acids_gff_feature_position_alt_aa_alt_codon}\n'
-                    f'unique (\n'
-                    f'    {StandardColumnNames.position_aa},\n'
-                    f'    {StandardColumnNames.alt_aa}, \n'
-                    f'    {StandardColumnNames.gff_feature},\n'
-                    f'    {StandardColumnNames.alt_codon}\n'
-                    f')\n'
-                    f'include (id);'
-                )
-            )
-            await session.commit()
+        await ConstraintManager.restore_constraints(
+            [
+                ConstraintNames.pk_amino_acids,
+                ConstraintNames.uq_amino_acids_gff_feature_position_alt_aa_alt_codon
+            ]
+        )
 
     @staticmethod
-    async def _drop_mutations_indexes():
-        constraint_names = [
-            ConstraintNames.uq_mutations_sample_allele_pair,
-            ConstraintNames.fk_mutations_sample_id_samples,
-            ConstraintNames.fk_mutations_allele_id_alleles
-        ]
-        async with get_async_write_session() as session:
-            for conname in constraint_names:
-                await session.execute(
-                    text(f'alter table {TableNames.mutations} drop constraint {conname};')
-                )
-            await session.execute(
-                text(f'drop index {IndexNames.ix_mutations_allele_id};')
-            )
-            await session.commit()
+    async def _restore_fks_using_amino_acid_id():
+        await ConstraintManager.restore_constraints(
+            [
+                ConstraintNames.fk_phenotype_metric_values_amino_acid_id_amino_acids,
+                ConstraintNames.fk_annotations_amino_acids_amino_acid_id_amino_acids,
+            ]
+        )
 
     @staticmethod
-    async def _restore_mutations_indexes():
-        async with get_async_write_session() as session:
-            await session.execute(
-                text(
-                    f'alter table {TableNames.mutations} \n'
-                    f'add constraint {ConstraintNames.uq_mutations_sample_allele_pair} \n'
-                    f'unique ({StandardColumnNames.sample_id}, {StandardColumnNames.allele_id});'
-                )
-            )
-            await session.execute(
-                text(
-                    f'create index {IndexNames.ix_mutations_allele_id} \n'
-                    f'on {TableNames.mutations} ({StandardColumnNames.allele_id});'
-                )
-            )
-            await session.execute(
-                text(
-                    f'alter table {TableNames.mutations} \n'
-                    f'add constraint {ConstraintNames.fk_mutations_allele_id_alleles} \n'
-                    f'foreign key ({StandardColumnNames.allele_id}) references {TableNames.alleles} (id);'
-                )
-            )
-            await session.execute(
-                text(
-                    f'alter table {TableNames.mutations} \n'
-                    f'add constraint {ConstraintNames.fk_mutations_sample_id_samples} \n'
-                    f'foreign key ({StandardColumnNames.sample_id}) references {TableNames.samples} (id);'
-                )
-            )
-            await session.commit()
+    async def _drop_ih_samples_by_allele_indexes():
+        await ih_samples_by_allele.drop_trigger_check_range_overlap()
 
     @staticmethod
-    async def _drop_intra_host_variants_indexes():
-        constraint_names = [
-            ConstraintNames.uq_intra_host_variants_sample_allele_pair,
-            ConstraintNames.fk_intra_host_variants_allele_id_alleles,
-            ConstraintNames.fk_intra_host_variants_sample_id_samples
-        ]
-        async with get_async_write_session() as session:
-            for conname in constraint_names:
-                await session.execute(
-                    text(f'alter table {TableNames.intra_host_variants} drop constraint {conname};')
-                )
-            await session.execute(
-                text(f'drop index {IndexNames.ix_intra_host_variants_allele_id};')
-            )
-            await session.commit()
+    async def _restore_ih_samples_by_allele_indexes():
+        await ConstraintManager.restore_constraints(
+            [
+                ConstraintNames.fk_ih_samples_by_allele_allele_id_alleles,
+            ]
+        )
+        await ih_samples_by_allele.restore_trigger_check_range_overlap()
 
     @staticmethod
-    async def _restore_intra_host_variants_indexes():
-        async with get_async_write_session() as session:
-            await session.execute(
-                text(
-                    f'alter table {TableNames.intra_host_variants} \n'
-                    f'add constraint {ConstraintNames.uq_intra_host_variants_sample_allele_pair} \n'
-                    f'unique ({StandardColumnNames.sample_id}, {StandardColumnNames.allele_id});'
-                )
-            )
-            await session.execute(
-                text(
-                    f'create index {IndexNames.ix_intra_host_variants_allele_id} \n'
-                    f'on {TableNames.intra_host_variants} ({StandardColumnNames.allele_id});'
-                )
-            )
-            await session.execute(
-                text(
-                    f'alter table {TableNames.intra_host_variants} \n'
-                    f'add constraint {ConstraintNames.fk_intra_host_variants_allele_id_alleles} \n'
-                    f'foreign key ({StandardColumnNames.allele_id}) references {TableNames.alleles} (id);'
-                )
-            )
-            await session.execute(
-                text(
-                    f'alter table {TableNames.intra_host_variants} \n'
-                    f'add constraint {ConstraintNames.fk_intra_host_variants_sample_id_samples} \n'
-                    f'foreign key ({StandardColumnNames.sample_id}) references {TableNames.samples} (id);'
-                )
-            )
-            await session.commit()
+    async def _restore_cns_samples_by_allele_indexes():
+        await ConstraintManager.restore_constraints(
+            [
+                ConstraintNames.fk_cns_samples_by_allele_allele_id_alleles,
+            ]
+        )
 
     @staticmethod
-    async def _drop_mutation_translations_indexes():
-        constraint_names = [
-            ConstraintNames.uq_mutation_translations_mutation_amino_acid_pair,
-            ConstraintNames.fk_mutation_translations_mutation_id_mutations,
-            ConstraintNames.fk_mutation_translations_amino_acid_id_amino_acids
-        ]
-        async with get_async_write_session() as session:
-            for conname in constraint_names:
-                await session.execute(
-                    text(f'alter table {TableNames.mutation_translations} drop constraint {conname};')
-                )
-            await session.execute(
-                text(f'drop index {IndexNames.ix_mutation_translations_amino_acid_id};')
-            )
-            await session.commit()
+    async def _drop_ih_samples_by_amino_acid_indexes():
+        await ih_samples_by_amino_acid.drop_trigger_check_range_overlap()
 
     @staticmethod
-    async def _restore_mutation_translations_indexes():
-        async with get_async_write_session() as session:
-            await session.execute(
-                text(
-                    f'alter table {TableNames.mutation_translations} \n'
-                    f'add constraint {ConstraintNames.uq_mutation_translations_mutation_amino_acid_pair} \n'
-                    f'unique ({StandardColumnNames.mutation_id}, {StandardColumnNames.amino_acid_id});'
-                )
-            )
-            await session.execute(
-                text(
-                    f'create index {IndexNames.ix_mutation_translations_amino_acid_id} \n'
-                    f'on {TableNames.mutation_translations} ({StandardColumnNames.amino_acid_id});'
-                )
-            )
-            await session.execute(
-                text(
-                    f'alter table {TableNames.mutation_translations} \n'
-                    f'add constraint {ConstraintNames.fk_mutation_translations_amino_acid_id_amino_acids} \n'
-                    f'foreign key ({StandardColumnNames.amino_acid_id}) references {TableNames.amino_acids} (id);'
-                )
-            )
-            await session.execute(
-                text(
-                    f'alter table {TableNames.mutation_translations} \n'
-                    f'add constraint {ConstraintNames.fk_mutation_translations_mutation_id_mutations} \n'
-                    f'foreign key ({StandardColumnNames.mutation_id}) references {TableNames.mutations} (id);'
-                )
-            )
-            await session.commit()
+    async def _restore_ih_samples_by_amino_acid_indexes():
+        await ConstraintManager.restore_constraints(
+            [
+                ConstraintNames.fk_ih_samples_by_amino_acid_amino_acid_id_amino_acids,
+            ]
+        )
+        await ih_samples_by_amino_acid.restore_trigger_check_range_overlap()
 
     @staticmethod
-    async def _drop_intra_host_translations_indexes():
-        constraint_names = [
-            ConstraintNames.uq_intra_host_translations_variant_amino_acid_pair,
-            ConstraintNames.fk_intra_host_translations_intra_host_variant_id,
-            ConstraintNames.fk_intra_host_translations_amino_acid_id_amino_acids
-        ]
-        async with get_async_write_session() as session:
-            for conname in constraint_names:
-                await session.execute(
-                    text(f'alter table {TableNames.intra_host_translations} drop constraint {conname};')
-                )
-            await session.execute(
-                text(f'drop index {IndexNames.ix_intra_host_translations_amino_acid_id};')
-            )
-            await session.commit()
-
-    @staticmethod
-    async def _restore_intra_host_translations_indexes():
-        async with get_async_write_session() as session:
-            await session.execute(
-                text(
-                    f'alter table {TableNames.intra_host_translations} \n'
-                    f'add constraint {ConstraintNames.uq_intra_host_translations_variant_amino_acid_pair} \n'
-                    f'unique ({StandardColumnNames.intra_host_variant_id}, {StandardColumnNames.amino_acid_id});'
-                )
-            )
-            await session.execute(
-                text(
-                    f'create index {IndexNames.ix_intra_host_translations_amino_acid_id} \n'
-                    f'on {TableNames.intra_host_translations} ({StandardColumnNames.amino_acid_id});'
-                )
-            )
-            await session.execute(
-                text(
-                    f'alter table {TableNames.intra_host_translations} \n'
-                    f'add constraint {ConstraintNames.fk_intra_host_translations_amino_acid_id_amino_acids} \n'
-                    f'foreign key ({StandardColumnNames.amino_acid_id}) references {TableNames.amino_acids} (id);'
-                )
-            )
-            await session.execute(
-                text(
-                    f'alter table {TableNames.intra_host_translations} \n'
-                    f'add constraint {ConstraintNames.fk_intra_host_translations_intra_host_variant_id} \n'
-                    f'foreign key ({StandardColumnNames.intra_host_variant_id}) references {TableNames.intra_host_variants} (id);'
-                )
-            )
-            await session.commit()
-
-    variants_column_mapping = {
-        StandardColumnNames.region: 'REGION',
-        StandardColumnNames.position_nt: 'POS',
-        StandardColumnNames.ref_nt: 'REF',
-        StandardColumnNames.alt_nt: 'ALT',
-        StandardColumnNames.position_aa: 'POS_AA',
-        StandardColumnNames.ref_aa: 'REF_AA',
-        StandardColumnNames.alt_aa: 'ALT_AA',
-        StandardColumnNames.gff_feature: 'GFF_FEATURE',
-        StandardColumnNames.ref_codon: 'REF_CODON',
-        StandardColumnNames.alt_codon: 'ALT_CODON',
-        StandardColumnNames.accession: 'SRA',
-        StandardColumnNames.pval: 'PVAL',
-        StandardColumnNames.ref_dp: 'REF_DP',
-        StandardColumnNames.ref_rv: 'REF_RV',
-        StandardColumnNames.ref_qual: 'REF_QUAL',
-        StandardColumnNames.alt_dp: 'ALT_DP',
-        StandardColumnNames.alt_rv: 'ALT_RV',
-        StandardColumnNames.alt_qual: 'ALT_QUAL',
-        StandardColumnNames.pass_qc: 'PASS',
-        StandardColumnNames.alt_freq: 'ALT_FREQ',
-        StandardColumnNames.total_dp: 'TOTAL_DP',
-    }
+    async def _restore_cns_samples_by_amino_acid_indexes():
+        await ConstraintManager.restore_constraints(
+            [
+                ConstraintNames.fk_cns_samples_by_amino_acid_amino_acid_id_amino_acids,
+            ]
+        )
 
     mutations_column_mapping = {
-        StandardColumnNames.accession: 'sra',
-        StandardColumnNames.position_nt: 'pos',
-        StandardColumnNames.ref_nt: 'ref',
-        StandardColumnNames.alt_nt: 'alt',
-        StandardColumnNames.region: 'region',
-        StandardColumnNames.gff_feature: 'GFF_FEATURE',
-        StandardColumnNames.ref_codon: 'ref_codon',
-        StandardColumnNames.alt_codon: 'alt_codon',
-        StandardColumnNames.ref_aa: 'ref_aa',
-        StandardColumnNames.alt_aa: 'alt_aa',
-        StandardColumnNames.position_aa: 'pos_aa',
+        ColumnNames.accession: 'sra',
+        ColumnNames.position_nt: 'pos',
+        ColumnNames.ref_nt: 'ref',
+        ColumnNames.alt_nt: 'alt',
+        ColumnNames.region: 'region',
+        ColumnNames.gff_feature: 'GFF_FEATURE',
+        ColumnNames.ref_codon: 'ref_codon',
+        ColumnNames.alt_codon: 'alt_codon',
+        ColumnNames.ref_aa: 'ref_aa',
+        ColumnNames.alt_aa: 'alt_aa',
+        ColumnNames.position_aa: 'pos_aa',
+    }
+
+    intrahost_nts_column_mapping = {
+        ColumnNames.region: 'REGION',
+        ColumnNames.position_nt: 'POS',
+        ColumnNames.ref_nt: 'REF',
+        ColumnNames.alt_nt: 'ALT',
+        ColumnNames.ref_dp: 'REF_DP',
+        ColumnNames.ref_rv: 'REF_RV',
+        ColumnNames.ref_qual: 'REF_QUAL',
+        ColumnNames.alt_dp: 'ALT_DP',
+        ColumnNames.alt_rv: 'ALT_RV',
+        ColumnNames.alt_qual: 'ALT_QUAL',
+        ColumnNames.alt_freq: 'ALT_FREQ',
+        ColumnNames.total_dp: 'TOTAL_DP',
+        ColumnNames.pval: 'PVAL',
+        ColumnNames.pass_qc: 'PASS',
+        ColumnNames.gff_feature: 'GFF_FEATURE',
+        ColumnNames.ref_codon: 'REF_CODON',
+        ColumnNames.ref_aa: 'REF_AA',
+        ColumnNames.alt_codon: 'ALT_CODON',
+        ColumnNames.alt_aa: 'ALT_AA',
+        ColumnNames.position_aa: 'POS_AA',
+        'gapped_freq': 'GAPPED_FREQ',
+        'gapped_dp': 'GAPPED_DEPTH',
+        'flagged_pos': 'FLAGGED_POS',
+        'amp_masked': 'AMP_MASKED',
+        'std_dev': 'STD_DEV',
+        'amp_freq': 'AMP_FREQ',
+        'amp_numbers': 'AMP_NUMBERS',
+        ColumnNames.accession: 'SRA',
+    }
+
+    intrahost_codons_column_mapping = {
+        ColumnNames.gff_feature: 'GFF_FEATURE',
+        ColumnNames.position_aa: 'POS_CODON',
+        ColumnNames.ref_codon: 'REF_CODON',
+        ColumnNames.alt_codon: 'ALT_CODON',
+        ColumnNames.ref_dp: 'REF_DEPTH_CODON',
+        ColumnNames.alt_dp: 'ALT_DEPTH_CODON',
+        ColumnNames.alt_freq: 'ALT_FREQ_CODON',
+        ColumnNames.position_nt: 'POS',
+        ColumnNames.ref_nt: 'REF',
+        ColumnNames.alt_nt: 'ALT',
+        ColumnNames.accession: 'SRA',
+
     }
 
     class InputFile:
@@ -1083,27 +1082,32 @@ class VariantsMutationsCombinedParser(FileParser):
             self.header_order: List[str] = self._get_header_order()
 
         def _choose_record_type(self):
-            variants_columns = set(VariantsMutationsCombinedParser.variants_column_mapping.values())
             mutations_columns = set(VariantsMutationsCombinedParser.mutations_column_mapping.values())
+            intrahost_nts_columns = set(VariantsMutationsCombinedParser.intrahost_nts_column_mapping.values())
+            intrahost_codons_columns = set(VariantsMutationsCombinedParser.intrahost_codons_column_mapping.values())
 
             with open(self.local_name, 'r') as f:
                 reader = csv.DictReader(f, delimiter=self.delimiter)
-                if set(reader.fieldnames) >= variants_columns:
-                    return RecordType.variants
-                elif set(reader.fieldnames) >= mutations_columns:
+                fieldnames = set(reader.fieldnames)
+
+                if fieldnames == intrahost_nts_columns:
+                    return RecordType.ih_nts
+                elif fieldnames == intrahost_codons_columns:
+                    return RecordType.ih_codons
+                elif fieldnames == mutations_columns:
                     return RecordType.mutations
                 else:
-                    raise ValueError(
-                        f'File has an unacceptable header and cannot be processed for variants or mutations: '
-                        f'{self.raw_name}'
-                    )
+                    raise ValueError(f'File has an unacceptable header and cannot be processed: {self.raw_name}')
 
         def _get_header_order(self) -> List[str]:
             column_name_mapping = None
-            if self.record_type == RecordType.variants:
-                column_name_mapping = VariantsMutationsCombinedParser.variants_column_mapping
-            if self.record_type == RecordType.mutations:
-                column_name_mapping = VariantsMutationsCombinedParser.mutations_column_mapping
+            match self.record_type:
+                case RecordType.mutations:
+                    column_name_mapping = VariantsMutationsCombinedParser.mutations_column_mapping
+                case RecordType.ih_nts:
+                    column_name_mapping = VariantsMutationsCombinedParser.intrahost_nts_column_mapping
+                case RecordType.ih_codons:
+                    column_name_mapping = VariantsMutationsCombinedParser.intrahost_codons_column_mapping
 
             proper_col_names = {
                 v: k for k, v in column_name_mapping.items()
@@ -1116,10 +1120,18 @@ class VariantsMutationsCombinedParser(FileParser):
                 raise ValueError(f'Failed to construct header ordering for file: {self.raw_name}')
             return ordered_header
 
+        async def copy_into_table(self, tablename: str, session: AsyncSession):
+            await session.execute(
+                text(
+                    f"copy {tablename} ({', '.join(self.header_order)})\n"
+                    f"from '/muninn/data/{self.relative_name}' delimiter E'{self.delimiter}' csv header;"
+                )
+            )
+
 
 class VariantsMutationsCombinedParserBig(VariantsMutationsCombinedParser):
-    def __init__(self, filenames: List[str]):
-        super().__init__(filenames)
+    def __init__(self, filenames: List[str], extras: list[str] | None):
+        super().__init__(filenames, extras)
         self.tmp_wal_size_mb = 1024 * 20
         self.tmp_checkpoint_timeout_s = 3600
 

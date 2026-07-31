@@ -9,7 +9,7 @@ from DB.queries.date_count_helpers import get_extract_clause, get_group_by_claus
 from DB.queries.helpers import get_appropriate_translations_table_and_id
 from api.models import PhenotypeMetricInfo
 from parser.parser import parser
-from utils.constants import DateBinOpt, COLLECTION_DATE, StandardColumnNames
+from utils.constants import DateBinOpt, COLLECTION_DATE, ColumnNames
 
 
 async def get_all_pheno_metrics() -> List[PhenotypeMetricInfo]:
@@ -87,7 +87,7 @@ async def count_variants_or_mutations_gte_pheno_value_by_collection_date(
                         inner join phenotype_metric_values pmv ON pmv.amino_acid_id = aa.id
                         inner join phenotype_metrics pm on pm.id = pmv.phenotype_metric_id
                         where num_nulls(collection_end_date, collection_start_date) = 0 
-                        and pm.{StandardColumnNames.phenotype_metric_name} = :pm_name 
+                        and pm.{ColumnNames.phenotype_metric_name} = :pm_name 
                         {user_where_clause}
                     )
                     where collection_span <= {max_span_days}
@@ -144,7 +144,7 @@ async def _get_phenotype_metric_value_quantile(
                 INNER JOIN lineage_systems ls on ls.id = l.lineage_system_id
                 INNER JOIN phenotype_metric_values pmv ON pmv.amino_acid_id = aa.id
                 INNER JOIN phenotype_metrics pm on pm.id = pmv.phenotype_metric_id
-            WHERE pm.{StandardColumnNames.phenotype_metric_name} = :pm_name 
+            WHERE pm.{ColumnNames.phenotype_metric_name} = :pm_name 
             AND pmv.value != 0;
             """
     async with get_async_session() as session:
@@ -246,7 +246,7 @@ async def _pheno_value_for_mutations_or_variants_by_sample_and_collection_date(
                         inner join phenotype_metric_values pmv ON pmv.amino_acid_id = aa.id
                         inner join phenotype_metrics pm on pm.id = pmv.phenotype_metric_id
                         where num_nulls(collection_end_date, collection_start_date) = 0 
-                        and pm.{StandardColumnNames.phenotype_metric_name}=:pm_name 
+                        and pm.{ColumnNames.phenotype_metric_name}=:pm_name 
                         {user_where_clause}
                     )
                     where collection_span <= {max_span_days}

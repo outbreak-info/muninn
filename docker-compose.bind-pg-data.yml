@@ -1,0 +1,72 @@
+version: "3.8"
+
+name: "${MUNINN_INSTANCE_NAME}_project"
+
+services:
+  postgres:
+    container_name: "${MUNINN_INSTANCE_NAME}_pg"
+    build:
+      context: .
+      dockerfile: pg.dockerfile
+    restart: always
+    ports:
+      - "${MUNINN_DB_PORT}:5432"
+    environment:
+      POSTGRES_USER: ${MUNINN_DB_SUPERUSER}
+      POSTGRES_PASSWORD: ${MUNINN_DB_SUPERUSER_PASSWORD}
+      POSTGRES_DB: ${MUNINN_DB_NAME}
+      MUNINN_DB_READONLY_PASSWORD: ${MUNINN_DB_READONLY_PASSWORD}
+      MUNINN_DB_READONLY_USER: ${MUNINN_DB_READONLY_USER}
+    command:
+      - "postgres"
+      - "-c"
+      - "config_file=/docker-entrypoint-initdb.d/${MUNINN_PG_CONFIG_NAME}.postgresql.conf"
+    healthcheck:
+      test: pg_isready -U flu_reader -d flu
+      interval: 2s
+      timeout: 3s
+      retries: 15
+    volumes:
+      - type: bind
+        source: ${MUNINN_PG_DATA_BIND_DIR}
+        target: /var/lib/postgresql
+        read_only: false
+      - type: bind
+        source: ./containers/database/initdb.d
+        target: /docker-entrypoint-initdb.d
+        read_only: true
+      - type: bind
+        source: ${MUNINN_SERVER_DATA_INPUT_DIR}
+        target: /muninn/data
+        read_only: true
+    shm_size: 1g
+  server:
+    container_name: "${MUNINN_INSTANCE_NAME}_server"
+    build:
+      context: .
+      dockerfile: server.dockerfile
+    volumes:
+      - type: bind
+        source: ${MUNINN_SERVER_DATA_INPUT_DIR}
+        target: /home/muninn/data
+        read_only: false
+    ports:
+      - "${MUNINN_SERVER_PORT}:8000"
+    environment:
+      MUNINN_DB_READONLY_USER: "${MUNINN_DB_READONLY_USER}"
+      MUNINN_DB_READONLY_PASSWORD: "${MUNINN_DB_READONLY_PASSWORD}"
+      MUNINN_DB_SUPERUSER_PASSWORD: "${MUNINN_DB_SUPERUSER_PASSWORD}"
+      MUNINN_DB_SUPERUSER: "${MUNINN_DB_SUPERUSER}"
+      MUNINN_DB_HOST: "${MUNINN_DB_HOST}"
+      MUNINN_DB_NAME: "${MUNINN_DB_NAME}"
+      MUNINN_DB_PORT: "${MUNINN_DB_PORT_FOR_SERVER}"
+      MUNINN_SERVER_DATA_INPUT_DIR: "${MUNINN_SERVER_DATA_INPUT_DIR}"
+    command: bash -c "
+      sleep 30
+      && fastapi run --workers 33 api/main.py
+      "
+
+networks:
+  default:
+    name: "${MUNINN_INSTANCE_NAME}_network"
+    driver: "bridge"

@@ -6,13 +6,13 @@ from sqlalchemy.sql.expression import delete
 
 from DB.engine import get_async_write_session, get_asyncpg_connection, get_uri_for_polars
 from DB.models import LineageImmediateChild
-from utils.constants import StandardColumnNames, ASYNCPG_MAX_QUERY_ARGS, TableNames
+from utils.constants import ColumnNames, ASYNCPG_MAX_QUERY_ARGS, TableNames
 
 
 async def copy_insert_lineage_children(relationships: pl.DataFrame):
     columns = [
-        StandardColumnNames.parent_id,
-        StandardColumnNames.child_id
+        ColumnNames.parent_id,
+        ColumnNames.child_id
     ]
     conn = await get_asyncpg_connection()
     res = await conn.copy_records_to_table(
@@ -27,8 +27,8 @@ async def copy_insert_lineage_children(relationships: pl.DataFrame):
 
 async def batch_delete_lineage_children(dropped_relationships: pl.DataFrame):
     delete_data_columns = [
-        StandardColumnNames.parent_id,
-        StandardColumnNames.child_id
+        ColumnNames.parent_id,
+        ColumnNames.child_id
     ]
 
     batch_size = floor(ASYNCPG_MAX_QUERY_ARGS / len(delete_data_columns))
@@ -40,8 +40,8 @@ async def batch_delete_lineage_children(dropped_relationships: pl.DataFrame):
             where_clause = or_(
                 where_clause,
                 and_(
-                    LineageImmediateChild.parent_id == d[StandardColumnNames.parent_id],
-                    LineageImmediateChild.child_id == d[StandardColumnNames.child_id]
+                    LineageImmediateChild.parent_id == d[ColumnNames.parent_id],
+                    LineageImmediateChild.child_id == d[ColumnNames.child_id]
                 )
             )
         delete_statement = (
@@ -59,13 +59,13 @@ async def get_all_lineages_immediate_children_by_system_as_pl_df(lineage_system_
     return pl.read_database_uri(
         query=f'''
         select 
-            {StandardColumnNames.parent_id},
-            {StandardColumnNames.child_id}
+            {ColumnNames.parent_id},
+            {ColumnNames.child_id}
         from {TableNames.lineages_immediate_children} lid
         -- we only need to check the parent, they have to be on the same system
-        inner join {TableNames.lineages} l on l.id = lid.{StandardColumnNames.parent_id}
-        inner join {TableNames.lineage_systems} ls on ls.id = l.{StandardColumnNames.lineage_system_id}
-        where ls.{StandardColumnNames.lineage_system_name} = '{lineage_system_name}'
+        inner join {TableNames.lineages} l on l.id = lid.{ColumnNames.parent_id}
+        inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
+        where ls.{ColumnNames.lineage_system_name} = '{lineage_system_name}'
         ''',
         uri=get_uri_for_polars()
     )

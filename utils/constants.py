@@ -2,6 +2,7 @@ import re
 import os
 from datetime import datetime
 from enum import Enum
+from warnings import deprecated
 
 from utils.dates_and_times import format_iso_month, format_iso_week, format_iso_interval
 
@@ -29,6 +30,7 @@ LINEAGE = 'lineage'
 DEFAULT_MAX_SPAN_DAYS = 366
 DEFAULT_DAYS = 5
 DEFAULT_PREVALENCE_THRESHOLD = 0.75
+MIN_PREVALENCE_THRESHOLD = 0.01
 ASYNCPG_MAX_QUERY_ARGS = 32767
 NUCLEOTIDE_CHARACTERS = ['A', 'C', 'G', 'T']
 # https://en.wikipedia.org/wiki/Nucleic_acid_notation
@@ -49,6 +51,7 @@ class DefaultGffFeaturesByRegion:
 class LineageSystemNames:
     usda_genoflu = 'usda_genoflu'
     freyja_demixed = 'freyja_demixed'
+    pango = 'PANGO'
 
 
 class DateBinOpt(Enum):
@@ -100,11 +103,6 @@ class StandardPhenoMetricNames:
     mutdiffsel = 'mutdiffsel'
 
 
-class StandardLineageSystemNames:
-    genoflu = 'usda_genoflu'
-    sc2 = 'PANGO'
-
-
 class PgIdentifiers(object):
     @classmethod
     def _check_id_lengths(cls):
@@ -120,7 +118,8 @@ class TableNames(PgIdentifiers):
     samples = 'samples'
     alleles = 'alleles'
     amino_acids = 'amino_acids'
-    mutations = 'mutations'
+    cns_samples_by_allele = 'cns_samples_by_allele'
+    cns_alleles_by_sample = 'cns_alleles_by_sample'
     intra_host_variants = 'intra_host_variants'
     geo_locations = 'geo_locations'
     phenotype_metrics = 'phenotype_metrics'
@@ -135,11 +134,15 @@ class TableNames(PgIdentifiers):
     annotations_amino_acids = 'annotations_amino_acids'
     lineages_immediate_children = 'lineages_immediate_children'
     lineages_deep_children = 'lineages_deep_children'  # actually a view.
-    mutation_translations = 'mutation_translations'
+    cns_samples_by_amino_acid = 'cns_samples_by_amino_acid'
+    cns_amino_acids_by_sample = 'cns_amino_acids_by_sample'
     intra_host_translations = 'intra_host_translations'
+    sequences = 'sequences'
+    ih_samples_by_allele = 'ih_samples_by_allele'
+    ih_samples_by_amino_acid = 'ih_samples_by_amino_acid'
 
 
-class StandardColumnNames(PgIdentifiers):
+class ColumnNames(PgIdentifiers):
     # ids
     sample_id = 'sample_id'
     allele_id = 'allele_id'
@@ -152,6 +155,7 @@ class StandardColumnNames(PgIdentifiers):
     effect_id = 'effect_id'
     paper_id = 'paper_id'
     annotation_id = 'annotation_id'
+    sequence_id = 'sequence_id'
 
     # samples
     accession = 'accession'
@@ -217,6 +221,11 @@ class StandardColumnNames(PgIdentifiers):
     pval = 'pval'
     pass_qc = 'pass_qc'
 
+    # variants / mutations bitmap
+    samples_present = 'samples_present'
+    alleles_present = 'alleles_present'
+    amino_acids_present = 'amino_acids_present'
+
     # geo locations
     country_name = 'country_name'
     admin1_name = 'admin1_name'
@@ -247,8 +256,39 @@ class StandardColumnNames(PgIdentifiers):
 
 
 class ConstraintNames(PgIdentifiers):
+    # primary keys
+    pk_samples = f'pk_{TableNames.samples}'
+    pk_alleles = f'pk_{TableNames.alleles}'
+    pk_amino_acids = f'pk_{TableNames.amino_acids}'
+    pk_cns_samples_by_allele = f'pk_{TableNames.cns_samples_by_allele}'
+    pk_intra_host_variants = f'pk_{TableNames.intra_host_variants}'
+    pk_geo_locations = f'pk_{TableNames.geo_locations}'
+    pk_phenotype_metrics = f'pk_{TableNames.phenotype_metrics}'
+    pk_phenotype_metric_values = f'pk_{TableNames.phenotype_metric_values}'
+    pk_lineage_systems = f'pk_{TableNames.lineage_systems}'
+    pk_lineages = f'pk_{TableNames.lineages}'
+    pk_samples_lineages = f'pk_{TableNames.samples_lineages}'
+    pk_papers = f'pk_{TableNames.papers}'
+    pk_effects = f'pk_{TableNames.effects}'
+    pk_annotations = f'pk_{TableNames.annotations}'
+    pk_annotations_papers = f'pk_{TableNames.annotations_papers}'
+    pk_annotations_amino_acids = f'pk_{TableNames.annotations_amino_acids}'
+    pk_lineages_immediate_children = f'pk_{TableNames.lineages_immediate_children}'
+    pk_cns_samples_by_amino_acid = f'pk_{TableNames.cns_samples_by_amino_acid}'
+    pk_intra_host_translations = f'pk_{TableNames.intra_host_translations}'
+    pk_sequences = f'pk_{TableNames.sequences}'
+    pk_cns_alleles_by_sample = f'pk_{TableNames.cns_alleles_by_sample}'
+    pk_cns_amino_acids_by_sample = f'pk_{TableNames.cns_amino_acids_by_sample}'
+    pk_ih_samples_by_allele = f'pk_{TableNames.ih_samples_by_allele}'
+    pk_ih_samples_by_amino_acid = f'pk_{TableNames.ih_samples_by_amino_acid}'
+
     # samples
     uq_samples_accession = 'uq_samples_accession'
+    fk_samples_sequence_id_sequences = 'fk_samples_sequence_id_sequences'
+    fk_samples_geo_location_id_geo_locations = 'fk_samples_geo_location_id_geo_locations'
+    ck_samples_retraction_values_existence_in_harmony = 'ck_samples_retraction_values_existence_in_harmony'
+    ck_samples_collection_start_and_end_both_absent_or_both_present = 'ck_samples_collection_start_and_end_both_absent_or_both_present'
+    ck_samples_collection_start_not_after_collection_end = 'ck_samples_collection_start_not_after_collection_end'
 
     # alleles
     ck_alleles_alt_nt_not_empty = 'ck_alleles_alt_nt_not_empty'
@@ -264,31 +304,70 @@ class ConstraintNames(PgIdentifiers):
     uq_amino_acids_gff_feature_position_alt_aa_alt_codon = 'uq_amino_acids_gff_feature_position_alt_aa_alt_codon'
 
     # intra host variants
-    uq_intra_host_variants_sample_allele_pair = 'uq_intra_host_variants_sample_allele_pair'
     fk_intra_host_variants_allele_id_alleles = 'fk_intra_host_variants_allele_id_alleles'
     fk_intra_host_variants_sample_id_samples = 'fk_intra_host_variants_sample_id_samples'
 
-    # mutations
-    uq_mutations_sample_allele_pair = 'uq_mutations_sample_allele_pair'
-    fk_mutations_sample_id_samples = 'fk_mutations_sample_id_samples'
-    fk_mutations_allele_id_alleles = 'fk_mutations_allele_id_alleles'
+    # intrahost samples by allele
+    fk_ih_samples_by_allele_allele_id_alleles = 'fk_ih_samples_by_allele_allele_id_alleles'
 
-    # mutation translations
-    uq_mutation_translations_mutation_amino_acid_pair = 'uq_mutation_translations_mutation_amino_acid_pair'
-    fk_mutation_translations_amino_acid_id_amino_acids = 'fk_mutation_translations_amino_acid_id_amino_acids'
-    fk_mutation_translations_mutation_id_mutations = 'fk_mutation_translations_mutation_id_mutations'
+    # intrahost samples by amino acid
+    fk_ih_samples_by_amino_acid_amino_acid_id_amino_acids = 'fk_ih_samples_by_amino_acid_amino_acid_id_amino_acids'
+
+    # consensus samples by allele
+    fk_cns_samples_by_allele_allele_id_alleles = 'fk_cns_samples_by_allele_allele_id_alleles'
+
+    # consensus samples by amino acid
+    fk_cns_samples_by_amino_acid_amino_acid_id_amino_acids = 'fk_cns_samples_by_amino_acid_amino_acid_id_amino_acids'
+
+    # consensus amino acids by sample
+    fk_cns_amino_acids_by_sample_sample_id_samples = 'fk_cns_amino_acids_by_sample_sample_id_samples'
 
     # intra host translations
     fk_intra_host_translations_amino_acid_id_amino_acids = 'fk_intra_host_translations_amino_acid_id_amino_acids'
-    fk_intra_host_translations_intra_host_variant_id = 'fk_intra_host_translations_intra_host_variant_id'
-    uq_intra_host_translations_variant_amino_acid_pair = 'uq_intra_host_translations_variant_amino_acid_pair'
+    fk_intra_host_translations_sample_id_samples = 'fk_intra_host_translations_sample_id_samples'
+
+    # phenotype metrics tables
+    uq_phenotype_metrics_name = 'uq_phenotype_metrics_name'
+    ck_phenotype_metrics_name_not_empty = 'ck_phenotype_metrics_name_not_empty'
+    ck_phenotype_metrics_assay_type_not_empty = 'ck_phenotype_metrics_assay_type_not_empty'
+    uq_phenotype_metric_values_metric_and_amino_acid = f'uq_{TableNames.phenotype_metric_values}_metric_and_amino_acid'
+    fk_phenotype_metric_values_amino_acid_id_amino_acids = 'fk_phenotype_metric_values_amino_acid_id_amino_acids'
+    fk_phenotype_metric_values_phenotype_metric_id_pheno_metrics = 'fk_phenotype_metric_values_phenotype_metric_id_pheno_metrics'
+
+    # geo locations
+    uq_geo_locations_division_names = 'uq_geo_locations_division_names'
+
+    # lineages tables
+    uq_lineage_systems_name = 'uq_lineage_systems_name'
+    uq_lineages_name_uq_within_system = 'uq_lineages_name_uq_within_system'
+    uq_samples_lineages_sample_id_lineage_id_is_consensus_call = 'uq_samples_lineages_sample_id_lineage_id_is_consensus_call'
+    ck_samples_lineages_has_abundance_xor_consensus = f'ck_{TableNames.samples_lineages}_has_abundance_xor_is_consensus'
+    uq_lineages_immediate_children_parent_child = f'uq_{TableNames.lineages_immediate_children}_parent_child'
+    ck_lineages_immediate_children_no_self_parenthood = f'ck_{TableNames.lineages_immediate_children}_no_self_parenthood'
+
+    # annotations tables
+    uq_papers_authors_title_year = 'uq_papers_authors_title_year'
+    uq_effects_detail = 'uq_effects_detail'
+    uq_annotations_papers_annotation_paper_pair = 'uq_annotations_papers_annotation_paper_pair'
+    uq_annotations_amino_acids_pair = 'uq_annotations_amino_acids_pair'
+    fk_annotations_amino_acids_amino_acid_id_amino_acids = 'fk_annotations_amino_acids_amino_acid_id_amino_acids'
 
 
 class IndexNames(PgIdentifiers):
-    ix_mutations_allele_id = 'ix_mutations_allele_id'
-    ix_mutation_translations_amino_acid_id = 'ix_mutation_translations_amino_acid_id'
-    ix_intra_host_translations_amino_acid_id = 'ix_intra_host_translations_amino_acid_id'
-    ix_intra_host_variants_allele_id = 'ix_intra_host_variants_allele_id'
+    # mutations
+    ix_mutations_allele_id_sequence_id = 'ix_mutations_allele_id_sequence_id'  # todo rm
+
+    # mutation translations
+    ix_mutation_translations_amino_acid_id_sequence_id = 'ix_mutation_translations_amino_acid_id_sequence_id'  # todo rm
+
+    # variants
+    ix_intra_host_variants_allele_id_sample_id = 'ix_intra_host_variants_allele_id_sample_id'
+
+    # intra-host translations
+    ix_intra_host_translations_amino_acid_id_sample_id = 'ix_intra_host_translations_amino_acid_id_sample_id'
+
+    # samples lineages
+    ix_samples_lineages_lineage_id = 'ix_samples_lineages_lineage_id'
 
 
 class MiscDbNames(PgIdentifiers):
@@ -316,3 +395,22 @@ EXCLUDED_SRAS = {
     'SRR29182474', 'SRR29182475', 'SRR29182476', 'SRR29182477', 'SRR29182478', 'SRR29182479',
     'SRR29182480', 'SRR29182481', 'SRR29182482', 'SRR29182483', 'SRR29182484', 'SRR29182485',
 }
+
+CODONS_AMINO_ACIDS = [
+    ('TTT', 'F'), ('TTC', 'F'), ('TTA', 'L'), ('TTG', 'L'),
+    ('CTT', 'L'), ('CTC', 'L'), ('CTA', 'L'), ('CTG', 'L'),
+    ('ATT', 'I'), ('ATC', 'I'), ('ATA', 'I'), ('ATG', 'M'),
+    ('GTT', 'V'), ('GTC', 'V'), ('GTA', 'V'), ('GTG', 'V'),
+    ('TCT', 'S'), ('TCC', 'S'), ('TCA', 'S'), ('TCG', 'S'),
+    ('CCT', 'P'), ('CCC', 'P'), ('CCA', 'P'), ('CCG', 'P'),
+    ('ACT', 'T'), ('ACC', 'T'), ('ACA', 'T'), ('ACG', 'T'),
+    ('GCT', 'A'), ('GCC', 'A'), ('GCA', 'A'), ('GCG', 'A'),
+    ('TAT', 'Y'), ('TAC', 'Y'), ('TAA', '*'), ('TAG', '*'),
+    ('CAT', 'H'), ('CAC', 'H'), ('CAA', 'Q'), ('CAG', 'Q'),
+    ('AAT', 'N'), ('AAC', 'N'), ('AAA', 'K'), ('AAG', 'K'),
+    ('GAT', 'D'), ('GAC', 'D'), ('GAA', 'E'), ('GAG', 'E'),
+    ('TGT', 'C'), ('TGC', 'C'), ('TGA', '*'), ('TGG', 'W'),
+    ('CGT', 'R'), ('CGC', 'R'), ('CGA', 'R'), ('CGG', 'R'),
+    ('AGT', 'S'), ('AGC', 'S'), ('AGA', 'R'), ('AGG', 'R'),
+    ('GGT', 'G'), ('GGC', 'G'), ('GGA', 'G'), ('GGG', 'G')
+]

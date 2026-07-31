@@ -2,6 +2,7 @@ import asyncpg
 from sqlalchemy import create_engine
 from sqlalchemy.engine import URL
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.ext.asyncio.engine import AsyncEngine
 
 from utils.constants import Env
 
@@ -52,13 +53,13 @@ def create_pg_engine():
     )
 
 
-async_write_engine = create_async_engine(
+async_write_engine: AsyncEngine = create_async_engine(
     get_url(async_=True, readonly=False),
     pool_size=POOL_SIZE,
     max_overflow=MAX_OVERFLOW
 )
 
-async_engine = create_async_engine(
+async_engine: AsyncEngine = create_async_engine(
     get_url(async_=True),
     pool_size=POOL_SIZE,
     max_overflow=MAX_OVERFLOW,

@@ -1,0 +1,2 @@
+alter table cns_samples_by_amino_acid add constraint pk_cns_samples_by_amino_acid
+primary key (amino_acid_id);

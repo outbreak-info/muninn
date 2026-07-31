@@ -14,8 +14,8 @@ from DB.inserts.file_parsers.freyja_demixed_parser import FreyjaDemixedParser
 from DB.inserts.file_parsers.samples_parser import SamplesCsvParser, SamplesTsvParser
 from DB.inserts.file_parsers.sarscov2_parsers.dms_parser import Sc2DmsTsvParser
 from DB.inserts.file_parsers.sarscov2_parsers.eve_parser import Sc2EveCsvParser
-from DB.inserts.file_parsers.sarscov2_parsers.sc2_wastewater_samples_parser import SC2WastewaterSamplesParser
-from DB.inserts.file_parsers.sarscov2_parsers.sc2_sd_samples_parser import SC2SDSamplesParser
+from DB.inserts.file_parsers.sarscov2_parsers.sc2_samples_parser import Sc2SdSamplesParser, Sc2SamplesParser, \
+    Sc2WastewaterSamplesParser, Sc2NcbiSamplesParser
 from DB.inserts.file_parsers.simple_lineage_parser import GenofluLineageParser, Sc2LineageParser
 from DB.inserts.file_parsers.variants_mutations_combined_parser import VariantsMutationsCombinedParser, \
     VariantsMutationsCombinedParserBig
@@ -38,9 +38,10 @@ def main():
         'freyja_demixed': FreyjaDemixedParser,
         'variants_mutations_combined_tsv': VariantsMutationsCombinedParser,
         'variants_mutations_combined_big_tsv': VariantsMutationsCombinedParserBig,
-        'sc2_samples': SC2SDSamplesParser,
-        'sc2_wastewater_samples': SC2WastewaterSamplesParser,
-        'sc2_sd_samples': SC2SDSamplesParser,
+        'sc2_samples': Sc2SdSamplesParser,
+        'sc2_wastewater_samples': Sc2WastewaterSamplesParser,
+        'sc2_sd_samples': Sc2SdSamplesParser,
+        'sc2_ncbi_samples': Sc2NcbiSamplesParser,
         'flumut_tsv': FlumutTsvParser,
         'dms_tmp_csv': HaRegionDmsCsvParserNewData,
         'freyja_demixed_hierarchy_yaml': FreyjaDemixedLineageHierarchyYamlParser,
@@ -64,6 +65,13 @@ def main():
         required=False
     )
 
+    argparser.add_argument(
+        '--parser_extras',
+        help='Extra arguments to be supplied to the parser. Format: --parser_extras name=value name2=value2',
+        nargs='*',
+        required=False
+    )
+
     args = argparser.parse_args()
 
     if args.req_cols:
@@ -81,20 +89,32 @@ def main():
 
     file_parser: FileParser = formats[args.format]
     filename: str = args.filenames[0]
-    if not issubclass(file_parser, VariantsMutationsCombinedParser) and len(args.filenames) > 1:
+    parser_extras: list[str]|None = args.parser_extras
+    if parser_extras == list():
+        parser_extras = None
+
+    if len(args.filenames) > 1 and not (
+            issubclass(file_parser, VariantsMutationsCombinedParser) or
+            issubclass(file_parser, Sc2SamplesParser)
+    ):
         raise ValueError('Multiple filenames provided, but this format takes only one.')
+
+    if parser_extras is not None and not issubclass(file_parser, VariantsMutationsCombinedParser):
+        print('Warning: this format does not except extra args, the values you passed will be ignored. ')
 
     # run inserts method
     start_time = datetime.now()
-    print(f'{filename} {args.format} start at {start_time}')
+    print(f'{args.filenames} {args.format} start at {start_time}')
     if issubclass(file_parser, FileParser):
         if issubclass(file_parser, VariantsMutationsCombinedParser):
-            parser = file_parser(args.filenames)
+            parser = file_parser(args.filenames, parser_extras)
+        elif issubclass(file_parser, Sc2SamplesParser) and len(args.filenames) >= 2:
+            parser = file_parser(args.filenames[0], args.filenames[1])
         else:
             parser = file_parser(filename)
         asyncio.run(parser.parse_and_insert())
     end_time = datetime.now()
-    print(f'{filename} {args.format} end at {end_time}, elapsed: {end_time - start_time}')
+    print(f'{args.filenames} {args.format} end at {end_time}, elapsed: {end_time - start_time}')
 
 
 def print_req_col_info(formats: dict[str, Any]) -> None:

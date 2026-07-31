@@ -11,7 +11,7 @@ from DB.inserts.lineages import find_or_insert_lineage
 from DB.inserts.samples import get_sample_id_by_accession
 from DB.inserts.samples_lineages import insert_sample_lineage
 from DB.models import LineageSystem, Lineage, SampleLineage
-from utils.constants import StandardColumnNames, StandardLineageSystemNames
+from utils.constants import ColumnNames, LineageSystemNames
 from utils.csv_helpers import get_value
 from utils.errors import NotFoundError
 
@@ -50,8 +50,8 @@ class SimpleLineageParser(FileParser):
 
             for row in reader:
                 try:
-                    sample_accession = get_value(row, self.column_name_map[StandardColumnNames.accession])
-                    genotype = get_value(row, self.column_name_map[StandardColumnNames.lineage_name])
+                    sample_accession = get_value(row, self.column_name_map[ColumnNames.accession])
+                    genotype = get_value(row, self.column_name_map[ColumnNames.lineage_name])
                 except ValueError:
                     debug_info['skipped_malformed'] += 1
                     continue
@@ -111,32 +111,32 @@ class SimpleLineageParser(FileParser):
         return {v for v in cls.column_name_map.values()}
 
     column_name_map = {
-        StandardColumnNames.lineage_name: StandardColumnNames.lineage_name,
-        StandardColumnNames.accession: StandardColumnNames.accession
+        ColumnNames.lineage_name: ColumnNames.lineage_name,
+        ColumnNames.accession: ColumnNames.accession
     }
 
 
 class GenofluLineageParser(SimpleLineageParser):
     def __init__(self, filename: str):
-        super().__init__(filename, '\t', StandardLineageSystemNames.genoflu)
+        super().__init__(filename, '\t', LineageSystemNames.usda_genoflu)
 
     async def parse_and_insert(self):
         await super().parse_and_insert()
 
     column_name_map = {
-        StandardColumnNames.lineage_name: 'Genotype',
-        StandardColumnNames.accession: 'sample'
+        ColumnNames.lineage_name: 'Genotype',
+        ColumnNames.accession: 'sample'
     }
 
 
 class Sc2LineageParser(SimpleLineageParser):
     def __init__(self, filename: str):
-        super().__init__(filename, ',', StandardLineageSystemNames.sc2)
+        super().__init__(filename, ',', LineageSystemNames.pango)
 
     async def parse_and_insert(self):
         await super().parse_and_insert()
 
     column_name_map = {
-        StandardColumnNames.accession: 'taxon',
-        StandardColumnNames.lineage_name: 'lineage'
+        ColumnNames.accession: 'taxon',
+        ColumnNames.lineage_name: 'lineage'
     }

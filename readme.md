@@ -1,8 +1,8 @@
-# Muninn --- Viral Mutation Database
+# Muninn
 
-Database system to store mutation and variant data for avian influenza.
+Muninn is a database system designed to store consensus and intra-host mutation data for avian influenza and SARS-CoV-2.
 
-## Testing Setup (containerized)
+## Containerized Setup
 
 1. Clone repository and cd into it.
 2. Create `.env` file.
@@ -29,12 +29,17 @@ Database system to store mutation and variant data for avian influenza.
     
     # this will be used as a prefix to the container names
     export MUNINN_INSTANCE_NAME="flu_db"
+   
+    # this is not used in the default docker-compose file
+    # directory to be mounted to store postgres data
+    export MUNINN_PG_DATA_BIND_DIR="/dev/null"
     ```
     - Change the value for `MUNINN_SERVER_DATA_INPUT_DIR` to allow the server to read input data from a host directory.
     - If the server and DB are running on the same host, they will talk through the docker network. 
     In that case, `MUNINN_DB_PORT_FOR_SERVER` should be 5432, regardless of the value of `MUNINN_DB_PORT`, 
     and `MUNINN_DB_HOST` should be `"postgres"`, which is the name of the database service within docker.
     - If the DB and server are on different hosts, then `MUNINN_DB_HOST` should be the DB host, and `MUNINN_DB_PORT_FOR_SERVER` must be the same as `MUNINN_DB_PORT`
+    - For local testing, `MUNINN_PG_DATA_BIND_DIR` does not need to be set. 
 3. Run docker compose to start the database and api containers.
     1. `docker-compose -f docker-compose.yml up -d --build`
     2. This will start up two containers, `flu_db_pg` for postgres, and `flu_db_server` for the webserver.
@@ -48,42 +53,35 @@ Database system to store mutation and variant data for avian influenza.
        will remain available.
     3. For information on logs see Troubleshooting Information > Webserver
     4. The `--auto` flag is optional, but this mode avoids the need to adhere to specific file and dir names within the input archive.
-6. Load or update test data: `docker exec -d flu_db_server muninn_ingest_playset ${MUNINN_SERVER_DATA_INPUT_DIR}/<archive name>`
-    1. Input data must be placed in `MUNINN_SERVER_DATA_INPUT_DIR` on the host machine.
-       For details read ingestion script: `containers/server/bin/muninn_ingest_playset`
-    2. This process will take a few minutes and data will persist in a docker volume. Please see `docker-compose.yml` for details.
-    3. For information on logs see Troubleshooting Information > Webserver
 
 ### Running Multiple Instances
 
-In some cases we want to run multiple instances of Muninn on one host. 
-For most use-cases this shouldn't be required, so these notes are largely for my own use and might not be complete.
+In some cases we want to run multiple instances of Muninn on one host.
 
-The motivation here is using an instance of the server on host A to do the data ingestion for a database on host B. 
-We have a few reasons for wanting to do it this way, but primarily, we want to avoid needing to copy the input data over.
-This way we avoid that issue by reusing the ingestion machinery we already have in place, and simply pointing it at a different target.
+The `MUNINN_INSTANCE_NAME` is used to name docker containers, volumes, etc to avoid conflicts between multiple instances of Muninn.
+If multiple instances share a host, each must have a unique value for this variable.
 
-It's best to have two copies of the project, one for each instance.
-By default, docker's `project-name` will be set using the name of the root directory of the project.
-If you run multiple instances from a single copy, then you'll have to explicitly set `project-name`:
-```commandline
-docker compose --project-name $MUNINN_INSTANCE_NAME up -d --build
-docker compose --project-name $MUNINN_INSTANCE_NAME down -v
-```
-Just make a second copy of the repo, it's the easier way.
-Beyond this point, these instructions will assume separate directories.
+It is possible to run multiple instances of muninn using a single copy of the project, but in most cases it will be more natural to have one copy per instance.
+Beyond this point, these instructions will assume the latter case.
 
 In the `.env` file for your new instance: 
-1. Change the `MUNINN_INSTANCE_NAME` to something other than the default.
-2. Change the server and database ports.
+1. Change the `MUNINN_INSTANCE_NAME` to avoid conflicts with other instances on the host.  
+   (Hint: use `docker ps` to see what else is running.)
+2. Change `MUNINN_DB_PORT` and `MUNINN_SERVER_PORT` to avoid conflicts.  
+   (No need to change `MUNINN_DB_PORT_FOR_SERVER`)
 3. Ideally, change `MUNINN_SERVER_DATA_INPUT_DIR`. 
 Allowing multiple instances to share the input directory shouldn't break anything, but it introduces opportunities for bugs and confusion.
 
-Recall our goal: to use a server instance on host A to manage data ingestion for a database on host B. 
-Obviously what we want, then, is to run only the server, and not the database: 
-```commandline
-docker compose -f docker-compose.yml up -d --no-deps --build server
-```
+### Postgres Data Location
+
+The default `docker-compose.yml` creates an anonymous volume to hold Postgres data.
+The location of this volume is decided by docker configuration on the host machine, but by default it will be stored on the root partition. 
+When using the default docker compose file, `MUNINN_PG_DATA_BIND_DIR` is ingored, and changing it will have no effect.
+
+The alternate compose file `docker-compose.bind-pg-data.yml` gives us the option to store Postgres data in a directory of our choosing.
+This directory will be bound to the Postgres container. 
+Set the directory using `MUNINN_PG_DATA_BIND_DIR`, and modify commands to use the alternate compose file: `docker-compose -f docker-compose.bind-pg-data.yml ...`
+Data stored in a bound directory will not be cleared with `docker compose down -v`.
 
 ## Troubleshooting Tools
 
@@ -145,60 +143,23 @@ For example, `/variants/by/sample/collection_start_date >= 2024-01-01 ^ host = c
 being used in the query above:
 `SELECT samples.id FROM samples WHERE collection_start_date >= '2024-01-01' ^ host = 'cat'`.
 
-Here's a quick (and quite possibly outdated) guide to the available syntax:
+Here's a quick guide to the available syntax:
 You can use equivalence relations: `=, !=, >, <, <=, >=`.
 Greater than and less than are only usable with numeric or date values.
 The available boolean operators are: `^`, `|`, and `!`, meaning `and`, `or` and `not`, respectively.
-Parentheses may be used to group terms, e.g.: `(host = cat | host = dog) ^ region_name = Minnesota`.
+Parentheses may be used to group terms, e.g.: `(host = cat | host = dog) ^ admin1_name = Minnesota`.
 Dates must be entered in the format `\d{4}-\d{2}-\d{2}`.
 In text inputs, only letters, numbers, hyphens and underscores are allowed.
 Numbers may contain decimal points.
 
+Note: using `id` as a field in any query (e.g.: `id = 1234`) is likely to fail.
+This is because multiple tables, each with their own `id` column are joined before being queried, and SQL will not allow a query to use an ambiguous column name.
+
 ## Endpoints
 
-**I'm no longer updating this list to include new endpoints.**
 Auto-generated documentation for the API can be found at `<host>:8000/docs`.
 
-The following endpoints are currently live:
-
-Get item by id:
-
-- `/sample/{id}`
-
-These endpoints simply allow you to query a particular collection:
-
-- `/samples?q=<query>`
-- `/variants?q=<query>`
-- `/mutations?q=<query>`
-
-These allow you to query one collection based on properties of related entries in other collections:
-
-- `/variants/by/sample?q=<query>`
-- `/mutations/by/sample?q=<query>`
-- `/samples/by/mutation?q=<query>`
-- `/samples/by/variant?q=<query>`
-
-Simple counts:
-
-- `/count/{x}/by/{y}`
-    - `{x}` is one of `samples`, `variants`, or `mutations`
-    - `{y}` is the name of a column from `{x}`. In the case of `variants` and `mutations`, columns from `alleles`
-      and `amino_acid_substitutions` are also allowed.
-
-Prevalence:
-
-- `/variants/frequency?aa=HA:Q238R`
-    - Also allows queries based on nucleotide with parameter `nt=HA:A123C`
-- `/mutations/frequency?aa=HA:Q238R`
-    - Also allows queries based on nucleotide as above.
-    - Returns count of samples associated with the given amino acid or nucleotide change.
-- `/variants/frequency/score?region=HA&metric=stability`
-
-Note: using `id` as a field in any query (e.g.: `id = 1234`) is likely to fail.
-This is because multiple tables, each with their own `id` column are joined before being queried, and SQL will not allow
-a query to use an ambiguous column name.
-As far as I know, the only columns affected by this are ids which we are unlikely to want to use in queries anyway, so
-fixing this will not be a priority unless a use-case arises.
+In general, parameters called `q` are expected to use the query syntax outlined above.
 
 ## Lineage Hierarchy
 
@@ -225,7 +186,7 @@ A       A.1.1
 A       A.1.2
 ```
 (Lineage names are used here for simplicity. In the actual implementation, only IDs are used.)
-Lineages are allowed to form a DAG, and a `BEFORE INSERT` trigger prevents any cycle-producing entries from being added to `lineages_immediate_children`.
+Lineages are allowed to form a directed acyclic graph, and a `BEFORE INSERT` trigger prevents any cycle-producing entries from being added to `lineages_immediate_children`.
 
 
 Have fun!

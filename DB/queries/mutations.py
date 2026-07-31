@@ -9,7 +9,7 @@ from DB.queries.date_count_helpers import get_extract_clause, MID_COLLECTION_DAT
     get_group_by_clause
 from api.models import MutationInfo
 from parser.parser import parser
-from utils.constants import StandardColumnNames, DateBinOpt, TableNames, COLLECTION_DATE
+from utils.constants import ColumnNames, DateBinOpt, TableNames, COLLECTION_DATE
 
 
 async def get_mutations(query: str) -> List['MutationInfo']:
@@ -78,11 +78,11 @@ async def get_aa_mutation_count_by_collection_date(
     group_by_clause = get_group_by_clause(
         date_bin,
         prefix_cols=[
-            StandardColumnNames.gff_feature,
-            StandardColumnNames.position_aa,
-            StandardColumnNames.alt_aa,
-            StandardColumnNames.ref_aa,
-            StandardColumnNames.lineage_name
+            ColumnNames.gff_feature,
+            ColumnNames.position_aa,
+            ColumnNames.alt_aa,
+            ColumnNames.ref_aa,
+            ColumnNames.lineage_name
         ]
     )
     order_by_clause = get_order_by_cause(date_bin)
@@ -121,7 +121,7 @@ async def get_aa_mutation_count_by_collection_date(
                             collection_end_date - collection_start_date as collection_span
                         from samples s
                         inner join mutations m on m.sample_id = s.id
-                        inner join {TableNames.mutation_translations} t on t.{StandardColumnNames.mutation_id} = m.id
+                        inner join {TableNames.cns_samples_by_amino_acid} t on t.{ColumnNames.mutation_id} = m.id
                         inner join amino_acids aa on aa.id = t.amino_acid_id
                         inner join samples_lineages sl on sl.sample_id = s.id
                         inner join lineages l on l.id = sl.lineage_id

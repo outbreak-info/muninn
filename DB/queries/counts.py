@@ -10,7 +10,7 @@ from DB.queries.date_count_helpers import get_extract_clause, get_group_by_claus
     MID_COLLECTION_DATE_CALCULATION
 from DB.queries.helpers import get_appropriate_translations_table_and_id
 from parser.parser import parser
-from utils.constants import DateBinOpt, NtOrAa, StandardColumnNames, COLLECTION_DATE
+from utils.constants import DateBinOpt, NtOrAa, ColumnNames, COLLECTION_DATE
 
 
 async def count_samples_by_column(by_col: str):
@@ -193,7 +193,7 @@ async def _count_variants_or_mutations_by_collection_date(
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(
         date_bin,
-        [StandardColumnNames.gff_feature, f'ref_{change_bin}', f'position_{change_bin}', f'alt_{change_bin}']
+        [ColumnNames.gff_feature, f'ref_{change_bin}', f'position_{change_bin}', f'alt_{change_bin}']
     )
     order_by_clause = get_order_by_cause(date_bin)
 
@@ -263,7 +263,7 @@ async def count_lineages_by_simple_date(
     extract_clause = get_extract_clause(group_by, date_bin, days)
     group_by_clause = get_group_by_clause(
         date_bin,
-        [StandardColumnNames.lineage_name, StandardColumnNames.lineage_system_name]
+        [ColumnNames.lineage_name, ColumnNames.lineage_system_name]
     )
     order_by_clause = get_order_by_cause(date_bin)
 
@@ -318,45 +318,39 @@ async def count_lineages_by_collection_date(
 ) -> Dict[str, Dict[str, Dict[str, int]]]:
     user_where_clause = ''
     if raw_query is not None:
-        user_where_clause = f'where {parser.parse(raw_query)}'
+        user_where_clause = f'and {parser.parse(raw_query)}'
 
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(
         date_bin,
-        [StandardColumnNames.lineage_name, StandardColumnNames.lineage_system_name]
+        [ColumnNames.lineage_name, ColumnNames.lineage_system_name]
     )
     order_by_clause = get_order_by_cause(date_bin)
 
     async with get_async_session() as session:
         res = await session.execute(
             text(
-                f'''
-                select
-                {extract_clause},
-                lineage_name,
-                lineage_system_name,
-                count(*)
-                from (
-                    select
-                    *,
-                    {MID_COLLECTION_DATE_CALCULATION}
-                    from (
-                        select
-                        lineage_name,
-                        lineage_system_name,
-                        collection_start_date,
-                        collection_end_date,
-                        collection_end_date - collection_start_date as collection_span
-                        from samples_lineages sl
-                        inner join lineages l on l.id = sl.lineage_id
-                        inner join lineage_systems ls on ls.id = l.lineage_system_id
-                        inner join samples s on s.id = sl.sample_id
-                        {user_where_clause}
-                    )
-                    where collection_span <= {max_span_days}
+               f'''
+               with lin_samp_date as (
+                    select lineage_name,
+                           lineage_system_name,
+                           collection_start_date,
+                           collection_end_date,
+                           collection_end_date - collection_start_date as collection_span,
+                           {MID_COLLECTION_DATE_CALCULATION}
+                    from samples_lineages sl
+                    inner join lineages l on l.id = sl.lineage_id
+                    inner join lineage_systems ls on ls.id = l.lineage_system_id
+                    inner join samples s on s.id = sl.sample_id
+                    where collection_end_date - collection_start_date <= {max_span_days} {user_where_clause}
                 )
-               {group_by_clause}
-               {order_by_clause}
+                select {extract_clause},
+                       lineage_name,
+                       lineage_system_name,
+                       count(*)
+                from lin_samp_date
+                {group_by_clause}
+                {order_by_clause};
                 '''
             )
         )

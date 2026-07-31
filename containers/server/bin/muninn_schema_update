@@ -1,3 +1,3 @@
 #! /bin/bash
-
-alembic upgrade head &>> /home/muninn/db_setup.log
+LOG="/home/muninn/data/db_setup.log"
+python3 create_db.py &> "$LOG"
