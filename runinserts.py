@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any
 
 from DB.inserts.file_parsers.dms_parser import HaRegionDmsTsvParser, HaRegionDmsCsvParser, HaRegionDmsCsvParserNewData, \
-    Pb2RegionDmsCsvParser
+    Pb2RegionDmsCsvParser, HaRegionDmsCsvParserNeuAcVsNeuGc
 from DB.inserts.file_parsers.eve_parser import EveCsvParser
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.file_parsers.flumut_annotations_parser import FlumutTsvParser
@@ -33,6 +33,7 @@ def main():
         'ha_dms_tsv': HaRegionDmsTsvParser,
         'ha_dms_csv': HaRegionDmsCsvParser,
         'pb2_dms_csv': Pb2RegionDmsCsvParser,
+        'ha_neuac_vs_neugc_dms_csv': HaRegionDmsCsvParserNeuAcVsNeuGc,
         'sc2_dms_tsv': Sc2DmsTsvParser,
         'freyja_demixed': FreyjaDemixedParser,
         'variants_mutations_combined_tsv': VariantsMutationsCombinedParser,
@@ -64,6 +65,13 @@ def main():
         required=False
     )
 
+    argparser.add_argument(
+        '--parser_extras',
+        help='Extra arguments to be supplied to the parser. Format: --parser_extras name=value name2=value2',
+        nargs='*',
+        required=False
+    )
+
     args = argparser.parse_args()
 
     if args.req_cols:
@@ -81,18 +89,25 @@ def main():
 
     file_parser: FileParser = formats[args.format]
     filename: str = args.filenames[0]
+    parser_extras: list[str]|None = args.parser_extras
+    if parser_extras == list():
+        parser_extras = None
+
     if len(args.filenames) > 1 and not (
             issubclass(file_parser, VariantsMutationsCombinedParser) or
             issubclass(file_parser, Sc2SamplesParser)
     ):
         raise ValueError('Multiple filenames provided, but this format takes only one.')
 
+    if parser_extras is not None and not issubclass(file_parser, VariantsMutationsCombinedParser):
+        print('Warning: this format does not except extra args, the values you passed will be ignored. ')
+
     # run inserts method
     start_time = datetime.now()
     print(f'{args.filenames} {args.format} start at {start_time}')
     if issubclass(file_parser, FileParser):
         if issubclass(file_parser, VariantsMutationsCombinedParser):
-            parser = file_parser(args.filenames)
+            parser = file_parser(args.filenames, parser_extras)
         elif issubclass(file_parser, Sc2SamplesParser) and len(args.filenames) >= 2:
             parser = file_parser(args.filenames[0], args.filenames[1])
         else:

@@ -1,1 +1,0 @@
-create index ix_intra_host_translations_amino_acid_id_sample_id on intra_host_translations (amino_acid_id, sample_id);

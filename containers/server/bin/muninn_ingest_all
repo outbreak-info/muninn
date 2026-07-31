@@ -3,12 +3,18 @@ SECONDS=0
 LOG="/home/muninn/data/ingest_all_$(date +%Y-%m-%dT%H_%M_%S%Z).log"
 echo "begin at $(date)" >> "$LOG"
 
+# bjorn-general outputs
+BJORN_GENERAL_OUTPUT_ARCHIVE="$DATA_DIR/outputs.all.zip"
+ARCHIVE_DEST_DIR="$DATA_DIR/outputs.all"
+
 # when in auto mode, we will automatically try to find the input files within the input archive
 AUTO=false
 
 DATA_DIR='/home/muninn/data'
 
 ARCHIVE_IN_NAME="UNSET"
+
+SKIP_DECOMPRESSION=false
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -22,47 +28,48 @@ while [[ $# -gt 0 ]]; do
     echo "Auto mode: will attempt to locate files within input archive" >> "$LOG"
     shift
     ;;
+   --dir_in)
+    SKIP_DECOMPRESSION=true
+    ARCHIVE_DEST_DIR="$DATA_DIR/$2"
+    echo "Skipping decompression and reading from $ARCHIVE_DEST_DIR" >> "$LOG"
+    shift
+    shift
+    ;;
   esac
 done
 
-# bjorn-general outputs
-BJORN_GENERAL_OUTPUT_ARCHIVE="$DATA_DIR/outputs.all.zip"
-ARCHIVE_DEST_DIR="$DATA_DIR/outputs.all"
-
-if [[ ! "$ARCHIVE_IN_NAME" = "UNSET" ]]; then
-  BJORN_GENERAL_OUTPUT_ARCHIVE="$DATA_DIR/$ARCHIVE_IN_NAME"
-fi
-
-# unpack archive
-if [[ -d "$ARCHIVE_DEST_DIR" ]]; then
-  rm -r "$ARCHIVE_DEST_DIR"
-fi
-
-if [[ ! -f "$BJORN_GENERAL_OUTPUT_ARCHIVE" ]]; then
-  echo "bjorn-general outputs archive not found: $BJORN_GENERAL_OUTPUT_ARCHIVE" >> "$LOG"
-  exit 1
-fi
-
-if [[ "$BJORN_GENERAL_OUTPUT_ARCHIVE" = *.zip ]]; then
-  unzip -d "$ARCHIVE_DEST_DIR" "$BJORN_GENERAL_OUTPUT_ARCHIVE"
-elif [[ "$BJORN_GENERAL_OUTPUT_ARCHIVE" = *.tar.gz ]]; then
-  if [[ ! -d  "$ARCHIVE_DEST_DIR" ]]; then
-    mkdir "$ARCHIVE_DEST_DIR"
+if [[ "$SKIP_DECOMPRESSION" = false ]]; then
+  if [[ ! "$ARCHIVE_IN_NAME" = "UNSET" ]]; then
+    BJORN_GENERAL_OUTPUT_ARCHIVE="$DATA_DIR/$ARCHIVE_IN_NAME"
   fi
-  tar -xzf "$BJORN_GENERAL_OUTPUT_ARCHIVE" -C "$ARCHIVE_DEST_DIR"
-else
-  echo "Unknown archive type. $BJORN_GENERAL_OUTPUT_ARCHIVE should be .zip or .tar.gz" >> "$LOG"
-  exit 1
-fi
+  # unpack archive
+  if [[ ! -f "$BJORN_GENERAL_OUTPUT_ARCHIVE" ]]; then
+    echo "bjorn-general outputs archive not found: $BJORN_GENERAL_OUTPUT_ARCHIVE" >> "$LOG"
+    exit 1
+  fi
 
-# b/c the archive is a compressed directory, we have to go down another layer
-# this is not used in auto mode
-ARCHIVE_DEST_SUBDIR="$ARCHIVE_DEST_DIR/outputs"
+  if [[ -d "$ARCHIVE_DEST_DIR" ]]; then
+    rm -r "$ARCHIVE_DEST_DIR"
+  fi
+
+  if [[ "$BJORN_GENERAL_OUTPUT_ARCHIVE" = *.zip ]]; then
+    unzip -d "$ARCHIVE_DEST_DIR" "$BJORN_GENERAL_OUTPUT_ARCHIVE"
+  elif [[ "$BJORN_GENERAL_OUTPUT_ARCHIVE" = *.tar.gz ]]; then
+    if [[ ! -d  "$ARCHIVE_DEST_DIR" ]]; then
+      mkdir "$ARCHIVE_DEST_DIR"
+    fi
+    tar -xzf "$BJORN_GENERAL_OUTPUT_ARCHIVE" -C "$ARCHIVE_DEST_DIR"
+  else
+    echo "Unknown archive type. $BJORN_GENERAL_OUTPUT_ARCHIVE should be .zip or .tar.gz" >> "$LOG"
+    exit 1
+  fi
+fi
 
 # Expected to be in bjorn general
-SAMPLES_FILE="$ARCHIVE_DEST_SUBDIR/metadata/metadata.tsv"
-VARIANTS_FILE="$ARCHIVE_DEST_SUBDIR/intrahost_dms/combined_variants.tsv"
-MUTATIONS_FILE="$ARCHIVE_DEST_SUBDIR/mutations/mutations.tsv"
+SAMPLES_FILE="$ARCHIVE_DEST_DIR/metadata.tsv"
+MUTATIONS_FILE="$ARCHIVE_DEST_DIR/mutations.tsv"
+INTRAHOST_NTS_FILE="$ARCHIVE_DEST_DIR/variants.tsv"
+INTRAHOST_CODONS_FILE="$ARCHIVE_DEST_DIR/variants.codons.tsv"
 
 
 # look in Bjorn general, default to external
@@ -80,10 +87,15 @@ if [[ $AUTO = true ]]; then
   fi
 
   # Variants file
-  TMP_FILE=$(find "$ARCHIVE_DEST_DIR" -type f -name "*variants*.tsv" | head -1)
+  TMP_FILE=$(find "$ARCHIVE_DEST_DIR" -type f -name "*variants.tsv" | head -1)
   if [[ -f "$TMP_FILE" ]]; then
-    VARIANTS_FILE="$TMP_FILE"
-    echo "using variants file: $VARIANTS_FILE" >> "$LOG"
+    INTRAHOST_NTS_FILE="$TMP_FILE"
+    echo "using intrahost nts file: $INTRAHOST_NTS_FILE" >> "$LOG"
+  fi
+    TMP_FILE=$(find "$ARCHIVE_DEST_DIR" -type f -name "*variants.codons.tsv" | head -1)
+  if [[ -f "$TMP_FILE" ]]; then
+    INTRAHOST_CODONS_FILE="$TMP_FILE"
+    echo "using intrahost codons file: $INTRAHOST_CODONS_FILE" >> "$LOG"
   fi
   # Mutations file
   TMP_FILE=$(find "$ARCHIVE_DEST_DIR" -type f -name "mutations*.tsv" | head -1)
@@ -116,6 +128,7 @@ EVE_FILE="eve_dms_data.csv"
 FREYJA_DEMIXED_DIR="demixed"
 FLUMUT_FILE="flumut_annotations.tsv"
 ADDITIONAL_HA_DMS_FILE="26_increase_low_sera.csv"
+HA_NEUAC_VS_NEUGC_DMS="entry_in_NeuAc_vs_NeuGc_cells.csv"
 
 # Debug output files for ref conflicts
 AMINO_SUB_REF_CONFLICTS_FILE="/tmp/amino_acid_ref_conflicts.csv"
@@ -125,7 +138,8 @@ ALLELE_REF_CONFLICTS_FILE="/tmp/allele_ref_conflicts.csv"
   # ingest bjorn-general outputs
   python3 -u runinserts.py "$SAMPLES_FILE" --format samples_tsv
   python3 -u runinserts.py \
-  "$VARIANTS_FILE" \
+  "$INTRAHOST_NTS_FILE" \
+  "$INTRAHOST_CODONS_FILE" \
   "$MUTATIONS_FILE" \
   --format variants_mutations_combined_tsv
   python3 -u runinserts.py "$HA_DMS_FILE" --format ha_dms_tsv
@@ -137,6 +151,7 @@ ALLELE_REF_CONFLICTS_FILE="/tmp/allele_ref_conflicts.csv"
   python3 -u runinserts.py "$DATA_DIR/$FREYJA_DEMIXED_DIR" --format freyja_demixed
   python3 -u runinserts.py "$DATA_DIR/$FLUMUT_FILE" --format flumut_tsv
   python3 -u runinserts.py "$DATA_DIR/$ADDITIONAL_HA_DMS_FILE" --format dms_tmp_csv
+  python3 -u runinserts.py "$DATA_DIR/$HA_NEUAC_VS_NEUGC_DMS" --format ha_neuac_vs_neugc_dms_csv
 } &>> "$LOG"
 
 # Copying over some debug files

@@ -13,24 +13,17 @@ from DB.models import GeoLocation
 from utils.constants import ColumnNames, COLLECTION_DATE, GEO_LOCATION
 from utils.dates_and_times import parse_collection_start_and_end
 
-
 class Sc2SamplesParser(FileParser):
     def __init__(
         self,
         samples_filename: str,
-        unique_seqs_filename: str | None,
         samples_delimiter: str = '\t',
-        unique_seqs_delimiter: str = '\t',
-        unique_seqs_within_field_delimiter: str = ',',
         geo_location_levels_delimiter: str = '/'
     ):
         self.samples_filename = samples_filename
         self.samples_delimiter = samples_delimiter
         self._verify_header()
 
-        self.unique_seqs_filename = unique_seqs_filename
-        self.unique_seqs_delimiter = unique_seqs_delimiter
-        self.unique_seqs_within_field_delimiter = unique_seqs_within_field_delimiter
         self.geo_location_levels_delimiter = geo_location_levels_delimiter
 
     async def parse_and_insert(self):
@@ -165,13 +158,11 @@ class Sc2SamplesParser(FileParser):
 
     column_name_map = dict()
 
-    unique_seqs_accession_columns = set()
-
 
 class Sc2SdSamplesParser(Sc2SamplesParser):
 
     def __init__(self, samples_filename: str, unique_sequences_filename: str | None = None):
-        super().__init__(samples_filename, unique_sequences_filename)
+        super().__init__(samples_filename)
 
     def fill_missing_required_cols(self, samples_input: pl.LazyFrame) -> pl.LazyFrame:
         return samples_input.with_columns(
@@ -186,15 +177,10 @@ class Sc2SdSamplesParser(Sc2SamplesParser):
         GEO_LOCATION: 'location'
     }
 
-    unique_seqs_accession_columns = {
-        'unique_id',
-        'dup_ids'
-    }
-
 
 class Sc2WastewaterSamplesParser(Sc2SamplesParser):
     def __init__(self, samples_filename: str, unique_sequences_filename: str | None = None):
-        super().__init__(samples_filename, unique_sequences_filename)
+        super().__init__(samples_filename)
 
     def fill_missing_required_cols(self, samples_input: pl.LazyFrame) -> pl.LazyFrame:
         return samples_input.with_columns(
@@ -222,7 +208,7 @@ class Sc2WastewaterSamplesParser(Sc2SamplesParser):
 
 class Sc2NcbiSamplesParser(Sc2SamplesParser):
     def __init__(self, samples_filename: str, unique_sequences_filename: str | None = None):
-        super().__init__(samples_filename, unique_sequences_filename, geo_location_levels_delimiter=':')
+        super().__init__(samples_filename, geo_location_levels_delimiter=':')
 
     def fill_missing_required_cols(self, samples_input: pl.LazyFrame) -> pl.LazyFrame:
         return samples_input.with_columns(
@@ -246,9 +232,4 @@ class Sc2NcbiSamplesParser(Sc2SamplesParser):
         ColumnNames.ww_catchment_population: 'population',
         ColumnNames.ww_site_id: 'site_id',
         ColumnNames.ww_collected_by: 'collected_by',
-    }
-
-    unique_seqs_accession_columns = {
-        'unique_id',
-        'dup_ids'
     }

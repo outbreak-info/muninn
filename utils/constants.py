@@ -147,6 +147,9 @@ class StandardPhenoMetricNames:
     ferret_sera_escape = 'ferret_sera_escape'
     mouse_sera_escape = 'mouse_sera_escape'
     entry_in_sa26_and_sa23_293t_cells = 'entry_in_sa26_and_sa23_293t_cells'
+    entry_in_neuac = 'entry_in_neuac'
+    entry_in_neugc = 'entry_in_neugc'
+    neugc_usage_increase = 'neugc_usage_increase'
     mutdiffsel = 'mutdiffsel'
 
 
@@ -185,6 +188,8 @@ class TableNames(PgIdentifiers):
     cns_amino_acids_by_sample = 'cns_amino_acids_by_sample'
     intra_host_translations = 'intra_host_translations'
     sequences = 'sequences'
+    ih_samples_by_allele = 'ih_samples_by_allele'
+    ih_samples_by_amino_acid = 'ih_samples_by_amino_acid'
 
 
 class ColumnNames(PgIdentifiers):
@@ -324,6 +329,8 @@ class ConstraintNames(PgIdentifiers):
     pk_sequences = f'pk_{TableNames.sequences}'
     pk_cns_alleles_by_sample = f'pk_{TableNames.cns_alleles_by_sample}'
     pk_cns_amino_acids_by_sample = f'pk_{TableNames.cns_amino_acids_by_sample}'
+    pk_ih_samples_by_allele = f'pk_{TableNames.ih_samples_by_allele}'
+    pk_ih_samples_by_amino_acid = f'pk_{TableNames.ih_samples_by_amino_acid}'
 
     # samples
     uq_samples_accession = 'uq_samples_accession'
@@ -349,6 +356,12 @@ class ConstraintNames(PgIdentifiers):
     # intra host variants
     fk_intra_host_variants_allele_id_alleles = 'fk_intra_host_variants_allele_id_alleles'
     fk_intra_host_variants_sample_id_samples = 'fk_intra_host_variants_sample_id_samples'
+
+    # intrahost samples by allele
+    fk_ih_samples_by_allele_allele_id_alleles = 'fk_ih_samples_by_allele_allele_id_alleles'
+
+    # intrahost samples by amino acid
+    fk_ih_samples_by_amino_acid_amino_acid_id_amino_acids = 'fk_ih_samples_by_amino_acid_amino_acid_id_amino_acids'
 
     # consensus samples by allele
     fk_cns_samples_by_allele_allele_id_alleles = 'fk_cns_samples_by_allele_allele_id_alleles'
@@ -432,3 +445,22 @@ EXCLUDED_SRAS = {
     'SRR29182474', 'SRR29182475', 'SRR29182476', 'SRR29182477', 'SRR29182478', 'SRR29182479',
     'SRR29182480', 'SRR29182481', 'SRR29182482', 'SRR29182483', 'SRR29182484', 'SRR29182485',
 }
+
+CODONS_AMINO_ACIDS = [
+    ('TTT', 'F'), ('TTC', 'F'), ('TTA', 'L'), ('TTG', 'L'),
+    ('CTT', 'L'), ('CTC', 'L'), ('CTA', 'L'), ('CTG', 'L'),
+    ('ATT', 'I'), ('ATC', 'I'), ('ATA', 'I'), ('ATG', 'M'),
+    ('GTT', 'V'), ('GTC', 'V'), ('GTA', 'V'), ('GTG', 'V'),
+    ('TCT', 'S'), ('TCC', 'S'), ('TCA', 'S'), ('TCG', 'S'),
+    ('CCT', 'P'), ('CCC', 'P'), ('CCA', 'P'), ('CCG', 'P'),
+    ('ACT', 'T'), ('ACC', 'T'), ('ACA', 'T'), ('ACG', 'T'),
+    ('GCT', 'A'), ('GCC', 'A'), ('GCA', 'A'), ('GCG', 'A'),
+    ('TAT', 'Y'), ('TAC', 'Y'), ('TAA', '*'), ('TAG', '*'),
+    ('CAT', 'H'), ('CAC', 'H'), ('CAA', 'Q'), ('CAG', 'Q'),
+    ('AAT', 'N'), ('AAC', 'N'), ('AAA', 'K'), ('AAG', 'K'),
+    ('GAT', 'D'), ('GAC', 'D'), ('GAA', 'E'), ('GAG', 'E'),
+    ('TGT', 'C'), ('TGC', 'C'), ('TGA', '*'), ('TGG', 'W'),
+    ('CGT', 'R'), ('CGC', 'R'), ('CGA', 'R'), ('CGG', 'R'),
+    ('AGT', 'S'), ('AGC', 'S'), ('AGA', 'R'), ('AGG', 'R'),
+    ('GGT', 'G'), ('GGC', 'G'), ('GGA', 'G'), ('GGG', 'G')
+]
