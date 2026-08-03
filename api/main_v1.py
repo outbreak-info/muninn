@@ -329,10 +329,22 @@ async def get_mutation_counts(
     summary='Get amino-acid changes seen as consensus mutations before intra-host variants, keyed by GFF feature'
 )
 async def get_mutations_before_variants(
-    lineage: str = Query(..., description='Lineage name to restrict samples to (e.g. a Pango/Nextstrain lineage), matched against lineages.lineage_name'),
-    lineage_system_name: str = Query(..., description='Name of the lineage nomenclature system the lineage belongs to, matched against lineage_systems.lineage_system_name'),
+    lineage: str = Query(..., description='Lineage name to restrict samples to (e.g. BA.1)'),
+    lineage_system_name: str = Query(..., description='Name of the lineage nomenclature system the lineage belongs to (e.g. a Pango/Nextstrain lineage)')
 ):
     return await DB.queries.variants_mutations.get_mutations_before_variants(lineage, lineage_system_name)
+
+@router.get(
+    '/variants:mutationLag',
+    response_model=Dict[str, List[VariantMutationLagInfo]],
+    tags=[TAG_VARIANTS],
+    summary='Get amino-acid changes seen as intra-host variants before consensus mutations, keyed by GFF feature'
+)
+async def get_variants_before_mutations(
+    lineage: str = Query(..., description='Lineage name to restrict samples to (e.g. BA.1)'),
+    lineage_system_name: str = Query(..., description='Name of the lineage nomenclature system the lineage belongs to (e.g. a Pango/Nextstrain lineage)'),
+):
+    return await DB.queries.variants_mutations.get_variants_before_mutations(lineage, lineage_system_name)
 
 @router.get(
     '/mutations:countByPhenotypeScore',
