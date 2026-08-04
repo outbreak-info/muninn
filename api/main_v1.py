@@ -249,6 +249,28 @@ async def get_variants_by_sample(
 ):
     return await DB.queries.variants.get_variants_by_sample(change_bin, filter)
 
+@router.get(
+    '/variants:count',
+    response_model=Dict[str, Dict[str, int]] | Dict[str, int],
+    tags=[TAG_VARIANTS],
+    summary='Count intra-host variant observations grouped by a column or by collection date'
+)
+async def get_variant_counts(
+    group_by: Annotated[str, Query(pattern=WORDLIKE_PATTERN.pattern, description='Grouping key: "collection_date" for a date-binned time series of per-change counts, or a column name to group by. The column must belong to the change_bin catalog: nt=alleles columns (region, position_nt, ref_nt, alt_nt); aa=amino_acids columns (gff_feature, ref_aa, position_aa, alt_aa, ref_codon, alt_codon). "alt_freq_range" also works, to count observations per intra-host frequency bin.')],
+    change_bin: NtOrAa = Query(NtOrAa.aa, description='Whether counts are over nucleotide (nt) allele variants or amino-acid (aa) variants.'),
+    date_bin: DateBinOpt = Query(DateBinOpt.month, description='Granularity of date bins when group_by=collection_date: month, week, or day'),
+    days: int = Query(DEFAULT_DAYS, description='Bin width in days when date_bin=day'),
+    max_span_days: int = Query(DEFAULT_MAX_SPAN_DAYS, description='Exclude samples whose collection window (end - start) exceeds this many days (collection_date grouping only)'),
+    filter: str | None = filter_query('Optional. Selects which *samples* are counted: over all columns of the `samples` table, the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names), and the lineage columns (lineage_name, lineage_system_name). filter can only narrow the sample side. Use group_by to slice the change side.', required=False),
+):
+    """
+    Counts are of (sample, change) observations: a change is counted once per sample carrying it at
+    any intra-host frequency, not once per frequency bin.
+    """
+    if group_by == COLLECTION_DATE:
+        return await DB.queries.counts.count_variants_by_collection_date(date_bin, change_bin, days, max_span_days, filter)
+    return await DB.queries.counts.count_variants_by_column(group_by, change_bin, filter)
+
 #############
 # MUTATIONS #
 #############

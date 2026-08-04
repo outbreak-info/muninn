@@ -1,14 +1,11 @@
-from typing import Type, List, Any, Dict
+from platformdirs import user_desktop_dir
+from typing import List, Any, Dict
 
-from sqlalchemy import text, select, Result
-from sqlalchemy.sql.functions import func
+from sqlalchemy import text, Result
 
 from DB.engine import get_async_session
-from DB.models import Sample, GeoLocation, IntraHostVariant, AminoAcid, Allele, Mutation, IntraHostTranslation, \
-    MutationTranslation
 from DB.queries.date_count_helpers import get_extract_clause, get_group_by_clause, get_order_by_cause, \
     MID_COLLECTION_DATE_CALCULATION
-from DB.queries.helpers import get_appropriate_translations_table_and_id
 from parser.parser import parser
 from utils.constants import DateBinOpt, NtOrAa, ColumnNames, COLLECTION_DATE
 
@@ -31,17 +28,66 @@ async def count_samples_by_column(by_col: str, filter: str | None = None):
         return await _package_count_by_column(res)
 
 
-async def count_variants_by_column(by_col: str):
-    async with get_async_session() as session:
-        res = await session.execute(
-            select(IntraHostVariant, Allele, IntraHostTranslation, AminoAcid)
-            .join(Allele, Allele.id == IntraHostVariant.allele_id, isouter=True)
-            .join(IntraHostTranslation, IntraHostTranslation.intra_host_variant_id == IntraHostVariant.id, isouter=True)
-            .join(AminoAcid, AminoAcid.id == IntraHostTranslation.amino_acid_id, isouter=True)
-            .with_only_columns(text(by_col), func.count().label('count1'))
-            .group_by(text(by_col))
-            .order_by(text('count1 desc'))
+def _get_ih_table_and_change_cols(change_bin: NtOrAa):
+    """
+    (bitmap table, change id col, change catalog table, feature col, ref col, pos col, alt col) for
+    the intra-host tables. Unlike the cns_* pair there is no by-sample transposition of these: they
+    are keyed (change id, alt_freq_range) only, with one row per 0.05-wide frequency bin, so a sample
+    restriction has to be applied by intersecting bitmaps rather than by joining on sample_id.
+    """
+    if change_bin == NtOrAa.nt:
+        return 'ih_samples_by_allele', 'allele_id', 'alleles', 'region', 'ref_nt', 'position_nt', 'alt_nt'
+    return 'ih_samples_by_amino_acid', 'amino_acid_id', 'amino_acids', 'gff_feature', 'ref_aa', 'position_aa', 'alt_aa'
+
+
+async def count_variants_by_column(
+    by_col: str,
+    change_bin: NtOrAa = NtOrAa.aa,
+    filter: str | None = None
+) -> Dict[str, int]:
+    ih_table, change_id_col, catalog_table, *_ = _get_ih_table_and_change_cols(change_bin)
+
+    # Counts are of (sample, change) observations. The frequency bins of a single change are collapsed
+    # with rb_or_agg *before* counting, so a sample that appears in two bins for the same change is
+    # counted once; summing rb_cardinality per bin would count it twice.
+    if filter is None:
+        subset_cte = ''
+        per_change_count = f'rb_or_cardinality_agg(v.{ColumnNames.samples_present})'
+        having_clause = ''
+    else:
+        subset_cte = f'''
+            with matching_samples as (
+                select coalesce(rb_build_agg(s.id), rb_build('{{}}')) as bm
+                from samples s
+                left join geo_locations gl on gl.id = s.geo_location_id
+                left join samples_lineages sl on sl.sample_id = s.id
+                left join lineages l on l.id = sl.lineage_id
+                left join lineage_systems ls on ls.id = l.lineage_system_id
+                where {parser.parse(filter)}
+            )
+        '''
+        per_change_count = \
+            f'rb_and_cardinality(rb_or_agg(v.{ColumnNames.samples_present}), (select bm from matching_samples))'
+        having_clause = 'having sum(n) > 0'
+
+    # the group key is cast to text in the database: group_by=alt_freq_range is a numrange, and
+    # str()-ing the driver's Range object client-side gives "<Range [Decimal('0'), ...]>" as the key
+    query = f'''
+        {subset_cte}
+        select {by_col}::text, sum(n)::bigint as count1
+        from (
+            select {by_col}, {per_change_count} as n
+            from {ih_table} v
+            inner join {catalog_table} t on t.id = v.{change_id_col}
+            group by v.{change_id_col}, {by_col}
         )
+        group by {by_col}
+        {having_clause}
+        order by count1 desc
+    '''
+
+    async with get_async_session() as session:
+        res = await session.execute(text(query))
         return await _package_count_by_column(res)
 
 
@@ -174,16 +220,76 @@ async def count_variants_by_collection_date(
     change_bin: NtOrAa,
     days: int,
     max_span_days: int,
-    raw_query: str
-):
-    return await _count_variants_or_mutations_by_collection_date(
-        date_bin,
-        change_bin,
-        days,
-        max_span_days,
-        raw_query,
-        IntraHostVariant
-    )
+    filter: str | None = None
+) -> Dict[str, Dict[str, int]]:
+    ih_table, change_id_col, catalog_table, feature_col, ref_col, pos_col, alt_col = \
+        _get_ih_table_and_change_cols(change_bin)
+
+    user_defined_filter = ''
+    if filter is not None:
+        user_defined_filter = f'and ({parser.parse(filter)})'
+
+    extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
+    group_by_clause = get_group_by_clause(date_bin, [feature_col, ref_col, pos_col, alt_col])
+    order_by_clause = get_order_by_cause(date_bin)
+
+    async with get_async_session() as session:
+        res = await session.execute(
+            text(
+                f'''
+                with samples_in_scope as (
+                    select distinct
+                        s.id as sample_id,
+                        s.collection_start_date,
+                        s.collection_end_date
+                    from samples s
+                    left join geo_locations gl on gl.id = s.geo_location_id
+                    left join samples_lineages sl on sl.sample_id = s.id
+                    left join lineages l on l.id = sl.lineage_id
+                    left join lineage_systems ls on ls.id = l.lineage_system_id
+                    where num_nulls(s.collection_end_date, s.collection_start_date) = 0
+                        and s.collection_end_date - s.collection_start_date <= {max_span_days}
+                        {user_defined_filter}
+                ),
+                scope_bm as (
+                    select coalesce(rb_build_agg(sample_id), rb_build('{{}}')) as bm
+                    from samples_in_scope
+                )
+                select
+                {extract_clause},
+                count(distinct sample_id),
+                {feature_col}, {ref_col}, {pos_col}, {alt_col}
+                from (
+                    select
+                        ss.sample_id,
+                        c.{feature_col}, c.{ref_col}, c.{pos_col}, c.{alt_col},
+                        {MID_COLLECTION_DATE_CALCULATION}
+                    from {ih_table} v
+                    inner join {catalog_table} c on c.id = v.{change_id_col}
+                    cross join lateral unnest(
+                        rb_to_array(v.{ColumnNames.samples_present} & (select bm from scope_bm))
+                    ) as u(sample_id)
+                    inner join samples_in_scope ss on ss.sample_id = u.sample_id
+                )
+                {group_by_clause}
+                {order_by_clause}
+                '''
+            )
+        )
+    out_data = dict()
+    for r in res:
+        date = date_bin.format_iso_chunk(r[0], r[1])
+        count = r[2]
+        feature = r[3]
+        ref = r[4]
+        pos = r[5]
+        alt = r[6]
+        change_name = f'{feature}:{ref}{pos}{alt}'
+        try:
+            out_data[date][change_name] = count
+        except KeyError:
+            out_data[date] = {change_name: count}
+    return out_data
 
 
 async def count_mutations_by_collection_date(
@@ -254,81 +360,6 @@ async def count_mutations_by_collection_date(
         pos = r[5]
         alt = r[6]
         change_name = f'{feature}:{ref}{pos}{alt}'
-        try:
-            out_data[date][change_name] = count
-        except KeyError:
-            out_data[date] = {change_name: count}
-    return out_data
-
-
-# TODO: Generalize for nucleotide mutations
-async def _count_variants_or_mutations_by_collection_date(
-    date_bin: DateBinOpt,
-    change_bin: NtOrAa,
-    days: int,
-    max_span_days: int,
-    raw_query: str,
-    table: Type[IntraHostVariant] | Type[Mutation]
-):
-    change_fields = f'ref_{change_bin}, position_{change_bin}, alt_{change_bin}'
-
-    user_where_clause = ''
-    if raw_query is not None:
-        user_where_clause = f'and ({parser.parse(raw_query)})'
-
-    extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
-    group_by_clause = get_group_by_clause(
-        date_bin,
-        [ColumnNames.gff_feature, f'ref_{change_bin}', f'position_{change_bin}', f'alt_{change_bin}']
-    )
-    order_by_clause = get_order_by_cause(date_bin)
-
-    translations_table, translations_join_col = get_appropriate_translations_table_and_id(table)
-
-    async with get_async_session() as session:
-        res = await session.execute(
-            text(
-                f'''
-                select
-                {extract_clause},
-                count(*),
-                gff_feature, {change_fields}
-                from(
-                    select
-                    *,
-                    {MID_COLLECTION_DATE_CALCULATION}
-                    from (
-                        select
-                        gff_feature, {change_fields},
-                        collection_start_date, collection_end_date,
-                        collection_end_date - collection_start_date as collection_span
-                        from samples s
-                        left join geo_locations gl on gl.id = s.geo_location_id
-                        inner join {table.__tablename__} VM on VM.sample_id = s.id
-                        left join {translations_table} t on t.{translations_join_col} = VM.id
-                        left join amino_acids aas on aas.id = t.amino_acid_id
-                        left join samples_lineages sl on sl.sample_id = s.id
-                        left join lineages l on l.id = sl.lineage_id
-                        left join lineage_systems ls on ls.id = l.lineage_system_id
-                        where num_nulls(collection_end_date, collection_start_date) = 0 {user_where_clause}
-                    )
-                    where collection_span <= {max_span_days}
-                )
-                {group_by_clause}
-                {order_by_clause}
-                '''
-            )
-        )
-    out_data = dict()
-    for r in res:
-        date = date_bin.format_iso_chunk(r[0], r[1])
-        count = r[2]
-        region = r[3]
-        ref = r[4]
-        pos = r[5]
-        alt = r[6]
-        change_name = f'{region}:{ref}{pos}{alt}'
-
         try:
             out_data[date][change_name] = count
         except KeyError:
