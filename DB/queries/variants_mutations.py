@@ -42,19 +42,19 @@ async def _get_lag_variants_mutations(
         res = await session.execute(
             text(
                 f'''
-                WITH samples_subset AS (
+                WITH sample_subset AS (
                     SELECT s.id, s.collection_start_date from samples s
                     INNER JOIN samples_lineages sl ON s.id = sl.sample_id
                     INNER JOIN lineages l ON sl.lineage_id = l.id
                     INNER JOIN lineage_systems ls ON l.lineage_system_id = ls.id
                     WHERE l.lineage_name = :lineage AND ls.lineage_system_name = :lineage_system_name AND collection_end_date - collection_start_date <= 30
                 ),
-                subset_bm AS (
-                    SELECT rb_build_agg(id) AS bm FROM samples_subset
+                sample_subset_bm AS (
+                    SELECT rb_build_agg(id) AS bm FROM sample_subset
                 ),
                 first_mutations AS (
                     SELECT MIN(ss.collection_start_date) as start_date, aa.ref_aa, aa.position_aa, aa.alt_aa, aa.gff_feature
-                    FROM samples_subset ss
+                    FROM sample_subset ss
                     INNER JOIN {TableNames.cns_amino_acids_by_sample} caas ON caas.{ColumnNames.sample_id} = ss.id
                     CROSS JOIN LATERAL unnest(rb_to_array(caas.{ColumnNames.amino_acids_present})) AS u({ColumnNames.amino_acid_id})
                     INNER JOIN {TableNames.amino_acids} aa ON aa.id = u.{ColumnNames.amino_acid_id}
@@ -75,9 +75,9 @@ async def _get_lag_variants_mutations(
                     INNER JOIN {TableNames.ih_samples_by_amino_acid} isaa
                         ON isaa.{ColumnNames.amino_acid_id} = c.id
                     CROSS JOIN LATERAL unnest(
-                        rb_to_array(isaa.{ColumnNames.samples_present} & (SELECT bm FROM subset_bm))
+                        rb_to_array(isaa.{ColumnNames.samples_present} & (SELECT bm FROM sample_subset_bm))
                     ) AS u({ColumnNames.sample_id})
-                    INNER JOIN samples_subset ss ON ss.id = u.{ColumnNames.sample_id}
+                    INNER JOIN sample_subset ss ON ss.id = u.{ColumnNames.sample_id}
                     INNER JOIN {TableNames.amino_acids} aa ON aa.id = isaa.{ColumnNames.amino_acid_id}
                     GROUP BY aa.ref_aa, aa.position_aa, aa.alt_aa, aa.gff_feature
                 )

@@ -4,6 +4,7 @@ from typing import List, Any, Dict
 from sqlalchemy import text, Result
 
 from DB.engine import get_async_session
+from DB.queries.helpers import get_ih_table_and_change_cols
 from DB.queries.date_count_helpers import get_extract_clause, get_group_by_clause, get_order_by_cause, \
     MID_COLLECTION_DATE_CALCULATION
 from parser.parser import parser
@@ -28,24 +29,12 @@ async def count_samples_by_column(by_col: str, filter: str | None = None):
         return await _package_count_by_column(res)
 
 
-def _get_ih_table_and_change_cols(change_bin: NtOrAa):
-    """
-    (bitmap table, change id col, change catalog table, feature col, ref col, pos col, alt col) for
-    the intra-host tables. Unlike the cns_* pair there is no by-sample transposition of these: they
-    are keyed (change id, alt_freq_range) only, with one row per 0.05-wide frequency bin, so a sample
-    restriction has to be applied by intersecting bitmaps rather than by joining on sample_id.
-    """
-    if change_bin == NtOrAa.nt:
-        return 'ih_samples_by_allele', 'allele_id', 'alleles', 'region', 'ref_nt', 'position_nt', 'alt_nt'
-    return 'ih_samples_by_amino_acid', 'amino_acid_id', 'amino_acids', 'gff_feature', 'ref_aa', 'position_aa', 'alt_aa'
-
-
 async def count_variants_by_column(
     by_col: str,
     change_bin: NtOrAa = NtOrAa.aa,
     filter: str | None = None
 ) -> Dict[str, int]:
-    ih_table, change_id_col, catalog_table, *_ = _get_ih_table_and_change_cols(change_bin)
+    ih_table, change_id_col, catalog_table, *_ = get_ih_table_and_change_cols(change_bin)
 
     # Counts are of (sample, change) observations. The frequency bins of a single change are collapsed
     # with rb_or_agg *before* counting, so a sample that appears in two bins for the same change is
@@ -56,7 +45,7 @@ async def count_variants_by_column(
         having_clause = ''
     else:
         subset_cte = f'''
-            with matching_samples as (
+            with sample_subset_bm as (
                 select coalesce(rb_build_agg(s.id), rb_build('{{}}')) as bm
                 from samples s
                 left join geo_locations gl on gl.id = s.geo_location_id
@@ -67,7 +56,7 @@ async def count_variants_by_column(
             )
         '''
         per_change_count = \
-            f'rb_and_cardinality(rb_or_agg(v.{ColumnNames.samples_present}), (select bm from matching_samples))'
+            f'rb_and_cardinality(rb_or_agg(v.{ColumnNames.samples_present}), (select bm from sample_subset_bm))'
         having_clause = 'having sum(n) > 0'
 
     # the group key is cast to text in the database: group_by=alt_freq_range is a numrange, and
@@ -223,7 +212,7 @@ async def count_variants_by_collection_date(
     filter: str | None = None
 ) -> Dict[str, Dict[str, int]]:
     ih_table, change_id_col, catalog_table, feature_col, ref_col, pos_col, alt_col = \
-        _get_ih_table_and_change_cols(change_bin)
+        get_ih_table_and_change_cols(change_bin)
 
     user_defined_filter = ''
     if filter is not None:
@@ -237,7 +226,7 @@ async def count_variants_by_collection_date(
         res = await session.execute(
             text(
                 f'''
-                with samples_in_scope as (
+                with sample_subset as (
                     select distinct
                         s.id as sample_id,
                         s.collection_start_date,
@@ -251,9 +240,9 @@ async def count_variants_by_collection_date(
                         and s.collection_end_date - s.collection_start_date <= {max_span_days}
                         {user_defined_filter}
                 ),
-                scope_bm as (
+                sample_subset_bm as (
                     select coalesce(rb_build_agg(sample_id), rb_build('{{}}')) as bm
-                    from samples_in_scope
+                    from sample_subset
                 )
                 select
                 {extract_clause},
@@ -267,9 +256,9 @@ async def count_variants_by_collection_date(
                     from {ih_table} v
                     inner join {catalog_table} c on c.id = v.{change_id_col}
                     cross join lateral unnest(
-                        rb_to_array(v.{ColumnNames.samples_present} & (select bm from scope_bm))
+                        rb_to_array(v.{ColumnNames.samples_present} & (select bm from sample_subset_bm))
                     ) as u(sample_id)
-                    inner join samples_in_scope ss on ss.sample_id = u.sample_id
+                    inner join sample_subset ss on ss.sample_id = u.sample_id
                 )
                 {group_by_clause}
                 {order_by_clause}

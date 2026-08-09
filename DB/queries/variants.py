@@ -1,4 +1,4 @@
-from typing import List
+from typing import Dict, List
 
 from sqlalchemy import select, text
 from sqlalchemy.orm import contains_eager
@@ -7,6 +7,7 @@ from DB.engine import get_async_session
 from DB.models import Sample, IntraHostVariant, Allele, AminoAcid, GeoLocation, IntraHostTranslation
 from DB.queries.date_count_helpers import get_extract_clause, get_group_by_clause, get_order_by_cause, \
     MID_COLLECTION_DATE_CALCULATION
+from DB.queries.helpers import get_ih_table_and_change_cols
 from api.models import VariantNucleotideInfo, VariantAminoAcidInfo
 from parser.parser import parser
 from utils.constants import ColumnNames, DateBinOpt, NtOrAa, TableNames, COLLECTION_DATE
@@ -111,26 +112,24 @@ async def get_variants_by_sample(
             return [VariantAminoAcidInfo(**row) for row in result.mappings().all()]
 
 
-# TODO: Generalize this for nucleotide mutations
-async def get_aa_variant_frequency_by_collection_date(
+async def get_variant_frequency_by_collection_date(
     date_bin: DateBinOpt,
+    change_bin: NtOrAa,
     days: int,
     max_span_days: int,
-    raw_query: str
-):
+    filter: str | None = None
+) -> List[Dict]:
+    ih_table, change_id_col, catalog_table, feature_col, ref_col, pos_col, alt_col = \
+        get_ih_table_and_change_cols(change_bin)
+
     user_where_clause = ''
-    if raw_query is not None:
-        user_where_clause = f'and ({parser.parse(raw_query)})'
+    if filter is not None:
+        user_where_clause = f'and ({parser.parse(filter)})'
 
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(
         date_bin,
-        prefix_cols=[
-            ColumnNames.gff_feature,
-            ColumnNames.ref_aa,
-            ColumnNames.position_aa,
-            ColumnNames.alt_aa
-        ]
+        prefix_cols=[feature_col, ref_col, pos_col, alt_col]
     )
     order_by_clause = get_order_by_cause(date_bin)
 
@@ -138,46 +137,51 @@ async def get_aa_variant_frequency_by_collection_date(
         res = await session.execute(
             text(
                 f'''
+                with sample_subset as (
+                    select distinct
+                        s.id as {ColumnNames.sample_id},
+                        s.collection_start_date,
+                        s.collection_end_date
+                    from {TableNames.samples} s
+                    left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
+                    left join samples_lineages sl on sl.{ColumnNames.sample_id} = s.id
+                    left join lineages l on l.id = sl.lineage_id
+                    left join lineage_systems ls on ls.id = l.lineage_system_id
+                    where num_nulls(s.collection_end_date, s.collection_start_date) = 0
+                        and s.collection_end_date - s.collection_start_date <= {max_span_days}
+                        {user_where_clause}
+                ),
+                sample_subset_bm as (
+                    select coalesce(rb_build_agg({ColumnNames.sample_id}), rb_build('{{}}')) as bm
+                    from sample_subset
+                )
                 select
-                {extract_clause},
-                count(distinct sample_id) as n,
-                percentile_cont(0.25) within group (order by alt_freq) as q1,
-                percentile_cont(0.5) within group (order by alt_freq) as median,
-                percentile_cont(0.75) within group (order by alt_freq) as q3,
-                gff_feature,
-                ref_aa,
-                position_aa,
-                alt_aa
-                from(
+                    {extract_clause},
+                    count(distinct {ColumnNames.sample_id}) as n,
+                    percentile_cont(0.25) within group (order by alt_freq) as q1,
+                    percentile_cont(0.5) within group (order by alt_freq) as median,
+                    percentile_cont(0.75) within group (order by alt_freq) as q3,
+                    {feature_col},
+                    {ref_col},
+                    {pos_col},
+                    {alt_col}
+                from (
                     select
-                    gff_feature,
-                    ref_aa,
-                    position_aa,
-                    alt_aa,
-                    alt_freq,
-                    sample_id,
-                    {MID_COLLECTION_DATE_CALCULATION}
-                    from (
-                        select
-                            aa.gff_feature,
-                            aa.ref_aa,
-                            aa.position_aa,
-                            aa.alt_aa,
-                            ihv.alt_freq,
-                            s.id as sample_id,
-                            s.collection_start_date,
-                            s.collection_end_date,
-                            collection_end_date - collection_start_date as collection_span
-                        from samples s
-                        inner join intra_host_variants ihv on ihv.sample_id = s.id
-                        inner join {TableNames.intra_host_translations} t on t.{ColumnNames.intra_host_variant_id} = ihv.id
-                        inner join amino_acids aa on aa.id = t.amino_acid_id
-                        left join samples_lineages sl on sl.sample_id = s.id
-                        left join lineages l on l.id = sl.lineage_id
-                        left join lineage_systems ls on ls.id = l.lineage_system_id
-                        where num_nulls(collection_end_date, collection_start_date) = 0 {user_where_clause}
-                    )
-                    where collection_span <= {max_span_days}
+                        ss.{ColumnNames.sample_id},
+                        c.{feature_col},
+                        c.{ref_col},
+                        c.{pos_col},
+                        c.{alt_col},
+                        -- every observation in a bin is represented by that bin's midpoint
+                        -- which makes these quartiles bin-resolution approximations
+                        (((lower(v.alt_freq_range) + upper(v.alt_freq_range)) / 2))::double precision as alt_freq,
+                        {MID_COLLECTION_DATE_CALCULATION}
+                    from {ih_table} v
+                    inner join {catalog_table} c on c.id = v.{change_id_col}
+                    cross join lateral unnest(
+                        rb_to_array(v.{ColumnNames.samples_present} & (select bm from sample_subset_bm))
+                    ) as u({ColumnNames.sample_id})
+                    inner join sample_subset ss on ss.{ColumnNames.sample_id} = u.{ColumnNames.sample_id}
                 )
                 {group_by_clause}
                 {order_by_clause}
@@ -194,10 +198,10 @@ async def get_aa_variant_frequency_by_collection_date(
                 "alt_freq_q1": r[3],
                 "alt_freq_median": r[4],
                 "alt_freq_q3": r[5],
-                "gff_feature": r[6],
-                "ref_aa": r[7],
-                "position_aa": r[8],
-                "alt_aa": r[9]
+                feature_col: r[6],
+                ref_col: r[7],
+                pos_col: r[8],
+                alt_col: r[9]
             }
         )
     return out_data

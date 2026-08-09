@@ -22,7 +22,8 @@ from api.models import VariantNucleotideInfo, VariantAminoAcidInfo, SampleInfo, 
     MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo, \
     LineageInfo, VariantMutationLagInfo, MutationProfileInfo, \
     LineageCountWithPrevalenceInfo, MutationProfileWithPrevalenceInfo, \
-    SampleCollectionReleaseLagInfo, MutationIncidenceInfo
+    SampleCollectionReleaseLagInfo, MutationIncidenceInfo, \
+    VariantAminoAcidFrequencyByCollectionDateInfo, VariantNucleotideFrequencyByCollectionDateInfo
 from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, NtOrAa, \
     DEFAULT_MAX_SPAN_DAYS, COLLECTION_DATE, DEFAULT_DAYS, COMMA_SEP_WORDLIKE_PATTERN, \
     DEFAULT_PREVALENCE_THRESHOLD, MIN_PREVALENCE_THRESHOLD, FILTER_SYNTAX_HELP, DistinctValueField
@@ -270,6 +271,27 @@ async def get_variant_counts(
     if group_by == COLLECTION_DATE:
         return await DB.queries.counts.count_variants_by_collection_date(date_bin, change_bin, days, max_span_days, filter)
     return await DB.queries.counts.count_variants_by_column(group_by, change_bin, filter)
+
+@router.get(
+    '/variants:freqByCollectionDate',
+    response_model=List[VariantNucleotideFrequencyByCollectionDateInfo] | List[VariantAminoAcidFrequencyByCollectionDateInfo],
+    tags=[TAG_VARIANTS],
+    summary='Get intra-host alternate-allele frequency quartiles for each change, binned by collection date'
+)
+async def get_variant_frequency_by_collection_date(
+    change_bin: NtOrAa = Query(NtOrAa.aa, description='Whether quartiles are reported per nucleotide (nt) allele variant or per amino-acid (aa) variant.'),
+    date_bin: DateBinOpt = Query(DateBinOpt.month, description='Granularity of the date bins over the collection-window midpoint: month, week, or day'),
+    days: int = Query(DEFAULT_DAYS, description='Bin width in days when date_bin=day'),
+    max_span_days: int = Query(DEFAULT_MAX_SPAN_DAYS, description='Exclude samples whose collection window (end - start) exceeds this many days'),
+    filter: str | None = filter_query('Optional. Selects which *samples* are included: over all columns of the `samples` table, the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names), and the lineage columns (lineage_name, lineage_system_name). Variant/change columns are not filterable here — an intra-host variant is stored per change, not per sample, so the filter can only narrow the sample side.', required=False),
+):
+    return await DB.queries.variants.get_variant_frequency_by_collection_date(
+        date_bin,
+        change_bin,
+        days,
+        max_span_days,
+        filter,
+    )
 
 #############
 # MUTATIONS #

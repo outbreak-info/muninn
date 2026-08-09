@@ -313,3 +313,49 @@ class SampleCollectionReleaseLagInfo(BaseModel):
         description="Third quartile (75th percentile) of the lag, in days, from the collection "
                     "midpoint to the release date. Null when the bin has no released samples."
     )
+
+
+class VariantFrequencyByCollectionDateInfo(BaseModel):
+    """
+    Shared fields of a (date bin, change) frequency row. Not a response model on its own: the endpoint
+    returns the nucleotide or amino-acid subclass, which is what identifies the change. Keep the
+    subclasses' field names disjoint — the response model is a plain union, and pydantic picks the
+    member by which required fields are present.
+    """
+    date: str = Field(
+        description="Date-bin label for the collection-window midpoint: e.g. '2024-06' (month), "
+                    "'2024-W05' (week), or a 'start/end' interval (day)."
+    )
+    n: int = Field(
+        description="Number of distinct samples in this date bin carrying this change as an intra-host "
+                    "variant"
+    )
+    alt_freq_q1: float = Field(
+        description="First quartile (25th percentile) of the intra-host alternate-allele frequency of "
+                    "this change across those samples. Frequency is stored as a 0.05-wide bin rather "
+                    "than an exact value, so each sample contributes its bin's midpoint: read these "
+                    "quartiles as accurate to about +/-0.025, and note that ingestion discards "
+                    "intra-host calls below 0.2, so the distribution is truncated there."
+    )
+    alt_freq_median: float = Field(
+        description="Median (50th percentile) of the binned intra-host alternate-allele frequency; see "
+                    "alt_freq_q1 for the resolution caveat"
+    )
+    alt_freq_q3: float = Field(
+        description="Third quartile (75th percentile) of the binned intra-host alternate-allele "
+                    "frequency; see alt_freq_q1 for the resolution caveat"
+    )
+
+
+class VariantAminoAcidFrequencyByCollectionDateInfo(VariantFrequencyByCollectionDateInfo):
+    gff_feature: str = Field(description="GFF feature (gene/product) the amino-acid change falls in")
+    ref_aa: str = Field(description="Reference amino acid of the change")
+    position_aa: int = Field(description="1-based amino-acid position of the change within the GFF feature")
+    alt_aa: str = Field(description="Alternate (mutant) amino acid of the change")
+
+
+class VariantNucleotideFrequencyByCollectionDateInfo(VariantFrequencyByCollectionDateInfo):
+    region: str = Field(description="Genomic region / segment the nucleotide change falls in")
+    ref_nt: str = Field(description="Reference nucleotide of the change")
+    position_nt: int = Field(description="1-based nucleotide position of the change within the region")
+    alt_nt: str = Field(description="Alternate (mutant) nucleotide of the change")

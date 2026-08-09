@@ -11,8 +11,27 @@ from utils.constants import (
     MIN_FUZZY_MATCH_SCORE,
     ColumnNames,
     DistinctValueField,
+    NtOrAa,
     TableNames,
 )
+
+
+def get_ih_table_and_change_cols(change_bin: NtOrAa):
+    """
+    (bitmap table, change id col, change catalog table, feature col, ref col, pos col, alt col) for
+    the intra-host tables. Unlike the cns_* pair there is no by-sample transposition of these: they
+    are keyed (change id, alt_freq_range) only, with one row per 0.05-wide frequency bin, so a sample
+    restriction has to be applied by intersecting bitmaps rather than by joining on sample_id.
+    """
+    if change_bin == NtOrAa.nt:
+        return (
+            TableNames.ih_samples_by_allele, ColumnNames.allele_id, TableNames.alleles,
+            ColumnNames.region, ColumnNames.ref_nt, ColumnNames.position_nt, ColumnNames.alt_nt
+        )
+    return (
+        TableNames.ih_samples_by_amino_acid, ColumnNames.amino_acid_id, TableNames.amino_acids,
+        ColumnNames.gff_feature, ColumnNames.ref_aa, ColumnNames.position_aa, ColumnNames.alt_aa
+    )
 
 
 async def get_gff_features() -> List[str]:
