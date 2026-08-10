@@ -39,7 +39,15 @@ class AminoAcidInfo(BaseModel):
         )
 
 
-class VariantNucleotideInfo(BaseModel):
+class IntraHostFrequencyBin(BaseModel):
+    alt_freq_range: str = Field(
+        description="The frequency bin as a range literal, e.g. '[0.2,0.25)', [0.8,1.0], etc."
+    )
+    alt_freq_lower: float = Field(description="Inclusive lower bound of the frequency bin")
+    alt_freq_upper: float = Field(description="Upper bound of the frequency bin (exclusive except in the last bin)")
+
+
+class VariantNucleotideInfo(IntraHostFrequencyBin):
     sample_id: int = Field(description="ID of the sample carrying this intra-host variant")
     allele_id: int = Field(description="ID of the allele (nt change) in the alleles table")
 
@@ -49,13 +57,8 @@ class VariantNucleotideInfo(BaseModel):
     ref_nt: str = Field(description="Reference nucleotide(s) at this position")
     alt_nt: str = Field(description="Alternate (variant) nucleotide(s) at this position")
 
-    # intra-host variant metrics
-    ref_dp: int = Field(description="Read depth supporting the reference allele")
-    alt_dp: int = Field(description="Read depth supporting the alternate allele")
-    alt_freq: float = Field(description="Intra-host alternate-allele frequency (alt_dp / total depth)")
 
-
-class VariantAminoAcidInfo(BaseModel):
+class VariantAminoAcidInfo(IntraHostFrequencyBin):
     sample_id: int = Field(description="ID of the sample carrying this intra-host amino-acid variant")
     position_aa: int = Field(description="1-based amino-acid position of the change within the feature")
     ref_aa: str = Field(description="Reference amino acid at this position")

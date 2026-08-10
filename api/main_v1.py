@@ -235,9 +235,11 @@ async def get_sample_counts(
 )
 async def get_variants_query(
     change_bin: NtOrAa = Query(NtOrAa.nt, description='Whether the query filters on (and returns) nucleotide (nt) allele variants or amino-acid (aa) variants'),
-    filter: str = filter_query('Over intra-host variant columns. change_bin=nt: all columns of the `alleles` (region, position_nt, ref_nt, alt_nt) and `intra_host_variants` (ref_dp, alt_dp, alt_freq, total_dp, pval, pass_qc, ...) tables; change_bin=aa: all columns of the `amino_acids` table (position_aa, ref_aa, alt_aa, gff_feature, ref_codon, alt_codon).'),
+    filter: str = filter_query('Over the change catalog. change_bin=nt: all columns of the `alleles` table (region, position_nt, ref_nt, alt_nt); change_bin=aa: all columns of the `amino_acids` table (position_aa, ref_aa, alt_aa, gff_feature, ref_codon, alt_codon). Read depths and the exact alt_freq are no longer stored, so they cannot be filtered on; use min_alt_freq/max_alt_freq for frequency, since the bin column is a range type the filter language cannot express.'),
+    min_alt_freq: float | None = Query(None, ge=0, le=1, description='Optional lower bound on the intra-host alternate-allele frequency. Frequency is stored as a 0.05-wide bin, so this selects observations whose bin overlaps the requested window: min_alt_freq=0.9 returns the [0.9,0.95) and [0.95,1] bins, and 0.92 returns the same two, because the database cannot resolve within a bin. Ingestion discards calls below 0.2.'),
+    max_alt_freq: float | None = Query(None, ge=0, le=1, description='Optional upper bound on the intra-host alternate-allele frequency, with the same bin-overlap semantics as min_alt_freq.'),
 ):
-    return await DB.queries.variants.get_variants(change_bin, filter)
+    return await DB.queries.variants.get_variants(change_bin, filter, min_alt_freq, max_alt_freq)
 
 @router.get(
     '/variants:bySample',
@@ -248,8 +250,10 @@ async def get_variants_query(
 async def get_variants_by_sample(
     change_bin: NtOrAa = Query(NtOrAa.nt, description='Whether to return nucleotide (nt) allele variants or amino-acid (aa) variants'),
     filter: str = filter_query('Selects which samples to return variants for: over all columns of the `samples` table, plus the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names).'),
+    min_alt_freq: float | None = Query(None, ge=0, le=1, description='Optional lower bound on the intra-host alternate-allele frequency. Frequency is stored as a 0.05-wide bin, so this selects observations whose bin overlaps the requested window: min_alt_freq=0.9 returns the [0.9,0.95) and [0.95,1] bins, and 0.92 returns the same two, because the database cannot resolve within a bin. Ingestion discards calls below 0.2.'),
+    max_alt_freq: float | None = Query(None, ge=0, le=1, description='Optional upper bound on the intra-host alternate-allele frequency, with the same bin-overlap semantics as min_alt_freq.'),
 ):
-    return await DB.queries.variants.get_variants_by_sample(change_bin, filter)
+    return await DB.queries.variants.get_variants_by_sample(change_bin, filter, min_alt_freq, max_alt_freq)
 
 @router.get(
     '/variants:count',
