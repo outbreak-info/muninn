@@ -1,10 +1,9 @@
-from typing import List, Type
+from typing import List
 
 from sqlalchemy import select, and_, ColumnElement, text, func
 
 from DB.engine import get_async_session
-from DB.models import IntraHostVariant, Sample, Allele, AminoAcid, Mutation, IntraHostTranslation, MutationTranslation
-from DB.queries.helpers import get_appropriate_translations_table_and_id
+from DB.models import IntraHostVariant, Sample, Allele, AminoAcid, IntraHostTranslation
 from api.models import VariantFreqInfo, VariantCountPhenoScoreInfo, MutationCountInfo
 from parser.parser import parser
 from utils.constants import ColumnNames, TableNames
@@ -177,52 +176,45 @@ async def get_pheno_values_and_mutation_counts(
     return out_data
 
 
-async def get_pheno_values_and_variant_counts(
-    pheno_metric_name: str, region: str, include_refs: bool, samples_query: str | None
-) -> List["VariantCountPhenoScoreInfo"]:
-    return await _get_pheno_values_and_counts(
-        pheno_metric_name, region, IntraHostVariant, include_refs, samples_query
-    )
-
-
 # TODO: Using "region" as the parameter for "gff_feature" for now.
-async def _get_pheno_values_and_counts(
-    pheno_metric_name: str,
-    region: str,
-    intermediate: Type[Mutation] | Type[IntraHostVariant],
-    include_refs: bool,
-    samples_query: str | None = None,
+async def get_pheno_values_and_variant_counts(
+    pheno_metric_name: str, region: str, include_refs: bool, filter: str | None
 ) -> List["VariantCountPhenoScoreInfo"]:
-    tablename = intermediate.__tablename__
-
-    no_refs_filter = f"and aas.ref_aa <> aas.alt_aa"
+    no_refs_filter = "and aas.ref_aa <> aas.alt_aa"
     if include_refs:
         no_refs_filter = ""
 
-    samples_query_addin = (
-        "" if samples_query is None else f"and {parser.parse(samples_query)}"
-    )
-
-    translations_table, translations_join_id = (
-        get_appropriate_translations_table_and_id(intermediate)
-    )
+    if filter is None:
+        sample_subset_cte = ""
+        count_expr = f"rb_or_cardinality_agg(v.{ColumnNames.samples_present})"
+    else:
+        sample_subset_cte = f"""
+            with sample_subset_bm as (
+                select coalesce(rb_build_agg(s.id), rb_build('{{}}')) as bm
+                from {TableNames.samples} s
+                left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
+                where {parser.parse(filter)}
+            )
+        """
+        count_expr = (
+            f"rb_and_cardinality(rb_or_agg(v.{ColumnNames.samples_present}), "
+            f"(select bm from sample_subset_bm))"
+        )
 
     async with get_async_session() as session:
         res = await session.execute(
             text(
                 f"""
-                select aas.ref_aa, aas.position_aa, aas.alt_aa, pmv.value, count(distinct s.id) as count
-                from {tablename} TAB
-                left join {translations_table} t on t.{translations_join_id} = TAB.id
-                left join samples s on s.id = TAB.sample_id
-                left join amino_acids aas on aas.id = t.amino_acid_id
-                left join phenotype_metric_values pmv on pmv.amino_acid_id = aas.id
-                left join phenotype_metrics pm on pm.id = pmv.phenotype_metric_id
-                left join geo_locations gl on gl.id = s.geo_location_id
+                {sample_subset_cte}
+                select aas.ref_aa, aas.position_aa, aas.alt_aa, pmv.value,
+                       {count_expr} as count
+                from {TableNames.ih_samples_by_amino_acid} v
+                inner join {TableNames.amino_acids} aas on aas.id = v.{ColumnNames.amino_acid_id}
+                inner join {TableNames.phenotype_metric_values} pmv on pmv.{ColumnNames.amino_acid_id} = aas.id
+                inner join {TableNames.phenotype_metrics} pm on pm.id = pmv.{ColumnNames.phenotype_metric_id}
                 where aas.gff_feature = :region
                 and pm.{ColumnNames.phenotype_metric_name} = :pm_name
                 {no_refs_filter}
-                {samples_query_addin}
                 group by aas.ref_aa, aas.position_aa, aas.alt_aa, pmv.value
                 order by count desc;
                 """

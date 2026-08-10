@@ -293,6 +293,20 @@ async def get_variant_frequency_by_collection_date(
         filter,
     )
 
+@router.get(
+    '/variants:countByPhenotypeScore',
+    response_model=List[VariantCountPhenoScoreInfo],
+    tags=[TAG_VARIANTS],
+    summary='Count samples per intra-host amino-acid variant alongside a phenotype metric value'
+)
+async def get_variant_counts_by_phenotype_score(
+    region: str = Query(..., description='GFF feature (gene/product) to restrict amino-acid variants to'),
+    metric: str = Query(..., description='Phenotype metric name whose value is reported per amino-acid change'),
+    include_refs: bool = Query(False, description='If true, also include changes where reference amino acid equals alternative amino acid; default false excludes them'),
+    filter: str | None = filter_query('Optional, restricting which samples are counted: over all columns of the `samples` table, plus the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names).', required=False),
+):
+    return await DB.queries.prevalence.get_pheno_values_and_variant_counts(metric, region, include_refs, filter)
+
 #############
 # MUTATIONS #
 #############
