@@ -13,6 +13,7 @@ from DB.queries.date_count_helpers import get_extract_clause, get_group_by_claus
 from DB.queries.counts import count_samples_by_column, count_samples_by_simple_date, \
     count_samples_by_collection_date, count_lineages_by_simple_date, count_lineages_by_collection_date
 from DB.queries.lineages import get_sample_counts_by_lineage
+from DB.queries.helpers import get_ih_table_and_change_cols
 from utils.constants import DateBinOpt, NtOrAa, TableNames, ColumnNames, COLLECTION_DATE, DEFAULT_DAYS, \
     DEFAULT_MAX_SPAN_DAYS, LINEAGE, SIMPLE_DATE_FIELDS
 
@@ -96,25 +97,23 @@ async def get_samples_by_mutation(change_bin: NtOrAa = NtOrAa.aa, filter: str = 
     return out_data
 
 
-async def get_samples_by_variant(change_bin: NtOrAa = NtOrAa.aa, filter: str = "") -> List['SampleInfo']:
+async def get_samples_by_variant(
+    change_bin: NtOrAa = NtOrAa.aa,
+    filter: str = "",
+    min_alt_freq: float | None = None,
+    max_alt_freq: float | None = None
+) -> List['SampleInfo']:
     user_defined_filter = parser.parse(filter)
-
-    if change_bin == NtOrAa.nt:
-        matching_samples = f'''
-            select ihv.{ColumnNames.sample_id}
-            from {TableNames.intra_host_variants} ihv
-            inner join {TableNames.alleles} a on a.id = ihv.{ColumnNames.allele_id}
-            where {user_defined_filter}
-        '''
-    else:
-        matching_samples = f'''
-            select iht.{ColumnNames.sample_id}
-            from {TableNames.intra_host_translations} iht
-            inner join {TableNames.amino_acids} aa on aa.id = iht.{ColumnNames.amino_acid_id}
-            where {user_defined_filter}
-        '''
+    ih_table, change_id_col, catalog_table, *_ = get_ih_table_and_change_cols(change_bin)
 
     samples_query = f"""
+    with matching_bm as (
+        select rb_or_agg(v.{ColumnNames.samples_present}) as bm
+        from {ih_table} v
+        inner join {catalog_table} c on c.id = v.{change_id_col}
+        where {user_defined_filter}
+        and v.alt_freq_range && numrange(:min_alt_freq, :max_alt_freq, '[]')
+    )
     select s.*,
         g.country_name as geo_country_name,
         g.admin1_name as geo_admin1_name,
@@ -122,15 +121,15 @@ async def get_samples_by_variant(change_bin: NtOrAa = NtOrAa.aa, filter: str = "
         g.admin3_name as geo_admin3_name
     from {TableNames.samples} s
     left join {TableNames.geo_locations} g on g.id = s.{ColumnNames.geo_location_id}
-    where s.id in (
-        {matching_samples}
-    )
+    where s.id = any(rb_to_array((select bm from matching_bm)))
     """
 
     async with get_async_session() as session:
-        samples = await session.execute(text(samples_query))
-        out_data = [SampleInfo(**row) for row in samples.mappings().all()]
-    return out_data
+        samples = await session.execute(
+            text(samples_query),
+            {'min_alt_freq': min_alt_freq, 'max_alt_freq': max_alt_freq}
+        )
+        return [SampleInfo(**row) for row in samples.mappings().all()]
 
 
 async def get_sample_counts(

@@ -199,9 +199,11 @@ async def get_samples_by_mutation(
 @router.get('/samples:byVariant', response_model=List[SampleInfo], tags=[TAG_SAMPLES], summary='Get samples carrying an intra-host variant matching a query')
 async def get_samples_by_variant(
     change_bin: NtOrAa = Query(NtOrAa.aa, description='Whether the query filters on nucleotide (nt) allele columns or amino-acid (aa) columns'),
-    filter: str = filter_query('Over intra-host variant columns. change_bin=nt: all columns of the `alleles` (region, position_nt, ref_nt, alt_nt) and `intra_host_variants` (ref_dp, alt_dp, alt_freq, total_dp, pval, pass_qc, ...) tables; change_bin=aa: all columns of the `amino_acids` table (position_aa, ref_aa, alt_aa, gff_feature, ref_codon, alt_codon).'),
+    filter: str = filter_query('Over the change catalog. change_bin=nt: all columns of the `alleles` table (region, position_nt, ref_nt, alt_nt); change_bin=aa: all columns of the `amino_acids` table (position_aa, ref_aa, alt_aa, gff_feature, ref_codon, alt_codon).'),
+    min_alt_freq: float | None = Query(None, ge=0, le=1, description='Optional lower bound on the intra-host alternate-allele frequency of the matching variant.'),
+    max_alt_freq: float | None = Query(None, ge=0, le=1, description='Optional upper bound on the intra-host alternate-allele frequency.'),
 ):
-    return await DB.queries.samples.get_samples_by_variant(change_bin, filter)
+    return await DB.queries.samples.get_samples_by_variant(change_bin, filter, min_alt_freq, max_alt_freq)
 
 @router.get(
     '/samples:count',
