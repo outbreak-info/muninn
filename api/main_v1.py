@@ -619,8 +619,10 @@ async def get_phenotype_metric_count_variants_by_collection_date(
     phenotype_metric_value_threshold: float = Query(..., description='Threshold on the metric value; n_gte counts scored amino-acid changes whose value is >= this'),
     date_bin: DateBinOpt = Query(DateBinOpt.month, description='Granularity of collection-date bins: month, week, or day'),
     days: int = Query(DEFAULT_DAYS, description='Bin width in days when date_bin=day'),
-    filter: str | None = filter_query('Optional. Unlike the sibling :countMutationsByCollectionDate (whose filter is restricted to samples/geo/lineage), here the filter is evaluated alongside the variant joins, so it can reference all `samples` columns, the joined `geo_locations` columns (raw names, e.g. admin1_name/country_name), `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name), and the `amino_acids` columns (gff_feature, ref_aa, position_aa, alt_aa, ref_codon, alt_codon) reached via intra_host_translations.', required=False),
+    filter: str | None = filter_query('Optional, selecting which samples are binned: over all `samples` columns, the joined `geo_locations` columns (raw names, e.g. admin1_name/country_name), and `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name). Amino-acid columns are not filterable — the metric already selects which changes are counted.', required=False),
     max_span_days: int = Query(DEFAULT_MAX_SPAN_DAYS, description='Exclude samples whose collection window (end - start) exceeds this many days'),
+    min_alt_freq: float | None = Query(None, ge=0, le=1, description='Optional lower bound on the intra-host frequency at which a change counts as present. Frequency is stored as a 0.05-wide bin, so this selects observations whose bin overlaps the requested window.'),
+    max_alt_freq: float | None = Query(None, ge=0, le=1, description='Optional upper bound on the intra-host frequency, with the same bin-overlap semantics as min_alt_freq.'),
 ):
     return await DB.queries.phenotype_metrics.count_variants_gte_pheno_value_by_collection_date(
         date_bin,
@@ -629,6 +631,8 @@ async def get_phenotype_metric_count_variants_by_collection_date(
         days,
         max_span_days,
         filter,
+        min_alt_freq,
+        max_alt_freq,
     )
 
 @router.get(

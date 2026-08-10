@@ -1,5 +1,3 @@
-version: "3.8"
-
 name: "${MUNINN_INSTANCE_NAME}_project"
 
 services:
@@ -37,6 +35,9 @@ services:
         target: /muninn/data
         read_only: true
     shm_size: 1g
+
+  # v1 api (api/main_v1.py) on 8001, run in dev mode for `docker compose watch`.
+  # Note: this no longer serves the v0 api (api/main.py) at all.
   server:
     container_name: "${MUNINN_INSTANCE_NAME}_server"
     build:
@@ -47,8 +48,10 @@ services:
         source: ${MUNINN_SERVER_DATA_INPUT_DIR}
         target: /home/muninn/data
         read_only: false
+    # defaults to 8001; keep it a variable so multiple MUNINN_INSTANCE_NAME instances
+    # on one host don't collide
     ports:
-      - "${MUNINN_SERVER_PORT}:8000"
+      - "${MUNINN_SERVER_PORT_V1:-8001}:8001"
     environment:
       MUNINN_DB_READONLY_USER: "${MUNINN_DB_READONLY_USER}"
       MUNINN_DB_READONLY_PASSWORD: "${MUNINN_DB_READONLY_PASSWORD}"
@@ -58,10 +61,47 @@ services:
       MUNINN_DB_NAME: "${MUNINN_DB_NAME}"
       MUNINN_DB_PORT: "${MUNINN_DB_PORT_FOR_SERVER}"
       MUNINN_SERVER_DATA_INPUT_DIR: "${MUNINN_SERVER_DATA_INPUT_DIR}"
-    command: bash -c "
-      sleep 30
-      && fastapi run --workers 33 api/main.py
-      "
+    # postgres already defines a healthcheck, so wait on that instead of a fixed `sleep 30`
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: fastapi dev api/main_v1.py --host 0.0.0.0 --port 8001
+    develop:
+      watch:
+        - action: sync
+          path: ./api
+          target: /home/muninn/api
+          ignore:
+            - __pycache__/
+        - action: sync
+          path: ./DB
+          target: /home/muninn/DB
+          ignore:
+            - __pycache__/
+        - action: sync
+          path: ./utils
+          target: /home/muninn/utils
+          ignore:
+            - __pycache__/
+        - action: sync
+          path: ./parser
+          target: /home/muninn/parser
+          ignore:
+            - __pycache__/
+            - parser.out
+            - parsetab.py
+        # not in the image; synced so the suite can be run in the container, which is the only place
+        # the dependencies exist:
+        #   docker compose exec server python -m unittest tests.integration.v1_variants_count_tests
+        - action: sync
+          path: ./tests
+          target: /home/muninn/tests
+          ignore:
+            - __pycache__/
+        # a dependency change can't be synced in; rebuild the image instead
+        - action: rebuild
+          path: ./requirements.txt
+
 volumes:
   postgres_data:
     name: "${MUNINN_INSTANCE_NAME}_postgres_data"

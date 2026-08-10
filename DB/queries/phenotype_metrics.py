@@ -212,6 +212,8 @@ async def count_variants_gte_pheno_value_by_collection_date(
     days: int,
     max_span_days: int,
     filter: str | None,
+    min_alt_freq: float | None = None,
+    max_alt_freq: float | None = None,
 ) -> List[Dict]:
     user_defined_filter = ''
     if filter is not None:
@@ -221,35 +223,61 @@ async def count_variants_gte_pheno_value_by_collection_date(
     group_by_clause = get_group_by_clause(date_bin)
     order_by_clause = get_order_by_cause(date_bin)
 
+    match date_bin:
+        case DateBinOpt.week | DateBinOpt.month:
+            bin_select_cols = f'{YEAR}, {CHUNK}'
+        case DateBinOpt.day:
+            bin_select_cols = f'{BIN_END}, {BIN_START}'
+        case _:
+            raise NotImplementedError
+
     query = f'''
-        select
-        {extract_clause},
-        count(distinct aa_id) filter (where value >= :threshold) as n_gte,
-        count(distinct aa_id) as n
-        from (
-            select value, aa_id, {MID_COLLECTION_DATE_CALCULATION}
-            from (
-                select
-                pmv.value as value,
-                aa.id as aa_id,
-                {ColumnNames.collection_start_date}, {ColumnNames.collection_end_date},
-                {ColumnNames.collection_end_date} - {ColumnNames.collection_start_date} as collection_span
-                from {TableNames.samples} s
-                left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
-                inner join {TableNames.intra_host_translations} iht on iht.{ColumnNames.sample_id} = s.id
-                inner join {TableNames.amino_acids} aa on aa.id = iht.{ColumnNames.amino_acid_id}
-                inner join {TableNames.samples_lineages} sl on sl.{ColumnNames.sample_id} = s.id
-                inner join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id}
-                inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
-                inner join {TableNames.phenotype_metric_values} pmv on pmv.{ColumnNames.amino_acid_id} = aa.id
-                inner join {TableNames.phenotype_metrics} pm on pm.id = pmv.{ColumnNames.phenotype_metric_id}
-                where num_nulls({ColumnNames.collection_end_date}, {ColumnNames.collection_start_date}) = 0
-                and pm.{ColumnNames.phenotype_metric_name} = :pm_name
-                {user_defined_filter}
-            )
-            where collection_span <= :max_span_days
+        with binned_samples as (
+            select s.id as sample_id,
+                {MID_COLLECTION_DATE_CALCULATION}
+            from {TableNames.samples} s
+            left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
+            inner join {TableNames.samples_lineages} sl on sl.{ColumnNames.sample_id} = s.id
+            inner join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id}
+            inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
+            where num_nulls({ColumnNames.collection_end_date}, {ColumnNames.collection_start_date}) = 0
+              and ({ColumnNames.collection_end_date} - {ColumnNames.collection_start_date}) <= :max_span_days
+              {user_defined_filter}
+        ),
+        bins as (
+            select {extract_clause},
+                   rb_build_agg(sample_id) as bm
+            from binned_samples
+            {group_by_clause}
+        ),
+        scored as (
+            select pmv.{ColumnNames.amino_acid_id} as aa_id, pmv.value as value
+            from {TableNames.phenotype_metric_values} pmv
+            inner join {TableNames.phenotype_metrics} pm on pm.id = pmv.{ColumnNames.phenotype_metric_id}
+            where pm.{ColumnNames.phenotype_metric_name} = :pm_name
+        ),
+        carriers as (
+            select v.{ColumnNames.amino_acid_id} as aa_id,
+                   rb_or_agg(v.{ColumnNames.samples_present}) as bm
+            from {TableNames.ih_samples_by_amino_acid} v
+            inner join scored sc on sc.aa_id = v.{ColumnNames.amino_acid_id}
+            where v.alt_freq_range && numrange(:min_alt_freq, :max_alt_freq, '[]')
+            group by v.{ColumnNames.amino_acid_id}
+        ),
+        per as (
+            select {bin_select_cols},
+                   sc.value as value,
+                   rb_and_cardinality(ca.bm, b.bm) as card
+            from bins b
+            cross join scored sc
+            inner join carriers ca on ca.aa_id = sc.aa_id
         )
+        select {bin_select_cols},
+               count(*) filter (where card > 0 and value >= :threshold) as n_gte,
+               count(*) filter (where card > 0) as n
+        from per
         {group_by_clause}
+        having count(*) filter (where card > 0) > 0
         {order_by_clause}
     '''
     async with get_async_session() as session:
@@ -259,6 +287,8 @@ async def count_variants_gte_pheno_value_by_collection_date(
                 'pm_name': phenotype_metric_name,
                 'threshold': phenotype_metric_value_threshold,
                 'max_span_days': max_span_days,
+                'min_alt_freq': min_alt_freq,
+                'max_alt_freq': max_alt_freq,
             }
         )
         rows = res.all()
