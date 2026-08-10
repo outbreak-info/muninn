@@ -23,7 +23,8 @@ from api.models import VariantNucleotideInfo, VariantAminoAcidInfo, SampleInfo, 
     LineageInfo, VariantMutationLagInfo, MutationProfileInfo, \
     LineageCountWithPrevalenceInfo, MutationProfileWithPrevalenceInfo, \
     SampleCollectionReleaseLagInfo, MutationIncidenceInfo, \
-    VariantAminoAcidFrequencyByCollectionDateInfo, VariantNucleotideFrequencyByCollectionDateInfo
+    VariantAminoAcidFrequencyByCollectionDateInfo, VariantNucleotideFrequencyByCollectionDateInfo, \
+    VariantFreqInfo
 from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, NtOrAa, \
     DEFAULT_MAX_SPAN_DAYS, COLLECTION_DATE, DEFAULT_DAYS, COMMA_SEP_WORDLIKE_PATTERN, \
     DEFAULT_PREVALENCE_THRESHOLD, MIN_PREVALENCE_THRESHOLD, FILTER_SYNTAX_HELP, DistinctValueField
@@ -292,6 +293,30 @@ async def get_variant_frequency_by_collection_date(
         max_span_days,
         filter,
     )
+
+@router.get(
+    '/variants:sampleFrequency',
+    response_model=List[VariantFreqInfo],
+    tags=[TAG_VARIANTS],
+    summary='Get the intra-host frequency of one change in each sample carrying it'
+)
+async def get_variant_sample_frequency(
+    aa: Annotated[str | None, Query(pattern=CHANGE_PATTERN, description='Amino-acid change to report, as gff_feature:ref<pos>alt (e.g. S:E484K). Provide aa or nt, not both.')] = None,
+    nt: Annotated[str | None, Query(pattern=CHANGE_PATTERN, description='Nucleotide change to report, as region:ref<pos>alt (e.g. NC_045512.2:C21T). Provide aa or nt, not both.')] = None,
+):
+    """
+    The per-sample counterpart of /v1/mutations:sampleCount, which counts samples rather than listing
+    them. Frequency is a 0.05-wide bin, not an exact value: the database stopped recording exact
+    alt_freq. Ingestion also discards intra-host calls below frequency 0.2, so a sample that carries
+    the change more faintly than that is absent rather than present with a low frequency.
+    """
+    if aa is not None and nt is not None:
+        raise HTTPException(status_code=400, detail='Provide either an amino-acid (aa) or nucleotide (nt) change, not both')
+    if aa is not None:
+        return await DB.queries.prevalence.get_samples_variant_freq_by_aa_change(aa)
+    if nt is not None:
+        return await DB.queries.prevalence.get_samples_variant_freq_by_nt_change(nt)
+    raise HTTPException(status_code=400, detail='Provide an amino-acid (aa) or nucleotide (nt) change')
 
 @router.get(
     '/variants:countByPhenotypeScore',

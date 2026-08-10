@@ -1,65 +1,66 @@
 from typing import List
 
-from sqlalchemy import select, and_, ColumnElement, text, func
+from sqlalchemy import text
 
 from DB.engine import get_async_session
-from DB.models import IntraHostVariant, Sample, Allele, AminoAcid, IntraHostTranslation
+from DB.queries.helpers import get_ih_table_and_change_cols
 from api.models import VariantFreqInfo, VariantCountPhenoScoreInfo, MutationCountInfo
 from parser.parser import parser
-from utils.constants import ColumnNames, TableNames
+from utils.constants import ColumnNames, NtOrAa, TableNames
 from utils.csv_helpers import parse_change_string
 
 
 async def get_samples_variant_freq_by_aa_change(change: str) -> List[VariantFreqInfo]:
-    region, ref_aa, position_aa, alt_aa = parse_change_string(change)
-
-    where_clause = and_(
-        Allele.region == region,
-        AminoAcid.ref_aa == ref_aa,
-        AminoAcid.position_aa == position_aa,
-        AminoAcid.alt_aa == alt_aa
-    )
-
-    return await _get_samples_variant_freq(where_clause)
+    return await _get_samples_variant_freq(change, NtOrAa.aa)
 
 
 async def get_samples_variant_freq_by_nt_change(change: str) -> List[VariantFreqInfo]:
-    region, ref_nt, position_nt, alt_nt = parse_change_string(change)
-
-    where_clause = and_(
-        Allele.region == region,
-        Allele.ref_nt == ref_nt,
-        Allele.position_nt == position_nt,
-        Allele.alt_nt == alt_nt
-    )
-
-    return await _get_samples_variant_freq(where_clause)
+    return await _get_samples_variant_freq(change, NtOrAa.nt)
 
 
-async def _get_samples_variant_freq(where_clause: ColumnElement[bool]) -> List[VariantFreqInfo]:
-    query = (
-        select(IntraHostVariant.alt_freq, Sample.accession, Allele.id, IntraHostTranslation.id, AminoAcid.id)
-        .join(Sample, Sample.id == IntraHostVariant.sample_id, isouter=True)
-        .join(Allele, Allele.id == IntraHostVariant.allele_id, isouter=True)
-        .join(IntraHostTranslation, IntraHostTranslation.intra_host_variant_id == IntraHostVariant.id, isouter=True)
-        .join(AminoAcid, AminoAcid.id == IntraHostTranslation.amino_acid_id, isouter=True)
-        .where(where_clause)
-    )
+async def _get_samples_variant_freq(change: str, change_bin: NtOrAa) -> List[VariantFreqInfo]:
+    """
+    Per-sample intra-host frequency for one change. Exact alt_freq no longer exists, so the frequency
+    of a sample is the bin its observation was filed under; a sample appears once per bin it was seen
+    in, which in practice is exactly once.
+    """
+    feature, ref, position, alt = parse_change_string(change)
+    ih_table, change_id_col, catalog_table, feature_col, ref_col, pos_col, alt_col = \
+        get_ih_table_and_change_cols(change_bin)
 
     async with get_async_session() as session:
-        res = await session.execute(query)
-    out_data = []
-    for r in res:
-        out_data.append(
-            VariantFreqInfo(
-                alt_freq=r[0],
-                accession=r[1],
-                allele_id=r[2],
-                translation_id=r[3],
-                amino_sub_id=r[4]
-            )
+        res = await session.execute(
+            text(
+                f"""
+                select
+                    s.id,
+                    s.accession,
+                    v.alt_freq_range::text,
+                    lower(v.alt_freq_range)::double precision,
+                    upper(v.alt_freq_range)::double precision
+                from {ih_table} v
+                inner join {catalog_table} c on c.id = v.{change_id_col}
+                cross join lateral unnest(rb_to_array(v.{ColumnNames.samples_present})) as u({ColumnNames.sample_id})
+                inner join {TableNames.samples} s on s.id = u.{ColumnNames.sample_id}
+                where c.{feature_col} = :feature
+                  and c.{ref_col} = :ref
+                  and c.{pos_col} = :position
+                  and c.{alt_col} = :alt
+                order by lower(v.alt_freq_range), s.id
+                """
+            ),
+            {'feature': feature, 'ref': ref, 'position': position, 'alt': alt},
         )
-    return out_data
+    return [
+        VariantFreqInfo(
+            sample_id=r[0],
+            accession=r[1],
+            alt_freq_range=r[2],
+            alt_freq_lower=r[3],
+            alt_freq_upper=r[4],
+        )
+        for r in res
+    ]
 
 
 async def get_mutation_sample_count_by_nt(change: str) -> List[MutationCountInfo]:
