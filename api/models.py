@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 from pydantic import BaseModel
 
@@ -307,3 +307,14 @@ class MutationProfileInfo(BaseModel):
     alt_nt: str
     region: str
     count: int
+
+class MutationEntry(BaseModel):
+    ref: str
+    alt: str
+    pos: int
+    count: int
+    prevalence: float
+
+class MutationIncidenceInfo(BaseModel):
+    sample_count: int
+    mutation_counts: Dict[str, List[MutationEntry]]

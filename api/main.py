@@ -1,4 +1,4 @@
-from typing import List, Annotated, Dict
+from typing import List, Annotated, Dict, Any, Union
 from datetime import date
 
 from fastapi import FastAPI, HTTPException, Query
@@ -19,7 +19,7 @@ import DB.queries.helpers
 from DB.models import Mutation, IntraHostVariant
 from api.models import LineageAbundanceWithSampleInfo, VariantInfo, SampleInfo, MutationInfo, VariantFreqInfo, VariantCountPhenoScoreInfo, \
     MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo, \
-    LineageInfo, VariantMutationLagInfo, RegionAndGffFeatureInfo, MutationProfileInfo, AverageLineageAbundanceInfo
+    LineageInfo, VariantMutationLagInfo, RegionAndGffFeatureInfo, MutationProfileInfo, AverageLineageAbundanceInfo, MutationIncidenceInfo
 from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, SIMPLE_DATE_FIELDS, NtOrAa, \
     DEFAULT_MAX_SPAN_DAYS, COLLECTION_DATE, DEFAULT_DAYS, COMMA_SEP_WORDLIKE_PATTERN, LINEAGE, DEFAULT_PREVALENCE_THRESHOLD, DEFAULT_N_LINEAGES
 from utils.errors import ParsingError
@@ -464,10 +464,10 @@ async def get_lineage_abundance(
             return await DB.queries.lineages.get_abundances(q)
 
 @app.get('/v0/lineages:mutationIncidence')
-async def get_mutation_incidence(lineage:str, background:str, lineage_system_name: str, change_bin:NtOrAa, prevalence_threshold:float = DEFAULT_PREVALENCE_THRESHOLD, match_reference:bool = False, q: str = None):
-    return await DB.queries.lineages.get_mutation_incidence(lineage, background, lineage_system_name, change_bin, prevalence_threshold, match_reference, q)
+async def get_mutation_incidence(lineage:str, background:str, lineage_system_name: str, change_bin:NtOrAa, prevalence_threshold:float = DEFAULT_PREVALENCE_THRESHOLD,q: str = None):
+    return await DB.queries.lineages.get_mutation_incidence(lineage, background, lineage_system_name, change_bin, prevalence_threshold, q)
 
-@app.get('/v0/lineages:lineagePrevalenceByCollectionDate')
+@app.get('/v0/lineages:lineagePrevalenceByCollectionDate', response_model=Dict[str, Dict[str, Any]])
 async def get_lineage_prevalence_by_collection_date(lineage:str, lineage_system_name: str, date_bin: DateBinOpt = DateBinOpt.month, days: int = DEFAULT_DAYS, max_span_days: int = DEFAULT_MAX_SPAN_DAYS):
     return await DB.queries.lineages.get_lineage_prevalence_by_collection_date(lineage, lineage_system_name, date_bin, days, max_span_days)
 

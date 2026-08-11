@@ -318,7 +318,6 @@ async def get_mutation_incidence(
     lineage_system_name: str,
     change_bin: NtOrAa,
     prevalence_threshold: float,
-    match_reference: bool,
     raw_query: str | None
 ):
     user_where_clause = ''
@@ -354,16 +353,16 @@ async def get_mutation_incidence(
         """
 
         mutation_subset_query = f"""
-        SELECT m.*, sample_subset.id AS sample_id 
+        SELECT m.allele_id,
+            sample_subset.id AS sample_id,
+            m.id
         FROM mutations m
         INNER JOIN sample_subset ON m.sequence_id = sample_subset.sequence_id
+        INNER JOIN alleles ON m.allele_id = alleles.id
+        WHERE region = '{background}'
         """
 
         if change_bin == NtOrAa.nt:
-            not_reference = 'AND ref_nt <> alt_nt'
-            if match_reference:
-                not_reference = ''
-
             res = await session.execute(
                 text(
                     f'''
@@ -374,16 +373,12 @@ async def get_mutation_incidence(
                     inner join mutations m ON m.sequence_id = sample_subset.sequence_id
                     inner join alleles a on a.id = m.allele_id
                     WHERE a.region = '{background}'
-                    {not_reference}
                     group by ref_nt, position_nt, alt_nt, region
                     having count(*) / {sample_count} >= {prevalence_threshold};
                     '''
                 )
             )
         else:
-            not_reference = 'AND ref_aa <> alt_aa'
-            if match_reference:
-                not_reference = ''
             res = await session.execute(
                 text(
                     f'''
@@ -392,10 +387,6 @@ async def get_mutation_incidence(
                     ),
                     mutation_subset AS (
                         {mutation_subset_query}
-                    ),
-                    alleles_subset AS (
-                        SELECT id FROM alleles
-                        WHERE region = '{background}'
                     ),
                     sample_aa AS (
                     SELECT DISTINCT mutation_subset.sample_id,
@@ -410,8 +401,6 @@ async def get_mutation_incidence(
                     from sample_subset 
                     inner join sample_aa ON sample_aa.sample_id = sample_subset.id
                     inner join amino_acids aa on aa.id = sample_aa.amino_acid_id
-                    inner join alleles_subset a on a.id = sample_aa.allele_id
-                    {not_reference}
                     group by ref_aa, position_aa, alt_aa, gff_feature
                     having count(DISTINCT sample_aa.sample_id) / {sample_count} >= {prevalence_threshold};
                     '''
@@ -421,7 +410,7 @@ async def get_mutation_incidence(
     out = defaultdict(list)
     for ref, pos, alt, region_or_gff, count, prevalence in res:
         out[region_or_gff].append({"ref": ref, "alt": alt, "pos": pos, "count": count, "prevalence": prevalence})
-    return {'sample_count': sample_count, 'mutation_counts': out}
+    return {'sample_count': int(sample_count), 'mutation_counts': out}
 
 
 async def get_lineage_prevalence_by_collection_date(
