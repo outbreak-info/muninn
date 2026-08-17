@@ -20,7 +20,7 @@ from DB.inserts.file_parsers.simple_lineage_parser import GenofluLineageParser, 
 from DB.inserts.file_parsers.variants_mutations_combined_parser import VariantsMutationsCombinedParser, \
     VariantsMutationsCombinedParserBig
 from DB.inserts.file_parsers.structural_annotations_parser import StructuralAnnotationsCsvParser
-
+2222
 def main():
     # define allowed formats, give names and point to parsers
     formats = {

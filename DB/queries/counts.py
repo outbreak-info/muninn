@@ -355,7 +355,7 @@ async def count_lineages_by_collection_date(
                     )
                     where collection_span <= {max_span_days}
                 )
-               {group_by_clause}
+               {group_by_clause}                                                                                                                                                                                    
                {order_by_clause}
                 '''
             )
@@ -396,3 +396,98 @@ async def count_sites_by_region() -> Dict[str, int]:
         rows = res.fetchall()
     
     return {row[0]: row[1] for row in rows}
+
+async def count_sites_by_region() -> Dict[str, int]:
+    """Count how many sites are in each region"""
+    async with get_async_session() as session:
+        res = await session.execute(
+            text(
+                '''
+                select
+                    structural_note->>'region' as region,
+                    count(*) as site_count
+                from structural_annotations
+                where structural_note is not null
+                group by structural_note->>'region'
+                order by structural_note->>'region'
+                '''
+            )
+        )
+        rows = res.fetchall()
+    return {row[0]: row[1] for row in rows}
+
+
+async def mutations_temporal_by_region() -> List[Dict[str, Any]]:
+    """Get mutation counts over time grouped by region"""
+    async with get_async_session() as session:
+        res = await session.execute(
+            text(
+                '''
+                select 
+                    date_trunc('week', s.collection_start_date)::date as week,
+                    (sa.structural_note->>'region')::text as region,
+                    count(mt.id) as total_mutations
+                from mutation_translations mt
+                join mutations m on mt.mutation_id = m.id
+                join samples s on m.sample_id = s.id
+                join amino_acids aa on mt.amino_acid_id = aa.id
+                join structural_annotations sa on sa.protein_name = aa.gff_feature
+                    and sa.sequential_site = aa.position_aa
+                where aa.gff_feature = 'XAJ25415.1'
+                group by week, region
+                order by week, region
+                '''
+            )
+        )
+        rows = res.fetchall()
+    return [{"week": row[0], "region": row[1], "mutations": row[2]} for row in rows]
+
+
+async def mutations_by_position() -> List[Dict[str, Any]]:
+    """Get mutation counts by position, labeled by region"""
+    async with get_async_session() as session:
+        res = await session.execute(
+            text(
+                '''
+                select 
+                    aa.position_aa as position,
+                    (sa.structural_note->>'region')::text as region,
+                    count(mt.id) as total_mutations
+                from mutation_translations mt
+                join amino_acids aa on mt.amino_acid_id = aa.id
+                join structural_annotations sa on sa.protein_name = aa.gff_feature
+                    and sa.sequential_site = aa.position_aa
+                where aa.gff_feature = 'XAJ25415.1'
+                group by position, region
+                order by position
+                '''
+            )
+        )
+        rows = res.fetchall()
+    return [{"position": row[0], "region": row[1], "mutations": row[2]} for row in rows]
+
+
+async def mutations_by_host() -> List[Dict[str, Any]]:
+    """Get mutation counts by region and host type"""
+    async with get_async_session() as session:
+        res = await session.execute(
+            text(
+                '''
+                select 
+                    (sa.structural_note->>'region')::text as region,
+                    s.host as host_type,
+                    count(mt.id) as mutation_count
+                from mutation_translations mt
+                join mutations m on mt.mutation_id = m.id
+                join samples s on m.sample_id = s.id
+                join amino_acids aa on mt.amino_acid_id = aa.id
+                join structural_annotations sa on sa.protein_name = aa.gff_feature
+                    and sa.sequential_site = aa.position_aa
+                where aa.gff_feature = 'XAJ25415.1'
+                group by region, host_type
+                order by region, host_type
+                '''
+            )
+        )
+        rows = res.fetchall()
+    return [{"region": row[0], "host": row[1], "mutations": row[2]} for row in rows]

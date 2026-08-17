@@ -673,3 +673,20 @@ async def get_intra_host_variants_timeline_at_structural_annotation(sequential_s
 async def get_sites_by_region():
     """Return count of sites in each region"""
     return await DB.queries.counts.count_sites_by_region()
+
+@app.get('/mutations/temporal-by-region')
+async def get_mutations_temporal():
+    """Return mutation counts over time by region"""
+    return await DB.queries.counts.mutations_temporal_by_region()
+
+
+@app.get('/mutations/by-position')
+async def get_mutations_by_position():
+    """Return mutation counts by position and region"""
+    return await DB.queries.counts.mutations_by_position()
+
+
+@app.get('/mutations/by-host')
+async def get_mutations_by_host():
+    """Return mutation counts by region and host type"""
+    return await DB.queries.counts.mutations_by_host()
