@@ -143,22 +143,6 @@ _USER_QUERY_SQLSTATES = frozenset({
     '42601',  # syntax_error: reachable from a filter that parses but emits invalid SQL
 })
 
-
-@app.exception_handler(DBAPIError)
-async def handle_db_query_error(request: Request, exc: DBAPIError):
-    sqlstate = getattr(getattr(exc, 'orig', None), 'sqlstate', None)
-    if sqlstate in _USER_QUERY_SQLSTATES:
-        return JSONResponse(
-            status_code=400,
-            content={
-                'detail': 'Invalid filter/group_by: it references a column, value, type, or operator that '
-                          'is not valid for this endpoint. See the endpoint filter description for the '
-                          'queryable columns.'
-            }
-        )
-    raise exc
-
-
 @app.exception_handler(ParsingError)
 async def handle_parsing_error(request: Request, exc: ParsingError):
     return JSONResponse(status_code=400, content={'detail': exc.message})

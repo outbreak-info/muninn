@@ -401,49 +401,31 @@ async def get_pheno_value_for_mutations_by_sample_and_collection_date(
     group_by_clause = get_group_by_clause(date_bin)
     order_by_clause = get_order_by_cause(date_bin)
 
-    query = f'''
-        with matching_samples as (
-            select s.id as sample_id,
-                   s.{ColumnNames.collection_start_date} as collection_start_date,
-                   s.{ColumnNames.collection_end_date} as collection_end_date
-            from {TableNames.samples} s
-            left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
-            inner join {TableNames.samples_lineages} sl on sl.{ColumnNames.sample_id} = s.id
-            inner join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id}
-            inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
-            where num_nulls(s.{ColumnNames.collection_end_date}, s.{ColumnNames.collection_start_date}) = 0
-              and (s.{ColumnNames.collection_end_date} - s.{ColumnNames.collection_start_date}) <= :max_span_days
-              {user_defined_filter}
-            group by s.id, s.{ColumnNames.collection_start_date}, s.{ColumnNames.collection_end_date}
-        ),
-        scored as (
-            select pmv.{ColumnNames.amino_acid_id} as aa_id, pmv.value as value
-            from {TableNames.phenotype_metric_values} pmv
-            inner join {TableNames.phenotype_metrics} pm on pm.id = pmv.{ColumnNames.phenotype_metric_id}
-            where pm.{ColumnNames.phenotype_metric_name} = :pm_name
-        )
-        select
-        {extract_clause},
-        percentile_cont(0.25) within group (order by aggregate_value) as q1,
-        percentile_cont(0.5) within group (order by aggregate_value) as median,
-        percentile_cont(0.75) within group (order by aggregate_value) as q3,
-        percentile_cont(0.25) within group (order by n_amino_acid_mutations) as q1_aa,
-        percentile_cont(0.5) within group (order by n_amino_acid_mutations) as median_aa,
-        percentile_cont(0.75) within group (order by n_amino_acid_mutations) as q3_aa
-        from (
-            select
-            sum(sc.value) as aggregate_value,
-            count(distinct sc.aa_id) as n_amino_acid_mutations,
-            {MID_COLLECTION_DATE_CALCULATION}
-            from matching_samples ms
-            inner join {TableNames.cns_amino_acids_by_sample} caas on caas.{ColumnNames.sample_id} = ms.sample_id
-            cross join lateral unnest(rb_to_array(caas.{ColumnNames.amino_acids_present})) as u({ColumnNames.amino_acid_id})
-            inner join scored sc on sc.aa_id = u.{ColumnNames.amino_acid_id}
-            group by ms.sample_id, ms.collection_start_date, ms.collection_end_date
-        ) per_sample
-        {group_by_clause}
-        {order_by_clause}
-    '''
+    query = (
+        f'with matching_samples as (\n'
+        f'    select s.id as sample_id,\n'
+        f'           {MID_COLLECTION_DATE_CALCULATION}\n'
+        f'    from samples s\n'
+        f'    left join geo_locations gl on gl.id = s.geo_location_id\n'
+        f'    inner join samples_lineages sl on sl.sample_id = s.id\n'
+        f'    inner join lineages l on l.id = sl.lineage_id\n'
+        f'    inner join lineage_systems ls on ls.id = l.lineage_system_id\n'
+        f'    where (s.collection_end_date - s.collection_start_date) <= :max_span_days {user_defined_filter}\n'
+        f')\n'
+        f'select {extract_clause},\n'
+        f'       percentile_cont(0.25) within group (order by pmv_value_sum) as pmv_sum_q1,\n'
+        f'       percentile_cont(0.5) within group (order by pmv_value_sum) as pmv_sum_median,\n'
+        f'       percentile_cont(0.75) within group (order by pmv_value_sum) as pmv_sum_q3,\n'
+        f'       percentile_cont(0.25) within group (order by n_scored_mutations) as n_scores_q1,\n'
+        f'       percentile_cont(0.5) within group (order by n_scored_mutations) as n_scores_median,\n'
+        f'       percentile_cont(0.75) within group (order by n_scored_mutations) as n_scores_q3\n'
+        f'from matching_samples\n'
+        f'inner join cache_cns_pmv_sums cache using (sample_id)\n'
+        f'inner join phenotype_metrics pm on pm.id = cache.phenotype_metric_id\n'
+        f'where pm.phenotype_metric_name = :pm_name\n'
+        f'{group_by_clause}\n'
+        f'{order_by_clause};'
+    )
     async with get_async_session() as session:
         res = await session.execute(
             text(query),
