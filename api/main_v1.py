@@ -1,6 +1,9 @@
 from typing import List, Annotated, Dict
 
+import re
+
 from fastapi import APIRouter, FastAPI, HTTPException, Path, Query, Request
+from fastapi.routing import APIRoute
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastmcp import FastMCP
@@ -24,7 +27,9 @@ from api.models import VariantNucleotideInfo, VariantAminoAcidInfo, SampleInfo, 
     LineageCountWithPrevalenceInfo, MutationProfileWithPrevalenceInfo, \
     SampleCollectionReleaseLagInfo, MutationIncidenceInfo, \
     VariantAminoAcidFrequencyByCollectionDateInfo, VariantNucleotideFrequencyByCollectionDateInfo, \
-    VariantFreqInfo
+    VariantFreqInfo, MutationNucleotideCountByDateAndLineageInfo, \
+    MutationAminoAcidCountByDateAndLineageInfo, PhenotypeMetricDateCountInfo, \
+    PhenotypeMetricAggregateByDateInfo, AnnotationProportionByDateInfo, AnnotatedPositionCountInfo
 from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, NtOrAa, \
     DEFAULT_MAX_SPAN_DAYS, COLLECTION_DATE, DEFAULT_DAYS, COMMA_SEP_WORDLIKE_PATTERN, \
     DEFAULT_PREVALENCE_THRESHOLD, MIN_PREVALENCE_THRESHOLD, FILTER_SYNTAX_HELP, DistinctValueField
@@ -68,7 +73,42 @@ app = FastAPI(
 )
 
 
-router = APIRouter(prefix='/v1')
+def operation_id_from_route(route: APIRoute) -> str:
+    """
+    FastMCP derives its tool names from FastAPI's operation_id, and truncates them at 56 characters.
+    The default id is function name + path + method, which blew that budget on 6 of the routes and cut
+    them mid-word ('..._v1_variants_countB'). Deriving the id from the path alone keeps every name
+    short, readable and stable if the handler is ever renamed.
+    """
+    path = route.path.removeprefix('/v1/')
+    return re.sub(r'\W+', '_', path).strip('_')
+
+
+router = APIRouter(prefix='/v1', generate_unique_id_function=operation_id_from_route)
+
+
+DateBinParam = Annotated[DateBinOpt, Query(
+    description='Granularity of the date bins over the collection-window midpoint: month, week, or day. '
+                'Applies only where date binning is in effect — on the :count endpoints that means '
+                'group_by=collection_date.'
+)]
+DaysParam = Annotated[int, Query(description='Bin width in days when date_bin=day')]
+MaxSpanParam = Annotated[int, Query(
+    description='Exclude samples whose collection window (end - start) exceeds this many days. Applies '
+                'only where collection-date binning is in effect.'
+)]
+MinAltFreqParam = Annotated[float | None, Query(
+    ge=0, le=1,
+    description='Optional lower bound on the intra-host alternate-allele frequency. Frequency is stored '
+                'as a 0.05-wide bin, so this selects observations whose bin overlaps the requested '
+                'window: 0.9 and 0.92 both return the [0.9,0.95) and [0.95,1] bins, because the database '
+                'cannot resolve within a bin. Ingestion discards calls below 0.2.'
+)]
+MaxAltFreqParam = Annotated[float | None, Query(
+    ge=0, le=1,
+    description='Optional upper bound on the intra-host alternate-allele frequency, with the same '
+                'bin-overlap semantics as min_alt_freq.'
+)]
 
 
 def filter_query(columns_help: str, *, required: bool = True) -> Query:
@@ -100,6 +140,7 @@ _USER_QUERY_SQLSTATES = frozenset({
     '22P02',  # invalid_text_representation (e.g. a non-numeric value for a numeric column)
     '22007',  # invalid_datetime_format
     '22008',  # datetime_field_overflow
+    '42601',  # syntax_error: reachable from a filter that parses but emits invalid SQL
 })
 
 
@@ -183,9 +224,9 @@ async def get_samples_query(filter: str = filter_query('Over all columns of the 
 
 @router.get('/samples:collectionReleaseLag', response_model=List[SampleCollectionReleaseLagInfo], tags=[TAG_SAMPLES], summary='Get collection-to-release lag quartiles, binned by collection-midpoint date')
 async def get_sample_collection_release_lag(
-    date_bin: DateBinOpt = Query(DateBinOpt.month, description='Granularity of the date bins: month, week, or day'),
-    days: int = Query(DEFAULT_DAYS, description='Bin width in days when date_bin=day'),
-    max_span_days: int = Query(DEFAULT_MAX_SPAN_DAYS, description='Exclude samples whose collection window (end - start) exceeds this many days'),
+    date_bin: DateBinParam = DateBinOpt.month,
+    days: DaysParam = DEFAULT_DAYS,
+    max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
 ):
     return await DB.queries.samples.get_sample_collection_release_lag(max_span_days, date_bin, days)
 
@@ -200,8 +241,8 @@ async def get_samples_by_mutation(
 async def get_samples_by_variant(
     change_bin: NtOrAa = Query(NtOrAa.aa, description='Whether the query filters on nucleotide (nt) allele columns or amino-acid (aa) columns'),
     filter: str = filter_query('Over the change catalog. change_bin=nt: all columns of the `alleles` table (region, position_nt, ref_nt, alt_nt); change_bin=aa: all columns of the `amino_acids` table (position_aa, ref_aa, alt_aa, gff_feature, ref_codon, alt_codon).'),
-    min_alt_freq: float | None = Query(None, ge=0, le=1, description='Optional lower bound on the intra-host alternate-allele frequency of the matching variant.'),
-    max_alt_freq: float | None = Query(None, ge=0, le=1, description='Optional upper bound on the intra-host alternate-allele frequency.'),
+    min_alt_freq: MinAltFreqParam = None,
+    max_alt_freq: MaxAltFreqParam = None,
 ):
     return await DB.queries.samples.get_samples_by_variant(change_bin, filter, min_alt_freq, max_alt_freq)
 
@@ -213,10 +254,10 @@ async def get_samples_by_variant(
 )
 async def get_sample_counts(
     group_by: Annotated[str, Query(pattern=COMMA_SEP_WORDLIKE_PATTERN.pattern, description='Column to group counts by: a date field (collection_date, release_date, creation_date), "lineage", or any sample column. Optionally "lineage,<date_field>" to also bin by date.')],
-    date_bin: DateBinOpt = Query(DateBinOpt.month, description='Granularity of date bins when grouping by a date field: month, week, or day'),
-    days: int = Query(DEFAULT_DAYS, description='Bin width in days when date_bin=day'),
+    date_bin: DateBinParam = DateBinOpt.month,
+    days: DaysParam = DEFAULT_DAYS,
     filter: str | None = filter_query('Optional: over all columns of the `samples` table, plus the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names).', required=False),
-    max_span_days: int = Query(DEFAULT_MAX_SPAN_DAYS, description='Exclude samples whose collection window (end - start) exceeds this many days (collection_date grouping only)'),
+    max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
 ):
     try:
         return await DB.queries.samples.get_sample_counts(group_by, date_bin, days, filter, max_span_days)
@@ -238,8 +279,8 @@ async def get_sample_counts(
 async def get_variants_query(
     change_bin: NtOrAa = Query(NtOrAa.nt, description='Whether the query filters on (and returns) nucleotide (nt) allele variants or amino-acid (aa) variants'),
     filter: str = filter_query('Over the change catalog. change_bin=nt: all columns of the `alleles` table (region, position_nt, ref_nt, alt_nt); change_bin=aa: all columns of the `amino_acids` table (position_aa, ref_aa, alt_aa, gff_feature, ref_codon, alt_codon). Read depths and the exact alt_freq are no longer stored, so they cannot be filtered on; use min_alt_freq/max_alt_freq for frequency, since the bin column is a range type the filter language cannot express.'),
-    min_alt_freq: float | None = Query(None, ge=0, le=1, description='Optional lower bound on the intra-host alternate-allele frequency. Frequency is stored as a 0.05-wide bin, so this selects observations whose bin overlaps the requested window: min_alt_freq=0.9 returns the [0.9,0.95) and [0.95,1] bins, and 0.92 returns the same two, because the database cannot resolve within a bin. Ingestion discards calls below 0.2.'),
-    max_alt_freq: float | None = Query(None, ge=0, le=1, description='Optional upper bound on the intra-host alternate-allele frequency, with the same bin-overlap semantics as min_alt_freq.'),
+    min_alt_freq: MinAltFreqParam = None,
+    max_alt_freq: MaxAltFreqParam = None,
 ):
     return await DB.queries.variants.get_variants(change_bin, filter, min_alt_freq, max_alt_freq)
 
@@ -252,8 +293,8 @@ async def get_variants_query(
 async def get_variants_by_sample(
     change_bin: NtOrAa = Query(NtOrAa.nt, description='Whether to return nucleotide (nt) allele variants or amino-acid (aa) variants'),
     filter: str = filter_query('Selects which samples to return variants for: over all columns of the `samples` table, plus the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names).'),
-    min_alt_freq: float | None = Query(None, ge=0, le=1, description='Optional lower bound on the intra-host alternate-allele frequency. Frequency is stored as a 0.05-wide bin, so this selects observations whose bin overlaps the requested window: min_alt_freq=0.9 returns the [0.9,0.95) and [0.95,1] bins, and 0.92 returns the same two, because the database cannot resolve within a bin. Ingestion discards calls below 0.2.'),
-    max_alt_freq: float | None = Query(None, ge=0, le=1, description='Optional upper bound on the intra-host alternate-allele frequency, with the same bin-overlap semantics as min_alt_freq.'),
+    min_alt_freq: MinAltFreqParam = None,
+    max_alt_freq: MaxAltFreqParam = None,
 ):
     return await DB.queries.variants.get_variants_by_sample(change_bin, filter, min_alt_freq, max_alt_freq)
 
@@ -266,9 +307,9 @@ async def get_variants_by_sample(
 async def get_variant_counts(
     group_by: Annotated[str, Query(pattern=WORDLIKE_PATTERN.pattern, description='Grouping key: "collection_date" for a date-binned time series of per-change counts, or a column name to group by. The column must belong to the change_bin catalog: nt=alleles columns (region, position_nt, ref_nt, alt_nt); aa=amino_acids columns (gff_feature, ref_aa, position_aa, alt_aa, ref_codon, alt_codon). "alt_freq_range" also works, to count observations per intra-host frequency bin.')],
     change_bin: NtOrAa = Query(NtOrAa.aa, description='Whether counts are over nucleotide (nt) allele variants or amino-acid (aa) variants.'),
-    date_bin: DateBinOpt = Query(DateBinOpt.month, description='Granularity of date bins when group_by=collection_date: month, week, or day'),
-    days: int = Query(DEFAULT_DAYS, description='Bin width in days when date_bin=day'),
-    max_span_days: int = Query(DEFAULT_MAX_SPAN_DAYS, description='Exclude samples whose collection window (end - start) exceeds this many days (collection_date grouping only)'),
+    date_bin: DateBinParam = DateBinOpt.month,
+    days: DaysParam = DEFAULT_DAYS,
+    max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
     filter: str | None = filter_query('Optional. Selects which *samples* are counted: over all columns of the `samples` table, the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names), and the lineage columns (lineage_name, lineage_system_name). filter can only narrow the sample side. Use group_by to slice the change side.', required=False),
 ):
     """
@@ -287,9 +328,9 @@ async def get_variant_counts(
 )
 async def get_variant_frequency_by_collection_date(
     change_bin: NtOrAa = Query(NtOrAa.aa, description='Whether quartiles are reported per nucleotide (nt) allele variant or per amino-acid (aa) variant.'),
-    date_bin: DateBinOpt = Query(DateBinOpt.month, description='Granularity of the date bins over the collection-window midpoint: month, week, or day'),
-    days: int = Query(DEFAULT_DAYS, description='Bin width in days when date_bin=day'),
-    max_span_days: int = Query(DEFAULT_MAX_SPAN_DAYS, description='Exclude samples whose collection window (end - start) exceeds this many days'),
+    date_bin: DateBinParam = DateBinOpt.month,
+    days: DaysParam = DEFAULT_DAYS,
+    max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
     filter: str | None = filter_query('Optional. Selects which *samples* are included: over all columns of the `samples` table, the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names), and the lineage columns (lineage_name, lineage_system_name). Variant/change columns are not filterable here — an intra-host variant is stored per change, not per sample, so the filter can only narrow the sample side.', required=False),
 ):
     return await DB.queries.variants.get_variant_frequency_by_collection_date(
@@ -402,10 +443,10 @@ async def get_mutation_gff_features():
 async def get_mutation_counts(
     group_by: Annotated[str, Query(pattern=WORDLIKE_PATTERN.pattern, description='Grouping key: "collection_date" for a date-binned time series of per-mutation counts, or a column name to group by. The column must belong to the change_bin catalog: nt=alleles columns (region, position_nt, ref_nt, alt_nt); aa=amino_acids columns (gff_feature, ref_aa, position_aa, alt_aa, ref_codon, alt_codon).')],
     change_bin: NtOrAa = Query(NtOrAa.aa, description='Whether counts are over nucleotide (nt) allele mutations or amino-acid (aa) mutations.'),
-    date_bin: DateBinOpt = Query(DateBinOpt.month, description='Granularity of date bins when group_by=collection_date: month, week, or day'),
-    days: int = Query(DEFAULT_DAYS, description='Bin width in days when date_bin=day'),
-    max_span_days: int = Query(DEFAULT_MAX_SPAN_DAYS, description='Exclude samples whose collection window (end - start) exceeds this many days (collection_date grouping only)'),
-    filter: str | None = filter_query('Optional, applied to the collection_date grouping only: over all samples + joined geo_locations columns, the change columns (nt: region, ref_nt, position_nt, alt_nt; aa: gff_feature, ref_aa, position_aa, alt_aa, ref_codon, alt_codon), and lineage columns (lineage_name, lineage_system_name).', required=False),
+    date_bin: DateBinParam = DateBinOpt.month,
+    days: DaysParam = DEFAULT_DAYS,
+    max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
+    filter: str | None = filter_query('Optional. With group_by=collection_date: over all `samples` columns, the joined `geo_locations` columns, the change columns (nt: region, ref_nt, position_nt, alt_nt; aa: gff_feature, ref_aa, position_aa, alt_aa, ref_codon, alt_codon) and the lineage columns (lineage_name, lineage_system_name). With any other group_by the filter selects samples only, so it accepts `samples` and `geo_locations` columns — change and lineage columns return 400 there.', required=False),
 ):
     if group_by == COLLECTION_DATE:
         return await DB.queries.counts.count_mutations_by_collection_date(date_bin, change_bin, days, max_span_days, filter)
@@ -451,7 +492,7 @@ async def get_mutation_counts_by_phenotype_score(
 
 @router.get(
     '/mutations:countByCollectionDateAndLineage',
-    response_model=List[Dict],
+    response_model=List[MutationNucleotideCountByDateAndLineageInfo] | List[MutationAminoAcidCountByDateAndLineageInfo],
     tags=[TAG_MUTATIONS],
     summary='Count samples carrying a specific consensus mutation, binned by collection date and lineage'
 )
@@ -460,10 +501,10 @@ async def get_mutation_count_by_collection_date_and_lineage(
     position: int = Query(..., description='1-based position of the change: position_nt (nt) or position_aa (aa)'),
     alt: str = Query(..., description='Alternate (mutant) nucleotide (nt) or amino acid (aa) of the change'),
     region: str = Query(..., description='For change_bin=nt: the genomic region/segment (alleles.region). For change_bin=aa: the GFF feature / gene (amino_acids.gff_feature).'),
-    date_bin: DateBinOpt = Query(DateBinOpt.month, description='Granularity of date bins: month, week, or day'),
-    days: int = Query(DEFAULT_DAYS, description='Bin width in days when date_bin=day'),
+    date_bin: DateBinParam = DateBinOpt.month,
+    days: DaysParam = DEFAULT_DAYS,
     filter: str | None = filter_query('Optional, restricting which samples are counted: over all columns of the `samples` table, plus the joined `lineages` columns (e.g. lineage_name). No geo columns are joined here.', required=False),
-    max_span_days: int = Query(DEFAULT_MAX_SPAN_DAYS, description='Exclude samples whose collection window (end - start) exceeds this many days'),
+    max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
 ):
     if change_bin == NtOrAa.nt:
         return await DB.queries.mutations.get_nt_mutation_count_by_collection_date(date_bin, position, alt, region, days, max_span_days, filter)
@@ -494,11 +535,11 @@ async def get_lineages_by_lineage_system(
 )
 async def get_lineage_abundance(
     group_by: Annotated[str | None, Query(pattern=WORDLIKE_PATTERN.pattern, description='Optional date field to bin summaries by: only "collection_date" is supported. Omit to aggregate/list over all samples.')] = None,
-    date_bin: DateBinOpt = Query(DateBinOpt.month, description='Granularity of date bins when group_by=collection_date: month, week, or day'),
-    days: int = Query(DEFAULT_DAYS, description='Bin width in days when date_bin=day'),
+    date_bin: DateBinParam = DateBinOpt.month,
+    days: DaysParam = DEFAULT_DAYS,
     filter: str | None = filter_query('Optional: over all `samples` columns, plus joined `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name) and `samples_lineages` (abundance); geo columns join in via their raw names too. Only abundance-based (non-consensus) lineage calls are ever included.', required=False),
     summary: bool = Query(True, description='If true (default) return per-lineage abundance summary stats; if false return per-sample abundance rows (only supported when group_by is omitted)'),
-    max_span_days: int = Query(DEFAULT_MAX_SPAN_DAYS, description='Exclude samples whose collection window (end - start) exceeds this many days (collection_date binning only)'),
+    max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
 ):
     if group_by == COLLECTION_DATE:
         if summary:
@@ -523,9 +564,9 @@ async def get_lineage_counts_over_time(
         required=False,
     ),
     lineage: str | None = Query(None, description='Optional: restrict to a single lineage (lineages.lineage_name); omit for all lineages'),
-    date_bin: DateBinOpt = Query(DateBinOpt.month, description='Granularity of collection-date bins: month, week, or day'),
-    days: int = Query(DEFAULT_DAYS, description='Bin width in days when date_bin=day'),
-    max_span_days: int = Query(DEFAULT_MAX_SPAN_DAYS, description='Exclude samples whose collection window (end - start) exceeds this many days'),
+    date_bin: DateBinParam = DateBinOpt.month,
+    days: DaysParam = DEFAULT_DAYS,
+    max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
     days_before_today: int | None = Query(None, gt=0, description='Optional: only count samples whose collection midpoint is within this many days before today'),
 ):
     return await DB.queries.lineages.get_lineage_counts_over_time(
@@ -587,17 +628,17 @@ async def get_all_phenotype_metrics():
 
 @router.get(
     '/phenotypeMetricValues:countMutationsByCollectionDate',
-    response_model=List[Dict],
+    response_model=List[PhenotypeMetricDateCountInfo],
     tags=[TAG_PHENOTYPE],
     summary='Count phenotype-scored consensus mutations at/above a threshold, binned by collection date'
 )
 async def get_phenotype_metric_count_mutations_by_collection_date(
     phenotype_metric_name: str = Query(..., description='Phenotype metric to score amino-acid changes by, matched against phenotype_metrics.phenotype_metric_name (e.g. delta_bind)'),
     phenotype_metric_value_threshold: float = Query(..., description='Threshold on the metric value; n_gte counts scored amino-acid changes whose value is >= this'),
-    date_bin: DateBinOpt = Query(DateBinOpt.month, description='Granularity of collection-date bins: month, week, or day'),
-    days: int = Query(DEFAULT_DAYS, description='Bin width in days when date_bin=day'),
+    date_bin: DateBinParam = DateBinOpt.month,
+    days: DaysParam = DEFAULT_DAYS,
     filter: str | None = filter_query('Optional: over all `samples` columns plus the joined `geo_locations` columns (raw names, e.g. admin1_name/country_name) and `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name). alleles/amino_acids columns are NOT joined and cannot be filtered on.', required=False),
-    max_span_days: int = Query(DEFAULT_MAX_SPAN_DAYS, description='Exclude samples whose collection window (end - start) exceeds this many days'),
+    max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
 ):
     return await DB.queries.phenotype_metrics.count_mutations_gte_pheno_value_by_collection_date(
         date_bin,
@@ -610,19 +651,19 @@ async def get_phenotype_metric_count_mutations_by_collection_date(
 
 @router.get(
     '/phenotypeMetricValues:countVariantsByCollectionDate',
-    response_model=List[Dict],
+    response_model=List[PhenotypeMetricDateCountInfo],
     tags=[TAG_PHENOTYPE],
     summary='Count phenotype-scored intra-host variants at/above a threshold, binned by collection date'
 )
 async def get_phenotype_metric_count_variants_by_collection_date(
     phenotype_metric_name: str = Query(..., description='Phenotype metric to score amino-acid changes by, matched against phenotype_metrics.phenotype_metric_name (e.g. delta_bind)'),
     phenotype_metric_value_threshold: float = Query(..., description='Threshold on the metric value; n_gte counts scored amino-acid changes whose value is >= this'),
-    date_bin: DateBinOpt = Query(DateBinOpt.month, description='Granularity of collection-date bins: month, week, or day'),
-    days: int = Query(DEFAULT_DAYS, description='Bin width in days when date_bin=day'),
+    date_bin: DateBinParam = DateBinOpt.month,
+    days: DaysParam = DEFAULT_DAYS,
     filter: str | None = filter_query('Optional, selecting which samples are binned: over all `samples` columns, the joined `geo_locations` columns (raw names, e.g. admin1_name/country_name), and `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name). Amino-acid columns are not filterable — the metric already selects which changes are counted.', required=False),
-    max_span_days: int = Query(DEFAULT_MAX_SPAN_DAYS, description='Exclude samples whose collection window (end - start) exceeds this many days'),
-    min_alt_freq: float | None = Query(None, ge=0, le=1, description='Optional lower bound on the intra-host frequency at which a change counts as present. Frequency is stored as a 0.05-wide bin, so this selects observations whose bin overlaps the requested window.'),
-    max_alt_freq: float | None = Query(None, ge=0, le=1, description='Optional upper bound on the intra-host frequency, with the same bin-overlap semantics as min_alt_freq.'),
+    max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
+    min_alt_freq: MinAltFreqParam = None,
+    max_alt_freq: MaxAltFreqParam = None,
 ):
     return await DB.queries.phenotype_metrics.count_variants_gte_pheno_value_by_collection_date(
         date_bin,
@@ -637,16 +678,17 @@ async def get_phenotype_metric_count_variants_by_collection_date(
 
 @router.get(
     '/phenotypeMetricValues:forMutationsAggregateBySampleAndCollectionDate',
-    response_model=List[Dict],
+    operation_id='phenotypeMetricValues_mutationAggregatesByDate',
+    response_model=List[PhenotypeMetricAggregateByDateInfo],
     tags=[TAG_PHENOTYPE],
     summary='Per-collection-date quartiles of per-sample consensus-mutation phenotype load (summed value and distinct-aa count)'
 )
 async def get_phenotype_metric_values_for_mutations_by_sample_and_collection_date(
     phenotype_metric_name: str = Query(..., description='Phenotype metric to score amino-acid changes by, matched against phenotype_metrics.phenotype_metric_name (e.g. delta_bind)'),
-    date_bin: DateBinOpt = Query(DateBinOpt.month, description='Granularity of collection-date bins: month, week, or day'),
-    days: int = Query(DEFAULT_DAYS, description='Bin width in days when date_bin=day'),
+    date_bin: DateBinParam = DateBinOpt.month,
+    days: DaysParam = DEFAULT_DAYS,
     filter: str | None = filter_query('Optional: over all `samples` columns plus the joined `geo_locations` columns (raw names, e.g. admin1_name/country_name) and `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name). alleles/amino_acids columns are NOT joined and cannot be filtered on.', required=False),
-    max_span_days: int = Query(DEFAULT_MAX_SPAN_DAYS, description='Exclude samples whose collection window (end - start) exceeds this many days'),
+    max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
 ):
     return await DB.queries.phenotype_metrics.get_pheno_value_for_mutations_by_sample_and_collection_date(
         date_bin,
@@ -658,16 +700,17 @@ async def get_phenotype_metric_values_for_mutations_by_sample_and_collection_dat
 
 @router.get(
     '/phenotypeMetricValues:forVariantsAggregateBySampleAndCollectionDate',
-    response_model=List[Dict],
+    operation_id='phenotypeMetricValues_variantAggregatesByDate',
+    response_model=List[PhenotypeMetricAggregateByDateInfo],
     tags=[TAG_PHENOTYPE],
     summary='Per-collection-date quartiles of per-sample intra-host-variant phenotype load (NOT IMPLEMENTED)'
 )
 async def get_phenotype_metric_values_for_variants_by_sample_and_collection_date(
     phenotype_metric_name: str = Query(..., description='Phenotype metric to score amino-acid changes by, matched against phenotype_metrics.phenotype_metric_name (e.g. delta_bind)'),
-    date_bin: DateBinOpt = Query(DateBinOpt.month, description='Granularity of collection-date bins: month, week, or day'),
-    days: int = Query(DEFAULT_DAYS, description='Bin width in days when date_bin=day'),
+    date_bin: DateBinParam = DateBinOpt.month,
+    days: DaysParam = DEFAULT_DAYS,
     filter: str | None = filter_query('Optional: over all `samples` columns plus the joined `geo_locations` columns (raw names, e.g. admin1_name/country_name) and `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name).', required=False),
-    max_span_days: int = Query(DEFAULT_MAX_SPAN_DAYS, description='Exclude samples whose collection window (end - start) exceeds this many days'),
+    max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
 ):
     # v0 deliberately left this unimplemented (raise NotImplementedError). Preserve that choice as a
     # clean 501 (v0's unhandled NotImplementedError surfaced as a 500). The intra-host-variant version
@@ -723,15 +766,15 @@ async def get_phenotype_metric_value_min_and_max(
 
 @router.get(
     '/annotations:byMutationsAndCollectionDate',
-    response_model=List[Dict],
+    response_model=List[AnnotationProportionByDateInfo],
     tags=[TAG_ANNOTATIONS],
     summary='Proportion of annotated consensus-mutation amino acids carrying an annotation effect, binned by collection date'
 )
 async def get_annotations_by_mutations_and_collection_date(
     effect_detail: str = Query(..., description='Annotation effect to match, compared against effects.detail'),
-    date_bin: DateBinOpt = Query(DateBinOpt.month, description='Granularity of collection-date bins: month, week, or day'),
-    days: int = Query(DEFAULT_DAYS, description='Bin width in days when date_bin=day'),
-    max_span_days: int = Query(DEFAULT_MAX_SPAN_DAYS, description='Exclude samples whose collection window (end - start) exceeds this many days'),
+    date_bin: DateBinParam = DateBinOpt.month,
+    days: DaysParam = DEFAULT_DAYS,
+    max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
     filter: str | None = filter_query('Optional: over all `samples` columns plus the joined `geo_locations` columns (raw names, e.g. admin1_name/country_name) and `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name). alleles/amino_acids columns are NOT joined and cannot be filtered on.', required=False),
 ):
     return await DB.queries.annotations.get_annotations_by_mutations_and_collection_date(
@@ -744,15 +787,15 @@ async def get_annotations_by_mutations_and_collection_date(
 
 @router.get(
     '/annotations:byVariantsAndCollectionDate',
-    response_model=List[Dict],
+    response_model=List[AnnotationProportionByDateInfo],
     tags=[TAG_ANNOTATIONS],
     summary='Proportion of annotated intra-host-variant amino acids carrying an annotation effect, binned by collection date (NOT IMPLEMENTED)'
 )
 async def get_annotations_by_variants_and_collection_date(
     effect_detail: str = Query(..., description='Annotation effect to match, compared against effects.detail'),
-    date_bin: DateBinOpt = Query(DateBinOpt.month, description='Granularity of collection-date bins: month, week, or day'),
-    days: int = Query(DEFAULT_DAYS, description='Bin width in days when date_bin=day'),
-    max_span_days: int = Query(DEFAULT_MAX_SPAN_DAYS, description='Exclude samples whose collection window (end - start) exceeds this many days'),
+    date_bin: DateBinParam = DateBinOpt.month,
+    days: DaysParam = DEFAULT_DAYS,
+    max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
     filter: str | None = filter_query('Optional: over samples/geo/lineage columns.', required=False),
 ):
     # Not implemented (deferred): the intra-host-variant path is unverifiable on SC2 (intra_host_translations
@@ -771,7 +814,7 @@ async def get_annotation_effects() -> List[str]:
 
 @router.get(
     '/annotations:byVariantsAndAminoAcidPosition',
-    response_model=Dict,
+    response_model=Dict[str, List[AnnotatedPositionCountInfo]],
     tags=[TAG_ANNOTATIONS],
     summary='Annotated intra-host-variant amino-acid positions for an annotation effect (NOT IMPLEMENTED)'
 )
@@ -786,7 +829,7 @@ async def get_annotations_by_variants_and_amino_acid_position(
 
 @router.get(
     '/annotations:byMutationsAndAminoAcidPosition',
-    response_model=Dict,
+    response_model=Dict[str, List[AnnotatedPositionCountInfo]],
     tags=[TAG_ANNOTATIONS],
     summary='Per-position sample counts of annotated consensus-mutation amino acids for an annotation effect'
 )

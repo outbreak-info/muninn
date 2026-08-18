@@ -364,3 +364,80 @@ class VariantNucleotideFrequencyByCollectionDateInfo(VariantFrequencyByCollectio
     ref_nt: str = Field(description="Reference nucleotide of the change")
     position_nt: int = Field(description="1-based nucleotide position of the change within the region")
     alt_nt: str = Field(description="Alternate (mutant) nucleotide of the change")
+
+
+class MutationCountByDateAndLineageInfo(BaseModel):
+    """
+    Shared fields of a (date bin, change, lineage) count row. Like the other nt/aa pairs in this
+    module, the subclasses keep their required fields disjoint so the route's `List[nt] | List[aa]`
+    response union resolves unambiguously.
+    """
+    date: str = Field(
+        description="Date-bin label for the collection-window midpoint: e.g. '2024-06' (month), "
+                    "'2024-W05' (week), or a 'start/end' interval (day)."
+    )
+    n: int = Field(description="Number of distinct samples in this bin, lineage and change")
+    lineage_name: str = Field(description="Lineage the samples were assigned to")
+
+
+class MutationNucleotideCountByDateAndLineageInfo(MutationCountByDateAndLineageInfo):
+    region: str = Field(description="Genomic region / segment the change falls in")
+    ref_nt: str = Field(description="Reference nucleotide of the change")
+    position_nt: int = Field(description="1-based nucleotide position within the region")
+    alt_nt: str = Field(description="Alternate (mutant) nucleotide of the change")
+
+
+class MutationAminoAcidCountByDateAndLineageInfo(MutationCountByDateAndLineageInfo):
+    gff_feature: str = Field(description="GFF feature (gene/product) the change falls in")
+    ref_aa: str = Field(description="Reference amino acid of the change")
+    position_aa: int = Field(description="1-based amino-acid position within the GFF feature")
+    alt_aa: str = Field(description="Alternate (mutant) amino acid of the change")
+
+
+class PhenotypeMetricDateCountInfo(BaseModel):
+    date: str = Field(
+        description="Date-bin label for the collection-window midpoint: e.g. '2024-06' (month), "
+                    "'2024-W05' (week), or a 'start/end' interval (day)."
+    )
+    n: int = Field(
+        description="Number of scored amino-acid changes present in at least one sample in this bin"
+    )
+    n_gte: int = Field(
+        description="Of those, how many have a phenotype metric value at or above the requested "
+                    "threshold"
+    )
+
+
+class PhenotypeMetricAggregateByDateInfo(BaseModel):
+    date: str = Field(
+        description="Date-bin label for the collection-window midpoint: e.g. '2024-06' (month), "
+                    "'2024-W05' (week), or a 'start/end' interval (day)."
+    )
+    aggregate_value_q1: float | None = Field(
+        description="First quartile, across the samples in this bin, of each sample's aggregated "
+                    "phenotype metric value. Null when the bin has no scored samples."
+    )
+    aggregate_value_median: float | None = Field(description="Median of the same per-sample aggregate")
+    aggregate_value_q3: float | None = Field(description="Third quartile of the same per-sample aggregate")
+    n_aa_q1: float | None = Field(
+        description="First quartile of the number of scored amino-acid changes per sample in this bin"
+    )
+    n_aa_median: float | None = Field(description="Median of the per-sample scored-change count")
+    n_aa_q3: float | None = Field(description="Third quartile of the per-sample scored-change count")
+
+
+class AnnotationProportionByDateInfo(BaseModel):
+    date: str = Field(
+        description="Date-bin label for the collection-window midpoint: e.g. '2024-06' (month), "
+                    "'2024-W05' (week), or a 'start/end' interval (day)."
+    )
+    n: int = Field(description="Samples in this bin carrying at least one change with the requested annotation effect")
+    n_total: int = Field(description="Total samples in this bin (the denominator)")
+    proportion: float = Field(description="n / n_total")
+
+
+class AnnotatedPositionCountInfo(BaseModel):
+    position_aa: int = Field(description="1-based amino-acid position within the GFF feature")
+    ref_aa: str = Field(description="Reference amino acid of the annotated change")
+    alt_aa: str = Field(description="Alternate amino acid of the annotated change")
+    count: int = Field(description="Number of samples carrying this annotated change")

@@ -57,7 +57,6 @@ services:
       MUNINN_DB_NAME: "${MUNINN_DB_NAME}"
       MUNINN_DB_PORT: "${MUNINN_DB_PORT_FOR_SERVER}"
       MUNINN_SERVER_DATA_INPUT_DIR: "${MUNINN_SERVER_DATA_INPUT_DIR}"
-    # postgres already defines a healthcheck, so wait on that instead of a fixed `sleep 30`
     depends_on:
       postgres:
         condition: service_healthy
