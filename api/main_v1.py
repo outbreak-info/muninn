@@ -707,28 +707,31 @@ async def get_phenotype_metric_values_for_mutations_by_sample_and_collection_dat
     operation_id='phenotypeMetricValues_variantAggregatesByDate',
     response_model=List[PhenotypeMetricAggregateByDateInfo],
     tags=[TAG_PHENOTYPE],
-    summary='Per-collection-date quartiles of per-sample intra-host-variant phenotype load (NOT IMPLEMENTED)'
+    summary='Per-collection-date quartiles of per-sample intra-host-variant phenotype load (summed value and distinct-aa count)'
 )
 async def get_phenotype_metric_values_for_variants_by_sample_and_collection_date(
     phenotype_metric_name: str = Query(..., description='Phenotype metric to score amino-acid changes by, matched against phenotype_metrics.phenotype_metric_name (e.g. delta_bind)'),
     date_bin: DateBinParam = DateBinOpt.month,
     days: DaysParam = DEFAULT_DAYS,
-    filter: str | None = filter_query('Optional: over all `samples` columns plus the joined `geo_locations` columns (raw names, e.g. admin1_name/country_name) and `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name).', required=False),
+    filter: str | None = filter_query('Optional: over all `samples` columns plus the joined `geo_locations` columns (raw names, e.g. admin1_name/country_name) and `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name). alleles/amino_acids columns are NOT joined and cannot be filtered on.', required=False),
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
 ):
-    # v0 deliberately left this unimplemented (raise NotImplementedError). Preserve that choice as a
-    # clean 501 (v0's unhandled NotImplementedError surfaced as a 500). The intra-host-variant version
-    # is a trivial adaptation of :forMutationsAggregate... over intra_host_translations if wanted.
-    raise HTTPException(status_code=501, detail='Per-sample intra-host-variant phenotype aggregation by collection date is not implemented')
+    return await DB.queries.phenotype_metrics.get_pheno_value_for_variants_by_sample_and_collection_date(
+        date_bin,
+        phenotype_metric_name,
+        days,
+        max_span_days,
+        filter,
+    )
 
 @router.get(
     '/phenotypeMetricValues:byMutationsQuantile',
     response_model=Dict[str, float | None],
     tags=[TAG_PHENOTYPE],
-    summary='Get the value of a phenotype metric at a given quantile across its scored substitutions'
+    summary='Get the value of a phenotype metric at a given quantile across the substitutions seen in consensus'
 )
 async def get_phenotype_metric_value_by_mutation_quantile(
-    phenotype_metric_name: str = Query(..., description='Phenotype metric whose value distribution is quantiled, matched against phenotype_metrics.phenotype_metric_name (e.g. delta_bind). phenotype_metric_value is null if the metric name is unknown or has no non-zero scored values.'),
+    phenotype_metric_name: str = Query(..., description='Phenotype metric whose value distribution is quantiled, matched against phenotype_metrics.phenotype_metric_name (e.g. delta_bind). phenotype_metric_value is null if the metric name is unknown, or if no substitution it scores has been seen in consensus.'),
     quantile: float = Query(..., ge=0.0, le=1.0, description='Quantile in [0,1] (e.g. 0.5 for the median), evaluated with percentile_disc over the non-zero scored-substitution values'),
 ):
     return await DB.queries.phenotype_metrics.get_phenotype_metric_value_by_mutation_quantile(
@@ -738,19 +741,18 @@ async def get_phenotype_metric_value_by_mutation_quantile(
 
 @router.get(
     '/phenotypeMetricValues:byVariantsQuantile',
-    response_model=Dict[str, float],
+    response_model=Dict[str, float | None],
     tags=[TAG_PHENOTYPE],
-    summary='Get the value of a phenotype metric at a given quantile across intra-host variants (NOT IMPLEMENTED)'
+    summary='Get the value of a phenotype metric at a given quantile across the substitutions seen intra-host'
 )
 async def get_phenotype_metric_value_by_variant_quantile(
-    phenotype_metric_name: str = Query(..., description='Phenotype metric whose value distribution is quantiled, matched against phenotype_metrics.phenotype_metric_name (e.g. delta_bind)'),
-    quantile: float = Query(..., description='Quantile in [0,1] (e.g. 0.5 for the median)'),
+    phenotype_metric_name: str = Query(..., description='Phenotype metric whose value distribution is quantiled, matched against phenotype_metrics.phenotype_metric_name (e.g. delta_bind). phenotype_metric_value is null if the metric name is unknown, or if no substitution it scores has ever been seen intra-host.'),
+    quantile: float = Query(..., ge=0.0, le=1.0, description='Quantile in [0,1] (e.g. 0.5 for the median), evaluated with percentile_disc over the non-zero scored-substitution values'),
 ):
-    # Not implemented (per direction). Under the catalog-quantile reading used by :byMutationsQuantile
-    # this would return the identical value (the metric value is a property of the amino-acid
-    # substitution, not of the intra-host-variant table); a sample-carrier-weighted variant quantile
-    # would be a different, larger computation and is unverifiable on SC2 (intra-host tables empty).
-    raise HTTPException(status_code=501, detail='Phenotype metric quantile across intra-host variants is not implemented')
+    return await DB.queries.phenotype_metrics.get_phenotype_metric_value_by_variant_quantile(
+        phenotype_metric_name,
+        quantile,
+    )
 
 @router.get(
     '/phenotypeMetricValues:minAndMaxValues',

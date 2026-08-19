@@ -305,22 +305,27 @@ async def count_variants_gte_pheno_value_by_collection_date(
     return out_data
 
 
-async def get_phenotype_metric_value_by_variant_quantile(
+async def _phenotype_metric_value_quantile(
     phenotype_metric_name: str,
-    quantile: float
-) -> Dict[str, float]:
-    return await _get_phenotype_metric_value_quantile(phenotype_metric_name, quantile, IntraHostVariant)
-
-
-async def get_phenotype_metric_value_by_mutation_quantile(
-    phenotype_metric_name: str,
-    quantile: float
+    quantile: float,
+    intra_host: bool,
 ) -> Dict[str, float | None]:
+    if intra_host:
+        carrier_table = TableNames.ih_samples_by_amino_acid
+    else:
+        carrier_table = TableNames.cns_samples_by_amino_acid
+
     query = f"""
         select percentile_disc(:quantile) within group (order by pmv.value)
         from {TableNames.phenotype_metric_values} pmv
         inner join {TableNames.phenotype_metrics} pm on pm.id = pmv.{ColumnNames.phenotype_metric_id}
-        where pm.{ColumnNames.phenotype_metric_name} = :pm_name and pmv.value != 0
+        where pm.{ColumnNames.phenotype_metric_name} = :pm_name
+          and pmv.value != 0
+          and exists (
+              select 1
+              from {carrier_table} c
+              where c.{ColumnNames.amino_acid_id} = pmv.{ColumnNames.amino_acid_id}
+          )
     """
     async with get_async_session() as session:
         res = await session.scalars(
@@ -334,56 +339,27 @@ async def get_phenotype_metric_value_by_mutation_quantile(
     }
 
 
-async def _get_phenotype_metric_value_quantile(
+async def get_phenotype_metric_value_by_variant_quantile(
     phenotype_metric_name: str,
-    quantile: float,
-    by_table: Type[IntraHostVariant] | Type[Mutation]
-) -> Dict[str, float]:
-    translations_table, translations_join_id_col = get_appropriate_translations_table_and_id(by_table)
-    query = f"""
-            SELECT percentile_disc({quantile}) within group (order by pmv.value)
-                FROM amino_acids aa
-                INNER JOIN {translations_table} t ON t.amino_acid_id = aa.id
-                INNER JOIN {by_table.__tablename__} vm ON vm.id = t.{translations_join_id_col}
-                INNER JOIN samples s on s.id = vm.sample_id
-                INNER JOIN samples_lineages sl on sl.sample_id = s.id
-                INNER JOIN lineages l ON l.id = sl.lineage_id
-                INNER JOIN lineage_systems ls on ls.id = l.lineage_system_id
-                INNER JOIN phenotype_metric_values pmv ON pmv.amino_acid_id = aa.id
-                INNER JOIN phenotype_metrics pm on pm.id = pmv.phenotype_metric_id
-            WHERE pm.{ColumnNames.phenotype_metric_name} = :pm_name
-            AND pmv.value != 0;
-            """
-    async with get_async_session() as session:
-        res = await session.scalars(
-            text(query),
-            {'pm_name': phenotype_metric_name}
-        )
-    value = next(res)
-    return {
-        "quantile": quantile,
-        "phenotype_metric_value": value
-    }
+    quantile: float
+) -> Dict[str, float | None]:
+    return await _phenotype_metric_value_quantile(phenotype_metric_name, quantile, intra_host=True)
 
 
-async def get_pheno_value_for_variants_by_sample_and_collection_date(
-    date_bin: DateBinOpt,
+async def get_phenotype_metric_value_by_mutation_quantile(
     phenotype_metric_name: str,
-    days: int,
-    max_span_days: int,
-    raw_query: str
-):
-    raise NotImplementedError(
-        "This function is not implemented yet."
-    )
+    quantile: float
+) -> Dict[str, float | None]:
+    return await _phenotype_metric_value_quantile(phenotype_metric_name, quantile, intra_host=False)
 
 
-async def get_pheno_value_for_mutations_by_sample_and_collection_date(
+async def _pheno_value_by_sample_and_collection_date(
     date_bin: DateBinOpt,
     phenotype_metric_name: str,
     days: int,
     max_span_days: int,
     filter: str | None,
+    intra_host: bool,
 ) -> List[Dict]:
     user_defined_filter = ''
     if filter is not None:
@@ -392,6 +368,55 @@ async def get_pheno_value_for_mutations_by_sample_and_collection_date(
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(date_bin)
     order_by_clause = get_order_by_cause(date_bin)
+
+    # Per sample: the summed metric value over the scored changes it carries, and how many it carries.
+    # This is the only part that differs between the consensus and intra-host halves, and the two get
+    # there from opposite directions.
+    if intra_host:
+        # There is no by-sample transposition of the intra-host data, so the per-sample view has to be
+        # rebuilt: collapse each scored change's frequency bins into one bitmap, intersect that with
+        # the sample subset, then unnest back to sample ids.
+        per_sample_cte = f'''
+        matching_bm as (
+            select coalesce(rb_build_agg(sample_id), rb_build('{{}}')) as bm
+            from matching_samples
+        ),
+        carriers as (
+            select v.{ColumnNames.amino_acid_id} as aa_id,
+                   rb_or_agg(v.{ColumnNames.samples_present}) as bm
+            from {TableNames.ih_samples_by_amino_acid} v
+            inner join scored sc on sc.aa_id = v.{ColumnNames.amino_acid_id}
+            group by v.{ColumnNames.amino_acid_id}
+        ),
+        per_sample as (
+            select ms.sample_id,
+                   ms.collection_start_date,
+                   ms.collection_end_date,
+                   sum(sc.value) as aggregate_value,
+                   count(distinct sc.aa_id) as n_amino_acid_mutations
+            from carriers c
+            inner join scored sc on sc.aa_id = c.aa_id
+            cross join lateral unnest(
+                rb_to_array(c.bm & (select bm from matching_bm))
+            ) as u({ColumnNames.sample_id})
+            inner join matching_samples ms on ms.sample_id = u.{ColumnNames.sample_id}
+            group by ms.sample_id, ms.collection_start_date, ms.collection_end_date
+        )'''
+    else:
+        # The consensus data already has a by-sample table, so this reads straight off it.
+        per_sample_cte = f'''
+        per_sample as (
+            select ms.sample_id,
+                   ms.collection_start_date,
+                   ms.collection_end_date,
+                   sum(sc.value) as aggregate_value,
+                   count(distinct sc.aa_id) as n_amino_acid_mutations
+            from matching_samples ms
+            inner join {TableNames.cns_amino_acids_by_sample} caas on caas.{ColumnNames.sample_id} = ms.sample_id
+            cross join lateral unnest(rb_to_array(caas.{ColumnNames.amino_acids_present})) as u({ColumnNames.amino_acid_id})
+            inner join scored sc on sc.aa_id = u.{ColumnNames.amino_acid_id}
+            group by ms.sample_id, ms.collection_start_date, ms.collection_end_date
+        )'''
 
     query = f'''
         with matching_samples as (
@@ -413,7 +438,8 @@ async def get_pheno_value_for_mutations_by_sample_and_collection_date(
             from {TableNames.phenotype_metric_values} pmv
             inner join {TableNames.phenotype_metrics} pm on pm.id = pmv.{ColumnNames.phenotype_metric_id}
             where pm.{ColumnNames.phenotype_metric_name} = :pm_name
-        )
+        ),
+        {per_sample_cte}
         select
         {extract_clause},
         percentile_cont(0.25) within group (order by aggregate_value) as q1,
@@ -424,15 +450,11 @@ async def get_pheno_value_for_mutations_by_sample_and_collection_date(
         percentile_cont(0.75) within group (order by n_amino_acid_mutations) as q3_aa
         from (
             select
-            sum(sc.value) as aggregate_value,
-            count(distinct sc.aa_id) as n_amino_acid_mutations,
+            aggregate_value,
+            n_amino_acid_mutations,
             {MID_COLLECTION_DATE_CALCULATION}
-            from matching_samples ms
-            inner join {TableNames.cns_amino_acids_by_sample} caas on caas.{ColumnNames.sample_id} = ms.sample_id
-            cross join lateral unnest(rb_to_array(caas.{ColumnNames.amino_acids_present})) as u({ColumnNames.amino_acid_id})
-            inner join scored sc on sc.aa_id = u.{ColumnNames.amino_acid_id}
-            group by ms.sample_id, ms.collection_start_date, ms.collection_end_date
-        ) per_sample
+            from per_sample
+        ) binned
         {group_by_clause}
         {order_by_clause}
     '''
@@ -460,3 +482,27 @@ async def get_pheno_value_for_mutations_by_sample_and_collection_date(
             }
         )
     return out_data
+
+
+async def get_pheno_value_for_mutations_by_sample_and_collection_date(
+    date_bin: DateBinOpt,
+    phenotype_metric_name: str,
+    days: int,
+    max_span_days: int,
+    filter: str | None,
+) -> List[Dict]:
+    return await _pheno_value_by_sample_and_collection_date(
+        date_bin, phenotype_metric_name, days, max_span_days, filter, intra_host=False
+    )
+
+
+async def get_pheno_value_for_variants_by_sample_and_collection_date(
+    date_bin: DateBinOpt,
+    phenotype_metric_name: str,
+    days: int,
+    max_span_days: int,
+    filter: str | None,
+) -> List[Dict]:
+    return await _pheno_value_by_sample_and_collection_date(
+        date_bin, phenotype_metric_name, days, max_span_days, filter, intra_host=True
+    )
