@@ -1,10 +1,7 @@
 from datetime import date, datetime
-from typing import List, Optional, Dict
+from typing import List, Dict
 
 from pydantic import BaseModel, Field
-
-from DB.models import IntraHostVariant, Sample, AminoAcid, Mutation, MutationTranslation, \
-    IntraHostTranslation
 
 """
 These models define the shapes for data returned by the api.
@@ -21,22 +18,6 @@ class AminoAcidInfo(BaseModel):
     gff_feature: str
     ref_codon: str
     alt_codon: str
-
-    @classmethod
-    def from_db_object(cls, dbo: MutationTranslation | IntraHostTranslation | None) -> Optional['AminoAcidInfo']:
-        if dbo is None:
-            return None
-        # noinspection PyTypeChecker
-        amino_acid: AminoAcid = dbo.r_amino_acid
-        return AminoAcidInfo(
-            id=amino_acid.id,
-            position_aa=amino_acid.position_aa,
-            ref_aa=amino_acid.ref_aa,
-            alt_aa=amino_acid.alt_aa,
-            gff_feature=amino_acid.gff_feature,
-            ref_codon=amino_acid.ref_codon,
-            alt_codon=amino_acid.alt_codon,
-        )
 
 
 class IntraHostFrequencyBin(BaseModel):
@@ -151,19 +132,6 @@ class MutationInfo(BaseModel):
 
     amino_acid_mutations: List[AminoAcidInfo]
 
-    @classmethod
-    def from_db_object(cls, dbo: 'Mutation') -> 'MutationInfo':
-        return MutationInfo(
-            id=dbo.id,
-            sample_id=dbo.sample_id,
-            allele_id=dbo.allele_id,
-            region=dbo.r_allele.region,
-            position_nt=dbo.r_allele.position_nt,
-            ref_nt=dbo.r_allele.ref_nt,
-            alt_nt=dbo.r_allele.alt_nt,
-            amino_acid_mutations=[AminoAcidInfo.from_db_object(t) for t in dbo.r_translations]
-        )
-
 
 class PhenotypeMetricInfo(BaseModel):
     id: int = Field(description="Muninn internal phenotype-metric ID (primary key of the phenotype_metrics table)")
@@ -221,31 +189,46 @@ class LineageAbundanceInfo(BaseModel):
 
 # wastewater-specific
 class LineageAbundanceWithSampleInfo(BaseModel):
-    accession: str
-    admin1_name: str
-    ww_collected_by: str | None
-    ww_site_id: str
-    lineage_name: str
-    abundance: float
-    ww_viral_load: float | None
-    ww_catchment_population: int
-    collection_start_date: date
+    accession: str = Field(description="SRA run accession of the wastewater sample")
+    admin1_name: str | None = Field(description="Admin level 1 (state/province) of the sampling site")
+    ww_collected_by: str | None = Field(description="Organization that collected the wastewater sample")
+    ww_site_id: str | None = Field(description="Wastewater sampling site identifier")
+    lineage_name: str = Field(description="Lineage this abundance is for")
+    abundance: float | None = Field(
+        description="Relative abundance of the lineage in the sample (0-1). Null for a consensus "
+                    "lineage call, which asserts membership without an abundance."
+    )
+    ww_viral_load: float | None = Field(description="Wastewater viral load measured in the sample")
+    ww_catchment_population: int | None = Field(description="Population served by the sampling site")
+    collection_start_date: date | None = Field(description="Start of the sample's collection window")
 
 
 # wastewater-specific
 class AverageLineageAbundanceInfo(BaseModel):
-    year: int
-    chunk: int
-    epiweek: int
-    week_start: date
-    week_end: date
-    lineage_name: str
-    census_region: str
-    geo_admin1_name: str | None
-    sample_count: int
-    mean_viral_load: float | None
-    mean_catchment_size: float
-    mean_lineage_prevalence: float
+    year: int = Field(description="Calendar year of the week bin")
+    chunk: int = Field(description="ISO week number within the year")
+    epiweek: int = Field(description="Year and zero-padded week as a single integer, e.g. 202405")
+    week_start: date = Field(description="Monday of the week bin (the collection-midpoint week)")
+    week_end: date = Field(description="Sunday of the week bin (week_start + 6 days)")
+    lineage_name: str = Field(
+        description="Lineage the abundance is for. When the request used a trailing '*', this is the "
+                    "parent name with the '*' kept, and the value aggregates parent plus descendants."
+    )
+    census_region: str | None = Field(description="US census region of the sampling site")
+    geo_admin1_name: str | None = Field(
+        description="Admin level 1 (state/province); always null when geo_bin=census_region"
+    )
+    sample_count: int = Field(description="Number of (sample, lineage) rows aggregated into this bin")
+    mean_viral_load: float | None = Field(
+        description="Mean wastewater viral load across the bin's samples; null if none reported one"
+    )
+    mean_catchment_size: float | None = Field(
+        description="Mean catchment population across the bin's samples; null if none reported one"
+    )
+    mean_lineage_prevalence: float | None = Field(
+        description="This lineage's share of the bin's total population-weighted abundance. Null when "
+                    "no sample in the bin has a catchment population, since that is the weight."
+    )
 
 
 class LineageAbundanceSummaryInfo(BaseModel):
@@ -431,8 +414,14 @@ class AnnotationProportionByDateInfo(BaseModel):
         description="Date-bin label for the collection-window midpoint: e.g. '2024-06' (month), "
                     "'2024-W05' (week), or a 'start/end' interval (day)."
     )
-    n: int = Field(description="Samples in this bin carrying at least one change with the requested annotation effect")
-    n_total: int = Field(description="Total samples in this bin (the denominator)")
+    n: int = Field(
+        description="Annotated amino-acid changes carrying the requested effect that are present in at "
+                    "least one of this bin's samples. This counts changes, not samples."
+    )
+    n_total: int = Field(
+        description="All annotated amino-acid changes present in at least one of this bin's samples, "
+                    "whatever their effect (the denominator)"
+    )
     proportion: float = Field(description="n / n_total")
 
 
@@ -440,4 +429,4 @@ class AnnotatedPositionCountInfo(BaseModel):
     position_aa: int = Field(description="1-based amino-acid position within the GFF feature")
     ref_aa: str = Field(description="Reference amino acid of the annotated change")
     alt_aa: str = Field(description="Alternate amino acid of the annotated change")
-    count: int = Field(description="Number of samples carrying this annotated change")
+    count: int = Field(description="Number of matching samples carrying this annotated change")

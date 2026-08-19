@@ -793,19 +793,27 @@ async def get_annotations_by_mutations_and_collection_date(
     '/annotations:byVariantsAndCollectionDate',
     response_model=List[AnnotationProportionByDateInfo],
     tags=[TAG_ANNOTATIONS],
-    summary='Proportion of annotated intra-host-variant amino acids carrying an annotation effect, binned by collection date (NOT IMPLEMENTED)'
+    summary='Proportion of annotated intra-host-variant amino acids carrying an annotation effect, binned by collection date'
 )
 async def get_annotations_by_variants_and_collection_date(
     effect_detail: str = Query(..., description='Annotation effect to match, compared against effects.detail'),
     date_bin: DateBinParam = DateBinOpt.month,
     days: DaysParam = DEFAULT_DAYS,
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
-    filter: str | None = filter_query('Optional: over samples/geo/lineage columns.', required=False),
+    filter: str | None = filter_query(
+        'Optional: over all `samples` columns plus the joined `geo_locations` columns (raw names, e.g. '
+        'admin1_name/country_name) and `lineages`/`lineage_systems` columns (lineage_name, '
+        'lineage_system_name). alleles/amino_acids columns are NOT joined and cannot be filtered on.',
+        required=False,
+    ),
 ):
-    # Not implemented (deferred): the intra-host-variant path is unverifiable on SC2 (intra_host_translations
-    # is empty). Returns a clean 501; a working version would mirror :byMutationsAndCollectionDate over
-    # the flat intra_host_translations table.
-    raise HTTPException(status_code=501, detail='Annotation proportion for intra-host variants by collection date is not implemented')
+    return await DB.queries.annotations.get_annotations_by_variants_and_collection_date(
+        effect_detail,
+        date_bin,
+        days,
+        max_span_days,
+        filter
+    )
 
 @router.get(
     '/annotations:effects',
@@ -820,16 +828,18 @@ async def get_annotation_effects() -> List[str]:
     '/annotations:byVariantsAndAminoAcidPosition',
     response_model=Dict[str, List[AnnotatedPositionCountInfo]],
     tags=[TAG_ANNOTATIONS],
-    summary='Annotated intra-host-variant amino-acid positions for an annotation effect (NOT IMPLEMENTED)'
+    summary='Per-position sample counts of annotated intra-host-variant amino acids for an annotation effect'
 )
 async def get_annotations_by_variants_and_amino_acid_position(
     effect_detail: str = Query(..., description='Annotation effect to match, compared against effects.detail'),
-    filter: str | None = filter_query('Optional: over samples/geo/lineage columns.', required=False),
+    filter: str | None = filter_query(
+        'Optional: over all `samples` columns plus the joined `geo_locations` columns (raw names, e.g. '
+        'admin1_name/country_name) and `lineages`/`lineage_systems` columns (lineage_name, '
+        'lineage_system_name). alleles/amino_acids columns are NOT joined and cannot be filtered on.',
+        required=False,
+    ),
 ):
-    # Not implemented (deferred): the intra-host-variant path is unverifiable on SC2 (intra_host_translations
-    # is empty). Returns a clean 501; a working version would mirror :byMutationsAndAminoAcidPosition over
-    # the flat intra_host_translations table.
-    raise HTTPException(status_code=501, detail='Annotated intra-host-variant positions for an effect is not implemented')
+    return await DB.queries.annotations.get_annotations_by_variants_and_amino_acid_position(effect_detail, filter)
 
 @router.get(
     '/annotations:byMutationsAndAminoAcidPosition',
