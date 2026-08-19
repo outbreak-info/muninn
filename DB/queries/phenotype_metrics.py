@@ -1,9 +1,9 @@
 from typing import List, Type, Dict
 
-from sqlalchemy import select, text, func
+from sqlalchemy import text
 
 from DB.engine import get_async_session
-from DB.models import PhenotypeMetric, IntraHostVariant, Mutation, PhenotypeMetricValues
+from DB.models import IntraHostVariant, Mutation
 from DB.queries.date_count_helpers import get_extract_clause, get_group_by_clause, get_order_by_cause, \
     MID_COLLECTION_DATE_CALCULATION, YEAR, CHUNK, BIN_START, BIN_END
 from DB.queries.helpers import get_appropriate_translations_table_and_id
@@ -376,14 +376,6 @@ async def get_pheno_value_for_variants_by_sample_and_collection_date(
     raise NotImplementedError(
         "This function is not implemented yet."
     )
-    return await _pheno_value_for_mutations_or_variants_by_sample_and_collection_date(
-        date_bin,
-        phenotype_metric_name,
-        days,
-        max_span_days,
-        raw_query,
-        IntraHostVariant
-    )
 
 
 async def get_pheno_value_for_mutations_by_sample_and_collection_date(
@@ -455,91 +447,6 @@ async def get_pheno_value_for_mutations_by_sample_and_collection_date(
         rows = res.all()
     out_data = []
     for r in rows:
-        date = date_bin.format_iso_chunk(r[0], r[1])
-        out_data.append(
-            {
-                "date": date,
-                "aggregate_value_q1": r[2],
-                "aggregate_value_median": r[3],
-                "aggregate_value_q3": r[4],
-                "n_aa_q1": r[5],
-                "n_aa_median": r[6],
-                "n_aa_q3": r[7],
-            }
-        )
-    return out_data
-
-
-async def _pheno_value_for_mutations_or_variants_by_sample_and_collection_date(
-    date_bin: DateBinOpt,
-    phenotype_metric_name: str,
-    days: int,
-    max_span_days: int,
-    raw_query: str,
-    table: Type[IntraHostVariant] | Type[Mutation]
-):
-    user_where_clause = ''
-    if raw_query is not None:
-        user_where_clause = f'and ({parser.parse(raw_query)})'
-
-    extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
-    group_by_clause = get_group_by_clause(date_bin)
-    order_by_clause = get_order_by_cause(date_bin)
-
-    # Todo fix for intrahost variants, this is currently only for mutations
-    translations_table, translations_join_col = (
-        get_appropriate_translations_table_and_id(table)
-    )
-
-    async with get_async_session() as session:
-        res = await session.execute(
-            text(
-                f"""
-                select
-                {extract_clause},
-                percentile_cont(0.25) within group (order by aggregate_value) as q1,
-                percentile_cont(0.5) within group (order by aggregate_value) as median,
-                percentile_cont(0.75) within group (order by aggregate_value) as q3,
-                percentile_cont(0.25) within group (order by n_amino_acid_mutations) as q1_aa,
-                percentile_cont(0.5) within group (order by n_amino_acid_mutations) as median_aa,
-                percentile_cont(0.75) within group (order by n_amino_acid_mutations) as q3_aa
-                from(
-                    select
-                    SUM(value) as aggregate_value,
-                    count(distinct aa_id) as n_amino_acid_mutations,
-                    {MID_COLLECTION_DATE_CALCULATION}
-                    from (
-                        select
-                        pmv.value as value,
-                        s.id as sample_id,
-                        aa.id as aa_id,
-                        collection_start_date, collection_end_date,
-                        collection_end_date - collection_start_date as collection_span
-                        from mutation_translations mt
-                        inner join amino_acids aa on aa.id = mt.amino_acid_id
-                        inner join phenotype_metric_values pmv on pmv.amino_acid_id = aa.id
-                        inner join phenotype_metrics pm on pm.id = pmv.phenotype_metric_id
-                        cross join lateral unnest(rb_to_array(mt.sequences_present)) as seqs(sequence_id)
-                        inner join samples s on s.sequence_id = seqs.sequence_id
-                        left join geo_locations gl on gl.id = s.geo_location_id
-                        inner join samples_lineages sl on sl.sample_id = s.id
-                        inner join lineages l on l.id = sl.lineage_id
-                        inner join lineage_systems ls on ls.id = l.lineage_system_id
-                        where num_nulls(collection_end_date, collection_start_date) = 0
-                        and pm.{ColumnNames.phenotype_metric_name}=:pm_name
-                        {user_where_clause}
-                    )
-                    where collection_span <= {max_span_days}
-                    group by sample_id, collection_start_date, collection_end_date
-                )
-                {group_by_clause}
-                {order_by_clause}
-                """
-            ),
-            {"pm_name": phenotype_metric_name},
-        )
-    out_data = []
-    for r in res:
         date = date_bin.format_iso_chunk(r[0], r[1])
         out_data.append(
             {

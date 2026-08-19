@@ -1,13 +1,13 @@
 from typing import List, Any, Dict
 
 from sqlalchemy import select, func, text, Result
-from sqlalchemy.orm import contains_eager
 
 from DB.engine import get_async_session
 from DB.models import Sample, GeoLocation, SampleLineage, Lineage
 from api.models import LineageAbundanceWithSampleInfo, AverageLineageAbundanceInfo, SampleInfo
 from parser.parser import parser
-from utils.constants import DEFAULT_MAX_SPAN_DAYS
+from utils.constants import DEFAULT_MAX_SPAN_DAYS, ColumnNames, TableNames
+
 
 async def get_lineage_abundances_by_sample(
     raw_query: str | None,
@@ -68,8 +68,7 @@ async def get_averaged_lineage_abundances_by_location(
         user_where_clause = f'and ({parser.parse(raw_query)})'
 
     is_wildcard = lineage_name is not None and lineage_name.endswith('*')
-    parent_lineage_name = lineage_name.rstrip('*') if is_wildcard else None\
-    
+    parent_lineage_name = lineage_name.rstrip('*') if is_wildcard else None
 
     match geo_bin:
         case 'admin1_name':
@@ -270,7 +269,7 @@ async def get_averaged_lineage_abundances_by_location(
                 mean_lineage_prevalence
             from result_data;
         '''
-        
+
     async with get_async_session() as session:
         res = await session.execute(text(query), params if params else {})
 
@@ -296,39 +295,33 @@ async def get_averaged_lineage_abundances_by_location(
 
 
 async def get_latest_sample(query: str | None) -> List[SampleInfo]:
-    # Parse and map field names to actual database columns
-    user_defined_query = None
+    where_clause = ''
     if query is not None:
-        user_defined_query = parser.parse(query)
-    
-    date_subquery = (
-        select(
-            func.max(Sample.collection_start_date).label("latest_collection_date")
-        )
-        .select_from(Sample)
-        .join(GeoLocation, Sample.geo_location_id == GeoLocation.id, isouter=True)
+        where_clause = f'and ({parser.parse(query)})'
+
+    sql = f"""
+    with matching as (
+        select s.id, s.{ColumnNames.collection_start_date} as collection_start_date
+        from {TableNames.samples} s
+        left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
+        where s.{ColumnNames.collection_start_date} is not null {where_clause}
     )
-    
-    if user_defined_query is not None:
-        date_subquery = date_subquery.where(text(user_defined_query))
-    
-    samples_query = (
-        select(Sample, GeoLocation)
-        .join(GeoLocation, Sample.geo_location_id == GeoLocation.id, isouter=True)
-        .options(contains_eager(Sample.r_geo_location))
-        .where(Sample.collection_start_date == date_subquery.scalar_subquery())
+    select s.*,
+        g.country_name as geo_country_name,
+        g.admin1_name as geo_admin1_name,
+        g.admin2_name as geo_admin2_name,
+        g.admin3_name as geo_admin3_name
+    from {TableNames.samples} s
+    left join {TableNames.geo_locations} g on g.id = s.{ColumnNames.geo_location_id}
+    where s.id in (
+        select id from matching
+        where collection_start_date = (select max(collection_start_date) from matching)
     )
-    
-    if user_defined_query is not None:
-        samples_query = samples_query.where(text(user_defined_query))
-    
+    """
+
     async with get_async_session() as session:
-        samples = await session.scalars(samples_query)
-        out_data = []
-        for s in samples:
-            sample_info = SampleInfo.from_db_object(s)
-            out_data.append(sample_info)
-    return out_data
+        res = await session.execute(text(sql))
+        return [SampleInfo(**row) for row in res.mappings().all()]
 
 
 async def count_samples_with_lineage_data(by_col: str, raw_query: str | None = None):

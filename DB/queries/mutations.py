@@ -147,7 +147,7 @@ async def get_aa_mutation_count_by_collection_date(
                     from {TableNames.amino_acids} aa
                     inner join {TableNames.cns_samples_by_amino_acid} t on t.{ColumnNames.amino_acid_id} = aa.id
                     cross join lateral unnest(rb_to_array(t.{ColumnNames.samples_present})) as samps({ColumnNames.sample_id})
-                    where aa.position_aa = {position_aa} and aa.alt_aa = :alt_aa and aa.gff_feature = :gff_feature
+                    where aa.position_aa = :position_aa and aa.alt_aa = :alt_aa and aa.gff_feature = :gff_feature
                 )
                 select
                 {extract_clause},
@@ -190,6 +190,7 @@ async def get_aa_mutation_count_by_collection_date(
                 '''
             ),
             {
+                'position_aa': position_aa,
                 'alt_aa': alt_aa,
                 'gff_feature': gff_feature
             }
@@ -251,7 +252,7 @@ async def get_nt_mutation_count_by_collection_date(
                     from {TableNames.alleles} a
                     inner join {TableNames.cns_samples_by_allele} m on m.{ColumnNames.allele_id} = a.id
                     cross join lateral unnest(rb_to_array(m.{ColumnNames.samples_present})) as samps({ColumnNames.sample_id})
-                    where a.position_nt = {position_nt} and a.alt_nt = :alt_nt and a.region = :region
+                    where a.position_nt = :position_nt and a.alt_nt = :alt_nt and a.region = :region
                 )
                 select
                 {extract_clause},
@@ -294,11 +295,11 @@ async def get_nt_mutation_count_by_collection_date(
                 '''
             ),
             {
+                'position_nt': position_nt,
                 'alt_nt': alt_nt,
                 'region': region
             }
         )
-    # print(res.all())
     out_data = []
     for r in res:
         date = date_bin.format_iso_chunk(r[0], r[1])

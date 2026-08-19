@@ -19,20 +19,23 @@ import DB.queries.prevalence
 import DB.queries.samples
 import DB.queries.variants
 import DB.queries.variants_mutations
+import DB.queries.wastewater
 from api.models import VariantNucleotideInfo, VariantAminoAcidInfo, SampleInfo, \
     MutationNucleotideInfo, MutationAminoAcidInfo, \
     VariantCountPhenoScoreInfo, \
     MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo, \
-    LineageInfo, VariantMutationLagInfo, MutationProfileInfo, \
+    LineageInfo, VariantMutationLagInfo, \
     LineageCountWithPrevalenceInfo, MutationProfileWithPrevalenceInfo, \
     SampleCollectionReleaseLagInfo, MutationIncidenceInfo, \
     VariantAminoAcidFrequencyByCollectionDateInfo, VariantNucleotideFrequencyByCollectionDateInfo, \
     VariantFreqInfo, MutationNucleotideCountByDateAndLineageInfo, \
     MutationAminoAcidCountByDateAndLineageInfo, PhenotypeMetricDateCountInfo, \
-    PhenotypeMetricAggregateByDateInfo, AnnotationProportionByDateInfo, AnnotatedPositionCountInfo
+    PhenotypeMetricAggregateByDateInfo, AnnotationProportionByDateInfo, AnnotatedPositionCountInfo, \
+    LineageAbundanceWithSampleInfo, AverageLineageAbundanceInfo
 from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, NtOrAa, \
     DEFAULT_MAX_SPAN_DAYS, COLLECTION_DATE, DEFAULT_DAYS, COMMA_SEP_WORDLIKE_PATTERN, \
-    DEFAULT_PREVALENCE_THRESHOLD, MIN_PREVALENCE_THRESHOLD, FILTER_SYNTAX_HELP, DistinctValueField
+    DEFAULT_PREVALENCE_THRESHOLD, MIN_PREVALENCE_THRESHOLD, FILTER_SYNTAX_HELP, DistinctValueField, \
+    WastewaterGeoBin
 from utils.errors import ParsingError
 
 # Tag names used to group the endpoints in the auto-generated docs at /docs.
@@ -62,6 +65,7 @@ TAGS_METADATA = [
     {'name': TAG_LINEAGES, 'description': 'Lineage assignments, abundances, and per-lineage mutation incidence/profiles.'},
     {'name': TAG_PHENOTYPE, 'description': 'Phenotype metrics (e.g. DMS/EVEscape scores) and mutation/variant counts scored by them.'},
     {'name': TAG_ANNOTATIONS, 'description': 'Literature/effect annotations attached to amino-acid changes.'},
+    {'name': TAG_WASTEWATER, 'description': 'Wastewater surveillance: abundance-based lineage calls in environmental samples, and their population-weighted averages by location and week.'},
     {'name': TAG_DISCOVERY, 'description': 'Endpoints that enumerate the valid values/keys used to build filter queries (start here before filtering).'},
 ]
 
@@ -841,6 +845,134 @@ async def get_annotations_by_mutations_and_amino_acid_position(
         effect_detail,
         filter,
     )
+
+
+##############
+# WASTEWATER #
+##############
+
+@router.get(
+    '/wastewater/lineages:abundancesBySample',
+    response_model=List[LineageAbundanceWithSampleInfo],
+    tags=[TAG_WASTEWATER],
+    summary='Get per-sample wastewater lineage abundances, with the sampling-site metadata'
+)
+async def get_wastewater_lineage_abundances_by_sample(
+    filter: str | None = filter_query(
+        'Optional: over all `samples` columns (including the wastewater ones: ww_viral_load, '
+        'ww_catchment_population, ww_site_id, ww_collected_by, census_region), the joined '
+        '`geo_locations` columns (raw names, e.g. admin1_name, country_name) and the `lineages` '
+        'columns (lineage_name).',
+        required=False,
+    ),
+):
+    """
+    One row per (sample, lineage) call. Unlike /v1/lineages:abundance this is not restricted to
+    abundance-based calls, so consensus calls appear here with a null abundance.
+    """
+    return await DB.queries.wastewater.get_lineage_abundances_by_sample(filter)
+
+@router.get(
+    '/wastewater/lineages:averageAbundancesByLocation',
+    response_model=List[AverageLineageAbundanceInfo],
+    tags=[TAG_WASTEWATER],
+    summary='Get population-weighted average lineage abundances by location and week'
+)
+async def get_wastewater_average_lineage_abundances_by_location(
+    geo_bin: WastewaterGeoBin = Query(
+        WastewaterGeoBin.admin1_name,
+        description='Geographic grouping: admin1_name (state/province) or census_region. With '
+                    'census_region the response\'s geo_admin1_name is always null, and a filter '
+                    'mentioning admin1_name is rejected with a 400 rather than silently ignored.'
+    ),
+    lineage: str | None = Query(
+        None,
+        description="Optional lineage name to report. A trailing '*' (e.g. B.1.1.7*) aggregates the "
+                    "lineage together with all of its descendants into one series, and the response's "
+                    "lineage_name keeps the '*'. Omit to get every lineage separately."
+    ),
+    filter: str | None = filter_query(
+        'Optional: over all `samples` columns (including the wastewater ones), the joined '
+        '`geo_locations` columns (raw names, e.g. admin1_name, country_name) and the `lineages` '
+        'columns (lineage_name).',
+        required=False,
+    ),
+    max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
+):
+    """
+    Abundances are weighted by each site's catchment population before being averaged, so a large
+    catchment counts for more than a small one. Bins are ISO weeks over the collection-window
+    midpoint. mean_lineage_prevalence is this lineage's share of the bin's total weighted abundance.
+    """
+    try:
+        return await DB.queries.wastewater.get_averaged_lineage_abundances_by_location(
+            filter,
+            geo_bin.value,
+            max_span_days,
+            lineage,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.get(
+    '/wastewater/lineages:count',
+    response_model=Dict[str, int],
+    tags=[TAG_WASTEWATER],
+    summary='Count samples per lineage, over the samples that carry abundance data'
+)
+async def get_wastewater_lineage_counts(
+    filter: str | None = filter_query(
+        'Optional: over all `samples` columns (including the wastewater ones), the joined '
+        '`geo_locations`, `samples_lineages` and `lineages` columns.',
+        required=False,
+    ),
+):
+    return await DB.queries.wastewater.count_lineages_by_sample_data(filter)
+
+@router.get(
+    '/wastewater/samples:count',
+    response_model=Dict[str, int],
+    tags=[TAG_WASTEWATER],
+    summary='Count the samples that carry abundance data, grouped by a column'
+)
+async def get_wastewater_sample_counts(
+    group_by: Annotated[str, Query(
+        pattern=COMMA_SEP_WORDLIKE_PATTERN.pattern,
+        description='Column to group counts by: any `samples` or joined `geo_locations` column, e.g. '
+                    'admin1_name or ww_site_id.'
+    )],
+    filter: str | None = filter_query(
+        'Optional: over all `samples` columns (including the wastewater ones), the joined '
+        '`geo_locations` and `samples_lineages` columns.',
+        required=False,
+    ),
+):
+    """
+    Only samples with a non-null abundance are counted, i.e. those with an abundance-based lineage
+    call. Use /v1/samples:count to count samples without that restriction.
+    """
+    return await DB.queries.wastewater.count_samples_with_lineage_data(group_by, filter)
+
+@router.get(
+    '/wastewater/samples:latest',
+    response_model=List[SampleInfo],
+    tags=[TAG_WASTEWATER],
+    summary='Get the most recently collected sample(s), to show how current the data is'
+)
+async def get_wastewater_latest_sample(
+    filter: str | None = filter_query(
+        'Optional: over all columns of the `samples` table, plus the joined `geo_locations` columns '
+        '(raw names, e.g. admin1_name, country_name, not the geo_* response names). The filter '
+        'narrows the field the maximum is taken over, so filter=admin1_name = California returns '
+        "California's latest sample rather than nothing.",
+        required=False,
+    ),
+):
+    """
+    Returns every sample tied for the latest collection_start_date, so this is a list rather than a
+    single object. Samples with no collection date are excluded.
+    """
+    return await DB.queries.wastewater.get_latest_sample(filter)
 
 
 app.include_router(router)

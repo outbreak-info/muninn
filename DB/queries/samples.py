@@ -1,11 +1,8 @@
 from typing import List, Dict
 
-from sqlalchemy import select, text, cast, Date, func, Integer
-from sqlalchemy.orm import contains_eager
+from sqlalchemy import text
 
 from DB.engine import get_async_session
-from DB.models import Sample, Mutation, GeoLocation, Allele, AminoAcid, IntraHostVariant, MutationTranslation, \
-    IntraHostTranslation
 from api.models import SampleInfo, LineageCountInfo
 from parser.parser import parser
 from DB.queries.date_count_helpers import get_extract_clause, get_group_by_clause, get_order_by_cause, \

@@ -47,7 +47,7 @@ services:
         target: /home/muninn/data
         read_only: false
     ports:
-      - "${MUNINN_SERVER_PORT_V1:-8000}:8000"
+      - "${MUNINN_SERVER_PORT:-8000}:8000"
     environment:
       MUNINN_DB_READONLY_USER: "${MUNINN_DB_READONLY_USER}"
       MUNINN_DB_READONLY_PASSWORD: "${MUNINN_DB_READONLY_PASSWORD}"

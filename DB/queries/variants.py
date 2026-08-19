@@ -1,10 +1,8 @@
 from typing import Dict, List
 
-from sqlalchemy import select, text
-from sqlalchemy.orm import contains_eager
+from sqlalchemy import text
 
 from DB.engine import get_async_session
-from DB.models import Sample, IntraHostVariant, Allele, AminoAcid, GeoLocation, IntraHostTranslation
 from DB.queries.date_count_helpers import get_extract_clause, get_group_by_clause, get_order_by_cause, \
     MID_COLLECTION_DATE_CALCULATION
 from DB.queries.helpers import get_ih_table_and_change_cols
