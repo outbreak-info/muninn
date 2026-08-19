@@ -39,7 +39,7 @@ services:
         source: ${MUNINN_SERVER_DATA_INPUT_DIR}
         target: /muninn/data
         read_only: true
-    shm_size: 1g
+    shm_size: 8g
   server:
     container_name: "${MUNINN_INSTANCE_NAME}_server"
     build:
