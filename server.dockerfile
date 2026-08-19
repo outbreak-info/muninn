@@ -17,3 +17,4 @@ ADD --chown=muninn:muninn parser ./parser
 COPY --chown=muninn:muninn runinserts.py ./
 COPY --chown=muninn:muninn create_db.py ./
 COPY --chown=muninn:muninn containers/server/bin/* /bin/
+COPY --chown=muninn:muninn caches.py ./
