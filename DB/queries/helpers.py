@@ -103,19 +103,19 @@ def rank_by_fuzzy_match(search: str, values: List[str]) -> List[str]:
 
 async def get_distinct_values(
     field: DistinctValueField,
-    filter: str | None = None,
+    where: str | None = None,
     search: str | None = None,
 ) -> List[str]:
     """
     Distinct non-null values of `field`, alphabetical.
 
-    `filter` narrows which rows contribute values (e.g. only the admin1_names of samples from USA).
+    `where` narrows which rows contribute values (e.g. only the admin1_names of samples from USA).
     `search` instead ranks the values by how well they match a search string, best first, dropping
     the ones that don't plausibly match.
     """
     table, column = _DISTINCT_VALUE_SOURCES[field]
 
-    if filter is None:
+    if where is None:
         # Read the column's own table directly: for the geo fields that means scanning a few
         # thousand rows rather than every sample.
         query = f"select distinct {column} from {table} where {column} is not null order by {column}"
@@ -132,7 +132,7 @@ async def get_distinct_values(
         from {TableNames.samples}
         left join {TableNames.geo_locations}
             on {TableNames.geo_locations}.id = {TableNames.samples}.{ColumnNames.geo_location_id}
-        where {table}.{column} is not null and ({parser.parse(filter)})
+        where {table}.{column} is not null and ({parser.parse(where)})
         order by 1
         """
 

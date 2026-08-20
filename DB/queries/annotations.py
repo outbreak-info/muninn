@@ -23,12 +23,12 @@ async def _annotations_by_collection_date(
     date_bin: DateBinOpt,
     days: int,
     max_span_days: int,
-    filter: str | None,
+    where: str | None,
     intra_host: bool,
 ) -> List[Dict]:
-    user_defined_filter = ''
-    if filter is not None:
-        user_defined_filter = f'and ({parser.parse(filter)})'
+    user_where_clause = ''
+    if where is not None:
+        user_where_clause = f'and ({parser.parse(where)})'
 
     # Which samples carry each annotated change, as (aa_id, bitmap). This is the only thing that
     # separates the consensus and intra-host halves of this endpoint; the rest of the query is shared.
@@ -76,7 +76,7 @@ async def _annotations_by_collection_date(
             inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
             where num_nulls({ColumnNames.collection_end_date}, {ColumnNames.collection_start_date}) = 0
               and ({ColumnNames.collection_end_date} - {ColumnNames.collection_start_date}) <= :max_span_days
-              {user_defined_filter}
+              {user_where_clause}
         ),
         bins as (
             select {extract_clause},
@@ -140,10 +140,10 @@ async def get_annotations_by_mutations_and_collection_date(
     date_bin: DateBinOpt,
     days: int,
     max_span_days: int,
-    filter: str | None,
+    where: str | None,
 ) -> List[Dict]:
     return await _annotations_by_collection_date(
-        effect_detail, date_bin, days, max_span_days, filter, intra_host=False
+        effect_detail, date_bin, days, max_span_days, where, intra_host=False
     )
 
 
@@ -152,7 +152,7 @@ async def get_annotations_by_variants_and_collection_date(
     date_bin: DateBinOpt,
     days: int,
     max_span_days: int,
-    filter: str | None,
+    where: str | None,
 ) -> List[Dict]:
     """
     The intra-host counterpart of :byMutationsAndCollectionDate. Identical shape and denominator —
@@ -161,18 +161,18 @@ async def get_annotations_by_variants_and_collection_date(
     sub-consensus rather than fixed in the consensus sequence.
     """
     return await _annotations_by_collection_date(
-        effect_detail, date_bin, days, max_span_days, filter, intra_host=True
+        effect_detail, date_bin, days, max_span_days, where, intra_host=True
     )
 
 
 async def _annotations_by_amino_acid_position(
     effect_detail: str,
-    filter: str | None,
+    where: str | None,
     intra_host: bool,
 ) -> Dict:
-    user_defined_filter = ''
-    if filter is not None:
-        user_defined_filter = f'and ({parser.parse(filter)})'
+    user_where_clause = ''
+    if where is not None:
+        user_where_clause = f'and ({parser.parse(where)})'
 
     # Which samples carry each annotated change, as (aa_id, bitmap). This is the only thing that
     # separates the consensus and intra-host halves of this endpoint; the rest of the query is shared.
@@ -204,7 +204,7 @@ async def _annotations_by_amino_acid_position(
             inner join {TableNames.samples_lineages} sl on sl.{ColumnNames.sample_id} = s.id
             inner join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id}
             inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
-            where true {user_defined_filter}
+            where true {user_where_clause}
         ),
         annotated as (
             select aa.id as aa_id,
@@ -251,18 +251,18 @@ async def _annotations_by_amino_acid_position(
 
 async def get_annotations_by_variants_and_amino_acid_position(
     effect_detail: str,
-    filter: str | None
+    where: str | None
 ) -> Dict:
     """
     The intra-host counterpart of :byMutationsAndAminoAcidPosition. Same shape, same counting rule —
     a sample is counted once per annotated change it carries — but read off the intra-host table
     instead of the consensus one, so it counts samples carrying the change sub-consensus.
     """
-    return await _annotations_by_amino_acid_position(effect_detail, filter, intra_host=True)
+    return await _annotations_by_amino_acid_position(effect_detail, where, intra_host=True)
 
 
 async def get_annotations_by_mutations_and_amino_acid_position(
     effect_detail: str,
-    filter: str | None
+    where: str | None
 ) -> Dict:
-    return await _annotations_by_amino_acid_position(effect_detail, filter, intra_host=False)
+    return await _annotations_by_amino_acid_position(effect_detail, where, intra_host=False)

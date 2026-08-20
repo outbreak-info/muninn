@@ -48,12 +48,12 @@ async def count_variants_or_mutations_gte_pheno_value_by_collection_date(
     phenotype_metric_value_threshold: float,
     days: int,
     max_span_days: int,
-    raw_query: str,
+    where: str,
     table: Type[IntraHostVariant] | Type[Mutation]
 ):
     user_where_clause = ''
-    if raw_query is not None:
-        user_where_clause = f'and ({parser.parse(raw_query)})'
+    if where is not None:
+        user_where_clause = f'and ({parser.parse(where)})'
 
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(date_bin)
@@ -123,11 +123,11 @@ async def count_mutations_gte_pheno_value_by_collection_date(
     phenotype_metric_value_threshold: float,
     days: int,
     max_span_days: int,
-    filter: str | None,
+    where: str | None,
 ) -> List[Dict]:
-    user_defined_filter = ''
-    if filter is not None:
-        user_defined_filter = f'and ({parser.parse(filter)})'
+    user_where_clause = ''
+    if where is not None:
+        user_where_clause = f'and ({parser.parse(where)})'
 
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(date_bin)
@@ -152,7 +152,7 @@ async def count_mutations_gte_pheno_value_by_collection_date(
             inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
             where num_nulls({ColumnNames.collection_end_date}, {ColumnNames.collection_start_date}) = 0
               and ({ColumnNames.collection_end_date} - {ColumnNames.collection_start_date}) <= :max_span_days
-              {user_defined_filter}
+              {user_where_clause}
         ),
         bins as (
             select {extract_clause},
@@ -211,13 +211,13 @@ async def count_variants_gte_pheno_value_by_collection_date(
     phenotype_metric_value_threshold: float,
     days: int,
     max_span_days: int,
-    filter: str | None,
+    where: str | None,
     min_alt_freq: float | None = None,
     max_alt_freq: float | None = None,
 ) -> List[Dict]:
-    user_defined_filter = ''
-    if filter is not None:
-        user_defined_filter = f'and ({parser.parse(filter)})'
+    user_where_clause = ''
+    if where is not None:
+        user_where_clause = f'and ({parser.parse(where)})'
 
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(date_bin)
@@ -242,7 +242,7 @@ async def count_variants_gte_pheno_value_by_collection_date(
             inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
             where num_nulls({ColumnNames.collection_end_date}, {ColumnNames.collection_start_date}) = 0
               and ({ColumnNames.collection_end_date} - {ColumnNames.collection_start_date}) <= :max_span_days
-              {user_defined_filter}
+              {user_where_clause}
         ),
         bins as (
             select {extract_clause},
@@ -353,17 +353,16 @@ async def get_phenotype_metric_value_by_mutation_quantile(
     return await _phenotype_metric_value_quantile(phenotype_metric_name, quantile, intra_host=False)
 
 
-async def _pheno_value_by_sample_and_collection_date(
+async def get_pheno_value_for_mutations_by_sample_and_collection_date(
     date_bin: DateBinOpt,
     phenotype_metric_name: str,
     days: int,
     max_span_days: int,
-    filter: str | None,
-    intra_host: bool,
+    where: str | None,
 ) -> List[Dict]:
-    user_defined_filter = ''
-    if filter is not None:
-        user_defined_filter = f'and ({parser.parse(filter)})'
+    user_where_clause = ''
+    if where is not None:
+        user_where_clause = f'and ({parser.parse(where)})'
 
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(date_bin)
@@ -378,7 +377,7 @@ async def _pheno_value_by_sample_and_collection_date(
         f'    inner join samples_lineages sl on sl.sample_id = s.id\n'
         f'    inner join lineages l on l.id = sl.lineage_id\n'
         f'    inner join lineage_systems ls on ls.id = l.lineage_system_id\n'
-        f'    where (s.collection_end_date - s.collection_start_date) <= :max_span_days {user_defined_filter}\n'
+        f'    where (s.collection_end_date - s.collection_start_date) <= :max_span_days {user_where_clause}\n'
         f')\n'
         f'select {extract_clause},\n'
         f'       percentile_cont(0.25) within group (order by pmv_value_sum) as pmv_sum_q1,\n'
@@ -420,25 +419,116 @@ async def _pheno_value_by_sample_and_collection_date(
     return out_data
 
 
-async def get_pheno_value_for_mutations_by_sample_and_collection_date(
-    date_bin: DateBinOpt,
-    phenotype_metric_name: str,
-    days: int,
-    max_span_days: int,
-    filter: str | None,
-) -> List[Dict]:
-    return await _pheno_value_by_sample_and_collection_date(
-        date_bin, phenotype_metric_name, days, max_span_days, filter, intra_host=False
-    )
-
-
 async def get_pheno_value_for_variants_by_sample_and_collection_date(
     date_bin: DateBinOpt,
     phenotype_metric_name: str,
     days: int,
     max_span_days: int,
-    filter: str | None,
+    where: str | None,
 ) -> List[Dict]:
-    return await _pheno_value_by_sample_and_collection_date(
-        date_bin, phenotype_metric_name, days, max_span_days, filter, intra_host=True
-    )
+    user_where_clause = ''
+    if where is not None:
+        user_where_clause = f'and ({parser.parse(where)})'
+
+    # Per sample: the summed metric value over the scored changes it carries, and how many it carries.
+    # This is the only part that differs between the consensus and intra-host halves, and the two get
+    # there from opposite directions.
+
+    extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
+    group_by_clause = get_group_by_clause(date_bin)
+    order_by_clause = get_order_by_cause(date_bin)
+
+    # There is no by-sample transposition of the intra-host data, so the per-sample view has to be
+    # rebuilt: collapse each scored change's frequency bins into one bitmap, intersect that with
+    # the sample subset, then unnest back to sample ids.
+    per_sample_cte = f'''
+          matching_bm as (
+              select coalesce(rb_build_agg(sample_id), rb_build('{{}}')) as bm
+              from matching_samples
+          ),
+          carriers as (
+              select v.{ColumnNames.amino_acid_id} as aa_id,
+                     rb_or_agg(v.{ColumnNames.samples_present}) as bm
+              from {TableNames.ih_samples_by_amino_acid} v
+              inner join scored sc on sc.aa_id = v.{ColumnNames.amino_acid_id}
+              group by v.{ColumnNames.amino_acid_id}
+          ),
+          per_sample as (
+              select ms.sample_id,
+                     ms.collection_start_date,
+                     ms.collection_end_date,
+                     sum(sc.value) as aggregate_value,
+                     count(distinct sc.aa_id) as n_amino_acid_mutations
+              from carriers c
+              inner join scored sc on sc.aa_id = c.aa_id
+              cross join lateral unnest(
+                  rb_to_array(c.bm & (select bm from matching_bm))
+              ) as u({ColumnNames.sample_id})
+              inner join matching_samples ms on ms.sample_id = u.{ColumnNames.sample_id}
+              group by ms.sample_id, ms.collection_start_date, ms.collection_end_date
+          )'''
+
+    query = f'''
+              with matching_samples as (
+                  select s.id as sample_id,
+                         s.{ColumnNames.collection_start_date} as collection_start_date,
+                         s.{ColumnNames.collection_end_date} as collection_end_date
+                  from {TableNames.samples} s
+                  left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
+                  inner join {TableNames.samples_lineages} sl on sl.{ColumnNames.sample_id} = s.id
+                  inner join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id}
+                  inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
+                  where num_nulls(s.{ColumnNames.collection_end_date}, s.{ColumnNames.collection_start_date}) = 0
+                    and (s.{ColumnNames.collection_end_date} - s.{ColumnNames.collection_start_date}) <= :max_span_days
+                    {user_where_clause}
+                  group by s.id, s.{ColumnNames.collection_start_date}, s.{ColumnNames.collection_end_date}
+              ),
+              scored as (
+                  select pmv.{ColumnNames.amino_acid_id} as aa_id, pmv.value as value
+                  from {TableNames.phenotype_metric_values} pmv
+                  inner join {TableNames.phenotype_metrics} pm on pm.id = pmv.{ColumnNames.phenotype_metric_id}
+                  where pm.{ColumnNames.phenotype_metric_name} = :pm_name
+              ),
+              {per_sample_cte}
+              select
+              {extract_clause},
+              percentile_cont(0.25) within group (order by aggregate_value) as q1,
+              percentile_cont(0.5) within group (order by aggregate_value) as median,
+              percentile_cont(0.75) within group (order by aggregate_value) as q3,
+              percentile_cont(0.25) within group (order by n_amino_acid_mutations) as q1_aa,
+              percentile_cont(0.5) within group (order by n_amino_acid_mutations) as median_aa,
+              percentile_cont(0.75) within group (order by n_amino_acid_mutations) as q3_aa
+              from (
+                  select
+                  aggregate_value,
+                  n_amino_acid_mutations,
+                  {MID_COLLECTION_DATE_CALCULATION}
+                  from per_sample
+              ) binned
+              {group_by_clause}
+              {order_by_clause}
+          '''
+    async with get_async_session() as session:
+        res = await session.execute(
+            text(query),
+            {
+                'pm_name': phenotype_metric_name,
+                'max_span_days': max_span_days,
+            }
+        )
+        rows = res.all()
+    out_data = []
+    for r in rows:
+        date = date_bin.format_iso_chunk(r[0], r[1])
+        out_data.append(
+            {
+                "date": date,
+                "aggregate_value_q1": r[2],
+                "aggregate_value_median": r[3],
+                "aggregate_value_q3": r[4],
+                "n_aa_q1": r[5],
+                "n_aa_median": r[6],
+                "n_aa_q3": r[7],
+            }
+        )
+    return out_data

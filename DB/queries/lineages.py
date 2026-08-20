@@ -29,16 +29,16 @@ async def get_all_lineages_by_lineage_system(lineage_system_name: str) -> List[L
     return out_data
 
 
-async def get_sample_counts_by_lineage(filter: str | None) -> List[LineageCountInfo]:
-    where_clause = ''
-    if filter is not None:
-        user_defined_filter = parser.parse(filter)
-        where_clause = f'''
+async def get_sample_counts_by_lineage(where: str | None) -> List[LineageCountInfo]:
+    sample_id_subquery = ''
+    if where is not None:
+        user_where_clause = parser.parse(where)
+        sample_id_subquery = f'''
             where sl.{ColumnNames.sample_id} in (
                 select s.id
                 from {TableNames.samples} s
                 left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
-                where {user_defined_filter}
+                where {user_where_clause}
             )
         '''
 
@@ -50,7 +50,7 @@ async def get_sample_counts_by_lineage(filter: str | None) -> List[LineageCountI
         from {TableNames.samples_lineages} sl
         left join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id}
         left join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
-        {where_clause}
+        {sample_id_subquery}
         group by ls.{ColumnNames.lineage_system_name}, l.{ColumnNames.lineage_name}
         order by count1 desc
     '''
@@ -67,10 +67,10 @@ async def get_sample_counts_by_lineage(filter: str | None) -> List[LineageCountI
     return out_data
 
 
-async def get_abundances(filter: str | None) -> List[LineageAbundanceInfo]:
-    user_defined_filter = ''
-    if filter is not None:
-        user_defined_filter = f'and ({parser.parse(filter)})'
+async def get_abundances(where: str | None) -> List[LineageAbundanceInfo]:
+    user_where_clause = ''
+    if where is not None:
+        user_where_clause = f'and ({parser.parse(where)})'
 
     query = f'''
         select
@@ -86,7 +86,7 @@ async def get_abundances(filter: str | None) -> List[LineageAbundanceInfo]:
         inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
         inner join {TableNames.samples} s on s.id = sl.{ColumnNames.sample_id}
         left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
-        where sl.{ColumnNames.is_consensus_call} = false {user_defined_filter}
+        where sl.{ColumnNames.is_consensus_call} = false {user_where_clause}
     '''
     async with get_async_session() as session:
         res = await session.execute(text(query))
@@ -107,10 +107,10 @@ async def get_abundances(filter: str | None) -> List[LineageAbundanceInfo]:
     return out_data
 
 
-async def get_abundance_summaries(filter: str | None) -> List[LineageAbundanceSummaryInfo]:
-    user_defined_filter = ''
-    if filter is not None:
-        user_defined_filter = f'and ({parser.parse(filter)})'
+async def get_abundance_summaries(where: str | None) -> List[LineageAbundanceSummaryInfo]:
+    user_where_clause = ''
+    if where is not None:
+        user_where_clause = f'and ({parser.parse(where)})'
 
     query = f'''
         select
@@ -127,7 +127,7 @@ async def get_abundance_summaries(filter: str | None) -> List[LineageAbundanceSu
         inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
         inner join {TableNames.samples} s on s.id = sl.{ColumnNames.sample_id}
         left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
-        where sl.{ColumnNames.is_consensus_call} = false {user_defined_filter}
+        where sl.{ColumnNames.is_consensus_call} = false {user_where_clause}
         group by l.{ColumnNames.lineage_name}, ls.{ColumnNames.lineage_system_name}
     '''
     async with get_async_session() as session:
@@ -139,12 +139,12 @@ async def get_abundance_summaries(filter: str | None) -> List[LineageAbundanceSu
 async def get_abundance_summaries_by_collection_date(
     date_bin: DateBinOpt,
     days: int,
-    filter: str | None,
+    where: str | None,
     max_span_days: int,
 ) -> Dict[str, List[LineageAbundanceSummaryInfo]]:
-    user_defined_filter = ''
-    if filter is not None:
-        user_defined_filter = f'and ({parser.parse(filter)})'
+    user_where_clause = ''
+    if where is not None:
+        user_where_clause = f'and ({parser.parse(where)})'
 
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(
@@ -184,7 +184,7 @@ async def get_abundance_summaries_by_collection_date(
                         inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
                         inner join {TableNames.samples} s on s.id = sl.{ColumnNames.sample_id}
                         left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
-                        where sl.{ColumnNames.is_consensus_call} = false {user_defined_filter}
+                        where sl.{ColumnNames.is_consensus_call} = false {user_where_clause}
 
                     )
                     where collection_span <= {max_span_days}
@@ -217,7 +217,7 @@ async def get_abundance_summaries_by_collection_date(
 async def get_lineage_counts_over_time(
     date_bin: DateBinOpt,
     days: int,
-    filter: str | None,
+    where: str | None,
     max_span_days: int,
     days_before_today: int | None = None,
     lineage: str | None = None,
@@ -227,9 +227,9 @@ async def get_lineage_counts_over_time(
     restricted to a single lineage and/or to samples whose collection midpoint is within the last
     `days_before_today` days.
     """
-    user_defined_filter = ''
-    if filter is not None:
-        user_defined_filter = f'and ({parser.parse(filter)})'
+    user_where_clause = ''
+    if where is not None:
+        user_where_clause = f'and ({parser.parse(where)})'
 
     query_params = {}
     lineage_clause = ''
@@ -271,7 +271,7 @@ async def get_lineage_counts_over_time(
             left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
             where sl.{ColumnNames.is_consensus_call} = true
                   and collection_end_date - collection_start_date <= {max_span_days}
-                  {user_defined_filter}
+                  {user_where_clause}
         ),
         binned as (
             select
@@ -327,11 +327,11 @@ async def get_mutation_incidence(
     change_bin: NtOrAa,
     prevalence_threshold: float,
     match_reference: bool,
-    filter: str | None
+    where: str | None
 ) -> Dict:
-    user_defined_filter = ''
-    if filter is not None:
-        user_defined_filter = f'and ({parser.parse(filter)})'
+    user_where_clause = ''
+    if where is not None:
+        user_where_clause = f'and ({parser.parse(where)})'
 
     query_params = {
         'input_lineage': lineage,
@@ -347,7 +347,7 @@ async def get_mutation_incidence(
                 f'left join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id}\n'
                 f'left join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id} \n'
                 f'WHERE l.{ColumnNames.lineage_name} = :input_lineage and ls.{ColumnNames.lineage_system_name} = :input_lineage_system_name\n'
-                f'{user_defined_filter}'
+                f'{user_where_clause}'
             ), query_params
         )
 
@@ -360,7 +360,7 @@ async def get_mutation_incidence(
         inner join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id}
         inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
         where l.{ColumnNames.lineage_name} = :input_lineage and ls.{ColumnNames.lineage_system_name} = :input_lineage_system_name
-        {user_defined_filter}
+        {user_where_clause}
         """
 
         if change_bin == NtOrAa.nt:
@@ -433,11 +433,11 @@ async def get_mutation_incidence(
 async def get_mutation_profile(
     lineage: str,
     lineage_system_name: str,
-    filter: str | None
+    where: str | None
 ) -> List['MutationProfileWithPrevalenceInfo']:
-    user_defined_filter = ''
-    if filter is not None:
-        user_defined_filter = f'and ({parser.parse(filter)})'
+    user_where_clause = ''
+    if where is not None:
+        user_where_clause = f'and ({parser.parse(where)})'
 
     nt_list = ', '.join(f"'{c}'" for c in NUCLEOTIDE_CHARACTERS)
 
@@ -449,7 +449,7 @@ async def get_mutation_profile(
             inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
             where l.{ColumnNames.lineage_name} = :input_lineage
                   and ls.{ColumnNames.lineage_system_name} = :input_lineage_system_name
-                  {user_defined_filter}
+                  {user_where_clause}
         ),
         sample_subset_bm as (
             select rb_build_agg(sample_id) as bm from sample_subset

@@ -13,11 +13,11 @@ from utils.constants import ColumnNames, DateBinOpt, NtOrAa, TableNames, COLLECT
 
 async def get_variants(
     change_bin: NtOrAa = NtOrAa.nt,
-    filter: str = "",
+    where: str = "",
     min_alt_freq: float | None = None,
     max_alt_freq: float | None = None
 ) -> List['VariantNucleotideInfo'] | List['VariantAminoAcidInfo']:
-    user_defined_filter = parser.parse(filter)
+    user_where_clause = parser.parse(where)
     ih_table, change_id_col, catalog_table, *_ = get_ih_table_and_change_cols(change_bin)
     if change_bin == NtOrAa.nt:
         model = VariantNucleotideInfo
@@ -36,7 +36,7 @@ async def get_variants(
         from {ih_table} v
         inner join {catalog_table} c on c.id = v.{change_id_col}
         cross join lateral unnest(rb_to_array(v.{ColumnNames.samples_present})) as u({ColumnNames.sample_id})
-        where {user_defined_filter}
+        where {user_where_clause}
         and v.alt_freq_range && numrange(:min_alt_freq, :max_alt_freq, '[]')
     '''
 
@@ -50,11 +50,11 @@ async def get_variants(
 
 async def get_variants_by_sample(
     change_bin: NtOrAa = NtOrAa.nt,
-    filter: str = "",
+    where: str = "",
     min_alt_freq: float | None = None,
     max_alt_freq: float | None = None
 ) -> List['VariantNucleotideInfo'] | List['VariantAminoAcidInfo']:
-    user_defined_filter = parser.parse(filter)
+    user_where_clause = parser.parse(where)
     ih_table, change_id_col, catalog_table, *_ = get_ih_table_and_change_cols(change_bin)
     if change_bin == NtOrAa.nt:
         model = VariantNucleotideInfo
@@ -68,7 +68,7 @@ async def get_variants_by_sample(
             select coalesce(rb_build_agg(s.id), rb_build('{{}}')) as bm
             from {TableNames.samples} s
             left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
-            where {user_defined_filter}
+            where {user_where_clause}
         )
         select
             u.{ColumnNames.sample_id},
@@ -97,14 +97,14 @@ async def get_variant_frequency_by_collection_date(
     change_bin: NtOrAa,
     days: int,
     max_span_days: int,
-    filter: str | None = None
+    where: str | None = None
 ) -> List[Dict]:
     ih_table, change_id_col, catalog_table, feature_col, ref_col, pos_col, alt_col = \
         get_ih_table_and_change_cols(change_bin)
 
     user_where_clause = ''
-    if filter is not None:
-        user_where_clause = f'and ({parser.parse(filter)})'
+    if where is not None:
+        user_where_clause = f'and ({parser.parse(where)})'
 
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(

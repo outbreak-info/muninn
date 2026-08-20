@@ -13,12 +13,11 @@ WW_SAMPLES_FILTER_SHIM = f'num_nulls({ColumnNames.ww_site_id}, {ColumnNames.ww_c
 
 
 async def get_lineage_abundances_by_sample(
-    raw_query: str | None,
+    where: str | None,
 ) -> List[LineageAbundanceWithSampleInfo]:
     user_where_clause = ''
-    if raw_query is not None:
-        parsed_query = parser.parse(raw_query)
-        user_where_clause = f'and ({parsed_query})'
+    if where is not None:
+        user_where_clause = f'and ({parser.parse(where)})'
 
     async with get_async_session() as session:
         res = await session.execute(
@@ -62,14 +61,14 @@ async def get_lineage_abundances_by_sample(
 
 
 async def get_averaged_lineage_abundances_by_location(
-    raw_query: str,
+    where: str,
     geo_bin: str,
     max_span_days: int = DEFAULT_MAX_SPAN_DAYS,
     lineage_name: str | None = None
 ) -> List[AverageLineageAbundanceInfo]:
     user_where_clause = ''
-    if raw_query is not None:
-        user_where_clause = f'and ({parser.parse(raw_query)})'
+    if where is not None:
+        user_where_clause = f'and ({parser.parse(where)})'
 
     is_wildcard = lineage_name is not None and lineage_name.endswith('*')
     parent_lineage_name = lineage_name.rstrip('*') if is_wildcard else None
@@ -90,7 +89,7 @@ async def get_averaged_lineage_abundances_by_location(
             result_admin1_expr = 'NULL::text as admin1_name'
 
             if 'admin1_name' in user_where_clause:
-                raise ValueError('admin1_name cannot be used in the raw_query when geo_bin is "census_region"')
+                raise ValueError('admin1_name cannot be used in the filter when geo_bin is "census_region"')
         case _:
             raise ValueError(f'illegal value for geo_bin: {geo_bin}')
 
@@ -156,7 +155,7 @@ async def get_averaged_lineage_abundances_by_location(
             total_prevalences as (
                 select
                     week_start,
-                    {geo_select_cols},œ
+                    {geo_select_cols},
                     sum(pop_weighted_prevalence) as total_prevalence,
                     count(*) as sample_count,
                     avg(ww_viral_load) as mean_viral_load,
@@ -303,10 +302,10 @@ async def get_averaged_lineage_abundances_by_location(
     return out_data
 
 
-async def get_latest_sample(query: str | None) -> List[SampleInfo]:
-    where_clause = ''
-    if query is not None:
-        where_clause = f'and ({parser.parse(query)})'
+async def get_latest_sample(where: str | None) -> List[SampleInfo]:
+    user_where_clause = ''
+    if where is not None:
+        user_where_clause = f'and ({parser.parse(where)})'
 
     sql = (
         f'with latest_date as (\n'
@@ -315,7 +314,7 @@ async def get_latest_sample(query: str | None) -> List[SampleInfo]:
         f'    left join geo_locations gl on gl.id = s.geo_location_id\n'
         f'    where s.collection_start_date is not null\n'
         f'        and {WW_SAMPLES_FILTER_SHIM}\n'
-        f'        {where_clause}'
+        f'        {user_where_clause}'
         f'    order by collection_start_date desc\n'
         f'    limit 1\n'
         f')\n'
@@ -328,7 +327,7 @@ async def get_latest_sample(query: str | None) -> List[SampleInfo]:
         f'left join geo_locations gl on gl.id = s.geo_location_id\n'
         f'inner join latest_date using (collection_start_date)\n'
         f'        where {WW_SAMPLES_FILTER_SHIM}\n'
-        f'        {where_clause};'
+        f'        {user_where_clause};'
     )
 
     async with get_async_session() as session:
@@ -336,7 +335,7 @@ async def get_latest_sample(query: str | None) -> List[SampleInfo]:
         return [SampleInfo(**row) for row in res.mappings().all()]
 
 
-async def count_samples_with_lineage_data(by_col: str, raw_query: str | None = None):
+async def count_samples_with_lineage_data(by_col: str, where: str | None = None):
     query = (
         select(Sample, GeoLocation, SampleLineage)
         .join(GeoLocation, GeoLocation.id == Sample.geo_location_id, isouter=True)
@@ -347,8 +346,8 @@ async def count_samples_with_lineage_data(by_col: str, raw_query: str | None = N
         .group_by(text(by_col))
         .order_by(text('count1 desc'))
     )
-    if raw_query is not None and raw_query.strip():
-        user_where_clause = text(parser.parse(raw_query))
+    if where is not None and where.strip():
+        user_where_clause = text(parser.parse(where))
         query = query.where(user_where_clause)
 
     async with get_async_session() as session:
@@ -360,7 +359,7 @@ async def _package_count_by_column(query_result: Result[tuple[Any, int]] | List[
     return {str(r[0]): r[1] for r in query_result}
 
 
-async def count_lineages_by_sample_data(raw_query: str | None = None):
+async def count_lineages_by_sample_data(where: str | None = None):
     query = (
         select(Sample, GeoLocation, SampleLineage, Lineage)
         .join(GeoLocation, GeoLocation.id == Sample.geo_location_id, isouter=True)
@@ -372,8 +371,8 @@ async def count_lineages_by_sample_data(raw_query: str | None = None):
         .group_by(Lineage.lineage_name)
         .order_by(text('count1 desc'))
     )
-    if raw_query is not None and raw_query.strip():
-        user_where_clause = text(parser.parse(raw_query))
+    if where is not None and where.strip():
+        user_where_clause = text(parser.parse(where))
         query = query.where(user_where_clause)
 
     async with get_async_session() as session:
