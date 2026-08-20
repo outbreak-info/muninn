@@ -19,16 +19,13 @@ def get_extract_clause(group_by: str, date_bin: DateBinOpt, days: int) -> str:
 
     match date_bin:
         case DateBinOpt.week | DateBinOpt.month:
-            return f'''
-                extract({YEAR} from {group_by_alias}) as {YEAR},  
-                extract({date_bin} from {group_by_alias}) as {CHUNK}
-                '''
+            return (f'extract({YEAR} from {group_by_alias}) as {YEAR},\n'
+                    f'extract({date_bin} from {group_by_alias}) as {CHUNK}')
         case DateBinOpt.day:
             origin = datetime.date.today()
-            return f'''
-                date_bin('{days} days', {group_by_alias}, '{origin}') + interval '{days} days' as {BIN_END},
-                date_bin('{days} days', {group_by_alias}, '{origin}') as {BIN_START}
-                '''
+            return (
+                f"date_bin('{days} days', {group_by_alias}, '{origin}') + interval '{days} days' as {BIN_END},\n"
+                f"date_bin('{days} days', {group_by_alias}, '{origin}') as {BIN_START}")
         case _:
             raise NotImplementedError
 
@@ -38,6 +35,7 @@ def get_group_by_clause(
     extra_cols: List[str] | None = None,
     prefix_cols: List[str] | None = None
 ) -> str:
+    cols = []
     match date_bin:
         case DateBinOpt.week | DateBinOpt.month:
             cols = [YEAR, CHUNK]

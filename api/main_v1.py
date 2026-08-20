@@ -1,3 +1,4 @@
+import logging
 from typing import List, Annotated, Dict
 
 import re
@@ -37,6 +38,8 @@ from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, NtOrAa
     DEFAULT_PREVALENCE_THRESHOLD, MIN_PREVALENCE_THRESHOLD, FILTER_SYNTAX_HELP, DistinctValueField, \
     WastewaterGeoBin
 from utils.errors import ParsingError
+
+log = logging.getLogger(__name__)
 
 # Tag names used to group the endpoints in the auto-generated docs at /docs.
 TAG_SAMPLES = 'Samples'
@@ -148,11 +151,11 @@ _USER_QUERY_SQLSTATES = frozenset({
     '42601',  # syntax_error: reachable from a filter that parses but emits invalid SQL
 })
 
-
 @app.exception_handler(DBAPIError)
 async def handle_db_query_error(request: Request, exc: DBAPIError):
     sqlstate = getattr(getattr(exc, 'orig', None), 'sqlstate', None)
     if sqlstate in _USER_QUERY_SQLSTATES:
+        log.error(exc)
         return JSONResponse(
             status_code=400,
             content={
@@ -162,7 +165,6 @@ async def handle_db_query_error(request: Request, exc: DBAPIError):
             }
         )
     raise exc
-
 
 @app.exception_handler(ParsingError)
 async def handle_parsing_error(request: Request, exc: ParsingError):
