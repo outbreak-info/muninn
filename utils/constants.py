@@ -205,6 +205,9 @@ class TableNames(PgIdentifiers):
     ih_samples_by_allele = 'ih_samples_by_allele'
     ih_samples_by_amino_acid = 'ih_samples_by_amino_acid'
 
+    # Caches
+    cache_cns_pmv_sums = 'cache_cns_pmv_sums'
+
 
 class ColumnNames(PgIdentifiers):
     # ids

@@ -388,7 +388,7 @@ async def _pheno_value_by_sample_and_collection_date(
         f'       percentile_cont(0.5) within group (order by n_scored_mutations) as n_scores_median,\n'
         f'       percentile_cont(0.75) within group (order by n_scored_mutations) as n_scores_q3\n'
         f'from matching_samples\n'
-        f'inner join cache_cns_pmv_sums cache using (sample_id)\n'
+        f'inner join {TableNames.cache_cns_pmv_sums} cache using (sample_id)\n'
         f'inner join phenotype_metrics pm on pm.id = cache.phenotype_metric_id\n'
         f'where pm.phenotype_metric_name = :pm_name\n'
         f'{group_by_clause}\n'
