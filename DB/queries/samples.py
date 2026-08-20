@@ -35,8 +35,8 @@ async def get_sample_by_id(sample_id: int) -> SampleInfo | None:
     return SampleInfo(**row)
 
 
-async def get_samples(filter: str) -> List['SampleInfo']:
-    user_defined_filter = parser.parse(filter)
+async def get_samples(where: str) -> List['SampleInfo']:
+    user_where_clause = parser.parse(where)
 
     query = f"""
     select s.*,
@@ -46,7 +46,7 @@ async def get_samples(filter: str) -> List['SampleInfo']:
         g.admin3_name as geo_admin3_name
     from {TableNames.samples} s
     left join {TableNames.geo_locations} g on g.id = s.{ColumnNames.geo_location_id}
-    where {user_defined_filter}
+    where {user_where_clause}
     """
 
     async with get_async_session() as session:
@@ -55,8 +55,8 @@ async def get_samples(filter: str) -> List['SampleInfo']:
     return out_data
 
 
-async def get_samples_by_mutation(change_bin: NtOrAa = NtOrAa.aa, filter: str = "") -> List['SampleInfo']:
-    user_defined_filter = parser.parse(filter)
+async def get_samples_by_mutation(change_bin: NtOrAa = NtOrAa.aa, where: str = "") -> List['SampleInfo']:
+    user_where_clause = parser.parse(where)
 
     if change_bin == NtOrAa.nt:
         matching_samples = f'''
@@ -64,7 +64,7 @@ async def get_samples_by_mutation(change_bin: NtOrAa = NtOrAa.aa, filter: str = 
             from {TableNames.cns_samples_by_allele} m
             inner join {TableNames.alleles} a on a.id = m.{ColumnNames.allele_id}
             cross join lateral unnest(rb_to_array(m.{ColumnNames.samples_present})) as samps(sample_id)
-            where {user_defined_filter}
+            where {user_where_clause}
         '''
     else:
         matching_samples = f'''
@@ -72,7 +72,7 @@ async def get_samples_by_mutation(change_bin: NtOrAa = NtOrAa.aa, filter: str = 
             from {TableNames.cns_samples_by_amino_acid} mt
             inner join {TableNames.amino_acids} aa on aa.id = mt.{ColumnNames.amino_acid_id}
             cross join lateral unnest(rb_to_array(mt.{ColumnNames.samples_present})) as samps(sample_id)
-            where {user_defined_filter}
+            where {user_where_clause}
         '''
 
     samples_query = f"""
@@ -96,11 +96,11 @@ async def get_samples_by_mutation(change_bin: NtOrAa = NtOrAa.aa, filter: str = 
 
 async def get_samples_by_variant(
     change_bin: NtOrAa = NtOrAa.aa,
-    filter: str = "",
+    where: str = "",
     min_alt_freq: float | None = None,
     max_alt_freq: float | None = None
 ) -> List['SampleInfo']:
-    user_defined_filter = parser.parse(filter)
+    user_where_clause = parser.parse(where)
     ih_table, change_id_col, catalog_table, *_ = get_ih_table_and_change_cols(change_bin)
 
     samples_query = f"""
@@ -108,7 +108,7 @@ async def get_samples_by_variant(
         select rb_or_agg(v.{ColumnNames.samples_present}) as bm
         from {ih_table} v
         inner join {catalog_table} c on c.id = v.{change_id_col}
-        where {user_defined_filter}
+        where {user_where_clause}
         and v.alt_freq_range && numrange(:min_alt_freq, :max_alt_freq, '[]')
     )
     select s.*,
@@ -133,7 +133,7 @@ async def get_sample_counts(
     group_by: str,
     date_bin: DateBinOpt = DateBinOpt.month,
     days: int = DEFAULT_DAYS,
-    filter: str | None = None,
+    where: str | None = None,
     max_span_days: int = DEFAULT_MAX_SPAN_DAYS,
 ) -> Dict[str, int] | Dict[str, Dict[str, Dict[str, int]]] | List[LineageCountInfo]:
     group_by_set = set(group_by.split(','))
@@ -143,22 +143,22 @@ async def get_sample_counts(
         if LINEAGE in group_by_set:
             date_field = group_by_set.difference({LINEAGE}).pop()
             if date_field in SIMPLE_DATE_FIELDS:
-                return await count_lineages_by_simple_date(date_field, date_bin, filter, days)
+                return await count_lineages_by_simple_date(date_field, date_bin, where, days)
             elif date_field == COLLECTION_DATE:
-                return await count_lineages_by_collection_date(date_bin, filter, days, max_span_days)
+                return await count_lineages_by_collection_date(date_bin, where, days, max_span_days)
 
         raise NotImplementedError(
             'Grouping by multiple fields is currently only supported for lineage plus a date field'
         )
     else:
         if group_by in SIMPLE_DATE_FIELDS:
-            return await count_samples_by_simple_date(group_by, date_bin, days, filter)
+            return await count_samples_by_simple_date(group_by, date_bin, days, where)
         elif group_by == COLLECTION_DATE:
-            return await count_samples_by_collection_date(date_bin, days, filter, max_span_days)
+            return await count_samples_by_collection_date(date_bin, days, where, max_span_days)
         elif group_by == LINEAGE:
-            return await get_sample_counts_by_lineage(filter)
+            return await get_sample_counts_by_lineage(where)
         else:
-            return await count_samples_by_column(group_by, filter)
+            return await count_samples_by_column(group_by, where)
 
 
 async def get_sample_collection_release_lag(

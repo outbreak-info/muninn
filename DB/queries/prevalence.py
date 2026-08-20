@@ -112,13 +112,13 @@ async def get_mutation_sample_count_by_aa(change: str) -> List[MutationCountInfo
     ]
 
 async def get_pheno_values_and_mutation_counts(
-    pheno_metric_name: str, region: str, include_refs: bool, filter: str | None
+    pheno_metric_name: str, region: str, include_refs: bool, where: str | None
 ) -> List["VariantCountPhenoScoreInfo"]:
     no_refs_filter = "and aas.ref_aa <> aas.alt_aa"
     if include_refs:
         no_refs_filter = ""
 
-    if filter is None:
+    if where is None:
         query = f"""
             select aas.ref_aa, aas.position_aa, aas.alt_aa, pmv.value,
                    rb_cardinality(rb_or_agg(m.{ColumnNames.samples_present})) as count
@@ -133,7 +133,7 @@ async def get_pheno_values_and_mutation_counts(
             order by count desc;
         """
     else:
-        user_defined_filter = parser.parse(filter)
+        user_where_clause = parser.parse(where)
         query = f"""
             select aas.ref_aa, aas.position_aa, aas.alt_aa, pmv.value,
                    count(distinct caas.{ColumnNames.sample_id}) as count
@@ -146,7 +146,7 @@ async def get_pheno_values_and_mutation_counts(
                 select s.id
                 from {TableNames.samples} s
                 left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
-                where {user_defined_filter}
+                where {user_where_clause}
             )
             and aas.gff_feature = :region
             and pm.{ColumnNames.phenotype_metric_name} = :pm_name
@@ -179,13 +179,13 @@ async def get_pheno_values_and_mutation_counts(
 
 # TODO: Using "region" as the parameter for "gff_feature" for now.
 async def get_pheno_values_and_variant_counts(
-    pheno_metric_name: str, region: str, include_refs: bool, filter: str | None
+    pheno_metric_name: str, region: str, include_refs: bool, where: str | None
 ) -> List["VariantCountPhenoScoreInfo"]:
     no_refs_filter = "and aas.ref_aa <> aas.alt_aa"
     if include_refs:
         no_refs_filter = ""
 
-    if filter is None:
+    if where is None:
         sample_subset_cte = ""
         count_expr = f"rb_or_cardinality_agg(v.{ColumnNames.samples_present})"
     else:
@@ -194,7 +194,7 @@ async def get_pheno_values_and_variant_counts(
                 select coalesce(rb_build_agg(s.id), rb_build('{{}}')) as bm
                 from {TableNames.samples} s
                 left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
-                where {parser.parse(filter)}
+                where {parser.parse(where)}
             )
         """
         count_expr = (

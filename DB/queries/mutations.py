@@ -12,9 +12,9 @@ from utils.constants import ColumnNames, DateBinOpt, TableNames, COLLECTION_DATE
 
 async def get_mutations(
     change_bin: NtOrAa = NtOrAa.nt,
-    filter: str = ""
+    where: str = ""
 ) -> List['MutationNucleotideInfo'] | List['MutationAminoAcidInfo']:
-    user_defined_filter = parser.parse(filter)
+    user_where_clause = parser.parse(where)
 
     if change_bin == NtOrAa.nt:
         mutations_query = f'''
@@ -28,7 +28,7 @@ async def get_mutations(
             from {TableNames.cns_samples_by_allele} m
             inner join {TableNames.alleles} a on a.id = m.{ColumnNames.allele_id}
             cross join lateral unnest(rb_to_array(m.{ColumnNames.samples_present})) as samps(sample_id)
-            where {user_defined_filter}
+            where {user_where_clause}
         '''
         async with get_async_session() as session:
             result = await session.execute(text(mutations_query))
@@ -46,7 +46,7 @@ async def get_mutations(
             from {TableNames.cns_samples_by_amino_acid} mt
             inner join {TableNames.amino_acids} aa on aa.id = mt.{ColumnNames.amino_acid_id}
             cross join lateral unnest(rb_to_array(mt.{ColumnNames.samples_present})) as samps(sample_id)
-            where {user_defined_filter}
+            where {user_where_clause}
         '''
         async with get_async_session() as session:
             result = await session.execute(text(mutations_query))
@@ -55,15 +55,15 @@ async def get_mutations(
 
 async def get_mutations_by_sample(
     change_bin: NtOrAa = NtOrAa.nt,
-    filter: str = ""
+    where: str = ""
 ) -> List['MutationNucleotideInfo'] | List['MutationAminoAcidInfo']:
-    user_defined_filter = parser.parse(filter)
+    user_where_clause = parser.parse(where)
 
     matching_samples = f'''
         select s.id
         from {TableNames.samples} s
         left join {TableNames.geo_locations} g on g.id = s.{ColumnNames.geo_location_id}
-        where {user_defined_filter}
+        where {user_where_clause}
     '''
 
     if change_bin == NtOrAa.nt:
@@ -114,11 +114,11 @@ async def get_aa_mutation_count_by_collection_date(
     gff_feature: str,
     days: int,
     max_span_days: int,
-    filter: str | None = None
+    where: str | None = None
 ):
-    user_defined_filter = ''
-    if filter is not None:
-        user_defined_filter = f'where ({parser.parse(filter)})'
+    user_where_clause = ''
+    if where is not None:
+        user_where_clause = f'where ({parser.parse(where)})'
 
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(
@@ -181,7 +181,7 @@ async def get_aa_mutation_count_by_collection_date(
                         inner join {TableNames.samples} s on s.id = ts.target_sample_id
                         inner join {TableNames.samples_lineages} sl on sl.sample_id = s.id
                         inner join {TableNames.lineages} l on l.id = sl.lineage_id
-                        {user_defined_filter}
+                        {user_where_clause}
                     )
                     where collection_span <= {max_span_days}
                 )
@@ -219,11 +219,11 @@ async def get_nt_mutation_count_by_collection_date(
     region: str,
     days: int,
     max_span_days: int,
-    filter: str | None = None
+    where: str | None = None
 ):
-    user_defined_filter = ''
-    if filter is not None:
-        user_defined_filter = f'where ({parser.parse(filter)})'
+    user_where_clause = ''
+    if where is not None:
+        user_where_clause = f'where ({parser.parse(where)})'
 
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(
@@ -286,7 +286,7 @@ async def get_nt_mutation_count_by_collection_date(
                         inner join {TableNames.samples} s on s.id = ms.target_sample_id
                         inner join {TableNames.samples_lineages} sl on sl.sample_id = s.id
                         inner join {TableNames.lineages} l on l.id = sl.lineage_id
-                        {user_defined_filter}
+                        {user_where_clause}
                     )
                     where collection_span <= {max_span_days}
                 )

@@ -48,12 +48,12 @@ async def count_variants_or_mutations_gte_pheno_value_by_collection_date(
     phenotype_metric_value_threshold: float,
     days: int,
     max_span_days: int,
-    raw_query: str,
+    where: str,
     table: Type[IntraHostVariant] | Type[Mutation]
 ):
     user_where_clause = ''
-    if raw_query is not None:
-        user_where_clause = f'and ({parser.parse(raw_query)})'
+    if where is not None:
+        user_where_clause = f'and ({parser.parse(where)})'
 
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(date_bin)
@@ -123,11 +123,11 @@ async def count_mutations_gte_pheno_value_by_collection_date(
     phenotype_metric_value_threshold: float,
     days: int,
     max_span_days: int,
-    filter: str | None,
+    where: str | None,
 ) -> List[Dict]:
-    user_defined_filter = ''
-    if filter is not None:
-        user_defined_filter = f'and ({parser.parse(filter)})'
+    user_where_clause = ''
+    if where is not None:
+        user_where_clause = f'and ({parser.parse(where)})'
 
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(date_bin)
@@ -152,7 +152,7 @@ async def count_mutations_gte_pheno_value_by_collection_date(
             inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
             where num_nulls({ColumnNames.collection_end_date}, {ColumnNames.collection_start_date}) = 0
               and ({ColumnNames.collection_end_date} - {ColumnNames.collection_start_date}) <= :max_span_days
-              {user_defined_filter}
+              {user_where_clause}
         ),
         bins as (
             select {extract_clause},
@@ -211,13 +211,13 @@ async def count_variants_gte_pheno_value_by_collection_date(
     phenotype_metric_value_threshold: float,
     days: int,
     max_span_days: int,
-    filter: str | None,
+    where: str | None,
     min_alt_freq: float | None = None,
     max_alt_freq: float | None = None,
 ) -> List[Dict]:
-    user_defined_filter = ''
-    if filter is not None:
-        user_defined_filter = f'and ({parser.parse(filter)})'
+    user_where_clause = ''
+    if where is not None:
+        user_where_clause = f'and ({parser.parse(where)})'
 
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(date_bin)
@@ -242,7 +242,7 @@ async def count_variants_gte_pheno_value_by_collection_date(
             inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
             where num_nulls({ColumnNames.collection_end_date}, {ColumnNames.collection_start_date}) = 0
               and ({ColumnNames.collection_end_date} - {ColumnNames.collection_start_date}) <= :max_span_days
-              {user_defined_filter}
+              {user_where_clause}
         ),
         bins as (
             select {extract_clause},
@@ -358,12 +358,12 @@ async def _pheno_value_by_sample_and_collection_date(
     phenotype_metric_name: str,
     days: int,
     max_span_days: int,
-    filter: str | None,
+    where: str | None,
     intra_host: bool,
 ) -> List[Dict]:
-    user_defined_filter = ''
-    if filter is not None:
-        user_defined_filter = f'and ({parser.parse(filter)})'
+    user_where_clause = ''
+    if where is not None:
+        user_where_clause = f'and ({parser.parse(where)})'
 
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(date_bin)
@@ -430,7 +430,7 @@ async def _pheno_value_by_sample_and_collection_date(
             inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
             where num_nulls(s.{ColumnNames.collection_end_date}, s.{ColumnNames.collection_start_date}) = 0
               and (s.{ColumnNames.collection_end_date} - s.{ColumnNames.collection_start_date}) <= :max_span_days
-              {user_defined_filter}
+              {user_where_clause}
             group by s.id, s.{ColumnNames.collection_start_date}, s.{ColumnNames.collection_end_date}
         ),
         scored as (
@@ -489,10 +489,10 @@ async def get_pheno_value_for_mutations_by_sample_and_collection_date(
     phenotype_metric_name: str,
     days: int,
     max_span_days: int,
-    filter: str | None,
+    where: str | None,
 ) -> List[Dict]:
     return await _pheno_value_by_sample_and_collection_date(
-        date_bin, phenotype_metric_name, days, max_span_days, filter, intra_host=False
+        date_bin, phenotype_metric_name, days, max_span_days, where, intra_host=False
     )
 
 
@@ -501,8 +501,8 @@ async def get_pheno_value_for_variants_by_sample_and_collection_date(
     phenotype_metric_name: str,
     days: int,
     max_span_days: int,
-    filter: str | None,
+    where: str | None,
 ) -> List[Dict]:
     return await _pheno_value_by_sample_and_collection_date(
-        date_bin, phenotype_metric_name, days, max_span_days, filter, intra_host=True
+        date_bin, phenotype_metric_name, days, max_span_days, where, intra_host=True
     )
