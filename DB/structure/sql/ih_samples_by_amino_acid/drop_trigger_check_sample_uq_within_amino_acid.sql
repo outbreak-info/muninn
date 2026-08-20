@@ -1,0 +1,1 @@
+drop trigger check_sample_uq_within_amino_acid on ih_samples_by_amino_acid;

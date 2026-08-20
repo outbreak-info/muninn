@@ -18,9 +18,9 @@ class Env:
     MUNINN_SERVER_DATA_INPUT_DIR = os.environ['MUNINN_SERVER_DATA_INPUT_DIR']
 
 
-CHANGE_PATTERN = r'^([\w-]+):([a-zA-Z])(\d+)([a-zA-Z\-+]+)'
-WORDLIKE_PATTERN = re.compile(r'\w+')
-COMMA_SEP_WORDLIKE_PATTERN = re.compile(r'(\w+,)*\w+')
+CHANGE_PATTERN = r'^([\w.-]+):([a-zA-Z])(\d+)([a-zA-Z\-+]+)'
+WORDLIKE_PATTERN = re.compile(r'^\w+$')
+COMMA_SEP_WORDLIKE_PATTERN = re.compile(r'^(\w+,)*\w+$')
 # these dates are "simple" b/c they are a single timestamp and not null
 SIMPLE_DATE_FIELDS = {'release_date', 'creation_date'}
 # Unlike the simple dates, collection date is a range, and may be null
@@ -28,10 +28,26 @@ COLLECTION_DATE = 'collection_date'
 GEO_LOCATION = 'geo_location'
 LINEAGE = 'lineage'
 DEFAULT_MAX_SPAN_DAYS = 366
-DEFAULT_DAYS = 5
+DEFAULT_DAYS = 1
 DEFAULT_PREVALENCE_THRESHOLD = 0.75
 MIN_PREVALENCE_THRESHOLD = 0.01
+# Below this, a fuzzy /v1/distinctValues `search` hit is noise rather than a typo of what the caller
+# meant. Measured against real values: typos land at 0.87-0.96 ('califronia'/'California' = 0.90)
+# while unrelated pairs top out around 0.56 ('cattle'/'Castor fiber' = 0.44).
+MIN_FUZZY_MATCH_SCORE = 0.7
 ASYNCPG_MAX_QUERY_ARGS = 32767
+
+FILTER_SYNTAX_HELP = (
+    'Filter mini-language: combine terms with ^ (AND) and | (OR); negate a single term with a prefix '
+    '! (NOT is unary, so write AND-NOT as a ^ !b, not as a ! b); group with (); '
+    'compare with = != > < >= <= (the ordered operators > < >= <= require a number or a YYYY-MM-DD date). '
+    'String values are written bare/unquoted (e.g. host = Homo sapiens); numbers and dates are bare too. '
+    'The words "and"/"or"/"not" are NOT operators and will raise a 400 error. There is no IN operator and '
+    'no null test OR the alternatives instead. Which column names are accepted depends on the endpoint '
+    '(see the columns listed above); enumerate the valid values for a column with GET /v1/distinctValues. '
+    'Example: bases > 1000 ^ host = Homo sapiens . '
+    'When placed in a URL, percent-encode the operators (space -> %20, ^ -> %5E, | -> %7C, ! -> %21, > -> %3E).'
+)
 NUCLEOTIDE_CHARACTERS = ['A', 'C', 'G', 'T']
 # https://en.wikipedia.org/wiki/Nucleic_acid_notation
 NUCLEOTIDE_CHARACTERS_AMBIGUOUS = ['A', 'C', 'G', 'T', 'M', 'R', 'W', 'S', 'Y', 'K', 'B', 'D', 'H', 'V', 'N']
@@ -83,6 +99,54 @@ class DateBinOpt(Enum):
 class NtOrAa(Enum):
     nt = 'nt'
     aa = 'aa'
+
+    def __str__(self):
+        return str(self.value)
+
+
+# TODO: Check if this the best place to keep this.
+class WastewaterGeoBin(Enum):
+    """
+    Geographic grouping for the averaged wastewater abundances. v0 took this as a bare string and
+    raised ValueError (a 500) on anything else; as an enum a bad value is a 422 and the two legal
+    values show up in the schema.
+    """
+    admin1_name = 'admin1_name'
+    census_region = 'census_region'
+
+    def __str__(self):
+        return str(self.value)
+
+
+class DistinctValueField(Enum):
+    """
+    Whitelist of columns whose distinct values can be enumerated via GET /v1/distinctValues.
+    These are the high-value, bounded-cardinality string columns an LLM/user needs when building
+    a `filter` query. The value <-> (table, column) mapping lives in DB.queries.helpers.
+    """
+    # samples metadata
+    host = 'host'
+    organism = 'organism'
+    serotype = 'serotype'
+    platform = 'platform'
+    instrument = 'instrument'
+    assay_type = 'assay_type'
+    library_selection = 'library_selection'
+    library_source = 'library_source'
+    library_layout = 'library_layout'
+    isolation_source = 'isolation_source'
+    center_name = 'center_name'
+    bio_project = 'bio_project'
+    # geo_locations (joined onto samples)
+    country_name = 'country_name'
+    admin1_name = 'admin1_name'
+    admin2_name = 'admin2_name'
+    admin3_name = 'admin3_name'
+    # genomic change dimensions
+    region = 'region'
+    gff_feature = 'gff_feature'
+    # lineage nomenclature
+    lineage_system_name = 'lineage_system_name'
 
     def __str__(self):
         return str(self.value)
@@ -140,6 +204,9 @@ class TableNames(PgIdentifiers):
     sequences = 'sequences'
     ih_samples_by_allele = 'ih_samples_by_allele'
     ih_samples_by_amino_acid = 'ih_samples_by_amino_acid'
+
+    # Caches
+    cache_cns_pmv_sums = 'cache_cns_pmv_sums'
 
 
 class ColumnNames(PgIdentifiers):

@@ -11,14 +11,18 @@ async def create_all():
     await run_sql_file('sql/ih_samples_by_allele/create_fk_ih_samples_by_allele_allele_id_alleles.sql')
     await run_sql_file('sql/ih_samples_by_allele/create_function_check_range_overlap.sql')
     await run_sql_file('sql/ih_samples_by_allele/create_trigger_check_range_overlap.sql')
+    await run_sql_file('sql/ih_samples_by_allele/create_function_check_sample_uq_within_allele.sql')
+    await run_sql_file('sql/ih_samples_by_allele/create_trigger_check_sample_uq_within_allele.sql')
 
 
-async def drop_trigger_check_range_overlap():
+async def drop_triggers():
     await run_sql_file('sql/ih_samples_by_allele/drop_trigger_check_range_overlap.sql')
+    await run_sql_file('sql/ih_samples_by_allele/drop_trigger_check_sample_uq_within_allele.sql')
 
 
-async def restore_trigger_check_range_overlap():
+async def restore_triggers():
     await run_sql_file('sql/ih_samples_by_allele/create_trigger_check_range_overlap.sql')
+    await run_sql_file('sql/ih_samples_by_allele/create_trigger_check_sample_uq_within_allele.sql')
     async with get_async_write_session() as session:
         await session.execute(
             text(f'update {TableNames.ih_samples_by_allele} set {ColumnNames.allele_id} = {ColumnNames.allele_id};')
