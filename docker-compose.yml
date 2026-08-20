@@ -60,7 +60,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    command: fastapi run api/main_v1.py
+    command: fastapi run api/main.py
 
 volumes:
   postgres_data:
