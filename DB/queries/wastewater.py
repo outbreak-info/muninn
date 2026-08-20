@@ -155,7 +155,7 @@ async def get_averaged_lineage_abundances_by_location(
             total_prevalences as (
                 select
                     week_start,
-                    {geo_select_cols},œ
+                    {geo_select_cols},
                     sum(pop_weighted_prevalence) as total_prevalence,
                     count(*) as sample_count,
                     avg(ww_viral_load) as mean_viral_load,
