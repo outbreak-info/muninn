@@ -11,14 +11,18 @@ async def create_all():
     await run_sql_file('sql/ih_samples_by_amino_acid/create_fk_ih_samples_by_amino_acid_amino_acid_id_amino_acids.sql')
     await run_sql_file('sql/ih_samples_by_amino_acid/create_function_check_range_overlap.sql')
     await run_sql_file('sql/ih_samples_by_amino_acid/create_trigger_check_range_overlap.sql')
+    await run_sql_file('sql/ih_samples_by_amino_acid/create_function_check_sample_uq_within_amino_acid.sql')
+    await run_sql_file('sql/ih_samples_by_amino_acid/create_trigger_check_sample_uq_within_amino_acid.sql')
 
 
-async def drop_trigger_check_range_overlap():
+async def drop_triggers():
     await run_sql_file('sql/ih_samples_by_amino_acid/drop_trigger_check_range_overlap.sql')
+    await run_sql_file('sql/ih_samples_by_amino_acid/drop_trigger_check_sample_uq_within_amino_acid.sql')
 
 
-async def restore_trigger_check_range_overlap():
+async def restore_triggers():
     await run_sql_file('sql/ih_samples_by_amino_acid/create_trigger_check_range_overlap.sql')
+    await run_sql_file('sql/ih_samples_by_amino_acid/create_trigger_check_sample_uq_within_amino_acid.sql')
     async with get_async_write_session() as session:
         await session.execute(
             text(

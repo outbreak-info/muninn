@@ -35,8 +35,8 @@ class VariantsMutationsCombinedParser(FileParser):
         self.n_freq_bins = 20
         self.ih_nt_min_depth = 10
         self.ih_codons_min_depth = 10
-        self.ih_nt_min_freq = 0.2
-        self.ih_codons_min_freq = 0.2
+        self.ih_nt_min_freq = 0.02
+        self.ih_codons_min_freq = 0.02
 
         if extras is not None:
             self._parse_extra_args(extras)
@@ -419,25 +419,7 @@ class VariantsMutationsCombinedParser(FileParser):
                 )
             )
 
-            # get amino acid values from mutations
-            await session.execute(
-                text(
-                    'insert into tmp_amino_acids (\n'
-                    '    gff_feature, position_aa, alt_aa, alt_codon, ref_aa, ref_codon\n'
-                    ')\n'
-                    'select gff_feature, position_aa, alt_aa, alt_codon, ref_aa, ref_codon\n'
-                    'from tmp_mutations\n'
-                    'where gff_feature is not null\n'
-                    'and position_aa is not null\n'
-                    'and alt_aa is not null\n'
-                    'and ref_aa is not null\n'
-                    'and alt_codon is not null\n'
-                    'and ref_codon is not null\n'
-                    'group by gff_feature, position_aa, alt_aa, alt_codon, ref_aa, ref_codon;'
-                )
-            )
-
-            # get values from variants, skipping over values already in tmp_amino_acids
+            # get amino acid values from mutations, skip values already in tmp_amino_acids
             await session.execute(
                 text(
                     'insert into tmp_amino_acids (\n'
@@ -971,7 +953,7 @@ class VariantsMutationsCombinedParser(FileParser):
 
     @staticmethod
     async def _drop_ih_samples_by_allele_indexes():
-        await ih_samples_by_allele.drop_trigger_check_range_overlap()
+        await ih_samples_by_allele.drop_triggers()
 
     @staticmethod
     async def _restore_ih_samples_by_allele_indexes():
@@ -980,7 +962,7 @@ class VariantsMutationsCombinedParser(FileParser):
                 ConstraintNames.fk_ih_samples_by_allele_allele_id_alleles,
             ]
         )
-        await ih_samples_by_allele.restore_trigger_check_range_overlap()
+        await ih_samples_by_allele.restore_triggers()
 
     @staticmethod
     async def _restore_cns_samples_by_allele_indexes():
@@ -992,7 +974,7 @@ class VariantsMutationsCombinedParser(FileParser):
 
     @staticmethod
     async def _drop_ih_samples_by_amino_acid_indexes():
-        await ih_samples_by_amino_acid.drop_trigger_check_range_overlap()
+        await ih_samples_by_amino_acid.drop_triggers()
 
     @staticmethod
     async def _restore_ih_samples_by_amino_acid_indexes():
@@ -1001,7 +983,7 @@ class VariantsMutationsCombinedParser(FileParser):
                 ConstraintNames.fk_ih_samples_by_amino_acid_amino_acid_id_amino_acids,
             ]
         )
-        await ih_samples_by_amino_acid.restore_trigger_check_range_overlap()
+        await ih_samples_by_amino_acid.restore_triggers()
 
     @staticmethod
     async def _restore_cns_samples_by_amino_acid_indexes():
