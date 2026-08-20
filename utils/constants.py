@@ -104,6 +104,20 @@ class NtOrAa(Enum):
         return str(self.value)
 
 
+# TODO: Check if this the best place to keep this.
+class WastewaterGeoBin(Enum):
+    """
+    Geographic grouping for the averaged wastewater abundances. v0 took this as a bare string and
+    raised ValueError (a 500) on anything else; as an enum a bad value is a 422 and the two legal
+    values show up in the schema.
+    """
+    admin1_name = 'admin1_name'
+    census_region = 'census_region'
+
+    def __str__(self):
+        return str(self.value)
+
+
 class DistinctValueField(Enum):
     """
     Whitelist of columns whose distinct values can be enumerated via GET /v1/distinctValues.

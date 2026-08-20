@@ -1,4 +1,3 @@
-from platformdirs import user_desktop_dir
 from typing import List, Any, Dict
 
 from sqlalchemy import text, Result

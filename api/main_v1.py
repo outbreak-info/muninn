@@ -20,20 +20,23 @@ import DB.queries.prevalence
 import DB.queries.samples
 import DB.queries.variants
 import DB.queries.variants_mutations
+import DB.queries.wastewater
 from api.models import VariantNucleotideInfo, VariantAminoAcidInfo, SampleInfo, \
     MutationNucleotideInfo, MutationAminoAcidInfo, \
     VariantCountPhenoScoreInfo, \
     MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo, \
-    LineageInfo, VariantMutationLagInfo, MutationProfileInfo, \
+    LineageInfo, VariantMutationLagInfo, \
     LineageCountWithPrevalenceInfo, MutationProfileWithPrevalenceInfo, \
     SampleCollectionReleaseLagInfo, MutationIncidenceInfo, \
     VariantAminoAcidFrequencyByCollectionDateInfo, VariantNucleotideFrequencyByCollectionDateInfo, \
     VariantFreqInfo, MutationNucleotideCountByDateAndLineageInfo, \
     MutationAminoAcidCountByDateAndLineageInfo, PhenotypeMetricDateCountInfo, \
-    PhenotypeMetricAggregateByDateInfo, AnnotationProportionByDateInfo, AnnotatedPositionCountInfo
+    PhenotypeMetricAggregateByDateInfo, AnnotationProportionByDateInfo, AnnotatedPositionCountInfo, \
+    LineageAbundanceWithSampleInfo, AverageLineageAbundanceInfo
 from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, NtOrAa, \
     DEFAULT_MAX_SPAN_DAYS, COLLECTION_DATE, DEFAULT_DAYS, COMMA_SEP_WORDLIKE_PATTERN, \
-    DEFAULT_PREVALENCE_THRESHOLD, MIN_PREVALENCE_THRESHOLD, FILTER_SYNTAX_HELP, DistinctValueField
+    DEFAULT_PREVALENCE_THRESHOLD, MIN_PREVALENCE_THRESHOLD, FILTER_SYNTAX_HELP, DistinctValueField, \
+    WastewaterGeoBin
 from utils.errors import ParsingError
 
 log = logging.getLogger(__name__)
@@ -65,6 +68,7 @@ TAGS_METADATA = [
     {'name': TAG_LINEAGES, 'description': 'Lineage assignments, abundances, and per-lineage mutation incidence/profiles.'},
     {'name': TAG_PHENOTYPE, 'description': 'Phenotype metrics (e.g. DMS/EVEscape scores) and mutation/variant counts scored by them.'},
     {'name': TAG_ANNOTATIONS, 'description': 'Literature/effect annotations attached to amino-acid changes.'},
+    {'name': TAG_WASTEWATER, 'description': 'Wastewater surveillance: abundance-based lineage calls in environmental samples, and their population-weighted averages by location and week.'},
     {'name': TAG_DISCOVERY, 'description': 'Endpoints that enumerate the valid values/keys used to build filter queries (start here before filtering).'},
 ]
 
@@ -705,28 +709,31 @@ async def get_phenotype_metric_values_for_mutations_by_sample_and_collection_dat
     operation_id='phenotypeMetricValues_variantAggregatesByDate',
     response_model=List[PhenotypeMetricAggregateByDateInfo],
     tags=[TAG_PHENOTYPE],
-    summary='Per-collection-date quartiles of per-sample intra-host-variant phenotype load (NOT IMPLEMENTED)'
+    summary='Per-collection-date quartiles of per-sample intra-host-variant phenotype load (summed value and distinct-aa count)'
 )
 async def get_phenotype_metric_values_for_variants_by_sample_and_collection_date(
     phenotype_metric_name: str = Query(..., description='Phenotype metric to score amino-acid changes by, matched against phenotype_metrics.phenotype_metric_name (e.g. delta_bind)'),
     date_bin: DateBinParam = DateBinOpt.month,
     days: DaysParam = DEFAULT_DAYS,
-    filter: str | None = filter_query('Optional: over all `samples` columns plus the joined `geo_locations` columns (raw names, e.g. admin1_name/country_name) and `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name).', required=False),
+    filter: str | None = filter_query('Optional: over all `samples` columns plus the joined `geo_locations` columns (raw names, e.g. admin1_name/country_name) and `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name). alleles/amino_acids columns are NOT joined and cannot be filtered on.', required=False),
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
 ):
-    # v0 deliberately left this unimplemented (raise NotImplementedError). Preserve that choice as a
-    # clean 501 (v0's unhandled NotImplementedError surfaced as a 500). The intra-host-variant version
-    # is a trivial adaptation of :forMutationsAggregate... over intra_host_translations if wanted.
-    raise HTTPException(status_code=501, detail='Per-sample intra-host-variant phenotype aggregation by collection date is not implemented')
+    return await DB.queries.phenotype_metrics.get_pheno_value_for_variants_by_sample_and_collection_date(
+        date_bin,
+        phenotype_metric_name,
+        days,
+        max_span_days,
+        filter,
+    )
 
 @router.get(
     '/phenotypeMetricValues:byMutationsQuantile',
     response_model=Dict[str, float | None],
     tags=[TAG_PHENOTYPE],
-    summary='Get the value of a phenotype metric at a given quantile across its scored substitutions'
+    summary='Get the value of a phenotype metric at a given quantile across the substitutions seen in consensus'
 )
 async def get_phenotype_metric_value_by_mutation_quantile(
-    phenotype_metric_name: str = Query(..., description='Phenotype metric whose value distribution is quantiled, matched against phenotype_metrics.phenotype_metric_name (e.g. delta_bind). phenotype_metric_value is null if the metric name is unknown or has no non-zero scored values.'),
+    phenotype_metric_name: str = Query(..., description='Phenotype metric whose value distribution is quantiled, matched against phenotype_metrics.phenotype_metric_name (e.g. delta_bind). phenotype_metric_value is null if the metric name is unknown, or if no substitution it scores has been seen in consensus.'),
     quantile: float = Query(..., ge=0.0, le=1.0, description='Quantile in [0,1] (e.g. 0.5 for the median), evaluated with percentile_disc over the non-zero scored-substitution values'),
 ):
     return await DB.queries.phenotype_metrics.get_phenotype_metric_value_by_mutation_quantile(
@@ -736,19 +743,18 @@ async def get_phenotype_metric_value_by_mutation_quantile(
 
 @router.get(
     '/phenotypeMetricValues:byVariantsQuantile',
-    response_model=Dict[str, float],
+    response_model=Dict[str, float | None],
     tags=[TAG_PHENOTYPE],
-    summary='Get the value of a phenotype metric at a given quantile across intra-host variants (NOT IMPLEMENTED)'
+    summary='Get the value of a phenotype metric at a given quantile across the substitutions seen intra-host'
 )
 async def get_phenotype_metric_value_by_variant_quantile(
-    phenotype_metric_name: str = Query(..., description='Phenotype metric whose value distribution is quantiled, matched against phenotype_metrics.phenotype_metric_name (e.g. delta_bind)'),
-    quantile: float = Query(..., description='Quantile in [0,1] (e.g. 0.5 for the median)'),
+    phenotype_metric_name: str = Query(..., description='Phenotype metric whose value distribution is quantiled, matched against phenotype_metrics.phenotype_metric_name (e.g. delta_bind). phenotype_metric_value is null if the metric name is unknown, or if no substitution it scores has ever been seen intra-host.'),
+    quantile: float = Query(..., ge=0.0, le=1.0, description='Quantile in [0,1] (e.g. 0.5 for the median), evaluated with percentile_disc over the non-zero scored-substitution values'),
 ):
-    # Not implemented (per direction). Under the catalog-quantile reading used by :byMutationsQuantile
-    # this would return the identical value (the metric value is a property of the amino-acid
-    # substitution, not of the intra-host-variant table); a sample-carrier-weighted variant quantile
-    # would be a different, larger computation and is unverifiable on SC2 (intra-host tables empty).
-    raise HTTPException(status_code=501, detail='Phenotype metric quantile across intra-host variants is not implemented')
+    return await DB.queries.phenotype_metrics.get_phenotype_metric_value_by_variant_quantile(
+        phenotype_metric_name,
+        quantile,
+    )
 
 @router.get(
     '/phenotypeMetricValues:minAndMaxValues',
@@ -791,19 +797,27 @@ async def get_annotations_by_mutations_and_collection_date(
     '/annotations:byVariantsAndCollectionDate',
     response_model=List[AnnotationProportionByDateInfo],
     tags=[TAG_ANNOTATIONS],
-    summary='Proportion of annotated intra-host-variant amino acids carrying an annotation effect, binned by collection date (NOT IMPLEMENTED)'
+    summary='Proportion of annotated intra-host-variant amino acids carrying an annotation effect, binned by collection date'
 )
 async def get_annotations_by_variants_and_collection_date(
     effect_detail: str = Query(..., description='Annotation effect to match, compared against effects.detail'),
     date_bin: DateBinParam = DateBinOpt.month,
     days: DaysParam = DEFAULT_DAYS,
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
-    filter: str | None = filter_query('Optional: over samples/geo/lineage columns.', required=False),
+    filter: str | None = filter_query(
+        'Optional: over all `samples` columns plus the joined `geo_locations` columns (raw names, e.g. '
+        'admin1_name/country_name) and `lineages`/`lineage_systems` columns (lineage_name, '
+        'lineage_system_name). alleles/amino_acids columns are NOT joined and cannot be filtered on.',
+        required=False,
+    ),
 ):
-    # Not implemented (deferred): the intra-host-variant path is unverifiable on SC2 (intra_host_translations
-    # is empty). Returns a clean 501; a working version would mirror :byMutationsAndCollectionDate over
-    # the flat intra_host_translations table.
-    raise HTTPException(status_code=501, detail='Annotation proportion for intra-host variants by collection date is not implemented')
+    return await DB.queries.annotations.get_annotations_by_variants_and_collection_date(
+        effect_detail,
+        date_bin,
+        days,
+        max_span_days,
+        filter
+    )
 
 @router.get(
     '/annotations:effects',
@@ -818,16 +832,18 @@ async def get_annotation_effects() -> List[str]:
     '/annotations:byVariantsAndAminoAcidPosition',
     response_model=Dict[str, List[AnnotatedPositionCountInfo]],
     tags=[TAG_ANNOTATIONS],
-    summary='Annotated intra-host-variant amino-acid positions for an annotation effect (NOT IMPLEMENTED)'
+    summary='Per-position sample counts of annotated intra-host-variant amino acids for an annotation effect'
 )
 async def get_annotations_by_variants_and_amino_acid_position(
     effect_detail: str = Query(..., description='Annotation effect to match, compared against effects.detail'),
-    filter: str | None = filter_query('Optional: over samples/geo/lineage columns.', required=False),
+    filter: str | None = filter_query(
+        'Optional: over all `samples` columns plus the joined `geo_locations` columns (raw names, e.g. '
+        'admin1_name/country_name) and `lineages`/`lineage_systems` columns (lineage_name, '
+        'lineage_system_name). alleles/amino_acids columns are NOT joined and cannot be filtered on.',
+        required=False,
+    ),
 ):
-    # Not implemented (deferred): the intra-host-variant path is unverifiable on SC2 (intra_host_translations
-    # is empty). Returns a clean 501; a working version would mirror :byMutationsAndAminoAcidPosition over
-    # the flat intra_host_translations table.
-    raise HTTPException(status_code=501, detail='Annotated intra-host-variant positions for an effect is not implemented')
+    return await DB.queries.annotations.get_annotations_by_variants_and_amino_acid_position(effect_detail, filter)
 
 @router.get(
     '/annotations:byMutationsAndAminoAcidPosition',
@@ -843,6 +859,134 @@ async def get_annotations_by_mutations_and_amino_acid_position(
         effect_detail,
         filter,
     )
+
+
+##############
+# WASTEWATER #
+##############
+
+@router.get(
+    '/wastewater/lineages:abundancesBySample',
+    response_model=List[LineageAbundanceWithSampleInfo],
+    tags=[TAG_WASTEWATER],
+    summary='Get per-sample wastewater lineage abundances, with the sampling-site metadata'
+)
+async def get_wastewater_lineage_abundances_by_sample(
+    filter: str | None = filter_query(
+        'Optional: over all `samples` columns (including the wastewater ones: ww_viral_load, '
+        'ww_catchment_population, ww_site_id, ww_collected_by, census_region), the joined '
+        '`geo_locations` columns (raw names, e.g. admin1_name, country_name) and the `lineages` '
+        'columns (lineage_name).',
+        required=False,
+    ),
+):
+    """
+    One row per (sample, lineage) call. Unlike /v1/lineages:abundance this is not restricted to
+    abundance-based calls, so consensus calls appear here with a null abundance.
+    """
+    return await DB.queries.wastewater.get_lineage_abundances_by_sample(filter)
+
+@router.get(
+    '/wastewater/lineages:averageAbundancesByLocation',
+    response_model=List[AverageLineageAbundanceInfo],
+    tags=[TAG_WASTEWATER],
+    summary='Get population-weighted average lineage abundances by location and week'
+)
+async def get_wastewater_average_lineage_abundances_by_location(
+    geo_bin: WastewaterGeoBin = Query(
+        WastewaterGeoBin.admin1_name,
+        description='Geographic grouping: admin1_name (state/province) or census_region. With '
+                    'census_region the response\'s geo_admin1_name is always null, and a filter '
+                    'mentioning admin1_name is rejected with a 400 rather than silently ignored.'
+    ),
+    lineage: str | None = Query(
+        None,
+        description="Optional lineage name to report. A trailing '*' (e.g. B.1.1.7*) aggregates the "
+                    "lineage together with all of its descendants into one series, and the response's "
+                    "lineage_name keeps the '*'. Omit to get every lineage separately."
+    ),
+    filter: str | None = filter_query(
+        'Optional: over all `samples` columns (including the wastewater ones), the joined '
+        '`geo_locations` columns (raw names, e.g. admin1_name, country_name) and the `lineages` '
+        'columns (lineage_name).',
+        required=False,
+    ),
+    max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
+):
+    """
+    Abundances are weighted by each site's catchment population before being averaged, so a large
+    catchment counts for more than a small one. Bins are ISO weeks over the collection-window
+    midpoint. mean_lineage_prevalence is this lineage's share of the bin's total weighted abundance.
+    """
+    try:
+        return await DB.queries.wastewater.get_averaged_lineage_abundances_by_location(
+            filter,
+            geo_bin.value,
+            max_span_days,
+            lineage,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.get(
+    '/wastewater/lineages:count',
+    response_model=Dict[str, int],
+    tags=[TAG_WASTEWATER],
+    summary='Count samples per lineage, over the samples that carry abundance data'
+)
+async def get_wastewater_lineage_counts(
+    filter: str | None = filter_query(
+        'Optional: over all `samples` columns (including the wastewater ones), the joined '
+        '`geo_locations`, `samples_lineages` and `lineages` columns.',
+        required=False,
+    ),
+):
+    return await DB.queries.wastewater.count_lineages_by_sample_data(filter)
+
+@router.get(
+    '/wastewater/samples:count',
+    response_model=Dict[str, int],
+    tags=[TAG_WASTEWATER],
+    summary='Count the samples that carry abundance data, grouped by a column'
+)
+async def get_wastewater_sample_counts(
+    group_by: Annotated[str, Query(
+        pattern=COMMA_SEP_WORDLIKE_PATTERN.pattern,
+        description='Column to group counts by: any `samples` or joined `geo_locations` column, e.g. '
+                    'admin1_name or ww_site_id.'
+    )],
+    filter: str | None = filter_query(
+        'Optional: over all `samples` columns (including the wastewater ones), the joined '
+        '`geo_locations` and `samples_lineages` columns.',
+        required=False,
+    ),
+):
+    """
+    Only samples with a non-null abundance are counted, i.e. those with an abundance-based lineage
+    call. Use /v1/samples:count to count samples without that restriction.
+    """
+    return await DB.queries.wastewater.count_samples_with_lineage_data(group_by, filter)
+
+@router.get(
+    '/wastewater/samples:latest',
+    response_model=List[SampleInfo],
+    tags=[TAG_WASTEWATER],
+    summary='Get the most recently collected sample(s), to show how current the data is'
+)
+async def get_wastewater_latest_sample(
+    filter: str | None = filter_query(
+        'Optional: over all columns of the `samples` table, plus the joined `geo_locations` columns '
+        '(raw names, e.g. admin1_name, country_name, not the geo_* response names). The filter '
+        'narrows the field the maximum is taken over, so filter=admin1_name = California returns '
+        "California's latest sample rather than nothing.",
+        required=False,
+    ),
+):
+    """
+    Returns every sample tied for the latest collection_start_date, so this is a list rather than a
+    single object. Samples with no collection date are excluded.
+    """
+    return await DB.queries.wastewater.get_latest_sample(filter)
 
 
 app.include_router(router)

@@ -1,4 +1,3 @@
-from encodings.punycode import T
 from typing import List, Annotated, Dict
 
 from fastapi import FastAPI, HTTPException, Query
@@ -24,7 +23,7 @@ from api.models import LineageAbundanceWithSampleInfo, VariantNucleotideInfo, Sa
 from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, SIMPLE_DATE_FIELDS, NtOrAa, \
     DEFAULT_MAX_SPAN_DAYS, COLLECTION_DATE, DEFAULT_DAYS, COMMA_SEP_WORDLIKE_PATTERN, LINEAGE, \
     DEFAULT_PREVALENCE_THRESHOLD, MIN_PREVALENCE_THRESHOLD
-from utils.errors import ParsingError, NotFoundError
+from utils.errors import ParsingError
 
 app = FastAPI(
     title='Muninn API',
