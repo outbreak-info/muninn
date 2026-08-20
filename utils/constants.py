@@ -184,7 +184,6 @@ class TableNames(PgIdentifiers):
     amino_acids = 'amino_acids'
     cns_samples_by_allele = 'cns_samples_by_allele'
     cns_alleles_by_sample = 'cns_alleles_by_sample'
-    intra_host_variants = 'intra_host_variants'
     geo_locations = 'geo_locations'
     phenotype_metrics = 'phenotype_metrics'
     phenotype_metric_values = 'phenotype_metric_values'
@@ -214,8 +213,6 @@ class ColumnNames(PgIdentifiers):
     sample_id = 'sample_id'
     allele_id = 'allele_id'
     amino_acid_id = 'amino_acid_id'
-    intra_host_variant_id = 'intra_host_variant_id'
-    mutation_id = 'mutation_id'
     phenotype_metric_id = 'phenotype_metric_id'
     lineage_system_id = 'lineage_system_id'
     lineage_id = 'lineage_id'
@@ -328,7 +325,6 @@ class ConstraintNames(PgIdentifiers):
     pk_alleles = f'pk_{TableNames.alleles}'
     pk_amino_acids = f'pk_{TableNames.amino_acids}'
     pk_cns_samples_by_allele = f'pk_{TableNames.cns_samples_by_allele}'
-    pk_intra_host_variants = f'pk_{TableNames.intra_host_variants}'
     pk_geo_locations = f'pk_{TableNames.geo_locations}'
     pk_phenotype_metrics = f'pk_{TableNames.phenotype_metrics}'
     pk_phenotype_metric_values = f'pk_{TableNames.phenotype_metric_values}'
@@ -343,7 +339,7 @@ class ConstraintNames(PgIdentifiers):
     pk_lineages_immediate_children = f'pk_{TableNames.lineages_immediate_children}'
     pk_cns_samples_by_amino_acid = f'pk_{TableNames.cns_samples_by_amino_acid}'
     pk_intra_host_translations = f'pk_{TableNames.intra_host_translations}'
-    pk_sequences = f'pk_{TableNames.sequences}'
+    pk_sequences = f'pk_{TableNames.sequences}' # rm
     pk_cns_alleles_by_sample = f'pk_{TableNames.cns_alleles_by_sample}'
     pk_cns_amino_acids_by_sample = f'pk_{TableNames.cns_amino_acids_by_sample}'
     pk_ih_samples_by_allele = f'pk_{TableNames.ih_samples_by_allele}'
@@ -421,14 +417,8 @@ class ConstraintNames(PgIdentifiers):
 
 
 class IndexNames(PgIdentifiers):
-    # mutations
-    ix_mutations_allele_id_sequence_id = 'ix_mutations_allele_id_sequence_id'  # todo rm
-
     # mutation translations
     ix_mutation_translations_amino_acid_id_sequence_id = 'ix_mutation_translations_amino_acid_id_sequence_id'  # todo rm
-
-    # variants
-    ix_intra_host_variants_allele_id_sample_id = 'ix_intra_host_variants_allele_id_sample_id'
 
     # intra-host translations
     ix_intra_host_translations_amino_acid_id_sample_id = 'ix_intra_host_translations_amino_acid_id_sample_id'

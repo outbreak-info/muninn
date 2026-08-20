@@ -3,7 +3,6 @@ from typing import List, Type, Dict
 from sqlalchemy import text
 
 from DB.engine import get_async_session
-from DB.models import IntraHostVariant, Mutation
 from DB.queries.date_count_helpers import get_extract_clause, get_group_by_clause, get_order_by_cause, \
     MID_COLLECTION_DATE_CALCULATION, YEAR, CHUNK, BIN_START, BIN_END
 from DB.queries.helpers import get_appropriate_translations_table_and_id
@@ -49,8 +48,9 @@ async def count_variants_or_mutations_gte_pheno_value_by_collection_date(
     days: int,
     max_span_days: int,
     where: str,
-    table: Type[IntraHostVariant] | Type[Mutation]
+    table # Type[IntraHostVariant] | Type[Mutation]
 ):
+    # todo: needs to be updated or removed
     user_where_clause = ''
     if where is not None:
         user_where_clause = f'and ({parser.parse(where)})'

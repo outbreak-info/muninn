@@ -173,36 +173,6 @@ class Sample(Base):
         self.bases = other.bases
 
 
-class Allele(Base):
-    __tablename__ = TableNames.alleles
-
-    id: Mapped[int] = mapped_column(sa.Integer, autoincrement=True)
-
-    region: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    position_nt: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
-    ref_nt: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    alt_nt: Mapped[str] = mapped_column(sa.Text, nullable=False)
-
-    __table_args__ = tuple(
-        [
-            PrimaryKeyConstraint('id', name=ConstraintNames.pk_alleles),
-            UniqueConstraint(
-                ColumnNames.region,
-                ColumnNames.position_nt,
-                ColumnNames.alt_nt,
-                postgresql_nulls_not_distinct=True,
-                name=ConstraintNames.uq_alleles_nt_values,
-                postgresql_include=['id']
-            ),
-            CheckConstraint(f"{ColumnNames.alt_nt} <> ''", name=ConstraintNames.ck_alleles_alt_nt_not_empty),
-            CheckConstraint(f"{ColumnNames.ref_nt} <> ''", name=ConstraintNames.ck_alleles_ref_nt_not_empty)
-        ]
-    )
-
-    r_variants: Mapped[List['IntraHostVariant']] = relationship(back_populates='r_allele')
-    r_mutations: Mapped[List['Mutation']] = relationship(back_populates='r_allele')
-
-
 class AminoAcid(Base):
     __tablename__ = TableNames.amino_acids
 
@@ -253,81 +223,6 @@ class AminoAcid(Base):
     r_intra_host_translations: Mapped[List['IntraHostTranslation']] = relationship(back_populates='r_amino_acid')
     r_pheno_metric_values: Mapped[List['PhenotypeMetricValues']] = relationship(back_populates='r_amino_acid')
     r_annotations_amino_acids: Mapped[List['AnnotationAminoAcid']] = relationship(back_populates='r_amino_acid')
-
-
-class Mutation(Base):
-    __tablename__ = TableNames.cns_samples_by_allele
-
-    sequence_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.sequences}.id'), nullable=False)
-    allele_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.alleles}.id'), nullable=False)
-
-    __table_args__ = tuple(
-        [
-            PrimaryKeyConstraint(
-                ColumnNames.sequence_id,
-                ColumnNames.allele_id,
-                name=ConstraintNames.pk_cns_samples_by_allele
-            ),
-            Index(
-                IndexNames.ix_mutations_allele_id_sequence_id,
-                allele_id, sequence_id
-            )
-        ]
-    )
-    r_allele: Mapped['Allele'] = relationship(back_populates='r_mutations')
-
-
-class IntraHostVariant(Base):
-    __tablename__ = TableNames.intra_host_variants
-
-    sample_id: Mapped[int] = mapped_column(
-        sa.ForeignKey(f'{TableNames.samples}.id', name=ConstraintNames.fk_intra_host_variants_sample_id_samples),
-        nullable=False
-    )
-    allele_id: Mapped[int] = mapped_column(
-        sa.ForeignKey(f'{TableNames.alleles}.id', name=ConstraintNames.fk_intra_host_variants_allele_id_alleles),
-        nullable=False
-    )
-
-    ref_dp: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
-    alt_dp: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
-    alt_freq: Mapped[float] = mapped_column(sa.Double, nullable=False)
-    ref_rv: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
-    alt_rv: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
-    ref_qual: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
-    alt_qual: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
-    total_dp: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
-    pval: Mapped[float] = mapped_column(sa.Double, nullable=False)
-    pass_qc: Mapped[bool] = mapped_column(sa.Boolean, nullable=False)
-
-    __table_args__ = tuple(
-        [
-            PrimaryKeyConstraint(
-                ColumnNames.sample_id,
-                ColumnNames.allele_id,
-                name=ConstraintNames.pk_intra_host_variants
-            ),
-            Index(IndexNames.ix_intra_host_variants_allele_id_sample_id, allele_id, sample_id)
-        ]
-
-    )
-
-    r_allele: Mapped['Allele'] = relationship(back_populates='r_variants')
-
-    def copy_from(self, other: 'IntraHostVariant'):
-        if not (other.sample_id, other.allele_id) == (self.sample_id, self.allele_id):
-            raise ValueError('sample and allele ids do not match, copying will not proceed.')
-
-        self.ref_dp = other.ref_dp
-        self.alt_dp = other.alt_dp
-        self.alt_freq = other.alt_freq
-        self.ref_rv = other.ref_rv
-        self.alt_rv = other.alt_rv
-        self.ref_qual = other.ref_qual
-        self.alt_qual = other.alt_qual
-        self.total_dp = other.total_dp
-        self.pval = other.pval
-        self.pass_qc = other.pass_qc
 
 
 class MutationTranslation(Base):
