@@ -1,9 +1,8 @@
 from typing import List, Any, Dict
 
-from sqlalchemy import select, func, text, Result
+from sqlalchemy import text, Result
 
 from DB.engine import get_async_session
-from DB.models import Sample, GeoLocation, SampleLineage, Lineage
 from api.models import LineageAbundanceWithSampleInfo, AverageLineageAbundanceInfo, SampleInfo
 from parser.parser import parser
 from utils.constants import DEFAULT_MAX_SPAN_DAYS, ColumnNames, TableNames
@@ -336,22 +335,29 @@ async def get_latest_sample(where: str | None) -> List[SampleInfo]:
 
 
 async def count_samples_with_lineage_data(by_col: str, where: str | None = None):
-    query = (
-        select(Sample, GeoLocation, SampleLineage)
-        .join(GeoLocation, GeoLocation.id == Sample.geo_location_id, isouter=True)
-        .join(SampleLineage, SampleLineage.sample_id == Sample.id, isouter=True)
-        .select_from(Sample)
-        .with_only_columns(text(by_col), func.count().label('count1'))
-        .where(SampleLineage.abundance.is_not(None))
-        .group_by(text(by_col))
-        .order_by(text('count1 desc'))
-    )
+    user_where_clause = ''
     if where is not None and where.strip():
-        user_where_clause = text(parser.parse(where))
-        query = query.where(user_where_clause)
+        user_where_clause = f' and {parser.parse(where)}'
+
+    ColumnNames.assert_name_exists(by_col)
 
     async with get_async_session() as session:
-        res = await session.execute(query)
+        res = await session.execute(
+            text(
+                f'''
+                SELECT {by_col}, 
+                       count(*) AS count1 
+                FROM {TableNames.samples} s 
+                LEFT OUTER JOIN {TableNames.geo_locations} gl ON gl.id = s.{ColumnNames.geo_location_id} 
+                LEFT OUTER JOIN {TableNames.samples_lineages} sl ON sl.{ColumnNames.sample_id} = s.id 
+                WHERE sl.{ColumnNames.abundance} IS NOT NULL
+                      and {WW_SAMPLES_FILTER_SHIM}
+                      {user_where_clause}
+                GROUP BY {by_col}
+                ORDER BY count1 desc
+                '''
+            ),
+        )
         return await _package_count_by_column(res)
 
 
@@ -360,21 +366,26 @@ async def _package_count_by_column(query_result: Result[tuple[Any, int]] | List[
 
 
 async def count_lineages_by_sample_data(where: str | None = None):
-    query = (
-        select(Sample, GeoLocation, SampleLineage, Lineage)
-        .join(GeoLocation, GeoLocation.id == Sample.geo_location_id, isouter=True)
-        .join(SampleLineage, SampleLineage.sample_id == Sample.id, isouter=True)
-        .join(Lineage, Lineage.id == SampleLineage.lineage_id, isouter=True)
-        .select_from(Sample)
-        .with_only_columns(Lineage.lineage_name, func.count().label('count1'))
-        .where(SampleLineage.abundance.is_not(None))
-        .group_by(Lineage.lineage_name)
-        .order_by(text('count1 desc'))
-    )
-    if where is not None and where.strip():
-        user_where_clause = text(parser.parse(where))
-        query = query.where(user_where_clause)
+    user_where_clause = ''
+    if where is not None:
+        user_where_clause = f'and {parser.parse(where)}'
 
     async with get_async_session() as session:
-        res = await session.execute(query)
+        res = await session.execute(
+            text(
+                f'''
+            SELECT l.{ColumnNames.lineage_name}, 
+                   count(*) AS count1
+            FROM {TableNames.samples} s
+            LEFT OUTER JOIN {TableNames.geo_locations} gl ON gl.id = s.{ColumnNames.geo_location_id} 
+            LEFT OUTER JOIN {TableNames.samples_lineages} sl ON sl.{ColumnNames.sample_id} = s.id 
+            LEFT OUTER JOIN {TableNames.lineages} l ON l.id = sl.{ColumnNames.lineage_id}
+            WHERE sl.{ColumnNames.abundance} IS NOT NULL
+                  and {WW_SAMPLES_FILTER_SHIM}
+                  {user_where_clause} 
+            GROUP BY l.{ColumnNames.lineage_name} 
+            ORDER BY count1 desc;
+            '''
+            )
+        )
         return await _package_count_by_column(res)

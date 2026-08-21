@@ -9,6 +9,11 @@ from sqlalchemy.sql.schema import PrimaryKeyConstraint
 from utils.constants import ConstraintNames, TableNames
 
 
+# These models are no longer used to set up the database schema,
+# but a few of them are still used in parsers/ingestion.
+# It makes sense to keep a model for samples and maybe geo locations,
+# but the others should be phased out rather than maintained.
+
 class Base(DeclarativeBase, AsyncAttrs):
     pass
 

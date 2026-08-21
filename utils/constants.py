@@ -176,6 +176,12 @@ class PgIdentifiers(object):
                     if len(value) > 63:
                         raise ValueError(f'Postgres identifier should have length <= 63 bytes: {value}')
 
+    @classmethod
+    def assert_name_exists(cls, s: str):
+        legit_names = {v for k, v in cls.__dict__.items() if not k.startswith('__')}
+        if not s in legit_names:
+            raise ValueError(f'Name not listed among pg identifiers: {s}')
+
 
 class TableNames(PgIdentifiers):
     samples = 'samples'
