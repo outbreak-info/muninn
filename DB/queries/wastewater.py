@@ -1,8 +1,9 @@
 from typing import List, Any, Dict
 
-from sqlalchemy import text, Result
+from sqlalchemy import Result
 
 from DB.engine import get_async_session
+from DB.textutils import text
 from api.models import LineageAbundanceWithSampleInfo, AverageLineageAbundanceInfo, SampleInfo
 from parser.parser import parser
 from utils.constants import DEFAULT_MAX_SPAN_DAYS, ColumnNames, TableNames
