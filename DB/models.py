@@ -4,9 +4,9 @@ from typing import List
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase, relationship
-from sqlalchemy.sql.schema import Index, PrimaryKeyConstraint
+from sqlalchemy.sql.schema import PrimaryKeyConstraint
 
-from utils.constants import ConstraintNames, TableNames, IndexNames
+from utils.constants import ConstraintNames, TableNames
 
 
 class Base(DeclarativeBase, AsyncAttrs):
@@ -133,58 +133,8 @@ class AminoAcid(Base):
         ]
     )
 
-    r_mutation_translations: Mapped[List['MutationTranslation']] = relationship(back_populates='r_amino_acid')
-    r_intra_host_translations: Mapped[List['IntraHostTranslation']] = relationship(back_populates='r_amino_acid')
     r_pheno_metric_values: Mapped[List['PhenotypeMetricValues']] = relationship(back_populates='r_amino_acid')
     r_annotations_amino_acids: Mapped[List['AnnotationAminoAcid']] = relationship(back_populates='r_amino_acid')
-
-
-class MutationTranslation(Base):
-    __tablename__ = TableNames.cns_samples_by_amino_acid
-
-    sequence_id: Mapped[int] = mapped_column(sa.ForeignKey(f'{TableNames.sequences}.id'), nullable=False)
-    amino_acid_id: Mapped[int] = mapped_column(
-        sa.ForeignKey(
-            f'{TableNames.amino_acids}.id',
-            name=ConstraintNames.fk_cns_samples_by_amino_acid_amino_acid_id_amino_acids
-        ),
-        nullable=False
-    )
-
-    __table_args__ = tuple(
-        [
-            PrimaryKeyConstraint(sequence_id, amino_acid_id, name=ConstraintNames.pk_cns_samples_by_amino_acid),
-            Index(IndexNames.ix_mutation_translations_amino_acid_id_sequence_id, amino_acid_id, sequence_id)
-        ]
-    )
-    r_amino_acid: Mapped['AminoAcid'] = relationship(back_populates='r_mutation_translations')
-
-
-class IntraHostTranslation(Base):
-    __tablename__ = TableNames.intra_host_translations
-
-    sample_id: Mapped[int] = mapped_column(
-        sa.ForeignKey(
-            f'{TableNames.samples}.id',
-            name=ConstraintNames.fk_intra_host_translations_sample_id_samples
-        ),
-        nullable=False
-    )
-    amino_acid_id: Mapped[int] = mapped_column(
-        sa.ForeignKey(
-            f'{TableNames.amino_acids}.id',
-            name=ConstraintNames.fk_intra_host_translations_amino_acid_id_amino_acids
-        ),
-        nullable=False
-    )
-
-    __table_args__ = tuple(
-        [
-            PrimaryKeyConstraint(sample_id, amino_acid_id, name=ConstraintNames.pk_intra_host_translations),
-            Index(IndexNames.ix_intra_host_translations_amino_acid_id_sample_id, amino_acid_id, sample_id)
-        ]
-    )
-    r_amino_acid: Mapped['AminoAcid'] = relationship(back_populates='r_intra_host_translations')
 
 
 class GeoLocation(Base):

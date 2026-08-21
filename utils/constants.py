@@ -199,8 +199,6 @@ class TableNames(PgIdentifiers):
     lineages_deep_children = 'lineages_deep_children'  # actually a view.
     cns_samples_by_amino_acid = 'cns_samples_by_amino_acid'
     cns_amino_acids_by_sample = 'cns_amino_acids_by_sample'
-    intra_host_translations = 'intra_host_translations'
-    sequences = 'sequences'
     ih_samples_by_allele = 'ih_samples_by_allele'
     ih_samples_by_amino_acid = 'ih_samples_by_amino_acid'
 
@@ -219,7 +217,6 @@ class ColumnNames(PgIdentifiers):
     effect_id = 'effect_id'
     paper_id = 'paper_id'
     annotation_id = 'annotation_id'
-    sequence_id = 'sequence_id'
 
     # samples
     accession = 'accession'
@@ -338,8 +335,7 @@ class ConstraintNames(PgIdentifiers):
     pk_annotations_amino_acids = f'pk_{TableNames.annotations_amino_acids}'
     pk_lineages_immediate_children = f'pk_{TableNames.lineages_immediate_children}'
     pk_cns_samples_by_amino_acid = f'pk_{TableNames.cns_samples_by_amino_acid}'
-    pk_intra_host_translations = f'pk_{TableNames.intra_host_translations}'
-    pk_sequences = f'pk_{TableNames.sequences}' # rm
+
     pk_cns_alleles_by_sample = f'pk_{TableNames.cns_alleles_by_sample}'
     pk_cns_amino_acids_by_sample = f'pk_{TableNames.cns_amino_acids_by_sample}'
     pk_ih_samples_by_allele = f'pk_{TableNames.ih_samples_by_allele}'
@@ -347,7 +343,6 @@ class ConstraintNames(PgIdentifiers):
 
     # samples
     uq_samples_accession = 'uq_samples_accession'
-    fk_samples_sequence_id_sequences = 'fk_samples_sequence_id_sequences'
     fk_samples_geo_location_id_geo_locations = 'fk_samples_geo_location_id_geo_locations'
     ck_samples_retraction_values_existence_in_harmony = 'ck_samples_retraction_values_existence_in_harmony'
     ck_samples_collection_start_and_end_both_absent_or_both_present = 'ck_samples_collection_start_and_end_both_absent_or_both_present'
@@ -385,10 +380,6 @@ class ConstraintNames(PgIdentifiers):
     # consensus amino acids by sample
     fk_cns_amino_acids_by_sample_sample_id_samples = 'fk_cns_amino_acids_by_sample_sample_id_samples'
 
-    # intra host translations
-    fk_intra_host_translations_amino_acid_id_amino_acids = 'fk_intra_host_translations_amino_acid_id_amino_acids'
-    fk_intra_host_translations_sample_id_samples = 'fk_intra_host_translations_sample_id_samples'
-
     # phenotype metrics tables
     uq_phenotype_metrics_name = 'uq_phenotype_metrics_name'
     ck_phenotype_metrics_name_not_empty = 'ck_phenotype_metrics_name_not_empty'
@@ -417,12 +408,6 @@ class ConstraintNames(PgIdentifiers):
 
 
 class IndexNames(PgIdentifiers):
-    # mutation translations
-    ix_mutation_translations_amino_acid_id_sequence_id = 'ix_mutation_translations_amino_acid_id_sequence_id'  # todo rm
-
-    # intra-host translations
-    ix_intra_host_translations_amino_acid_id_sample_id = 'ix_intra_host_translations_amino_acid_id_sample_id'
-
     # samples lineages
     ix_samples_lineages_lineage_id = 'ix_samples_lineages_lineage_id'
 
