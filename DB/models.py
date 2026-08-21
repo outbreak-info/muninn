@@ -2,59 +2,15 @@ from datetime import datetime, date
 from typing import List
 
 import sqlalchemy as sa
-from sqlalchemy import UniqueConstraint, CheckConstraint, MetaData
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase, relationship
 from sqlalchemy.sql.schema import Index, PrimaryKeyConstraint
 
-from utils.constants import ConstraintNames, TableNames, ColumnNames, MiscDbNames, IndexNames
+from utils.constants import ConstraintNames, TableNames, IndexNames
 
-
-#########################################################################################
-# NOTE:
-# Alembic DOES NOT autogenerate check constraints!
-# Or, more accurately, it doesn't detect when they've changed. It only creates them when
-# it creates a table.
-# ==> If you add a check constraint, you must add it to the migration manually! <==
-# I've created a little system (or maybe an eldrich horror) that makes this a bit easier:
-#
-#         for model in [<models with changed check constraints>]:
-#             for name, table, sqltext in model.get_check_constraints_for_alembic():
-#                 op.execute(f'ALTER TABLE {table} DROP CONSTRAINT IF EXISTS "{name}"')
-#                 op.create_check_constraint(name, table, sqltext)
-#
-# Also, don't use unique=True, it will create an unnamed constraint
-#########################################################################################
-
-# Leaving this note in case it's needed again
-# this SO post explains how to add a missing dialect-specific feature to sqlalchemy
-# https://stackoverflow.com/a/77475375
 
 class Base(DeclarativeBase, AsyncAttrs):
-    metadata = MetaData(
-        # This will automatically name constraints, but it's still best to name them manually
-        # It's possible to get conflicting names from this convention
-        # note: constraint names (like all pg identifiers) are limited to 63 bytes
-        naming_convention={
-            "ix": "ix_%(column_0_label)s",
-            "uq": "uq_%(table_name)s_%(column_0_name)s",
-            # you always have to name check constraints: they should be named: ck_<table>_<descriptive name>
-            "ck": "%(constraint_name)s",
-            "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
-            "pk": "pk_%(table_name)s"
-        }
-    )
-
-    @classmethod
-    def get_check_constraints_for_alembic(cls) -> List[tuple[str, str, str]]:
-        checks = []
-        for arg in cls.__table_args__:
-            if type(arg) != CheckConstraint:
-                continue
-            arg: CheckConstraint
-
-            checks.append((arg.name, cls.__tablename__, arg.sqltext.text))
-        return checks
+    pass
 
 
 class Sample(Base):
@@ -117,20 +73,6 @@ class Sample(Base):
     __table_args__ = tuple(
         [
             PrimaryKeyConstraint('id', name=ConstraintNames.pk_samples),
-            UniqueConstraint(ColumnNames.accession, name=ConstraintNames.uq_samples_accession),
-            CheckConstraint(
-                f'(not {ColumnNames.is_retracted} and {ColumnNames.retraction_detected_date} is null) or '
-                f'({ColumnNames.is_retracted} and {ColumnNames.retraction_detected_date} is not null)',
-                name=ConstraintNames.ck_samples_retraction_values_existence_in_harmony
-            ),
-            CheckConstraint(
-                f'num_nulls({ColumnNames.collection_start_date}, {ColumnNames.collection_end_date}) in (0, 2)',
-                name=ConstraintNames.ck_samples_collection_start_and_end_both_absent_or_both_present
-            ),
-            CheckConstraint(
-                f'{ColumnNames.collection_start_date} <= {ColumnNames.collection_end_date}',
-                name=ConstraintNames.ck_samples_collection_start_not_after_collection_end
-            )
         ]
     )
 
@@ -188,34 +130,6 @@ class AminoAcid(Base):
     __table_args__ = tuple(
         [
             PrimaryKeyConstraint('id', name=ConstraintNames.pk_amino_acids),
-            CheckConstraint(
-                f"{ColumnNames.gff_feature} <> ''",
-                name=ConstraintNames.ck_amino_acids_gff_feature_not_empty
-            ),
-            CheckConstraint(
-                f"{ColumnNames.ref_aa} <> ''",
-                name=ConstraintNames.ck_amino_acids_ref_aa_not_empty
-            ),
-            CheckConstraint(
-                f"{ColumnNames.alt_aa} <> ''",
-                name=ConstraintNames.ck_amino_acids_alt_aa_not_empty
-            ),
-            CheckConstraint(
-                f"{ColumnNames.alt_codon} <> ''",
-                name=ConstraintNames.ck_amino_acids_alt_codon_not_empty
-            ),
-            CheckConstraint(
-                f"{ColumnNames.ref_codon} <> ''",
-                name=ConstraintNames.ck_amino_acids_ref_codon_not_empty
-            ),
-            UniqueConstraint(
-                ColumnNames.position_aa,
-                ColumnNames.alt_aa,
-                ColumnNames.gff_feature,
-                ColumnNames.alt_codon,
-                name=ConstraintNames.uq_amino_acids_gff_feature_position_alt_aa_alt_codon,
-                postgresql_include=['id']
-            )
         ]
     )
 
@@ -288,14 +202,6 @@ class GeoLocation(Base):
     __table_args__ = tuple(
         [
             PrimaryKeyConstraint('id', name=ConstraintNames.pk_geo_locations),
-            UniqueConstraint(
-                ColumnNames.country_name,
-                ColumnNames.admin1_name,
-                ColumnNames.admin2_name,
-                ColumnNames.admin3_name,
-                postgresql_nulls_not_distinct=True,
-                name=ConstraintNames.uq_geo_locations_division_names
-            )
         ]
     )
 
@@ -313,15 +219,6 @@ class PhenotypeMetric(Base):
     __table_args__ = tuple(
         [
             PrimaryKeyConstraint('id', name=ConstraintNames.pk_phenotype_metrics),
-            UniqueConstraint(ColumnNames.phenotype_metric_name, name=ConstraintNames.uq_phenotype_metrics_name),
-            CheckConstraint(
-                f"{ColumnNames.phenotype_metric_name} <> ''",
-                name=ConstraintNames.ck_phenotype_metrics_name_not_empty
-            ),
-            CheckConstraint(
-                f"{ColumnNames.phenotype_metric_assay_type} <> ''",
-                name=ConstraintNames.ck_phenotype_metrics_assay_type_not_empty
-            )
         ]
     )
 
@@ -354,11 +251,6 @@ class PhenotypeMetricValues(Base):
     __table_args__ = tuple(
         [
             PrimaryKeyConstraint('id', name=ConstraintNames.pk_phenotype_metric_values),
-            UniqueConstraint(
-                ColumnNames.phenotype_metric_id,
-                ColumnNames.amino_acid_id,
-                name=ConstraintNames.uq_phenotype_metric_values_metric_and_amino_acid
-            )
         ]
     )
 
@@ -374,7 +266,6 @@ class LineageSystem(Base):
     __table_args__ = tuple(
         [
             PrimaryKeyConstraint('id', name=ConstraintNames.pk_lineage_systems),
-            UniqueConstraint(ColumnNames.lineage_system_name, name=ConstraintNames.uq_lineage_systems_name),
         ]
     )
 
@@ -390,11 +281,6 @@ class Lineage(Base):
     __table_args__ = tuple(
         [
             PrimaryKeyConstraint('id', name=ConstraintNames.pk_lineages),
-            UniqueConstraint(
-                ColumnNames.lineage_system_id,
-                ColumnNames.lineage_name,
-                name=ConstraintNames.uq_lineages_name_uq_within_system
-            )
         ]
     )
 
@@ -415,17 +301,6 @@ class SampleLineage(Base):
     __table_args__ = tuple(
         [
             PrimaryKeyConstraint('id', name=ConstraintNames.pk_samples_lineages),
-            UniqueConstraint(
-                ColumnNames.sample_id,
-                ColumnNames.lineage_id,
-                ColumnNames.is_consensus_call,
-                name=ConstraintNames.uq_samples_lineages_sample_id_lineage_id_is_consensus_call
-            ),
-            CheckConstraint(
-                f'({ColumnNames.abundance} is null) = {ColumnNames.is_consensus_call}',
-                name=ConstraintNames.ck_samples_lineages_has_abundance_xor_consensus
-            ),
-            Index(IndexNames.ix_samples_lineages_lineage_id, lineage_id)
         ]
     )
 
@@ -443,15 +318,6 @@ class LineageImmediateChild(Base):
     __table_args__ = tuple(
         [
             PrimaryKeyConstraint('id', name=ConstraintNames.pk_lineages_immediate_children),
-            UniqueConstraint(
-                ColumnNames.parent_id,
-                ColumnNames.child_id,
-                name=ConstraintNames.uq_lineages_immediate_children_parent_child
-            ),
-            CheckConstraint(
-                f'{ColumnNames.parent_id} <> {ColumnNames.child_id}',
-                name=ConstraintNames.ck_lineages_immediate_children_no_self_parenthood
-            )
         ]
     )
 
@@ -468,12 +334,6 @@ class Paper(Base):
     __table_args__ = tuple(
         [
             PrimaryKeyConstraint('id', name=ConstraintNames.pk_papers),
-            UniqueConstraint(
-                ColumnNames.authors,
-                ColumnNames.publication_year,
-                ColumnNames.title,
-                name=ConstraintNames.uq_papers_authors_title_year
-            )
         ]
     )
 
@@ -490,10 +350,6 @@ class Effect(Base):
     __table_args__ = tuple(
         [
             PrimaryKeyConstraint('id', name=ConstraintNames.pk_effects),
-            UniqueConstraint(
-                ColumnNames.detail,
-                name=ConstraintNames.uq_effects_detail
-            )
         ]
     )
 
@@ -530,11 +386,6 @@ class AnnotationPaper(Base):
     __table_args__ = tuple(
         [
             PrimaryKeyConstraint('id', name=ConstraintNames.pk_annotations_papers),
-            UniqueConstraint(
-                ColumnNames.paper_id,
-                ColumnNames.annotation_id,
-                name=ConstraintNames.uq_annotations_papers_annotation_paper_pair
-            )
         ]
     )
 
@@ -558,126 +409,8 @@ class AnnotationAminoAcid(Base):
     __table_args__ = tuple(
         [
             PrimaryKeyConstraint('id', name=ConstraintNames.pk_annotations_amino_acids),
-            UniqueConstraint(
-                ColumnNames.amino_acid_id,
-                ColumnNames.annotation_id,
-                name=ConstraintNames.uq_annotations_amino_acids_pair
-            )
         ]
     )
 
     r_annotation: Mapped['Annotation'] = relationship(back_populates='r_annotations_amino_acids')
     r_amino_acid: Mapped['AminoAcid'] = relationship(back_populates='r_annotations_amino_acids')
-
-
-class SqlSnippets:
-    # language=SQL
-    create_view_lineages_deep_children = f'''
-    create or replace view {TableNames.lineages_deep_children} as
-    with recursive deep_children(parent_id, child_id) as (
-        select lic.{ColumnNames.parent_id},
-               lic.{ColumnNames.child_id}
-        from {TableNames.lineages_immediate_children} lic
-        union all
-        select dc.parent_id,
-               lic.{ColumnNames.child_id}
-        from deep_children dc
-        inner join {TableNames.lineages_immediate_children} lic on dc.child_id = lic.{ColumnNames.parent_id}
-    )
-    select {ColumnNames.parent_id}, {ColumnNames.child_id}
-    from deep_children;
-    '''
-
-    drop_view_lineages_deep_children = f'drop view if exists {TableNames.lineages_deep_children};'
-
-    create_function_check_cyclic_lineage = f'''
-    create or replace function {MiscDbNames.check_cyclic_lineage}()
-        returns trigger as
-    $$
-    declare
-        num_rows integer;
-    begin
-        select count(*)
-        into num_rows
-        from {TableNames.lineages_deep_children}
-        where 
-            {ColumnNames.child_id} = new.{ColumnNames.parent_id} 
-            and {ColumnNames.parent_id} = new.{ColumnNames.child_id};
-        if num_rows > 0 then
-            raise exception 'cyclic lineage hierarchy';
-        end if;
-        return new;
-    end;
-    $$
-        language plpgsql;
-    '''
-
-    drop_function_check_cyclic_lineage = f'drop function if exists {MiscDbNames.check_cyclic_lineage};'
-
-    create_trigger_check_cyclic_lineage = f'''
-    do
-    $$
-        begin
-            if not exists (
-                select *
-                from information_schema.triggers
-                where event_object_table = '{TableNames.lineages_immediate_children}'
-                  and trigger_name = '{MiscDbNames.check_cyclic_lineage_trigger}'
-            )
-            then
-                create trigger {MiscDbNames.check_cyclic_lineage_trigger}
-                    before insert or update
-                    on {TableNames.lineages_immediate_children}
-                    for each row
-                execute procedure {MiscDbNames.check_cyclic_lineage}();
-            end if;
-        end;
-    $$;
-    '''
-
-    drop_trigger_check_cyclic_lineage = f'drop trigger if exists {MiscDbNames.check_cyclic_lineage_trigger} on {TableNames.lineages_immediate_children};'
-
-    create_function_check_cross_system_lineage = f'''
-    create or replace function {MiscDbNames.check_cross_system_lineage}()
-        returns trigger as
-    $$
-    declare
-        num_systems int;
-    begin
-        select count(distinct({ColumnNames.lineage_system_id}))
-        into num_systems
-        from {TableNames.lineages} l
-        where l.id = new.{ColumnNames.parent_id} or l.id = new.{ColumnNames.child_id};
-        if num_systems > 1 then
-            raise exception 'parent and child are from different lineage systems';
-        end if;
-        return new;
-    end;
-    $$
-        language plpgsql;
-    '''
-
-    drop_function_check_cross_system_lineage = f'drop function if exists {MiscDbNames.check_cross_system_lineage};'
-
-    create_trigger_check_cross_system_lineage = f'''
-    do
-    $$
-        begin
-            if not exists (
-                select *
-                from information_schema.triggers
-                where event_object_table = '{TableNames.lineages_immediate_children}'
-                  and trigger_name = '{MiscDbNames.check_cross_system_lineage_trigger}'
-            )
-            then
-                create trigger {MiscDbNames.check_cross_system_lineage_trigger}
-                    before insert or update
-                    on {TableNames.lineages_immediate_children}
-                    for each row
-                execute procedure {MiscDbNames.check_cross_system_lineage}();
-            end if;
-        end;
-    $$;
-    '''
-
-    drop_trigger_check_cross_system_lineage = f'drop trigger if exists {MiscDbNames.check_cross_system_lineage_trigger} on {TableNames.lineages_immediate_children};'
