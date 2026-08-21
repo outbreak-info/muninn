@@ -1,6 +1,6 @@
 from typing import List
 
-from sqlalchemy import text
+from DB.textutils import text
 
 from DB.engine import get_async_session
 from DB.queries.helpers import get_ih_table_and_change_cols

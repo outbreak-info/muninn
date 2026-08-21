@@ -1,6 +1,6 @@
 from typing import Set, List
 
-from sqlalchemy.sql.expression import text
+from DB.textutils import text
 
 from DB.engine import get_async_session
 from utils.constants import ColumnNames, TableNames

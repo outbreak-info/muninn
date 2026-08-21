@@ -1,7 +1,7 @@
 from collections import defaultdict
 from typing import List, Dict
 
-from sqlalchemy import text
+from DB.textutils import text
 
 from DB.engine import get_async_session
 from api.models import VariantMutationLagInfo

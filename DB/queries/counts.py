@@ -1,8 +1,9 @@
 from typing import List, Any, Dict
 
-from sqlalchemy import text, Result
+from sqlalchemy import Result
 
 from DB.engine import get_async_session
+from DB.textutils import text
 from DB.queries.helpers import get_ih_table_and_change_cols
 from DB.queries.date_count_helpers import get_extract_clause, get_group_by_clause, get_order_by_cause, \
     MID_COLLECTION_DATE_CALCULATION

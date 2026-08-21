@@ -5,7 +5,7 @@ from os import path
 from typing import Set, List
 
 from sqlalchemy.ext.asyncio.session import AsyncSession
-from sqlalchemy.sql.expression import text
+from DB.textutils import text
 
 from DB.engine import get_async_write_session, get_async_session
 from DB.inserts.file_parsers.file_parser import FileParser

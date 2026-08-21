@@ -1,4 +1,4 @@
-from sqlalchemy.sql.expression import text
+from DB.textutils import text
 
 from DB.engine import get_async_write_session
 from DB.structure.utils import run_sql_file

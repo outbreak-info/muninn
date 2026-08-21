@@ -1,7 +1,7 @@
 import difflib
 from typing import List, Type
 
-from sqlalchemy import text
+from DB.textutils import text
 
 from api.models import RegionAndGffFeatureInfo
 from DB.engine import get_async_session

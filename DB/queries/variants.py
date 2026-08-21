@@ -1,6 +1,6 @@
 from typing import Dict, List
 
-from sqlalchemy import text
+from DB.textutils import text
 
 from DB.engine import get_async_session
 from DB.queries.date_count_helpers import get_extract_clause, get_group_by_clause, get_order_by_cause, \
