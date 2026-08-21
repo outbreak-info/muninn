@@ -2,12 +2,12 @@ from csv import DictReader
 from enum import Enum
 from typing import Set
 
-from DB.inserts.amino_acids import find_amino_acid, find_equivalent_amino_acids
+from DB.inserts.amino_acids import find_equivalent_amino_acids
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.phenotype_measurement_results import insert_pheno_measurement_result
 from DB.inserts.phenotype_metrics import find_or_insert_metric
 from DB.models import PhenotypeMetricValues, PhenotypeMetric, AminoAcid
-from utils.constants import PhenotypeMetricAssayTypes, DefaultGffFeaturesByRegion
+from utils.constants import PhenotypeMetricAssayTypes
 from utils.csv_helpers import get_value, int_from_decimal_str
 from utils.errors import NotFoundError
 

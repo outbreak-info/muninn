@@ -104,7 +104,6 @@ class NtOrAa(Enum):
         return str(self.value)
 
 
-# TODO: Check if this the best place to keep this.
 class WastewaterGeoBin(Enum):
     """
     Geographic grouping for the averaged wastewater abundances. v0 took this as a bare string and

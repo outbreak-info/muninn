@@ -111,6 +111,7 @@ async def get_mutation_sample_count_by_aa(change: str) -> List[MutationCountInfo
         for r in res
     ]
 
+
 async def get_pheno_values_and_mutation_counts(
     pheno_metric_name: str, region: str, include_refs: bool, where: str | None
 ) -> List["VariantCountPhenoScoreInfo"]:
@@ -177,7 +178,6 @@ async def get_pheno_values_and_mutation_counts(
     return out_data
 
 
-# TODO: Using "region" as the parameter for "gff_feature" for now.
 async def get_pheno_values_and_variant_counts(
     pheno_metric_name: str, region: str, include_refs: bool, where: str | None
 ) -> List["VariantCountPhenoScoreInfo"]:

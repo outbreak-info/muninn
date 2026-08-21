@@ -79,7 +79,6 @@ class SamplesParser(FileParser):
                         allow_none=True
                     )
                     if retraction_detected_date is not None:
-                        # todo: handle the tz better
                         retraction_detected_date = dateutil.parser.isoparse(retraction_detected_date + 'Z')
 
                     sample = Sample(
