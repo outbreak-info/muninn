@@ -1,5 +1,3 @@
-version: "3.8"
-
 name: "${MUNINN_INSTANCE_NAME}_project"
 
 services:
@@ -22,7 +20,7 @@ services:
       - "-c"
       - "config_file=/docker-entrypoint-initdb.d/${MUNINN_PG_CONFIG_NAME}.postgresql.conf"
     healthcheck:
-      test: pg_isready -U flu_reader -d flu
+      test: "pg_isready -U ${MUNINN_DB_READONLY_USER} -d ${MUNINN_DB_NAME}"
       interval: 2s
       timeout: 3s
       retries: 15
@@ -40,6 +38,31 @@ services:
         target: /muninn/data
         read_only: true
     shm_size: 8g
+
+  bouncer:
+    container_name: "${MUNINN_INSTANCE_NAME}_bouncer"
+    build:
+      context: .
+      dockerfile: pgbouncer.dockerfile
+    ports:
+      - "${MUNINN_DB_BOUNCER_PORT}:6432"
+    environment:
+      MUNINN_DB_SUPERUSER: "${MUNINN_DB_SUPERUSER}"
+      MUNINN_DB_READONLY_USER: "${MUNINN_DB_READONLY_USER}"
+      MUNINN_DB_READONLY_PASSWORD: "${MUNINN_DB_READONLY_PASSWORD}"
+      MUNINN_DB_HOST: "${MUNINN_DB_HOST}"
+      MUNINN_DB_NAME: "${MUNINN_DB_NAME}"
+      MUNINN_DB_PORT: "${MUNINN_DB_PORT_FOR_BOUNCER}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ./entrypoint.sh
+    healthcheck:
+      test: "pg_isready -p 6432 -h localhost -U ${MUNINN_DB_READONLY_USER}"
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
   server:
     container_name: "${MUNINN_INSTANCE_NAME}_server"
     build:
@@ -51,20 +74,25 @@ services:
         target: /home/muninn/data
         read_only: false
     ports:
-      - "${MUNINN_SERVER_PORT}:8000"
+      - "${MUNINN_SERVER_PORT:?error}:8000"
     environment:
       MUNINN_DB_READONLY_USER: "${MUNINN_DB_READONLY_USER}"
       MUNINN_DB_READONLY_PASSWORD: "${MUNINN_DB_READONLY_PASSWORD}"
       MUNINN_DB_SUPERUSER_PASSWORD: "${MUNINN_DB_SUPERUSER_PASSWORD}"
       MUNINN_DB_SUPERUSER: "${MUNINN_DB_SUPERUSER}"
-      MUNINN_DB_HOST: "${MUNINN_DB_HOST}"
+      MUNINN_DB_HOST: "${MUNINN_DB_BOUNCER_HOST}"
       MUNINN_DB_NAME: "${MUNINN_DB_NAME}"
       MUNINN_DB_PORT: "${MUNINN_DB_PORT_FOR_SERVER}"
       MUNINN_SERVER_DATA_INPUT_DIR: "${MUNINN_SERVER_DATA_INPUT_DIR}"
-    command: bash -c "
-      sleep 30
-      && fastapi run --workers 33 api/main.py
-      "
+    depends_on:
+      bouncer:
+        condition: service_healthy
+    command: fastapi run --workers 20 api/main.py
+    healthcheck:
+      test: "curl localhost:8000/v1/health"
+      interval: 10s
+      timeout: 3s
+      retries: 15
 
 networks:
   default:
