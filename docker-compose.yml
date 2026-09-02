@@ -86,8 +86,8 @@ services:
         condition: service_healthy
     command: fastapi run --workers 20 api/main.py
     healthcheck:
-      test: "curl localhost:8000/docs"
-      interval: 2s
+      test: "curl localhost:8000/v1/health"
+      interval: 10s
       timeout: 3s
       retries: 15
 

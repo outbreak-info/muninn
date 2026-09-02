@@ -171,6 +171,27 @@ async def handle_parsing_error(request: Request, exc: ParsingError):
     return JSONResponse(status_code=400, content={'detail': exc.message})
 
 
+def register_log_filter() -> None:
+    """
+    Avoid cluttering logs with requests to health endpoints
+    """
+
+    class EndpointFilter(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            return (
+                record.args
+                and len(record.args) >= 3
+                and record.args[2] != "/v1/health"
+            )
+
+    logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
+register_log_filter()
+
+
+@router.get('/health')
+async def health():
+    return JSONResponse(status_code=200, content={'alive?': 'you betcha!'})
+
 #############
 # DISCOVERY #
 #############
