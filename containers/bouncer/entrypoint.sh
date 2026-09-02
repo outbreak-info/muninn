@@ -19,6 +19,7 @@ psql -h "$MUNINN_DB_HOST" -p "$MUNINN_DB_PORT" -d "$MUNINN_DB_NAME" -U "$MUNINN_
 chmod 600 /etc/pgbouncer/userlist.txt
 
 # pgbouncer.ini setup
+# Times are in seconds unless otherwise noted
 INI="/etc/pgbouncer/pgbouncer.ini"
 :> "$INI"
 {
@@ -26,15 +27,20 @@ INI="/etc/pgbouncer/pgbouncer.ini"
   echo "${MUNINN_DB_NAME} = host=${MUNINN_DB_HOST} port=${MUNINN_DB_PORT} dbname=${MUNINN_DB_NAME}";
   echo
   echo "[pgbouncer]";
-  echo "listen_addr=0.0.0.0";
-  echo "listen_port=6432";
-  echo "auth_type=scram-sha-256";
-  echo "auth_file=/etc/pgbouncer/userlist.txt"
+  echo "listen_addr = 0.0.0.0";
+  echo "listen_port = 6432";
+  echo "auth_type = scram-sha-256";
+  echo "auth_file = /etc/pgbouncer/userlist.txt"
   echo
-  echo "pool_mode=transaction";
-  echo "max_client_conn=1000"; #todo
-  echo "server_idle_timeout=300";
-  echo ""
+  echo "pool_mode = transaction";
+  echo "max_client_conn = 200";
+  echo "server_idle_timeout = 300";
+  echo "default_pool_size = 18";
+  echo "reserve_pool_size = 4";
+  echo "reserve_pool_timeout = 3";
+  echo "server_lifetime = 1200";
+  echo "query_wait_timeout = 30";
+
 } >> "$INI"
 
 exec pgbouncer /etc/pgbouncer/pgbouncer.ini

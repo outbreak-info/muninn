@@ -7,8 +7,10 @@ from sqlalchemy.ext.asyncio.engine import AsyncEngine
 from utils.constants import Env
 
 STATEMENT_TIMEOUT_MS = 600_000
-POOL_SIZE = 10
-MAX_OVERFLOW = (90 - (2 * POOL_SIZE)) / 2
+POOL_SIZE = 2
+MAX_OVERFLOW = 3
+POOL_TIMEOUT = 10
+POOL_RECYCLE = 1800
 
 
 async def get_asyncpg_connection():
@@ -55,14 +57,18 @@ def create_pg_engine():
 
 async_write_engine: AsyncEngine = create_async_engine(
     get_url(async_=True, readonly=False),
-    pool_size=POOL_SIZE,
-    max_overflow=MAX_OVERFLOW
+    pool_size=1,
+    max_overflow=0,
+    pool_timeout=POOL_TIMEOUT,
+    pool_recycle=POOL_RECYCLE,
 )
 
 async_engine: AsyncEngine = create_async_engine(
     get_url(async_=True),
     pool_size=POOL_SIZE,
     max_overflow=MAX_OVERFLOW,
+    pool_timeout=POOL_TIMEOUT,
+    pool_recycle=POOL_RECYCLE,
     connect_args={'server_settings': {'statement_timeout': str(STATEMENT_TIMEOUT_MS)}}
 )
 
