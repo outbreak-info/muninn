@@ -65,6 +65,8 @@ The server will send all its database requests through PgBouncer, which serves a
     ```
     - Change the value for `MUNINN_SERVER_DATA_INPUT_DIR` to allow the server to read input data from a host directory.
     - For local testing, `MUNINN_PG_DATA_BIND_DIR` does not need to be set. 
+    - The names of the database users and database do not matter, there's no need to change them, even if you're not storing flu data.
+      If you do change them, it's convenient if the `MUNINN_DB_SUPERUSER` and `MUNINN_DB_NAME` have the same value.
 3. Run docker compose to start the database and api containers.  
     `docker-compose -f docker-compose.yml up -d --build`
 4. Update the database schema:  
