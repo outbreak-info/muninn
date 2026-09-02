@@ -4,24 +4,53 @@ Muninn is a database system designed to store consensus and intra-host mutation 
 
 ## Containerized Setup
 
+The standard and easiest way to run Muninn is through docker compose.
+The compose file defines three services, each of which will run in their own container:
+- `postgres` is the database 
+- `bouncer` is PgBouncer, which handles connection pooling for the database.
+- `server` is the fastapi server that handles web requests
+
+The server will send all its database requests through PgBouncer, which serves as a wrapper around the actual Postgres instance.
+
 1. Clone repository and cd into it.
 2. Create `.env` file.
     ```shell
     export MUNINN_DB_READONLY_USER="flu_reader"
-    export MUNINN_DB_READONLY_PASSWORD="default-flu-reader"
+    export MUNINN_DB_READONLY_PASSWORD="default-flu-reader" # change this please!
     export MUNINN_DB_SUPERUSER="flu"
-    export MUNINN_DB_SUPERUSER_PASSWORD="default-flu"
+    export MUNINN_DB_SUPERUSER_PASSWORD="default-flu" # change this please!
     export MUNINN_DB_NAME="flu"
-    
-    # Use "postgres" when running on same host (linked via docker network)
-    export MUNINN_DB_HOST="postgres"
-    export MUNINN_DB_PORT="5432"
-    # If running on the same host (and using docker networking) this should be 5432 regardless of the value of MUNINN_DB_PORT
-    export MUNINN_DB_PORT_FOR_SERVER="5432"
    
+    # These settings control the hostnames services will use for each other.
+    # When all services are running in docker on the same host, they will connect
+    # via the docker network, and the docker service names should be used. 
+    # (See the compose file for the service names.)
+    # Otherwise use the name of the remote host.
+    # These default values assume use of docker network.
+    export MUNINN_DB_HOST="postgres"
+    export MUNINN_DB_BOUNCER_HOST="bouncer"
+   
+    # Internally, the containers always listen on the same ports:
+    # postgres: 5432 
+    # bouncer:  6432
+    # server:   8000
+    # A host port is mapped to each of these to allow the container to listen for 
+    # external traffic. These settings control which host ports will be used. 
+    # Choose values that avoid conflict with other processes running on the host.
+    export MUNINN_DB_PORT="5432"
+    export MUNINN_DB_BOUNCER_PORT="6432"
     export MUNINN_SERVER_PORT="8000"
+
+    # These settings control what ports the bouncer will use to contact postgres 
+    # and the server will use to contact the bouncer. When connected via the 
+    # docker network, the internal port for the target service should be used
+    # Otherwise use host ports configured above.
+    # These default values assume use of docker network.
+    export MUNINN_DB_PORT_FOR_BOUNCER="5432"     
+    export MUNINN_DB_PORT_FOR_SERVER="6432"
     
-    # this will be mounted to the server container as /home/muninn/data
+    # this will be mounted to the server container as /home/muninn/data 
+    # and to the postgres container as /muninn/data
     export MUNINN_SERVER_DATA_INPUT_DIR="/dev/null"
     
     # this controls which config file is applied to postgres
@@ -29,24 +58,19 @@ Muninn is a database system designed to store consensus and intra-host mutation 
     
     # this will be used as a prefix to the container names
     export MUNINN_INSTANCE_NAME="flu_db"
-   
+    
     # this is not used in the default docker-compose file
     # directory to be mounted to store postgres data
     export MUNINN_PG_DATA_BIND_DIR="/dev/null"
     ```
     - Change the value for `MUNINN_SERVER_DATA_INPUT_DIR` to allow the server to read input data from a host directory.
-    - If the server and DB are running on the same host, they will talk through the docker network. 
-    In that case, `MUNINN_DB_PORT_FOR_SERVER` should be 5432, regardless of the value of `MUNINN_DB_PORT`, 
-    and `MUNINN_DB_HOST` should be `"postgres"`, which is the name of the database service within docker.
-    - If the DB and server are on different hosts, then `MUNINN_DB_HOST` should be the DB host, and `MUNINN_DB_PORT_FOR_SERVER` must be the same as `MUNINN_DB_PORT`
     - For local testing, `MUNINN_PG_DATA_BIND_DIR` does not need to be set. 
-3. Run docker compose to start the database and api containers.
-    1. `docker-compose -f docker-compose.yml up -d --build`
-    2. This will start up two containers, `flu_db_pg` for postgres, and `flu_db_server` for the webserver.
-    3. The server container will automatically start fastAPI.
-    4. Use `docker logs flu_db_server` to see server logs.
-4. Update the database schema: `docker exec -d flu_db_server muninn_schema_update`
-5. Load or update data:  `docker exec -d flu_db_server muninn_ingest_all --auto --archive_in <name of archive>`
+3. Run docker compose to start the database and api containers.  
+    `docker-compose -f docker-compose.yml up -d --build`
+4. Update the database schema:  
+    `docker exec -d flu_db_server muninn_schema_update`
+5. Load or update data:  
+   `docker exec -d flu_db_server muninn_ingest_all --auto --archive_in <name of archive>`
     1. Input data must be placed in `MUNINN_SERVER_DATA_INPUT_DIR` on the host machine, in either `.zip` or `.tar.gz` format.
            For details read ingestion script: `containers/server/bin/muninn_ingest_all`
     2. This process will take 15-45 minutes to finish, but existing records will be updated in-place, and the webserver
