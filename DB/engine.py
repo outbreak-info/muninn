@@ -69,7 +69,6 @@ async_engine: AsyncEngine = create_async_engine(
     max_overflow=MAX_OVERFLOW,
     pool_timeout=POOL_TIMEOUT,
     pool_recycle=POOL_RECYCLE,
-    connect_args={'server_settings': {'statement_timeout': str(STATEMENT_TIMEOUT_MS)}}
 )
 
 
