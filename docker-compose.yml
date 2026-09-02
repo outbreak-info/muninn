@@ -58,6 +58,11 @@ services:
       postgres:
         condition: service_healthy
     command: ./entrypoint.sh
+    healthcheck:
+      test: "pg_isready -p 6432 -h localhost -U ${MUNINN_DB_READONLY_USER}"
+      interval: 2s
+      timeout: 3s
+      retries: 15
 
   server:
     container_name: "${MUNINN_INSTANCE_NAME}_server"
@@ -81,9 +86,14 @@ services:
       MUNINN_DB_PORT: "${MUNINN_DB_PORT_FOR_SERVER}"
       MUNINN_SERVER_DATA_INPUT_DIR: "${MUNINN_SERVER_DATA_INPUT_DIR}"
     depends_on:
-      postgres:
+      bouncer:
         condition: service_healthy
-    command: fastapi run api/main.py
+    command: fastapi run --workers 20 api/main.py
+    healthcheck:
+      test: "curl localhost:8000/docs"
+      interval: 2s
+      timeout: 3s
+      retries: 15
 
 volumes:
   postgres_data:
