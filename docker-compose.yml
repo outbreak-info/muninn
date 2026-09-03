@@ -29,7 +29,7 @@ services:
       - type: bind
         source: ./containers/database/initdb.d
         target: /docker-entrypoint-initdb.d
-        read_only: true
+        read_only: false
       - type: bind
         source: ${MUNINN_SERVER_DATA_INPUT_DIR}
         target: /muninn/data
