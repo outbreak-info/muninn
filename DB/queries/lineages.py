@@ -7,7 +7,7 @@ from DB.engine import get_async_session
 from DB.queries.date_count_helpers import get_extract_clause, get_group_by_clause, get_order_by_cause, \
     YEAR, CHUNK, BIN_START, BIN_END, MID_COLLECTION_DATE_CALCULATION
 from api.models import LineageCountInfo, LineageAbundanceInfo, LineageInfo, LineageAbundanceSummaryInfo, \
-    LineageCountWithPrevalenceInfo, MutationProfileWithPrevalenceInfo
+    LineageCountWithPrevalenceInfo, MutationProfileWithPrevalenceInfo, LineageRelationshipsInfo
 from parser.parser import parser
 from utils.constants import DateBinOpt, NtOrAa, NUCLEOTIDE_CHARACTERS, TableNames, ColumnNames, COLLECTION_DATE
 
@@ -27,6 +27,86 @@ async def get_all_lineages_by_lineage_system(lineage_system_name: str) -> List[L
         res = await session.execute(text(query), {'lineage_system_name': lineage_system_name})
         out_data = [LineageInfo(**row) for row in res.mappings().all()]
     return out_data
+
+
+async def get_lineage_relationships(
+    lineage: str,
+    lineage_system_name: str
+) -> LineageRelationshipsInfo | None:
+    """
+    Get a lineage's immediate parents and children. Returns None if no such lineage exists, so the
+    caller can tell an unknown lineage from a known one with no relatives.
+    """
+    target_query = f'''
+        select
+            l.id as lineage_id,
+            l.{ColumnNames.lineage_name} as lineage_name,
+            ls.id as lineage_system_id,
+            ls.{ColumnNames.lineage_system_name} as lineage_system_name
+        from {TableNames.lineages} l
+        inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
+        where l.{ColumnNames.lineage_name} = :input_lineage
+              and ls.{ColumnNames.lineage_system_name} = :input_lineage_system_name
+    '''
+
+    relationships_query = f'''
+        select
+            'parent' as relationship,
+            l.id as lineage_id,
+            l.{ColumnNames.lineage_name} as lineage_name,
+            ls.id as lineage_system_id,
+            ls.{ColumnNames.lineage_system_name} as lineage_system_name
+        from {TableNames.lineages_immediate_children} lic
+        inner join {TableNames.lineages} l on l.id = lic.{ColumnNames.parent_id}
+        inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
+        where lic.{ColumnNames.child_id} = :input_lineage_id
+        union all
+        select
+            'child',
+            l.id,
+            l.{ColumnNames.lineage_name},
+            ls.id,
+            ls.{ColumnNames.lineage_system_name}
+        from {TableNames.lineages_immediate_children} lic
+        inner join {TableNames.lineages} l on l.id = lic.{ColumnNames.child_id}
+        inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
+        where lic.{ColumnNames.parent_id} = :input_lineage_id
+        order by 1, 3
+    '''
+
+    async with get_async_session() as session:
+        target = (
+            await session.execute(
+                text(target_query),
+                {
+                    'input_lineage': lineage,
+                    'input_lineage_system_name': lineage_system_name
+                }
+            )
+        ).mappings().one_or_none()
+
+        if target is None:
+            return None
+
+        res = await session.execute(
+            text(relationships_query),
+            {'input_lineage_id': target['lineage_id']}
+        )
+
+        parents = []
+        children = []
+        for row in res.mappings().all():
+            relative = LineageInfo(**{k: v for k, v in row.items() if k != 'relationship'})
+            if row['relationship'] == 'parent':
+                parents.append(relative)
+            else:
+                children.append(relative)
+
+    return LineageRelationshipsInfo(
+        lineage=LineageInfo(**target),
+        parents=parents,
+        children=children,
+    )
 
 
 async def get_sample_counts_by_lineage(where: str | None) -> List[LineageCountInfo]:
