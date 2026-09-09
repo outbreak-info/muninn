@@ -136,24 +136,27 @@ async def get_pheno_values_and_mutation_counts(
     else:
         user_where_clause = parser.parse(where)
         query = f"""
-            select aas.ref_aa, aas.position_aa, aas.alt_aa, pmv.value,
-                   count(distinct caas.{ColumnNames.sample_id}) as count
-            from {TableNames.cns_amino_acids_by_sample} caas
-            cross join lateral unnest(rb_to_array(caas.{ColumnNames.amino_acids_present})) as u({ColumnNames.amino_acid_id})
-            inner join {TableNames.amino_acids} aas on aas.id = u.{ColumnNames.amino_acid_id}
-            inner join {TableNames.phenotype_metric_values} pmv on pmv.{ColumnNames.amino_acid_id} = aas.id
-            inner join {TableNames.phenotype_metrics} pm on pm.id = pmv.{ColumnNames.phenotype_metric_id}
-            where caas.{ColumnNames.sample_id} in (
-                select s.id
-                from {TableNames.samples} s
-                left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
-                where {user_where_clause}
-            )
-            and aas.gff_feature = :region
-            and pm.{ColumnNames.phenotype_metric_name} = :pm_name
-            {no_refs_filter}
-            group by aas.ref_aa, aas.position_aa, aas.alt_aa, pmv.value
-            order by count desc;
+        with matching_samples as (
+            select s.id as sample_id
+            from {TableNames.samples} s
+            left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
+            where {user_where_clause}
+        )
+        select aa.ref_aa,
+               aa.position_aa,
+               aa.alt_aa,
+               pmv.value,
+               count(distinct matching_samples.sample_id) as count
+        from matching_samples
+        inner join {TableNames.cns_samples_by_amino_acid} csaa on csaa.{ColumnNames.samples_present} @> matching_samples.sample_id
+        inner join {TableNames.amino_acids} aa on aa.id = csaa.{ColumnNames.amino_acid_id}
+        inner join {TableNames.phenotype_metric_values} pmv on pmv.{ColumnNames.amino_acid_id} = aa.id
+        inner join {TableNames.phenotype_metrics} pm on pm.id = pmv.{ColumnNames.phenotype_metric_id}
+                and aa.{ColumnNames.gff_feature} = :region
+                and pm.{ColumnNames.phenotype_metric_name} = :pm_name
+                {no_refs_filter}
+        group by aa.ref_aa, aa.position_aa, aa.alt_aa, pmv.value
+        order by count desc;
         """
 
     async with get_async_session() as session:
