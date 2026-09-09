@@ -180,6 +180,12 @@ class LineageInfo(BaseModel):
     lineage_system_name: str = Field(description="Name of the lineage nomenclature system this lineage belongs to (e.g. 'PANGO')")
 
 
+class LineageRelationshipsInfo(BaseModel):
+    lineage: 'LineageInfo' = Field(description="The lineage whose relationships were resolved")
+    parents: List['LineageInfo'] = Field(description="Immediate parents. Usually one, but a recombinant may have several.")
+    children: List['LineageInfo'] = Field(description="Immediate children")
+
+
 class LineageAbundanceInfo(BaseModel):
     lineage_info: 'LineageInfo' = Field(description="The lineage this abundance is for, and its nomenclature system")
     sample_id: int = Field(description="Sample ID this abundance was measured in")
