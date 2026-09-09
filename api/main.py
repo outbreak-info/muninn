@@ -32,7 +32,7 @@ from api.models import VariantNucleotideInfo, VariantAminoAcidInfo, SampleInfo, 
     VariantFreqInfo, MutationNucleotideCountByDateAndLineageInfo, \
     MutationAminoAcidCountByDateAndLineageInfo, PhenotypeMetricDateCountInfo, \
     PhenotypeMetricAggregateByDateInfo, AnnotationProportionByDateInfo, AnnotatedPositionCountInfo, \
-    LineageAbundanceWithSampleInfo, AverageLineageAbundanceInfo
+    LineageAbundanceWithSampleInfo, AverageLineageAbundanceInfo, LineageRelationshipsInfo
 from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, NtOrAa, \
     DEFAULT_MAX_SPAN_DAYS, COLLECTION_DATE, DEFAULT_DAYS, COMMA_SEP_WORDLIKE_PATTERN, \
     DEFAULT_PREVALENCE_THRESHOLD, MIN_PREVALENCE_THRESHOLD, FILTER_SYNTAX_HELP, DistinctValueField, \
@@ -170,6 +170,27 @@ async def handle_db_query_error(request: Request, exc: DBAPIError):
 async def handle_parsing_error(request: Request, exc: ParsingError):
     return JSONResponse(status_code=400, content={'detail': exc.message})
 
+
+def register_log_filter() -> None:
+    """
+    Avoid cluttering logs with requests to health endpoints
+    """
+
+    class EndpointFilter(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            return (
+                record.args
+                and len(record.args) >= 3
+                and record.args[2] != "/v1/health"
+            )
+
+    logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
+register_log_filter()
+
+
+@router.get('/health')
+async def health():
+    return JSONResponse(status_code=200, content={'alive?': 'you betcha!'})
 
 #############
 # DISCOVERY #
@@ -531,6 +552,28 @@ async def get_lineages_by_lineage_system(
     lineage_system_name: str = Query(..., description='Name of the lineage nomenclature system to list lineages for, matched against lineage_systems.lineage_system_name (e.g. PANGO)'),
 ):
     return await DB.queries.lineages.get_all_lineages_by_lineage_system(lineage_system_name)
+
+@router.get(
+    '/lineages:relationships',
+    response_model=LineageRelationshipsInfo,
+    tags=[TAG_LINEAGES],
+    summary="Get a lineage's immediate parents and children"
+)
+async def get_lineage_relationships(
+    lineage: str = Query(..., description='Lineage name to get relationships for, matched against lineages.lineage_name (e.g. B.1.1)'),
+    lineage_system_name: str = Query(..., description='Lineage nomenclature system the lineage belongs to, matched against lineage_systems.lineage_system_name (e.g. PANGO). Required: a lineage name is only unique within its system.'),
+):
+    """
+    Relationships never cross lineage systems, so the relatives are always from the same system as
+    the queried lineage.
+    """
+    relationships = await DB.queries.lineages.get_lineage_relationships(lineage, lineage_system_name)
+    if relationships is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f'No lineage named "{lineage}" in lineage system "{lineage_system_name}"'
+        )
+    return relationships
 
 @router.get(
     '/lineages:abundance',

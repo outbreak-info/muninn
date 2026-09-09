@@ -1,3 +1,5 @@
+import uuid
+
 import asyncpg
 from sqlalchemy import create_engine
 from sqlalchemy.engine import URL
@@ -7,8 +9,10 @@ from sqlalchemy.ext.asyncio.engine import AsyncEngine
 from utils.constants import Env
 
 STATEMENT_TIMEOUT_MS = 600_000
-POOL_SIZE = 10
-MAX_OVERFLOW = (90 - (2 * POOL_SIZE)) / 2
+POOL_SIZE = 2
+MAX_OVERFLOW = 3
+POOL_TIMEOUT = 10
+POOL_RECYCLE = 1800
 
 
 async def get_asyncpg_connection():
@@ -17,7 +21,8 @@ async def get_asyncpg_connection():
         user=Env.MUNINN_DB_SUPERUSER,
         port=int(Env.MUNINN_DB_PORT),
         password=Env.MUNINN_DB_SUPERUSER_PASSWORD,
-        database=Env.MUNINN_DB_NAME
+        database=Env.MUNINN_DB_NAME,
+        statement_cache_size=0
     )
 
 
@@ -55,15 +60,28 @@ def create_pg_engine():
 
 async_write_engine: AsyncEngine = create_async_engine(
     get_url(async_=True, readonly=False),
-    pool_size=POOL_SIZE,
-    max_overflow=MAX_OVERFLOW
+    pool_size=1,
+    max_overflow=0,
+    pool_timeout=POOL_TIMEOUT,
+    pool_recycle=POOL_RECYCLE,
+    connect_args={
+        "prepared_statement_name_func": lambda: f"__asyncpg_{uuid.uuid4()}__",
+        "statement_cache_size": 0,
+        "prepared_statement_cache_size": 0,
+    }
 )
 
 async_engine: AsyncEngine = create_async_engine(
     get_url(async_=True),
     pool_size=POOL_SIZE,
     max_overflow=MAX_OVERFLOW,
-    connect_args={'server_settings': {'statement_timeout': str(STATEMENT_TIMEOUT_MS)}}
+    pool_timeout=POOL_TIMEOUT,
+    pool_recycle=POOL_RECYCLE,
+    connect_args={
+        "prepared_statement_name_func": lambda: f"__asyncpg_{uuid.uuid4()}__",
+        "statement_cache_size": 0,
+        "prepared_statement_cache_size": 0,
+    }
 )
 
 
