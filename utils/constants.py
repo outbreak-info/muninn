@@ -188,7 +188,7 @@ class TableNames(PgIdentifiers):
     alleles = 'alleles'
     amino_acids = 'amino_acids'
     cns_samples_by_allele = 'cns_samples_by_allele'
-    cns_alleles_by_sample = 'cns_alleles_by_sample'
+    cns_alleles_by_sample = 'cns_alleles_by_sample' # todo rm
     geo_locations = 'geo_locations'
     phenotype_metrics = 'phenotype_metrics'
     phenotype_metric_values = 'phenotype_metric_values'
@@ -203,12 +203,12 @@ class TableNames(PgIdentifiers):
     lineages_immediate_children = 'lineages_immediate_children'
     lineages_deep_children = 'lineages_deep_children'  # actually a view.
     cns_samples_by_amino_acid = 'cns_samples_by_amino_acid'
-    cns_amino_acids_by_sample = 'cns_amino_acids_by_sample'
+    cns_amino_acids_by_sample = 'cns_amino_acids_by_sample' # todo rm
     ih_samples_by_allele = 'ih_samples_by_allele'
     ih_samples_by_amino_acid = 'ih_samples_by_amino_acid'
 
     # Caches
-    cache_cns_pmv_sums = 'cache_cns_pmv_sums'
+    cache_cns_pmv_sums = 'cache_cns_pmv_sums' # actually a materialized view
 
 
 class ColumnNames(PgIdentifiers):

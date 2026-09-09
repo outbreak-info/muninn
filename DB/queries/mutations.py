@@ -59,48 +59,45 @@ async def get_mutations_by_sample(
 ) -> List['MutationNucleotideInfo'] | List['MutationAminoAcidInfo']:
     user_where_clause = parser.parse(where)
 
-    matching_samples = f'''
-        select s.id
-        from {TableNames.samples} s
-        left join {TableNames.geo_locations} g on g.id = s.{ColumnNames.geo_location_id}
-        where {user_where_clause}
-    '''
-
     if change_bin == NtOrAa.nt:
         mutations_query = f'''
-            select
-                cabs.{ColumnNames.sample_id},
-                alls.allele_id,
-                a.region,
-                a.position_nt,
-                a.ref_nt,
-                a.alt_nt
-            from {TableNames.cns_alleles_by_sample} cabs
-            cross join lateral unnest(rb_to_array(cabs.{ColumnNames.alleles_present})) as alls(allele_id)
-            inner join {TableNames.alleles} a on a.id = alls.allele_id
-            where cabs.{ColumnNames.sample_id} in (
-                {matching_samples}
+            with matching_samples as (
+                select s.id as sample_id
+                from {TableNames.samples} s
+                inner join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
+                where {user_where_clause}
             )
+            select matching_samples.sample_id,
+                   csa.{ColumnNames.allele_id},
+                   a.{ColumnNames.region},
+                   a.{ColumnNames.position_nt},
+                   a.{ColumnNames.ref_nt},
+                   a.{ColumnNames.alt_nt}
+            from matching_samples
+            inner join {TableNames.cns_samples_by_allele} csa on csa.{ColumnNames.samples_present} @> matching_samples.sample_id
+            inner join {TableNames.alleles} a on a.id = csa.{ColumnNames.allele_id};
         '''
         async with get_async_session() as session:
             result = await session.execute(text(mutations_query))
             return [MutationNucleotideInfo(**row) for row in result.mappings().all()]
     else:
         mutations_query = f'''
-            select
-                caabs.{ColumnNames.sample_id},
-                aa.position_aa,
-                aa.ref_aa,
-                aa.alt_aa,
-                aa.gff_feature,
-                aa.ref_codon,
-                aa.alt_codon
-            from {TableNames.cns_amino_acids_by_sample} caabs
-            cross join lateral unnest(rb_to_array(caabs.{ColumnNames.amino_acids_present})) as aas(amino_acid_id)
-            inner join {TableNames.amino_acids} aa on aa.id = aas.amino_acid_id
-            where caabs.{ColumnNames.sample_id} in (
-                {matching_samples}
+            with matching_samples as (
+                select s.id as sample_id
+                from {TableNames.samples} s
+                inner join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
+                where {user_where_clause}
             )
+            select matching_samples.sample_id,
+                   aa.{ColumnNames.position_aa},
+                   aa.{ColumnNames.ref_aa},
+                   aa.{ColumnNames.alt_aa},
+                   aa.{ColumnNames.gff_feature},
+                   aa.{ColumnNames.ref_codon},
+                   aa.{ColumnNames.alt_codon}
+            from matching_samples
+            inner join {TableNames.cns_samples_by_amino_acid} csaa on csaa.{ColumnNames.samples_present} @> matching_samples.sample_id
+            inner join {TableNames.amino_acids} aa on aa.id = csaa.{ColumnNames.amino_acid_id};
         '''
         async with get_async_session() as session:
             result = await session.execute(text(mutations_query))
