@@ -239,7 +239,7 @@ class VariantsMutationsCombinedParser(FileParser):
 
             await session.execute(
                 text('delete from tmp_ih_codons where alt_freq < :threshold;'),
-                {'threshold': self.ih_codons_min_depth}
+                {'threshold': self.ih_codons_min_freq}
             )
 
             await session.execute(
