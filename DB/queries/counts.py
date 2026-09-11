@@ -8,7 +8,7 @@ from DB.queries.helpers import get_ih_table_and_change_cols
 from DB.queries.date_count_helpers import get_extract_clause, get_group_by_clause, get_order_by_cause, \
     MID_COLLECTION_DATE_CALCULATION
 from parser.parser import parser
-from utils.constants import DateBinOpt, NtOrAa, ColumnNames, COLLECTION_DATE
+from utils.constants import DateBinOpt, NtOrAa, ColumnNames, COLLECTION_DATE, TableNames
 
 
 async def count_samples_by_column(by_col: str, where: str | None = None):
@@ -82,11 +82,9 @@ async def count_variants_by_column(
 
 async def count_mutations_by_column(by_col: str, change_bin: NtOrAa = NtOrAa.aa, where: str | None = None):
     if change_bin == NtOrAa.nt:
-        cns_table, join_table, join_key = 'cns_samples_by_allele', 'alleles', 'allele_id'
-        transposed_table, present_col = 'cns_alleles_by_sample', 'alleles_present'
+        cns_table, join_table, join_key = TableNames.cns_samples_by_allele, TableNames.alleles, ColumnNames.allele_id
     else:
-        cns_table, join_table, join_key = 'cns_samples_by_amino_acid', 'amino_acids', 'amino_acid_id'
-        transposed_table, present_col = 'cns_amino_acids_by_sample', 'amino_acids_present'
+        cns_table, join_table, join_key = TableNames.cns_samples_by_amino_acid, TableNames.amino_acids, ColumnNames.amino_acid_id
 
     if where is None:
         query = f'''
@@ -98,19 +96,23 @@ async def count_mutations_by_column(by_col: str, change_bin: NtOrAa = NtOrAa.aa,
             '''
     else:
         query = f'''
-            select {by_col}, count(*)::bigint as count1
-            from {transposed_table} cs
-            cross join lateral unnest(rb_to_array(cs.{present_col})) as u({join_key})
-            inner join {join_table} t on t.id = u.{join_key}
-            where cs.sample_id in (
-                select s.id
-                from samples s
-                left join geo_locations gl on gl.id = s.geo_location_id
-                where {parser.parse(where)}
-            )
-            group by {by_col}
-            order by count1 desc
-            '''
+                with matching_samples as (
+                    select s.id
+                    from samples s
+                    left join geo_locations gl on gl.id = s.geo_location_id
+                    where {parser.parse(where)}
+                ),
+                samples_bm as (
+                    select rb_build_agg(id) as bitmap from matching_samples
+                )
+                select {by_col}, 
+                       sum(rb_cardinality(samples_bm.bitmap & CNS.{ColumnNames.samples_present}))::bigint as count1
+                from {cns_table} CNS
+                inner join {join_table} JT on JT.id = CNS.{join_key}
+                cross join samples_bm
+                group by {by_col}
+                order by count1 desc;
+                '''
 
     async with get_async_session() as session:
         res = await session.execute(text(query))
@@ -437,7 +439,7 @@ async def count_lineages_by_collection_date(
     async with get_async_session() as session:
         res = await session.execute(
             text(
-               f'''
+                f'''
                with lin_samp_date as (
                     select lineage_name,
                            lineage_system_name,
