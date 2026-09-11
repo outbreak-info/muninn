@@ -19,7 +19,7 @@ import DB.queries.phenotype_metrics
 import DB.queries.prevalence
 import DB.queries.samples
 import DB.queries.variants
-import DB.queries.variants_mutations
+import DB.queries.variants_mutations_lag
 import DB.queries.wastewater
 from api.models import VariantNucleotideInfo, VariantAminoAcidInfo, SampleInfo, \
     MutationNucleotideInfo, MutationAminoAcidInfo, \
@@ -491,7 +491,7 @@ async def get_mutations_before_variants(
     lineage: str = Query(..., description='Lineage name to restrict samples to (e.g. BA.1)'),
     lineage_system_name: str = Query(..., description='Name of the lineage nomenclature system the lineage belongs to (e.g. a Pango/Nextstrain lineage)')
 ):
-    return await DB.queries.variants_mutations.get_mutations_before_variants(lineage, lineage_system_name)
+    return await DB.queries.variants_mutations_lag.get_mutations_before_variants(lineage, lineage_system_name)
 
 @router.get(
     '/variants:mutationLag',
@@ -503,7 +503,7 @@ async def get_variants_before_mutations(
     lineage: str = Query(..., description='Lineage name to restrict samples to (e.g. BA.1)'),
     lineage_system_name: str = Query(..., description='Name of the lineage nomenclature system the lineage belongs to (e.g. a Pango/Nextstrain lineage)'),
 ):
-    return await DB.queries.variants_mutations.get_variants_before_mutations(lineage, lineage_system_name)
+    return await DB.queries.variants_mutations_lag.get_variants_before_mutations(lineage, lineage_system_name)
 
 @router.get(
     '/mutations:countByPhenotypeScore',
