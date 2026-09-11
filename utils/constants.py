@@ -188,7 +188,6 @@ class TableNames(PgIdentifiers):
     alleles = 'alleles'
     amino_acids = 'amino_acids'
     cns_samples_by_allele = 'cns_samples_by_allele'
-    cns_alleles_by_sample = 'cns_alleles_by_sample' # todo rm
     geo_locations = 'geo_locations'
     phenotype_metrics = 'phenotype_metrics'
     phenotype_metric_values = 'phenotype_metric_values'
@@ -203,7 +202,6 @@ class TableNames(PgIdentifiers):
     lineages_immediate_children = 'lineages_immediate_children'
     lineages_deep_children = 'lineages_deep_children'  # actually a view.
     cns_samples_by_amino_acid = 'cns_samples_by_amino_acid'
-    cns_amino_acids_by_sample = 'cns_amino_acids_by_sample' # todo rm
     ih_samples_by_allele = 'ih_samples_by_allele'
     ih_samples_by_amino_acid = 'ih_samples_by_amino_acid'
 
@@ -326,7 +324,6 @@ class ConstraintNames(PgIdentifiers):
     pk_samples = f'pk_{TableNames.samples}'
     pk_alleles = f'pk_{TableNames.alleles}'
     pk_amino_acids = f'pk_{TableNames.amino_acids}'
-    pk_cns_samples_by_allele = f'pk_{TableNames.cns_samples_by_allele}'
     pk_geo_locations = f'pk_{TableNames.geo_locations}'
     pk_phenotype_metrics = f'pk_{TableNames.phenotype_metrics}'
     pk_phenotype_metric_values = f'pk_{TableNames.phenotype_metric_values}'
@@ -339,10 +336,8 @@ class ConstraintNames(PgIdentifiers):
     pk_annotations_papers = f'pk_{TableNames.annotations_papers}'
     pk_annotations_amino_acids = f'pk_{TableNames.annotations_amino_acids}'
     pk_lineages_immediate_children = f'pk_{TableNames.lineages_immediate_children}'
+    pk_cns_samples_by_allele = f'pk_{TableNames.cns_samples_by_allele}'
     pk_cns_samples_by_amino_acid = f'pk_{TableNames.cns_samples_by_amino_acid}'
-
-    pk_cns_alleles_by_sample = f'pk_{TableNames.cns_alleles_by_sample}'
-    pk_cns_amino_acids_by_sample = f'pk_{TableNames.cns_amino_acids_by_sample}'
     pk_ih_samples_by_allele = f'pk_{TableNames.ih_samples_by_allele}'
     pk_ih_samples_by_amino_acid = f'pk_{TableNames.ih_samples_by_amino_acid}'
 
@@ -381,9 +376,6 @@ class ConstraintNames(PgIdentifiers):
 
     # consensus samples by amino acid
     fk_cns_samples_by_amino_acid_amino_acid_id_amino_acids = 'fk_cns_samples_by_amino_acid_amino_acid_id_amino_acids'
-
-    # consensus amino acids by sample
-    fk_cns_amino_acids_by_sample_sample_id_samples = 'fk_cns_amino_acids_by_sample_sample_id_samples'
 
     # phenotype metrics tables
     uq_phenotype_metrics_name = 'uq_phenotype_metrics_name'
