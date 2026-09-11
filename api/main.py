@@ -118,7 +118,7 @@ MaxAltFreqParam = Annotated[float | None, Query(
 )]
 
 
-def filter_query(columns_help: str, *, required: bool = True) -> Query:
+def filter_query(columns_help: str, *, required: bool = True, alias: str = 'filter') -> Query:
     """
     Build the OpenAPI `Query` for a `filter` parameter. `columns_help` describes the columns that
     are filterable *for this endpoint*; the shared filter-language grammar (FILTER_SYNTAX_HELP) is
@@ -127,7 +127,7 @@ def filter_query(columns_help: str, *, required: bool = True) -> Query:
     """
     return Query(
         ... if required else None,
-        alias='filter',
+        alias=alias,
         description=f'{columns_help}\n\n{FILTER_SYNTAX_HELP}',
     )
 
@@ -474,10 +474,11 @@ async def get_mutation_counts(
     date_bin: DateBinParam = DateBinOpt.month,
     days: DaysParam = DEFAULT_DAYS,
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
-    where: str | None = filter_query('Optional. With group_by=collection_date: over all `samples` columns, the joined `geo_locations` columns, the change columns (nt: region, ref_nt, position_nt, alt_nt; aa: gff_feature, ref_aa, position_aa, alt_aa, ref_codon, alt_codon) and the lineage columns (lineage_name, lineage_system_name). With any other group_by the filter selects samples only, so it accepts `samples` and `geo_locations` columns — change and lineage columns return 400 there.', required=False),
+    where: str | None = filter_query('Optional. Filter by all `samples` columns and joined `geo_locations` columns. With group_by=collection_date, lineage columns (lineage_name, lineage_system_name) become available. With any other group_by lineage columns return 400.', required=False),
+    mutations_where: str | None = filter_query('Optional. With group_by=collection_date: over the change columns (nt: region, ref_nt, position_nt, alt_nt; aa: gff_feature, ref_aa, position_aa, alt_aa, ref_codon, alt_codon). With any other group_by this parameter is not used.', required=False, alias='mutations_filter'),
 ):
     if group_by == COLLECTION_DATE:
-        return await DB.queries.counts.count_mutations_by_collection_date(date_bin, change_bin, days, max_span_days, where)
+        return await DB.queries.counts.count_mutations_by_collection_date(date_bin, change_bin, days, max_span_days, where, mutations_where)
     return await DB.queries.counts.count_mutations_by_column(group_by, change_bin, where)
 
 @router.get(

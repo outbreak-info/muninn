@@ -19,12 +19,12 @@ def get_extract_clause(group_by: str, date_bin: DateBinOpt, days: int) -> str:
 
     match date_bin:
         case DateBinOpt.week | DateBinOpt.month:
-            return (f'extract({YEAR} from {group_by_alias}) as {YEAR},\n'
+            return (f'extract({YEAR} from {group_by_alias}) as {YEAR}, '
                     f'extract({date_bin} from {group_by_alias}) as {CHUNK}')
         case DateBinOpt.day:
             origin = datetime.date.today()
             return (
-                f"date_bin('{days} days', {group_by_alias}, '{origin}') + interval '{days} days' as {BIN_END},\n"
+                f"date_bin('{days} days', {group_by_alias}, '{origin}') + interval '{days} days' as {BIN_END}, "
                 f"date_bin('{days} days', {group_by_alias}, '{origin}') as {BIN_START}")
         case _:
             raise NotImplementedError
@@ -59,5 +59,15 @@ def get_order_by_cause(date_bin: DateBinOpt) -> str:
             return f'order by {YEAR}, {CHUNK}'
         case DateBinOpt.day:
             return f'order by {BIN_START}'
+        case _:
+            raise NotImplementedError
+
+
+def get_date_column_names(date_bin: DateBinOpt) -> str:
+    match date_bin:
+        case DateBinOpt.week | DateBinOpt.month:
+            return ', '.join([YEAR, CHUNK])
+        case DateBinOpt.day:
+            return ', '.join([BIN_START, BIN_END])
         case _:
             raise NotImplementedError

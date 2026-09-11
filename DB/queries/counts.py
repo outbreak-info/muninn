@@ -6,7 +6,7 @@ from DB.engine import get_async_session
 from DB.textutils import text
 from DB.queries.helpers import get_ih_table_and_change_cols
 from DB.queries.date_count_helpers import get_extract_clause, get_group_by_clause, get_order_by_cause, \
-    MID_COLLECTION_DATE_CALCULATION
+    MID_COLLECTION_DATE_CALCULATION, get_date_column_names
 from parser.parser import parser
 from utils.constants import DateBinOpt, NtOrAa, ColumnNames, COLLECTION_DATE, TableNames
 
@@ -288,59 +288,79 @@ async def count_mutations_by_collection_date(
     change_bin: NtOrAa,
     days: int,
     max_span_days: int,
-    where: str | None = None
+    where: str | None = None,
+    mutations_where: str | None = None
 ):
     if change_bin == NtOrAa.nt:
-        transposed_table, present_col, join_table, join_key = \
-            'cns_alleles_by_sample', 'alleles_present', 'alleles', 'allele_id'
-        feature_col, ref_col, pos_col, alt_col = 'region', 'ref_nt', 'position_nt', 'alt_nt'
+        consensus_table = TableNames.cns_samples_by_allele
+        join_table = TableNames.alleles
+        join_key = ColumnNames.allele_id
+        feature_col = ColumnNames.region
+        ref_col = ColumnNames.ref_nt
+        pos_col = ColumnNames.position_nt
+        alt_col = ColumnNames.alt_nt
+
     else:
-        transposed_table, present_col, join_table, join_key = \
-            'cns_amino_acids_by_sample', 'amino_acids_present', 'amino_acids', 'amino_acid_id'
-        feature_col, ref_col, pos_col, alt_col = 'gff_feature', 'ref_aa', 'position_aa', 'alt_aa'
+        consensus_table = TableNames.cns_samples_by_amino_acid
+        join_table = TableNames.amino_acids
+        join_key = ColumnNames.amino_acid_id
+        feature_col = ColumnNames.gff_feature
+        ref_col = ColumnNames.ref_aa
+        pos_col = ColumnNames.position_aa
+        alt_col = ColumnNames.alt_aa
 
     user_where_clause = ''
     if where is not None:
         user_where_clause = f'and ({parser.parse(where)})'
 
+    mutations_where_clause = ''
+    if mutations_where is not None:
+        mutations_where_clause = f'where ({parser.parse(mutations_where)})'
+
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(date_bin, [feature_col, ref_col, pos_col, alt_col])
+    group_by_clause_date_only = get_group_by_clause(date_bin)
     order_by_clause = get_order_by_cause(date_bin)
+
+    query = f'''
+            with matching_samples as (
+                select s.id as sample_id,
+                       {MID_COLLECTION_DATE_CALCULATION}
+                from samples s
+                left join {TableNames.geo_locations} gl on gl.id = s.geo_location_id
+                left join {TableNames.samples_lineages} sl on sl.sample_id = s.id
+                left join {TableNames.lineages} l on l.id = sl.lineage_id
+                left join {TableNames.lineage_systems} ls on ls.id = l.lineage_system_id
+                where num_nulls(s.{ColumnNames.collection_end_date}, s.{ColumnNames.collection_start_date}) = 0
+                  and s.{ColumnNames.collection_end_date} - s.{ColumnNames.collection_start_date} <= :max_span_days
+                  {user_where_clause}
+            ),
+            samps_dated_bm as (
+                select rb_build_agg(sample_id) as samples_present,
+                       {extract_clause}
+                from matching_samples
+                {group_by_clause_date_only}
+            )
+            select {get_date_column_names(date_bin)},
+                   sum(rb_cardinality(samps_dated_bm.samples_present & CNS.{ColumnNames.samples_present})) as count,
+                   J.{feature_col},
+                   J.{ref_col},
+                   J.{pos_col},
+                   J.{alt_col}
+            from {consensus_table} CNS
+            inner join {join_table} J on J.id = CNS.{join_key}
+            inner join samps_dated_bm on samps_dated_bm.samples_present && CNS.{ColumnNames.samples_present}
+            {mutations_where_clause}
+            {group_by_clause}
+            {order_by_clause}
+            '''
 
     async with get_async_session() as session:
         res = await session.execute(
-            text(
-                f'''
-                select
-                {extract_clause},
-                count(distinct sample_id),
-                {feature_col}, {ref_col}, {pos_col}, {alt_col}
-                from (
-                    select
-                    *,
-                    {MID_COLLECTION_DATE_CALCULATION}
-                    from (
-                        select
-                            s.id as sample_id,
-                            c.{feature_col}, c.{ref_col}, c.{pos_col}, c.{alt_col},
-                            s.collection_start_date, s.collection_end_date,
-                            s.collection_end_date - s.collection_start_date as collection_span
-                        from samples s
-                        left join geo_locations gl on gl.id = s.geo_location_id
-                        left join samples_lineages sl on sl.sample_id = s.id
-                        left join lineages l on l.id = sl.lineage_id
-                        left join lineage_systems ls on ls.id = l.lineage_system_id
-                        inner join {transposed_table} t on t.sample_id = s.id
-                        cross join lateral unnest(rb_to_array(t.{present_col})) as u({join_key})
-                        inner join {join_table} c on c.id = u.{join_key}
-                        where num_nulls(s.collection_end_date, s.collection_start_date) = 0 {user_where_clause}
-                    )
-                    where collection_span <= {max_span_days}
-                )
-                {group_by_clause}
-                {order_by_clause}
-                '''
-            )
+            text(query),
+            {
+                'max_span_days': max_span_days
+            }
         )
     out_data = dict()
     for r in res:
