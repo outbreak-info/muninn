@@ -9,7 +9,7 @@ from DB.inserts.file_parsers.dms_parser import HaRegionDmsTsvParser, HaRegionDms
 from DB.inserts.file_parsers.eve_parser import EveCsvParser
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.file_parsers.flumut_annotations_parser import FlumutTsvParser
-from DB.inserts.file_parsers.freyja_demixed_lineage_hierarchy_parser import FreyjaDemixedLineageHierarchyYamlParser, \
+from DB.inserts.file_parsers.lineage_hierarchy_parser import FreyjaDemixedLineageHierarchyYamlParser, \
     LineageHierarchyYamlParser
 from DB.inserts.file_parsers.freyja_demixed_parser import FreyjaDemixedParser
 from DB.inserts.file_parsers.samples_parser import SamplesCsvParser, SamplesTsvParser

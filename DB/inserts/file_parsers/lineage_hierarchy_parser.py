@@ -1,4 +1,3 @@
-import asyncio
 from typing import Set
 
 import polars as pl
