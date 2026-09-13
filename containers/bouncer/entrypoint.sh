@@ -32,7 +32,7 @@ INI="/etc/pgbouncer/pgbouncer.ini"
   echo "auth_type = scram-sha-256";
   echo "auth_file = /etc/pgbouncer/userlist.txt"
   echo
-  echo "pool_mode = transaction";
+  echo "pool_mode = session";
   echo "max_client_conn = 200";
   echo "server_idle_timeout = 300";
   echo "default_pool_size = 18";

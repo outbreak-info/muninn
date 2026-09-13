@@ -22,7 +22,6 @@ async def get_asyncpg_connection():
         port=int(Env.MUNINN_DB_PORT),
         password=Env.MUNINN_DB_SUPERUSER_PASSWORD,
         database=Env.MUNINN_DB_NAME,
-        statement_cache_size=0
     )
 
 
@@ -66,8 +65,6 @@ async_write_engine: AsyncEngine = create_async_engine(
     pool_recycle=POOL_RECYCLE,
     connect_args={
         "prepared_statement_name_func": lambda: f"__asyncpg_{uuid.uuid4()}__",
-        "statement_cache_size": 0,
-        "prepared_statement_cache_size": 0,
     }
 )
 
@@ -79,8 +76,6 @@ async_engine: AsyncEngine = create_async_engine(
     pool_recycle=POOL_RECYCLE,
     connect_args={
         "prepared_statement_name_func": lambda: f"__asyncpg_{uuid.uuid4()}__",
-        "statement_cache_size": 0,
-        "prepared_statement_cache_size": 0,
     }
 )
 
