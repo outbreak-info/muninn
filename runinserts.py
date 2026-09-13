@@ -9,7 +9,8 @@ from DB.inserts.file_parsers.dms_parser import HaRegionDmsTsvParser, HaRegionDms
 from DB.inserts.file_parsers.eve_parser import EveCsvParser
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.file_parsers.flumut_annotations_parser import FlumutTsvParser
-from DB.inserts.file_parsers.freyja_demixed_lineage_hierarchy_parser import FreyjaDemixedLineageHierarchyYamlParser
+from DB.inserts.file_parsers.freyja_demixed_lineage_hierarchy_parser import FreyjaDemixedLineageHierarchyYamlParser, \
+    LineageHierarchyYamlParser
 from DB.inserts.file_parsers.freyja_demixed_parser import FreyjaDemixedParser
 from DB.inserts.file_parsers.samples_parser import SamplesCsvParser, SamplesTsvParser
 from DB.inserts.file_parsers.sarscov2_parsers.dms_parser import Sc2DmsTsvParser
@@ -45,6 +46,7 @@ def main():
         'flumut_tsv': FlumutTsvParser,
         'dms_tmp_csv': HaRegionDmsCsvParserNewData,
         'freyja_demixed_hierarchy_yaml': FreyjaDemixedLineageHierarchyYamlParser,
+        'lineage_hierarchy_yaml': LineageHierarchyYamlParser,
     }
 
     ## Parse and verify args ##
@@ -89,7 +91,7 @@ def main():
 
     file_parser: FileParser = formats[args.format]
     filename: str = args.filenames[0]
-    parser_extras: list[str]|None = args.parser_extras
+    parser_extras: list[str] | None = args.parser_extras
     if parser_extras == list():
         parser_extras = None
 
@@ -99,7 +101,10 @@ def main():
     ):
         raise ValueError('Multiple filenames provided, but this format takes only one.')
 
-    if parser_extras is not None and not issubclass(file_parser, VariantsMutationsCombinedParser):
+    if parser_extras is not None and not (
+            issubclass(file_parser, VariantsMutationsCombinedParser) or
+            issubclass(file_parser, LineageHierarchyYamlParser)
+    ):
         print('Warning: this format does not except extra args, the values you passed will be ignored. ')
 
     # run inserts method
@@ -110,6 +115,8 @@ def main():
             parser = file_parser(args.filenames, parser_extras)
         elif issubclass(file_parser, Sc2SamplesParser) and len(args.filenames) >= 2:
             parser = file_parser(args.filenames[0], args.filenames[1])
+        elif issubclass(file_parser, LineageHierarchyYamlParser):
+            parser = file_parser(args.filenames[0], parser_extras)
         else:
             parser = file_parser(filename)
         asyncio.run(parser.parse_and_insert())
