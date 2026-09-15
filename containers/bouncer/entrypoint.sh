@@ -40,6 +40,7 @@ INI="/etc/pgbouncer/pgbouncer.ini"
   echo "reserve_pool_timeout = 3";
   echo "server_lifetime = 1200";
   echo "query_wait_timeout = 30";
+  echo "admin_users = flu"
 
 } >> "$INI"
 
