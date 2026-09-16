@@ -2,7 +2,6 @@ import re
 import os
 from datetime import datetime
 from enum import Enum
-from warnings import deprecated
 
 from utils.dates_and_times import format_iso_month, format_iso_week, format_iso_interval
 

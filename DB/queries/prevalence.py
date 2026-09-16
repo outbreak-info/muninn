@@ -9,6 +9,7 @@ from parser.parser import parser
 from utils.constants import ColumnNames, NtOrAa, TableNames
 from utils.csv_helpers import parse_change_string
 
+WW_NOT_SAMPLES_FILTER_SHIM = f'num_nulls({ColumnNames.ww_site_id}, {ColumnNames.ww_catchment_population}, {ColumnNames.ww_collected_by}, {ColumnNames.ww_viral_load}) < 4'
 
 async def get_samples_variant_freq_by_aa_change(change: str) -> List[VariantFreqInfo]:
     return await _get_samples_variant_freq(change, NtOrAa.aa)
@@ -134,28 +135,30 @@ async def get_pheno_values_and_mutation_counts(
             order by count desc;
         """
     else:
-        user_where_clause = parser.parse(where)
+        user_where_clause = f'and ({parser.parse(where)})'
         query = f"""
         with matching_samples as (
             select s.id as sample_id
             from {TableNames.samples} s
             left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
-            where {user_where_clause}
+            inner join {TableNames.samples_lineages} sl on sl.{ColumnNames.sample_id} = s.id
+            inner join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id}
+            where NOT {WW_NOT_SAMPLES_FILTER_SHIM} {user_where_clause}
         )
-        select aa.ref_aa,
-               aa.position_aa,
-               aa.alt_aa,
+        select aas.ref_aa,
+               aas.position_aa,
+               aas.alt_aa,
                pmv.value,
                count(distinct matching_samples.sample_id) as count
         from matching_samples
         inner join {TableNames.cns_samples_by_amino_acid} csaa on csaa.{ColumnNames.samples_present} @> matching_samples.sample_id
-        inner join {TableNames.amino_acids} aa on aa.id = csaa.{ColumnNames.amino_acid_id}
-        inner join {TableNames.phenotype_metric_values} pmv on pmv.{ColumnNames.amino_acid_id} = aa.id
+        inner join {TableNames.amino_acids} aas on aas.id = csaa.{ColumnNames.amino_acid_id}
+        inner join {TableNames.phenotype_metric_values} pmv on pmv.{ColumnNames.amino_acid_id} = aas.id
         inner join {TableNames.phenotype_metrics} pm on pm.id = pmv.{ColumnNames.phenotype_metric_id}
-                and aa.{ColumnNames.gff_feature} = :region
+                and aas.{ColumnNames.gff_feature} = :region
                 and pm.{ColumnNames.phenotype_metric_name} = :pm_name
                 {no_refs_filter}
-        group by aa.ref_aa, aa.position_aa, aa.alt_aa, pmv.value
+        group by aas.ref_aa, aas.position_aa, aas.alt_aa, pmv.value
         order by count desc;
         """
 
