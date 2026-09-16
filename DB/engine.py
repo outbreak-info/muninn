@@ -9,8 +9,8 @@ from sqlalchemy.ext.asyncio.engine import AsyncEngine
 from utils.constants import Env
 
 STATEMENT_TIMEOUT_MS = 600_000
-POOL_SIZE = 2
-MAX_OVERFLOW = 3
+POOL_SIZE = 1
+MAX_OVERFLOW = 0
 POOL_TIMEOUT = 10
 POOL_RECYCLE = 1800
 
@@ -63,6 +63,7 @@ async_write_engine: AsyncEngine = create_async_engine(
     max_overflow=0,
     pool_timeout=POOL_TIMEOUT,
     pool_recycle=POOL_RECYCLE,
+    echo_pool=True,
     connect_args={
         "prepared_statement_name_func": lambda: f"__asyncpg_{uuid.uuid4()}__",
     }
@@ -74,8 +75,10 @@ async_engine: AsyncEngine = create_async_engine(
     max_overflow=MAX_OVERFLOW,
     pool_timeout=POOL_TIMEOUT,
     pool_recycle=POOL_RECYCLE,
+    echo_pool=True,
     connect_args={
         "prepared_statement_name_func": lambda: f"__asyncpg_{uuid.uuid4()}__",
+        'server_settings': {'statement_timeout': str(STATEMENT_TIMEOUT_MS)}
     }
 )
 

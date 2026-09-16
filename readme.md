@@ -5,12 +5,9 @@ Muninn is a database system designed to store consensus and intra-host mutation 
 ## Containerized Setup
 
 The standard and easiest way to run Muninn is through docker compose.
-The compose file defines three services, each of which will run in their own container:
+The compose file defines two services, each of which will run in their own container:
 - `postgres` is the database 
-- `bouncer` is PgBouncer, which handles connection pooling for the database.
 - `server` is the fastapi server that handles web requests
-
-The server will send all its database requests through PgBouncer, which serves as a wrapper around the actual Postgres instance.
 
 1. Clone repository and cd into it.
 2. Create `.env` file.
@@ -28,25 +25,20 @@ The server will send all its database requests through PgBouncer, which serves a
     # Otherwise use the name of the remote host.
     # These default values assume use of docker network.
     export MUNINN_DB_HOST="postgres"
-    export MUNINN_DB_BOUNCER_HOST="bouncer"
    
     # Internally, the containers always listen on the same ports:
     # postgres: 5432 
-    # bouncer:  6432
     # server:   8000
     # A host port is mapped to each of these to allow the container to listen for 
     # external traffic. These settings control which host ports will be used. 
     # Choose values that avoid conflict with other processes running on the host.
     export MUNINN_DB_PORT="5432"
-    export MUNINN_DB_BOUNCER_PORT="6432"
     export MUNINN_SERVER_PORT="8000"
 
-    # These settings control what ports the bouncer will use to contact postgres 
-    # and the server will use to contact the bouncer. When connected via the 
-    # docker network, the internal port for the target service should be used
+    # These settings control what ports the server will use to contact postgres.
+    # When connected via the docker network, the internal port for the target service should be used
     # Otherwise use host ports configured above.
     # These default values assume use of docker network.
-    export MUNINN_DB_PORT_FOR_BOUNCER="5432"     
     export MUNINN_DB_PORT_FOR_SERVER="6432"
     
     # this will be mounted to the server container as /home/muninn/data 
