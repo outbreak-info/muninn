@@ -515,7 +515,7 @@ async def get_mutation_counts_by_phenotype_score(
     region: str = Query(..., description='GFF feature (gene/product) to restrict amino-acid mutations to'),
     metric: str = Query(..., description='Phenotype metric name whose value is reported per amino-acid change'),
     include_refs: bool = Query(False, description='If true, also include changes where reference amino acid equals alternative amino acid; default false excludes them'),
-    where: str | None = filter_query('Optional, restricting which samples are counted: over all columns of the `samples` table, plus the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names).', required=False),
+    where: str | None = filter_query('Optional, restricting which samples are counted: over all columns of the `samples` table, plus the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names)  and the joined `lineages`/`lineage_systems`/`samples_lineages` columns (e.g. lineage_name, lineage_system_name).', required=False),
 ):
     return await DB.queries.prevalence.get_pheno_values_and_mutation_counts(metric, region, include_refs, where)
 
