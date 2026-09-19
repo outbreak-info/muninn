@@ -66,15 +66,21 @@ async def get_mutations_by_sample(
                 from {TableNames.samples} s
                 inner join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
                 where {user_where_clause}
+            ),
+            matching_samples_bm as (
+                select coalesce(rb_build_agg(sample_id), rb_build('{{}}')) as bm
+                from matching_samples
             )
-            select matching_samples.sample_id,
+            select u.sample_id,
                    csa.{ColumnNames.allele_id},
                    a.{ColumnNames.region},
                    a.{ColumnNames.position_nt},
                    a.{ColumnNames.ref_nt},
                    a.{ColumnNames.alt_nt}
-            from matching_samples
-            inner join {TableNames.cns_samples_by_allele} csa on csa.{ColumnNames.samples_present} @> matching_samples.sample_id
+            from {TableNames.cns_samples_by_allele} csa
+            cross join lateral unnest(
+                rb_to_array(csa.{ColumnNames.samples_present} & (select bm from matching_samples_bm))
+            ) as u(sample_id)
             inner join {TableNames.alleles} a on a.id = csa.{ColumnNames.allele_id};
         '''
         async with get_async_session() as session:
@@ -87,16 +93,22 @@ async def get_mutations_by_sample(
                 from {TableNames.samples} s
                 inner join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
                 where {user_where_clause}
+            ),
+            matching_samples_bm as (
+                select coalesce(rb_build_agg(sample_id), rb_build('{{}}')) as bm
+                from matching_samples
             )
-            select matching_samples.sample_id,
+            select u.sample_id,
                    aa.{ColumnNames.position_aa},
                    aa.{ColumnNames.ref_aa},
                    aa.{ColumnNames.alt_aa},
                    aa.{ColumnNames.gff_feature},
                    aa.{ColumnNames.ref_codon},
                    aa.{ColumnNames.alt_codon}
-            from matching_samples
-            inner join {TableNames.cns_samples_by_amino_acid} csaa on csaa.{ColumnNames.samples_present} @> matching_samples.sample_id
+            from {TableNames.cns_samples_by_amino_acid} csaa
+            cross join lateral unnest(
+                rb_to_array(csaa.{ColumnNames.samples_present} & (select bm from matching_samples_bm))
+            ) as u(sample_id)
             inner join {TableNames.amino_acids} aa on aa.id = csaa.{ColumnNames.amino_acid_id};
         '''
         async with get_async_session() as session:
@@ -113,9 +125,28 @@ async def get_aa_mutation_count_by_collection_date(
     max_span_days: int,
     where: str | None = None
 ):
+    # Without a filter the query keeps its original shape. With one, the matching samples are
+    # collapsed into a bitmap first and intersected with the change's own bitmap before unnest:
+    # otherwise every sample carrying the change (7M+ for a common allele) is expanded into a row
+    # and probed against samples_lineages, only to be discarded by the filter afterwards.
     user_where_clause = ''
+    subset_ctes = ''
+    subset_intersect = ''
     if where is not None:
         user_where_clause = f'where ({parser.parse(where)})'
+        subset_ctes = f'''
+            with sample_subset as (
+                select s.id as sample_id
+                from {TableNames.samples} s
+                inner join {TableNames.samples_lineages} sl on sl.sample_id = s.id
+                inner join {TableNames.lineages} l on l.id = sl.lineage_id
+                {user_where_clause}
+            ),
+            sample_subset_bm as (
+                select coalesce(rb_build_agg(sample_id), rb_build('{{}}')) as bm from sample_subset
+            ),
+        '''
+        subset_intersect = ' & (select bm from sample_subset_bm)'
 
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(
@@ -134,7 +165,7 @@ async def get_aa_mutation_count_by_collection_date(
         res = await session.execute(
             text(
                 f'''
-                with translation_samples as (
+                {subset_ctes if subset_ctes else 'with'} translation_samples as (
                     select
                         aa.gff_feature,
                         aa.ref_aa,
@@ -143,7 +174,7 @@ async def get_aa_mutation_count_by_collection_date(
                         samps.{ColumnNames.sample_id} as target_sample_id
                     from {TableNames.amino_acids} aa
                     inner join {TableNames.cns_samples_by_amino_acid} t on t.{ColumnNames.amino_acid_id} = aa.id
-                    cross join lateral unnest(rb_to_array(t.{ColumnNames.samples_present})) as samps({ColumnNames.sample_id})
+                    cross join lateral unnest(rb_to_array(t.{ColumnNames.samples_present}{subset_intersect})) as samps({ColumnNames.sample_id})
                     where aa.position_aa = :position_aa and aa.alt_aa = :alt_aa and aa.gff_feature = :gff_feature
                 )
                 select
@@ -218,9 +249,28 @@ async def get_nt_mutation_count_by_collection_date(
     max_span_days: int,
     where: str | None = None
 ):
+    # Without a filter the query keeps its original shape. With one, the matching samples are
+    # collapsed into a bitmap first and intersected with the change's own bitmap before unnest:
+    # otherwise every sample carrying the change (7M+ for a common allele) is expanded into a row
+    # and probed against samples_lineages, only to be discarded by the filter afterwards.
     user_where_clause = ''
+    subset_ctes = ''
+    subset_intersect = ''
     if where is not None:
         user_where_clause = f'where ({parser.parse(where)})'
+        subset_ctes = f'''
+            with sample_subset as (
+                select s.id as sample_id
+                from {TableNames.samples} s
+                inner join {TableNames.samples_lineages} sl on sl.sample_id = s.id
+                inner join {TableNames.lineages} l on l.id = sl.lineage_id
+                {user_where_clause}
+            ),
+            sample_subset_bm as (
+                select coalesce(rb_build_agg(sample_id), rb_build('{{}}')) as bm from sample_subset
+            ),
+        '''
+        subset_intersect = ' & (select bm from sample_subset_bm)'
 
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(
@@ -239,7 +289,7 @@ async def get_nt_mutation_count_by_collection_date(
         res = await session.execute(
             text(
                 f'''
-                with mutation_samples as (
+                {subset_ctes if subset_ctes else 'with'} mutation_samples as (
                     select
                         a.region,
                         a.ref_nt,
@@ -248,7 +298,7 @@ async def get_nt_mutation_count_by_collection_date(
                         samps.{ColumnNames.sample_id} as target_sample_id
                     from {TableNames.alleles} a
                     inner join {TableNames.cns_samples_by_allele} m on m.{ColumnNames.allele_id} = a.id
-                    cross join lateral unnest(rb_to_array(m.{ColumnNames.samples_present})) as samps({ColumnNames.sample_id})
+                    cross join lateral unnest(rb_to_array(m.{ColumnNames.samples_present}{subset_intersect})) as samps({ColumnNames.sample_id})
                     where a.position_nt = :position_nt and a.alt_nt = :alt_nt and a.region = :region
                 )
                 select

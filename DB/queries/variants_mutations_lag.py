@@ -61,8 +61,13 @@ async def _get_lag_variants_mutations(
                            aa.{ColumnNames.position_aa},
                            aa.{ColumnNames.alt_aa},
                            aa.{ColumnNames.gff_feature}
-                    FROM sample_subset ss
-                    inner join {TableNames.cns_samples_by_amino_acid} csaa on csaa.{ColumnNames.samples_present} @> ss.id
+                    FROM {TableNames.cns_samples_by_amino_acid} csaa
+                    CROSS JOIN LATERAL unnest(
+                                rb_to_array(csaa.{ColumnNames.samples_present} & (
+                                    SELECT bm
+                                    FROM sample_subset_bm
+                                ))) AS u(sample_id)
+                    INNER JOIN sample_subset ss ON ss.id = u.sample_id
                     INNER JOIN {TableNames.amino_acids} aa ON aa.id = csaa.{ColumnNames.amino_acid_id}
                     GROUP BY aa.{ColumnNames.ref_aa}, aa.{ColumnNames.position_aa}, aa.{ColumnNames.alt_aa}, aa.{ColumnNames.gff_feature}
                 ),
