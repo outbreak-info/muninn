@@ -1,6 +1,7 @@
 # Muninn
 
-Muninn is a database system designed to store consensus and intra-host mutation data for avian influenza and SARS-CoV-2.
+Muninn is a pathogen-agnostic database system for functional and genomic surveillance.
+It stores genomic and protein mutation data at both the intrahost and consensus levels, as well as phenotype data on mutation effects.
 
 ## Containerized Setup
 
