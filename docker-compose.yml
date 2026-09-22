@@ -60,7 +60,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    command: fastapi run --workers 8 api/main.py
+    command: fastapi run --workers ${MUNINN_N_API_WORKERS:-4} api/main.py
     healthcheck:
       test: "curl localhost:8000/v1/health"
       interval: 10s
