@@ -70,6 +70,9 @@ def p_term_lte(p):
     'term : field LTE comparable'
     p[0] = f'{p[1]} <= {p[3]}'
 
+def p_term_field(p):
+    'term : field'
+    p[0] = p[1]
 
 def p_word_value(p):
     'value : WORD'

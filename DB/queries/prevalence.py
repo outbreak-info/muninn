@@ -9,7 +9,6 @@ from parser.parser import parser
 from utils.constants import ColumnNames, NtOrAa, TableNames
 from utils.csv_helpers import parse_change_string
 
-WW_NOT_SAMPLES_FILTER_SHIM = f'num_nulls({ColumnNames.ww_site_id}, {ColumnNames.ww_catchment_population}, {ColumnNames.ww_collected_by}, {ColumnNames.ww_viral_load}) < 4'
 
 async def get_samples_variant_freq_by_aa_change(change: str) -> List[VariantFreqInfo]:
     return await _get_samples_variant_freq(change, NtOrAa.aa)
@@ -114,7 +113,10 @@ async def get_mutation_sample_count_by_aa(change: str) -> List[MutationCountInfo
 
 
 async def get_pheno_values_and_mutation_counts(
-    pheno_metric_name: str, region: str, include_refs: bool, where: str | None
+    pheno_metric_name: str,
+    region: str,
+    include_refs: bool,
+    where: str | None
 ) -> List["VariantCountPhenoScoreInfo"]:
     no_refs_filter = "and aas.ref_aa <> aas.alt_aa"
     if include_refs:
@@ -143,7 +145,7 @@ async def get_pheno_values_and_mutation_counts(
             left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
             inner join {TableNames.samples_lineages} sl on sl.{ColumnNames.sample_id} = s.id
             inner join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id}
-            where NOT {WW_NOT_SAMPLES_FILTER_SHIM} {user_where_clause}
+            where {user_where_clause}
         )
         select aas.ref_aa,
                aas.position_aa,

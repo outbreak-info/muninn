@@ -8,9 +8,6 @@ from api.models import LineageAbundanceWithSampleInfo, AverageLineageAbundanceIn
 from parser.parser import parser
 from utils.constants import DEFAULT_MAX_SPAN_DAYS, ColumnNames, TableNames
 
-# todo: replace this with an actual flag
-WW_SAMPLES_FILTER_SHIM = f'num_nulls({ColumnNames.ww_site_id}, {ColumnNames.ww_catchment_population}, {ColumnNames.ww_collected_by}, {ColumnNames.ww_viral_load}) < 4'
-
 
 async def get_lineage_abundances_by_sample(
     where: str | None,
@@ -37,7 +34,7 @@ async def get_lineage_abundances_by_sample(
                 inner join lineages l on l.id = sl.lineage_id
                 inner join samples s on s.id = sl.sample_id
                 inner join geo_locations gl on gl.id = s.geo_location_id
-                where {WW_SAMPLES_FILTER_SHIM}
+                where {ColumnNames.is_ww_sample}
                 {user_where_clause}
                 '''
             )
@@ -132,7 +129,7 @@ async def get_averaged_lineage_abundances_by_location(
                 inner join samples s on s.id = sl.sample_id
                 left join geo_locations gl on gl.id = s.geo_location_id
                 where (s.collection_end_date - s.collection_start_date) <= {max_span_days}
-                and {WW_SAMPLES_FILTER_SHIM}
+                and {ColumnNames.is_ww_sample}
                 {user_where_clause}
             ),
             lineage_base_data as (
@@ -149,7 +146,7 @@ async def get_averaged_lineage_abundances_by_location(
                 inner join samples s on s.id = sl.sample_id
                 left join geo_locations gl on gl.id = s.geo_location_id
                 where (s.collection_end_date - s.collection_start_date) <= {max_span_days}
-                and {WW_SAMPLES_FILTER_SHIM}
+                and {ColumnNames.is_ww_sample}
                 {user_where_clause}
             ),
             total_prevalences as (
@@ -222,7 +219,7 @@ async def get_averaged_lineage_abundances_by_location(
                 inner join samples s on s.id = sl.sample_id
                 left join geo_locations gl on gl.id = s.geo_location_id
                 where (s.collection_end_date - s.collection_start_date) <= {max_span_days}
-                and {WW_SAMPLES_FILTER_SHIM}
+                and {ColumnNames.is_ww_sample}
                 {user_where_clause}
             ),
             total_prevalences as (
@@ -308,26 +305,28 @@ async def get_latest_sample(where: str | None) -> List[SampleInfo]:
         user_where_clause = f'and ({parser.parse(where)})'
 
     sql = (
-        f'with latest_date as (\n'
-        f'    select s.collection_start_date\n'
-        f'    from samples s\n'
-        f'    left join geo_locations gl on gl.id = s.geo_location_id\n'
-        f'    where s.collection_start_date is not null\n'
-        f'        and {WW_SAMPLES_FILTER_SHIM}\n'
-        f'        {user_where_clause}'
-        f'    order by collection_start_date desc\n'
-        f'    limit 1\n'
-        f')\n'
-        f'select s.*,\n'
-        f'       gl.country_name as geo_country_name,\n'
-        f'       gl.admin1_name as geo_admin1_name,\n'
-        f'       gl.admin2_name as geo_admin2_name,\n'
-        f'       gl.admin3_name as geo_admin3_name\n'
-        f'from samples s\n'
-        f'left join geo_locations gl on gl.id = s.geo_location_id\n'
-        f'inner join latest_date using (collection_start_date)\n'
-        f'        where {WW_SAMPLES_FILTER_SHIM}\n'
-        f'        {user_where_clause};'
+        f'''
+        with latest_date as (
+            select s.collection_start_date
+            from samples s
+            left join geo_locations gl on gl.id = s.geo_location_id
+            where s.collection_start_date is not null
+                and {ColumnNames.is_ww_sample}
+                {user_where_clause}
+            order by collection_start_date desc
+            limit 1
+        )
+        select s.*,
+               gl.country_name as geo_country_name,
+               gl.admin1_name as geo_admin1_name,
+               gl.admin2_name as geo_admin2_name,
+               gl.admin3_name as geo_admin3_name
+        from samples s
+        left join geo_locations gl on gl.id = s.geo_location_id
+        inner join latest_date using (collection_start_date)
+                where {ColumnNames.is_ww_sample}
+                {user_where_clause};
+        '''
     )
 
     async with get_async_session() as session:
@@ -352,7 +351,7 @@ async def count_samples_with_lineage_data(by_col: str, where: str | None = None)
                 LEFT OUTER JOIN {TableNames.geo_locations} gl ON gl.id = s.{ColumnNames.geo_location_id} 
                 LEFT OUTER JOIN {TableNames.samples_lineages} sl ON sl.{ColumnNames.sample_id} = s.id 
                 WHERE sl.{ColumnNames.abundance} IS NOT NULL
-                      and {WW_SAMPLES_FILTER_SHIM}
+                      and {ColumnNames.is_ww_sample}
                       {user_where_clause}
                 GROUP BY {by_col}
                 ORDER BY count1 desc
@@ -374,7 +373,7 @@ async def count_lineages_by_sample_data(where: str | None = None):
     async with get_async_session() as session:
         res = await session.execute(
             text(
-                f'''
+            f'''
             SELECT l.{ColumnNames.lineage_name}, 
                    count(*) AS count1
             FROM {TableNames.samples} s
@@ -382,7 +381,7 @@ async def count_lineages_by_sample_data(where: str | None = None):
             LEFT OUTER JOIN {TableNames.samples_lineages} sl ON sl.{ColumnNames.sample_id} = s.id 
             LEFT OUTER JOIN {TableNames.lineages} l ON l.id = sl.{ColumnNames.lineage_id}
             WHERE sl.{ColumnNames.abundance} IS NOT NULL
-                  and {WW_SAMPLES_FILTER_SHIM}
+                  and {ColumnNames.is_ww_sample}
                   {user_where_clause} 
             GROUP BY l.{ColumnNames.lineage_name} 
             ORDER BY count1 desc;
