@@ -140,6 +140,7 @@ class SamplesParser(FileParser):
                             transform=dateutil.parser.isoparse,
                             allow_none=True
                         ),
+                        is_ww_sample=False,
                     )
 
                     _, preexisting = await find_or_insert_sample(sample, upsert=True)

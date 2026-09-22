@@ -69,6 +69,7 @@ class Sample(Base):
     bases: Mapped[int] = mapped_column(sa.BigInteger, nullable=True)
 
     # wastewater-specific columns
+    is_ww_sample: Mapped[bool] = mapped_column(sa.Boolean, nullable=False)
     ww_viral_load: Mapped[float] = mapped_column(sa.Double, nullable=True)
     ww_catchment_population: Mapped[int] = mapped_column(sa.BigInteger, nullable=True)
     ww_site_id: Mapped[str] = mapped_column(sa.Text, nullable=True)

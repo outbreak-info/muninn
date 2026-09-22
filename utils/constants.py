@@ -257,6 +257,7 @@ class ColumnNames(PgIdentifiers):
     ww_site_id = 'ww_site_id'
     ww_collected_by = 'ww_collected_by'
     census_region = 'census_region'
+    is_ww_sample = 'is_ww_sample'
 
     # alleles
     position_nt = 'position_nt'

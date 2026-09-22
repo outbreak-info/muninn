@@ -56,6 +56,7 @@ async def batch_upsert_samples(samples: pl.DataFrame):
         ColumnNames.collection_end_date,
         ColumnNames.host,
         ColumnNames.geo_location_id,
+        ColumnNames.is_ww_sample,
     ]
     # this is just the columns expected to be null in the SC2 data
     # if there are errors because another col is showing up as null, it may need to be added

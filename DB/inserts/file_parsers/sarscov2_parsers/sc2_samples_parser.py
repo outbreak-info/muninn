@@ -22,9 +22,9 @@ class Sc2SamplesParser(FileParser):
     ):
         self.samples_filename = samples_filename
         self.samples_delimiter = samples_delimiter
+        self.geo_location_levels_delimiter = geo_location_levels_delimiter
         self._verify_header()
 
-        self.geo_location_levels_delimiter = geo_location_levels_delimiter
 
     async def parse_and_insert(self):
         start = perf_counter()
@@ -167,7 +167,8 @@ class Sc2SdSamplesParser(Sc2SamplesParser):
     def fill_missing_required_cols(self, samples_input: pl.LazyFrame) -> pl.LazyFrame:
         return samples_input.with_columns(
             pl.lit("NA").alias(ColumnNames.organism),
-            pl.lit(False).alias(ColumnNames.is_retracted)
+            pl.lit(False).alias(ColumnNames.is_retracted),
+            pl.lit(False).alias(ColumnNames.is_ww_sample),
         )
 
     column_name_map = {
@@ -184,7 +185,8 @@ class Sc2WastewaterSamplesParser(Sc2SamplesParser):
 
     def fill_missing_required_cols(self, samples_input: pl.LazyFrame) -> pl.LazyFrame:
         return samples_input.with_columns(
-            pl.lit(False).alias(ColumnNames.is_retracted)
+            pl.lit(False).alias(ColumnNames.is_retracted),
+            pl.lit(True).alias(ColumnNames.is_ww_sample),
         )
 
     column_name_map = {
@@ -213,7 +215,8 @@ class Sc2NcbiSamplesParser(Sc2SamplesParser):
     def fill_missing_required_cols(self, samples_input: pl.LazyFrame) -> pl.LazyFrame:
         return samples_input.with_columns(
             pl.lit("NA").alias(ColumnNames.organism),
-            pl.lit(False).alias(ColumnNames.is_retracted)
+            pl.lit(False).alias(ColumnNames.is_retracted),
+            pl.lit(False).alias(ColumnNames.is_ww_sample),
         )
 
     column_name_map = {
