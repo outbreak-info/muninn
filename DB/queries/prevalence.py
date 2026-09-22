@@ -137,15 +137,15 @@ async def get_pheno_values_and_mutation_counts(
             order by count desc;
         """
     else:
-        user_where_clause = f'and ({parser.parse(where)})'
+        user_where_clause = f'where {parser.parse(where)}'
         query = f"""
         with matching_samples as (
             select s.id as sample_id
             from {TableNames.samples} s
             left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
             inner join {TableNames.samples_lineages} sl on sl.{ColumnNames.sample_id} = s.id
-            inner join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id}
-            where {user_where_clause}
+            inner join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id} 
+            {user_where_clause}
         )
         select aas.ref_aa,
                aas.position_aa,
