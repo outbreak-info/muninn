@@ -40,7 +40,7 @@ create table samples (
 	bases bigint,
 
 	-- wastewater columns
-	is_ww_sample boolean not null, -- todo
+	is_ww_sample boolean not null,
 	ww_viral_load double precision,
 	ww_catchment_population bigint,
 	ww_site_id text,
