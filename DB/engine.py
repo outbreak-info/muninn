@@ -60,8 +60,8 @@ def create_pg_engine():
 
 async_write_engine: AsyncEngine = create_async_engine(
     get_url(async_=True, readonly=False),
-    pool_size=1,
-    max_overflow=0,
+    pool_size=WRITE_POOL_SIZE,
+    max_overflow=WRITE_MAX_OVERFLOW,
     pool_timeout=POOL_TIMEOUT,
     pool_recycle=POOL_RECYCLE,
     echo_pool=True,
