@@ -64,7 +64,6 @@ async_write_engine: AsyncEngine = create_async_engine(
     max_overflow=WRITE_MAX_OVERFLOW,
     pool_timeout=POOL_TIMEOUT,
     pool_recycle=POOL_RECYCLE,
-    echo_pool=True,
     connect_args={
         "prepared_statement_name_func": lambda: f"__asyncpg_{uuid.uuid4()}__",
     }
@@ -76,7 +75,6 @@ async_engine: AsyncEngine = create_async_engine(
     max_overflow=READ_MAX_OVERFLOW,
     pool_timeout=POOL_TIMEOUT,
     pool_recycle=POOL_RECYCLE,
-    echo_pool=True,
     connect_args={
         "prepared_statement_name_func": lambda: f"__asyncpg_{uuid.uuid4()}__",
         'server_settings': {'statement_timeout': str(READ_STATEMENT_TIMEOUT_MS)}
