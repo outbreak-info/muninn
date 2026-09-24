@@ -15,16 +15,17 @@ Rule 9     term -> field GT comparable
 Rule 10    term -> field LT comparable
 Rule 11    term -> field GTE comparable
 Rule 12    term -> field LTE comparable
-Rule 13    value -> WORD
-Rule 14    field -> WORD
-Rule 15    value -> comparable
-Rule 16    comparable -> NUMBER
-Rule 17    comparable -> DATE
+Rule 13    term -> field
+Rule 14    value -> WORD
+Rule 15    field -> WORD
+Rule 16    value -> comparable
+Rule 17    comparable -> NUMBER
+Rule 18    comparable -> DATE
 
 Terminals, with rules where they appear
 
 AND                  : 1
-DATE                 : 17
+DATE                 : 18
 EQUALS               : 7
 GT                   : 9
 GTE                  : 11
@@ -33,17 +34,17 @@ LT                   : 10
 LTE                  : 12
 NOT                  : 3
 NOT_EQUALS           : 8
-NUMBER               : 16
+NUMBER               : 17
 OR                   : 2
 RPAREN               : 5 6
-WORD                 : 13 14
+WORD                 : 14 15
 error                : 
 
 Nonterminals, with rules where they appear
 
-comparable           : 9 10 11 12 15
+comparable           : 9 10 11 12 16
 expression           : 1 1 2 2 3 5 0
-field                : 7 8 9 10 11 12
+field                : 7 8 9 10 11 12 13
 term                 : 4 6
 value                : 7 8
 
@@ -64,7 +65,8 @@ state 0
     (10) term -> . field LT comparable
     (11) term -> . field GTE comparable
     (12) term -> . field LTE comparable
-    (14) field -> . WORD
+    (13) term -> . field
+    (15) field -> . WORD
 
     NOT             shift and go to state 2
     LPAREN          shift and go to state 4
@@ -99,7 +101,8 @@ state 2
     (10) term -> . field LT comparable
     (11) term -> . field GTE comparable
     (12) term -> . field LTE comparable
-    (14) field -> . WORD
+    (13) term -> . field
+    (15) field -> . WORD
 
     NOT             shift and go to state 2
     LPAREN          shift and go to state 4
@@ -135,7 +138,8 @@ state 4
     (10) term -> . field LT comparable
     (11) term -> . field GTE comparable
     (12) term -> . field LTE comparable
-    (14) field -> . WORD
+    (13) term -> . field
+    (15) field -> . WORD
 
     NOT             shift and go to state 2
     LPAREN          shift and go to state 4
@@ -153,6 +157,7 @@ state 5
     (10) term -> field . LT comparable
     (11) term -> field . GTE comparable
     (12) term -> field . LTE comparable
+    (13) term -> field .
 
     EQUALS          shift and go to state 12
     NOT_EQUALS      shift and go to state 13
@@ -160,18 +165,26 @@ state 5
     LT              shift and go to state 15
     GTE             shift and go to state 16
     LTE             shift and go to state 17
+    AND             reduce using rule 13 (term -> field .)
+    OR              reduce using rule 13 (term -> field .)
+    $end            reduce using rule 13 (term -> field .)
+    RPAREN          reduce using rule 13 (term -> field .)
 
 
 state 6
 
-    (14) field -> WORD .
+    (15) field -> WORD .
 
-    EQUALS          reduce using rule 14 (field -> WORD .)
-    NOT_EQUALS      reduce using rule 14 (field -> WORD .)
-    GT              reduce using rule 14 (field -> WORD .)
-    LT              reduce using rule 14 (field -> WORD .)
-    GTE             reduce using rule 14 (field -> WORD .)
-    LTE             reduce using rule 14 (field -> WORD .)
+    EQUALS          reduce using rule 15 (field -> WORD .)
+    NOT_EQUALS      reduce using rule 15 (field -> WORD .)
+    GT              reduce using rule 15 (field -> WORD .)
+    LT              reduce using rule 15 (field -> WORD .)
+    GTE             reduce using rule 15 (field -> WORD .)
+    LTE             reduce using rule 15 (field -> WORD .)
+    AND             reduce using rule 15 (field -> WORD .)
+    OR              reduce using rule 15 (field -> WORD .)
+    $end            reduce using rule 15 (field -> WORD .)
+    RPAREN          reduce using rule 15 (field -> WORD .)
 
 
 state 7
@@ -189,7 +202,8 @@ state 7
     (10) term -> . field LT comparable
     (11) term -> . field GTE comparable
     (12) term -> . field LTE comparable
-    (14) field -> . WORD
+    (13) term -> . field
+    (15) field -> . WORD
 
     NOT             shift and go to state 2
     LPAREN          shift and go to state 4
@@ -214,7 +228,8 @@ state 8
     (10) term -> . field LT comparable
     (11) term -> . field GTE comparable
     (12) term -> . field LTE comparable
-    (14) field -> . WORD
+    (13) term -> . field
+    (15) field -> . WORD
 
     NOT             shift and go to state 2
     LPAREN          shift and go to state 4
@@ -266,10 +281,10 @@ state 11
 state 12
 
     (7) term -> field EQUALS . value
-    (13) value -> . WORD
-    (15) value -> . comparable
-    (16) comparable -> . NUMBER
-    (17) comparable -> . DATE
+    (14) value -> . WORD
+    (16) value -> . comparable
+    (17) comparable -> . NUMBER
+    (18) comparable -> . DATE
 
     WORD            shift and go to state 23
     NUMBER          shift and go to state 25
@@ -281,10 +296,10 @@ state 12
 state 13
 
     (8) term -> field NOT_EQUALS . value
-    (13) value -> . WORD
-    (15) value -> . comparable
-    (16) comparable -> . NUMBER
-    (17) comparable -> . DATE
+    (14) value -> . WORD
+    (16) value -> . comparable
+    (17) comparable -> . NUMBER
+    (18) comparable -> . DATE
 
     WORD            shift and go to state 23
     NUMBER          shift and go to state 25
@@ -296,8 +311,8 @@ state 13
 state 14
 
     (9) term -> field GT . comparable
-    (16) comparable -> . NUMBER
-    (17) comparable -> . DATE
+    (17) comparable -> . NUMBER
+    (18) comparable -> . DATE
 
     NUMBER          shift and go to state 25
     DATE            shift and go to state 26
@@ -307,8 +322,8 @@ state 14
 state 15
 
     (10) term -> field LT . comparable
-    (16) comparable -> . NUMBER
-    (17) comparable -> . DATE
+    (17) comparable -> . NUMBER
+    (18) comparable -> . DATE
 
     NUMBER          shift and go to state 25
     DATE            shift and go to state 26
@@ -318,8 +333,8 @@ state 15
 state 16
 
     (11) term -> field GTE . comparable
-    (16) comparable -> . NUMBER
-    (17) comparable -> . DATE
+    (17) comparable -> . NUMBER
+    (18) comparable -> . DATE
 
     NUMBER          shift and go to state 25
     DATE            shift and go to state 26
@@ -329,8 +344,8 @@ state 16
 state 17
 
     (12) term -> field LTE . comparable
-    (16) comparable -> . NUMBER
-    (17) comparable -> . DATE
+    (17) comparable -> . NUMBER
+    (18) comparable -> . DATE
 
     NUMBER          shift and go to state 25
     DATE            shift and go to state 26
@@ -399,42 +414,42 @@ state 22
 
 state 23
 
-    (13) value -> WORD .
+    (14) value -> WORD .
 
-    AND             reduce using rule 13 (value -> WORD .)
-    OR              reduce using rule 13 (value -> WORD .)
-    $end            reduce using rule 13 (value -> WORD .)
-    RPAREN          reduce using rule 13 (value -> WORD .)
+    AND             reduce using rule 14 (value -> WORD .)
+    OR              reduce using rule 14 (value -> WORD .)
+    $end            reduce using rule 14 (value -> WORD .)
+    RPAREN          reduce using rule 14 (value -> WORD .)
 
 
 state 24
 
-    (15) value -> comparable .
+    (16) value -> comparable .
 
-    AND             reduce using rule 15 (value -> comparable .)
-    OR              reduce using rule 15 (value -> comparable .)
-    $end            reduce using rule 15 (value -> comparable .)
-    RPAREN          reduce using rule 15 (value -> comparable .)
+    AND             reduce using rule 16 (value -> comparable .)
+    OR              reduce using rule 16 (value -> comparable .)
+    $end            reduce using rule 16 (value -> comparable .)
+    RPAREN          reduce using rule 16 (value -> comparable .)
 
 
 state 25
 
-    (16) comparable -> NUMBER .
+    (17) comparable -> NUMBER .
 
-    AND             reduce using rule 16 (comparable -> NUMBER .)
-    OR              reduce using rule 16 (comparable -> NUMBER .)
-    $end            reduce using rule 16 (comparable -> NUMBER .)
-    RPAREN          reduce using rule 16 (comparable -> NUMBER .)
+    AND             reduce using rule 17 (comparable -> NUMBER .)
+    OR              reduce using rule 17 (comparable -> NUMBER .)
+    $end            reduce using rule 17 (comparable -> NUMBER .)
+    RPAREN          reduce using rule 17 (comparable -> NUMBER .)
 
 
 state 26
 
-    (17) comparable -> DATE .
+    (18) comparable -> DATE .
 
-    AND             reduce using rule 17 (comparable -> DATE .)
-    OR              reduce using rule 17 (comparable -> DATE .)
-    $end            reduce using rule 17 (comparable -> DATE .)
-    RPAREN          reduce using rule 17 (comparable -> DATE .)
+    AND             reduce using rule 18 (comparable -> DATE .)
+    OR              reduce using rule 18 (comparable -> DATE .)
+    $end            reduce using rule 18 (comparable -> DATE .)
+    RPAREN          reduce using rule 18 (comparable -> DATE .)
 
 
 state 27

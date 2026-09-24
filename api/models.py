@@ -96,6 +96,7 @@ class SampleInfo(BaseModel):
     ww_catchment_population: int | None = Field(description="Catchment population served by the sampling site")
     ww_site_id: str | None = Field(description="Wastewater sampling site identifier")
     ww_collected_by: str | None = Field(description="Organization that collected the wastewater sample")
+    is_ww_sample: bool = Field(description="If true, this is a wastewater sample")
 
 
 class MutationNucleotideInfo(BaseModel):

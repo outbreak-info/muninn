@@ -146,6 +146,9 @@ async def count_samples_by_simple_date(
                 count(*)
                 from samples s
                 left join geo_locations gl on gl.id = s.geo_location_id
+                left join {TableNames.samples_lineages} sl on sl.{ColumnNames.sample_id} = s.id
+                left join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id}
+                left join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
                 {user_where_clause}
                 {group_by_clause}
                 {order_by_clause}
@@ -190,6 +193,9 @@ async def count_samples_by_collection_date(
                         collection_end_date - collection_start_date as collection_span
                         from samples s
                         left join geo_locations gl on gl.id = s.geo_location_id
+                        left join {TableNames.samples_lineages} sl on sl.{ColumnNames.sample_id} = s.id
+                        left join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id}
+                        left join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
                         {user_where_clause}
                     )
                     where collection_span <= {max_span_days}

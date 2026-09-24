@@ -1,6 +1,7 @@
 # Muninn
 
-Muninn is a database system designed to store consensus and intra-host mutation data for avian influenza and SARS-CoV-2.
+Muninn is a pathogen-agnostic database system for functional and genomic surveillance.
+It stores genomic and protein mutation data at both the intrahost and consensus levels, as well as phenotype data on mutation effects.
 
 ## Containerized Setup
 
@@ -54,6 +55,11 @@ The compose file defines two services, each of which will run in their own conta
     # this is not used in the default docker-compose file
     # directory to be mounted to store postgres data
     export MUNINN_PG_DATA_BIND_DIR="/dev/null"
+   
+    # Optional: this sets the number of workers for fastapi
+    # if not set, the default is 4. 
+    # when setting this, consider also the number of database connections that will be created.
+    export MUNINN_N_API_WORKERS=4
     ```
     - Change the value for `MUNINN_SERVER_DATA_INPUT_DIR` to allow the server to read input data from a host directory.
     - For local testing, `MUNINN_PG_DATA_BIND_DIR` does not need to be set. 

@@ -7,10 +7,11 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.ext.asyncio.engine import AsyncEngine
 
 from utils.constants import Env
-
-STATEMENT_TIMEOUT_MS = 600_000
-POOL_SIZE = 1
-MAX_OVERFLOW = 0
+READ_STATEMENT_TIMEOUT_MS = 600_000
+READ_POOL_SIZE = 2
+READ_MAX_OVERFLOW = 2
+WRITE_POOL_SIZE = 1
+WRITE_MAX_OVERFLOW = 0
 POOL_TIMEOUT = 10
 POOL_RECYCLE = 1800
 
@@ -53,17 +54,16 @@ def get_url(async_: bool = False, polars: bool = False, readonly: bool = True):
 def create_pg_engine():
     return create_engine(
         get_url(readonly=False),
-        connect_args={'options': f'-c statement_timeout={STATEMENT_TIMEOUT_MS}'}
+        connect_args={'options': f'-c statement_timeout={READ_STATEMENT_TIMEOUT_MS}'}
     )
 
 
 async_write_engine: AsyncEngine = create_async_engine(
     get_url(async_=True, readonly=False),
-    pool_size=1,
-    max_overflow=0,
+    pool_size=WRITE_POOL_SIZE,
+    max_overflow=WRITE_MAX_OVERFLOW,
     pool_timeout=POOL_TIMEOUT,
     pool_recycle=POOL_RECYCLE,
-    echo_pool=True,
     connect_args={
         "prepared_statement_name_func": lambda: f"__asyncpg_{uuid.uuid4()}__",
     }
@@ -71,14 +71,13 @@ async_write_engine: AsyncEngine = create_async_engine(
 
 async_engine: AsyncEngine = create_async_engine(
     get_url(async_=True),
-    pool_size=POOL_SIZE,
-    max_overflow=MAX_OVERFLOW,
+    pool_size=READ_POOL_SIZE,
+    max_overflow=READ_MAX_OVERFLOW,
     pool_timeout=POOL_TIMEOUT,
     pool_recycle=POOL_RECYCLE,
-    echo_pool=True,
     connect_args={
         "prepared_statement_name_func": lambda: f"__asyncpg_{uuid.uuid4()}__",
-        'server_settings': {'statement_timeout': str(STATEMENT_TIMEOUT_MS)}
+        'server_settings': {'statement_timeout': str(READ_STATEMENT_TIMEOUT_MS)}
     }
 )
 

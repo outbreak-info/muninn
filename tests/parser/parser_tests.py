@@ -51,6 +51,12 @@ class TestParser(unittest.TestCase):
         res = parser.parse('(host=cat ^ accession=SRR28752446) ^ host = bird')
         self.assertEqual('(host = \'cat\' AND accession = \'SRR28752446\') AND host = \'bird\'', res)
 
+        res = parser.parse('!(is_redacted)')
+        self.assertEqual('NOT (is_redacted)', res)
+
+        res = parser.parse('(!is_redacted)')
+        self.assertEqual('(NOT is_redacted)', res)
+
     def test_paren_term(self):
         res = parser.parse('(host = cat) ^ accession = SRR28752446')
         self.assertEqual('(host = \'cat\') AND accession = \'SRR28752446\'', res)
@@ -108,6 +114,20 @@ class TestParser(unittest.TestCase):
         res = parser.parse('number = 5 ^ !!(host = cat)')
         self.assertEqual('number = 5 AND NOT NOT (host = \'cat\')', res)
 
+    def test_boolean_field(self):
+        res = parser.parse('is_ww_sample')
+        self.assertEqual('is_ww_sample', res)
+
+        res = parser.parse('!is_redacted')
+        self.assertEqual('NOT is_redacted', res)
+
+    def test_complex_expression_with_boolean(self):
+        res = parser.parse('number = 5 ^ !(host = cat) | is_ww_sample')
+        self.assertEqual('number = 5 AND NOT (host = \'cat\') OR is_ww_sample', res)
+
+        res = parser.parse('number = 5 ^ !!(host = cat) ^ (is_ww_sample)')
+        self.assertEqual('number = 5 AND NOT NOT (host = \'cat\') AND (is_ww_sample)', res)
+
     def test_compare_not_comparable(self):
         self.assertRaises(ParsingError, parser.parse, 'host > cat')
         self.assertRaises(ParsingError, parser.parse, 'host < domestic cat')
@@ -144,3 +164,9 @@ class TestParser(unittest.TestCase):
         self.assertRaises(ParsingError, parser.parse, 'host = cat ^^ number = 5')
         self.assertRaises(ParsingError, parser.parse, 'host = cat || number = 5')
         self.assertRaises(ParsingError, parser.parse, 'host = cat |^ number = 5')
+
+    def test_partial_terms(self):
+        self.assertRaises(ParsingError, parser.parse, 'is_ww_sample = ')
+        self.assertRaises(ParsingError, parser.parse, 'is_ww_sample=')
+        self.assertRaises(ParsingError, parser.parse, '!is_ww_sample=')
+        self.assertRaises(ParsingError, parser.parse, '=is_ww_sample')
