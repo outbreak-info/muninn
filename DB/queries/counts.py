@@ -217,70 +217,75 @@ async def count_variants_by_collection_date(
     change_bin: NtOrAa,
     days: int,
     max_span_days: int,
-    where: str | None = None
+    where: str | None = None,
+    variants_where: str = None
 ) -> Dict[str, Dict[str, int]]:
     ih_table, change_id_col, catalog_table, feature_col, ref_col, pos_col, alt_col = \
         get_ih_table_and_change_cols(change_bin)
 
-    user_where_clause = ''
+    samples_where_clause = ''
     if where is not None:
-        user_where_clause = f'and ({parser.parse(where)})'
+        samples_where_clause = f'and ({parser.parse(where)})'
+
+    variants_where_clause = ''
+    if variants_where is not None:
+        variants_where_clause = f'where ({parser.parse(variants_where)})'
 
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(date_bin, [feature_col, ref_col, pos_col, alt_col])
+    group_by_date_only = get_group_by_clause(date_bin)
     order_by_clause = get_order_by_cause(date_bin)
+    date_col_names = get_date_column_names(date_bin)
 
     async with get_async_session() as session:
         res = await session.execute(
             text(
                 f'''
                 with sample_subset as (
-                    select distinct
-                        s.id as sample_id,
-                        s.collection_start_date,
-                        s.collection_end_date
+                    select s.id as sample_id,
+                           {MID_COLLECTION_DATE_CALCULATION}
                     from samples s
                     left join geo_locations gl on gl.id = s.geo_location_id
                     left join samples_lineages sl on sl.sample_id = s.id
                     left join lineages l on l.id = sl.lineage_id
                     left join lineage_systems ls on ls.id = l.lineage_system_id
                     where num_nulls(s.collection_end_date, s.collection_start_date) = 0
-                        and s.collection_end_date - s.collection_start_date <= {max_span_days}
-                        {user_where_clause}
+                      and s.collection_end_date - s.collection_start_date <= {max_span_days}
+                      {samples_where_clause}
                 ),
-                sample_subset_bm as (
-                    select coalesce(rb_build_agg(sample_id), rb_build('{{}}')) as bm
+                samples_dated as (
+                    select coalesce(rb_build_agg(sample_id), rb_build('{{}}')) as bm,
+                           {extract_clause}
                     from sample_subset
+                    {group_by_date_only}
+                ),
+                match_catalog as (
+                    select *
+                    from {ih_table} IH
+                    inner join {catalog_table} C on C.id = IH.{change_id_col}
+                    {variants_where_clause}
                 )
-                select
-                {extract_clause},
-                count(distinct sample_id),
-                {feature_col}, {ref_col}, {pos_col}, {alt_col}
-                from (
-                    select
-                        ss.sample_id,
-                        c.{feature_col}, c.{ref_col}, c.{pos_col}, c.{alt_col},
-                        {MID_COLLECTION_DATE_CALCULATION}
-                    from {ih_table} v
-                    inner join {catalog_table} c on c.id = v.{change_id_col}
-                    cross join lateral unnest(
-                        rb_to_array(v.{ColumnNames.samples_present} & (select bm from sample_subset_bm))
-                    ) as u(sample_id)
-                    inner join sample_subset ss on ss.sample_id = u.sample_id
-                )
+                select {date_col_names},
+                       {feature_col},
+                       {ref_col},
+                       {pos_col},
+                       {alt_col},
+                       sum(rb_and_cardinality(sd.bm, mc.samples_present)) as count
+                from match_catalog mc
+                inner join samples_dated sd on sd.bm && mc.samples_present
                 {group_by_clause}
-                {order_by_clause}
+                {order_by_clause};
                 '''
             )
         )
     out_data = dict()
     for r in res:
         date = date_bin.format_iso_chunk(r[0], r[1])
-        count = r[2]
-        feature = r[3]
-        ref = r[4]
-        pos = r[5]
-        alt = r[6]
+        count = r[6]
+        feature = r[2]
+        ref = r[3]
+        pos = r[4]
+        alt = r[5]
         change_name = f'{feature}:{ref}{pos}{alt}'
         try:
             out_data[date][change_name] = count

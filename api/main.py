@@ -339,13 +339,14 @@ async def get_variant_counts(
     days: DaysParam = DEFAULT_DAYS,
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
     where: str | None = filter_query('Optional. Selects which *samples* are counted: over all columns of the `samples` table, the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names), and the lineage columns (lineage_name, lineage_system_name). filter can only narrow the sample side. Use group_by to slice the change side.', required=False),
+    variants_where: str | None = filter_query(f'Optional. Only used when group_by={COLLECTION_DATE}. Applied to columns of alleles or amino acids, as appropriate.', required=False, alias='variants_filter')
 ):
     """
     Counts are of (sample, change) observations: a change is counted once per sample carrying it at
     any intra-host frequency, not once per frequency bin.
     """
     if group_by == COLLECTION_DATE:
-        return await DB.queries.counts.count_variants_by_collection_date(date_bin, change_bin, days, max_span_days, where)
+        return await DB.queries.counts.count_variants_by_collection_date(date_bin, change_bin, days, max_span_days, where, variants_where)
     return await DB.queries.counts.count_variants_by_column(group_by, change_bin, where)
 
 @router.get(
