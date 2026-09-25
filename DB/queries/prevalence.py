@@ -144,16 +144,22 @@ async def get_pheno_values_and_mutation_counts(
             from {TableNames.samples} s
             left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
             inner join {TableNames.samples_lineages} sl on sl.{ColumnNames.sample_id} = s.id
-            inner join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id} 
+            inner join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id}
             {user_where_clause}
+        ),
+        matching_samples_bm as (
+            select coalesce(rb_build_agg(sample_id), rb_build('{{}}')) as bm
+            from matching_samples
         )
         select aas.ref_aa,
                aas.position_aa,
                aas.alt_aa,
                pmv.value,
-               count(distinct matching_samples.sample_id) as count
-        from matching_samples
-        inner join {TableNames.cns_samples_by_amino_acid} csaa on csaa.{ColumnNames.samples_present} @> matching_samples.sample_id
+               rb_and_cardinality(
+                   rb_or_agg(csaa.{ColumnNames.samples_present}),
+                   (select bm from matching_samples_bm)
+               ) as count
+        from {TableNames.cns_samples_by_amino_acid} csaa
         inner join {TableNames.amino_acids} aas on aas.id = csaa.{ColumnNames.amino_acid_id}
         inner join {TableNames.phenotype_metric_values} pmv on pmv.{ColumnNames.amino_acid_id} = aas.id
         inner join {TableNames.phenotype_metrics} pm on pm.id = pmv.{ColumnNames.phenotype_metric_id}
