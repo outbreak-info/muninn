@@ -1,11 +1,12 @@
 import datetime
 from typing import List
 
-from utils.constants import DateBinOpt, COLLECTION_DATE
+from utils.constants import DateBinOpt, COLLECTION_DATE, ColumnNames
 
 MID_COLLECTION_DATE = 'mid_collection_date'
-MID_COLLECTION_DATE_CALCULATION = \
-    '(collection_start_date + ((collection_end_date - collection_start_date) / 2))::date AS mid_collection_date'
+# todo: next refactor should rename these two
+MID_COLLECTION_DATE_MATH = f'({ColumnNames.collection_start_date} + (({ColumnNames.collection_end_date} - {ColumnNames.collection_start_date}) / 2))::date'
+MID_COLLECTION_DATE_CALCULATION = f'{MID_COLLECTION_DATE_MATH} AS {MID_COLLECTION_DATE}'
 YEAR = 'year'
 CHUNK = 'chunk'
 BIN_START = 'bin_start'
@@ -52,7 +53,7 @@ def get_group_by_clause(
 
     return f'group by {", ".join(cols)}'
 
-
+# todo: fix this typo
 def get_order_by_cause(date_bin: DateBinOpt) -> str:
     match date_bin:
         case DateBinOpt.week | DateBinOpt.month:
@@ -63,11 +64,16 @@ def get_order_by_cause(date_bin: DateBinOpt) -> str:
             raise NotImplementedError
 
 
-def get_date_column_names(date_bin: DateBinOpt) -> str:
+def get_date_column_names(date_bin: DateBinOpt, joined: bool = True) -> str | list[str]:
+    cols = None
     match date_bin:
         case DateBinOpt.week | DateBinOpt.month:
-            return ', '.join([YEAR, CHUNK])
+           cols = [YEAR, CHUNK]
         case DateBinOpt.day:
-            return ', '.join([BIN_START, BIN_END])
+           cols = [BIN_START, BIN_END]
         case _:
             raise NotImplementedError
+    if joined:
+        return ', '.join(cols)
+    else:
+        return cols

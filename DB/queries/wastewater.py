@@ -1,12 +1,15 @@
+from datetime import date
 from typing import List, Any, Dict
 
 from sqlalchemy import Result
 
 from DB.engine import get_async_session
+from DB.queries.date_count_helpers import get_extract_clause, get_group_by_clause, \
+    get_date_column_names, get_order_by_cause, MID_COLLECTION_DATE_CALCULATION, YEAR, CHUNK
 from DB.textutils import text
 from api.models import LineageAbundanceWithSampleInfo, AverageLineageAbundanceInfo, SampleInfo
 from parser.parser import parser
-from utils.constants import DEFAULT_MAX_SPAN_DAYS, ColumnNames, TableNames
+from utils.constants import DEFAULT_MAX_SPAN_DAYS, ColumnNames, TableNames, DateBinOpt, COLLECTION_DATE
 
 
 async def get_lineage_abundances_by_sample(
@@ -58,241 +61,200 @@ async def get_lineage_abundances_by_sample(
 
 
 async def get_averaged_lineage_abundances_by_location(
-    where: str,
+    samples_where: str,
     geo_bin: str,
     max_span_days: int = DEFAULT_MAX_SPAN_DAYS,
-    lineage_name: str | None = None
+    lineage_name: str | None = None,
+    lineage_system_name: str | None = None
 ) -> List[AverageLineageAbundanceInfo]:
-    user_where_clause = ''
-    if where is not None:
-        user_where_clause = f'and ({parser.parse(where)})'
+    # Samples where
+    samples_where_clause = ''
+    if samples_where is not None:
+        samples_where_clause = f'and ({parser.parse(samples_where)})'
 
+    # are we dealing with a wildcard query?
     is_wildcard = lineage_name is not None and lineage_name.endswith('*')
-    parent_lineage_name = lineage_name.rstrip('*') if is_wildcard else None
 
-    group_by_cols = ['week_start']
+    # lineage name
+    if is_wildcard:
+        wildcard_lineage = lineage_name
+        lineage_name = lineage_name.rstrip('*')
+    else:
+        wildcard_lineage = None
 
+    # lineage where clause
+    params: dict = {}
+    lineage_where_clause = ''
+    if lineage_name is not None:
+        lineage_where_clause = f'{ColumnNames.lineage_name} = :{ColumnNames.lineage_name}'
+        params[ColumnNames.lineage_name] = lineage_name
+    if lineage_system_name is not None:
+        lineage_where_clause = ' and '.join(
+            [
+                lineage_where_clause,
+                f'{ColumnNames.lineage_system_name} = :{ColumnNames.lineage_system_name}'
+            ]
+        )
+        params[ColumnNames.lineage_system_name] = lineage_system_name
+    if lineage_where_clause != '':
+        lineage_where_clause = 'where ' + lineage_where_clause
+
+    # union to select descendants for wildcard queries
+    if is_wildcard:
+        child_lineages_union_query = \
+            f'''
+            union
+            select ldc.child_id,
+                   ls.id as {ColumnNames.lineage_system_id}
+            from lineages_deep_children ldc
+            inner join lineages l on l.id = ldc.parent_id
+            inner join lineage_systems ls on ls.id = lineage_system_id
+            {lineage_where_clause}
+            '''
+    else:
+        child_lineages_union_query = ''
+
+    # geo cols: always use census region, optionally use admin1_name as well.
+    # this could be made significantly more flexible
+    geo_cols = [ColumnNames.census_region]
     match geo_bin:
         case ColumnNames.admin1_name:
-            group_by_cols += ['admin1_name', 'census_region']
-            geo_select_cols = 'admin1_name, census_region'
-            lp_join_on = 'and lp.admin1_name = tp.admin1_name and lp.census_region = tp.census_region'
-            result_admin1_expr = 'lp.admin1_name'
+            geo_cols += [ColumnNames.admin1_name]
 
         case ColumnNames.census_region:
-            group_by_cols += ['census_region']
-            geo_select_cols = 'census_region'
-            lp_join_on = 'and lp.census_region = tp.census_region'
-            result_admin1_expr = 'NULL::text as admin1_name'
-
-            if 'admin1_name' in user_where_clause:
+            if 'admin1_name' in samples_where_clause:
+                # why not?
                 raise ValueError('admin1_name cannot be used in the filter when geo_bin is "census_region"')
         case _:
             raise ValueError(f'illegal value for geo_bin: {geo_bin}')
 
-    group_by_clause = f'group by {", ".join(group_by_cols)}'
+    # Various query parts, these don't depend on wildcard
+    select_geo = ', '.join(geo_cols)
+    date_extract_clause = get_extract_clause(COLLECTION_DATE, DateBinOpt.week, 0)
+    order_by_clause = get_order_by_cause(DateBinOpt.week)
+    date_and_location_cols = get_date_column_names(DateBinOpt.week, False) + geo_cols
+    group_by_clause = get_group_by_clause(DateBinOpt.week, extra_cols=geo_cols)
+    select_date = get_date_column_names(DateBinOpt.week)
 
-    params: dict = {}
-    lineage_where = ''
-    if lineage_name is not None and not is_wildcard:
-        lineage_where = 'where lineage_name = :lineage_name'
-        params['lineage_name'] = lineage_name
-
+    # when calculating lineage prevalence, we group by lineage id
+    # EXCEPT when doing a wildcard query, b/c in that case all present lineages are descendants of the wildcard,
+    # and we want to throw them all into one big bucket.
+    # Similarly, we skip lineage name and system name in the final select for wildcard queries.
     if is_wildcard:
-        params['parent_lineage_name'] = parent_lineage_name
-        query = f'''
-            with lineage_filter as (
-                select l.id as lineage_id
-                from lineages l
-                where l.lineage_name = :parent_lineage_name
-
-                union
-
-                select ldc.child_id as lineage_id
-                from lineages l
-                inner join lineages_deep_children ldc on ldc.parent_id = l.id
-                where l.lineage_name = :parent_lineage_name
-            ),
-            all_base_data as (
-                select
-                    date_trunc('week', (
-                        s.collection_start_date +
-                        ((s.collection_end_date - s.collection_start_date) / 2)
-                    )::timestamp)::date as week_start,
-                    gl.admin1_name,
-                    s.census_region as census_region,
-                    sl.abundance * s.ww_catchment_population as pop_weighted_prevalence,
-                    s.ww_viral_load,
-                    s.ww_catchment_population
-                from samples_lineages sl
-                inner join lineages l on l.id = sl.lineage_id
-                inner join samples s on s.id = sl.sample_id
-                left join geo_locations gl on gl.id = s.geo_location_id
-                where (s.collection_end_date - s.collection_start_date) <= {max_span_days}
-                and {ColumnNames.is_ww_sample}
-                {user_where_clause}
-            ),
-            lineage_base_data as (
-                select
-                    date_trunc('week', (
-                        s.collection_start_date +
-                        ((s.collection_end_date - s.collection_start_date) / 2)
-                    )::timestamp)::date as week_start,
-                    gl.admin1_name,
-                    s.census_region as census_region,
-                    sl.abundance * s.ww_catchment_population as pop_weighted_prevalence
-                from lineage_filter lf
-                inner join samples_lineages sl on sl.lineage_id = lf.lineage_id
-                inner join samples s on s.id = sl.sample_id
-                left join geo_locations gl on gl.id = s.geo_location_id
-                where (s.collection_end_date - s.collection_start_date) <= {max_span_days}
-                and {ColumnNames.is_ww_sample}
-                {user_where_clause}
-            ),
-            total_prevalences as (
-                select
-                    week_start,
-                    {geo_select_cols},
-                    sum(pop_weighted_prevalence) as total_prevalence,
-                    count(*) as sample_count,
-                    avg(ww_viral_load) as mean_viral_load,
-                    avg(ww_catchment_population) as mean_catchment_size
-                from all_base_data
-                {group_by_clause}
-            ),
-            lineage_prevalences as (
-                select
-                    week_start,
-                    {geo_select_cols},
-                    :parent_lineage_name as lineage_name,
-                    sum(pop_weighted_prevalence) as lineage_prevalence,
-                    count(*) as sample_count
-                from lineage_base_data
-                {group_by_clause}
-            ),
-            result_data as (
-                select
-                    lp.week_start,
-                    lp.lineage_name as lineage,
-                    lp.census_region,
-                    {result_admin1_expr},
-                    lp.sample_count,
-                    tp.mean_viral_load,
-                    tp.mean_catchment_size,
-                    lp.lineage_prevalence / tp.total_prevalence as mean_lineage_prevalence
-                from lineage_prevalences lp
-                join total_prevalences tp
-                    on lp.week_start = tp.week_start
-                    {lp_join_on}
-            )
-            select
-                extract(year from week_start)::int as year,
-                extract(week from week_start)::int as chunk,
-                (extract(year from week_start)::text || LPAD(extract(week from week_start)::text, 2, '0'))::int as epiweek,
-                week_start as week_start,
-                (week_start + interval '6 days')::date as week_end,
-                lineage,
-                census_region,
-                admin1_name,
-                sample_count,
-                mean_viral_load,
-                mean_catchment_size,
-                mean_lineage_prevalence
-            from result_data;
-        '''
+        group_by_for_lineage_prevalence = ', '.join([group_by_clause, ColumnNames.lineage_system_id])
+        select_lineage_id = ''
+        select_lineage_name_for_results = ''
+        join_lineages_for_results = ''
     else:
-        query = f'''
-            with base_data as (
-                select
-                    date_trunc('week', (
-                        s.collection_start_date +
-                        ((s.collection_end_date - s.collection_start_date) / 2)
-                    )::timestamp)::date as week_start,
-                    l.lineage_name,
-                    gl.admin1_name,
-                    s.census_region as census_region,
-                    sl.abundance * s.ww_catchment_population as pop_weighted_prevalence,
-                    s.ww_viral_load,
-                    s.ww_catchment_population
-                from samples_lineages sl
-                inner join lineages l on l.id = sl.lineage_id
-                inner join samples s on s.id = sl.sample_id
+        lin_prev_group_cols = date_and_location_cols + [ColumnNames.lineage_system_id, ColumnNames.lineage_id]
+        group_by_for_lineage_prevalence = f"group by {', '.join(lin_prev_group_cols)}"
+        select_lineage_id = ColumnNames.lineage_id + ','
+        select_lineage_name_for_results = ColumnNames.lineage_name + ','
+        join_lineages_for_results ='inner join lineages l on l.id = LP.lineage_id'
+
+    query = f'''
+            with match_samples as (
+                select s.id,
+                       {select_geo}, 
+                       ww_catchment_population,
+                       ww_viral_load,
+                       {MID_COLLECTION_DATE_CALCULATION}
+                from samples s
                 left join geo_locations gl on gl.id = s.geo_location_id
                 where (s.collection_end_date - s.collection_start_date) <= {max_span_days}
-                and {ColumnNames.is_ww_sample}
-                {user_where_clause}
+                  and {ColumnNames.is_ww_sample}
+                  {samples_where_clause}
             ),
-            total_prevalences as (
-                select
-                    week_start,
-                    {geo_select_cols},
-                    sum(pop_weighted_prevalence) as total_prevalence,
-                    count(*) as sample_count,
-                    avg(ww_viral_load) as mean_viral_load,
-                    avg(ww_catchment_population) as mean_catchment_size
-                from base_data
+            base as (
+                select {date_extract_clause},
+                       l.id as lineage_id,
+                       {select_geo},
+                       sl.abundance * MS.ww_catchment_population as pop_weighted_prevalence,
+                       ww_viral_load,
+                       ww_catchment_population
+                from samples_lineages sl
+                inner join lineages l on l.id = sl.lineage_id
+                inner join match_samples MS on MS.id = sl.sample_id
+            ),
+            overall_prevalences as (
+                select {select_date},
+                       {select_geo},
+                       sum(pop_weighted_prevalence) as overall_prevalence,
+                       avg(ww_viral_load) as overall_mean_viral_load,
+                       avg(ww_catchment_population) as overall_mean_catchment_population
+                from base
                 {group_by_clause}
             ),
-            lineage_prevalences as (
-                select
-                    week_start,
-                    {geo_select_cols},
-                    lineage_name,
-                    sum(pop_weighted_prevalence) as lineage_prevalence,
-                    count(*) as sample_count
-                from base_data
-                {lineage_where}
-                {group_by_clause}, lineage_name
+            match_lineages as (
+                select l.id as lineage_id,
+                       l.{ColumnNames.lineage_system_id}
+                from lineages l
+                inner join lineage_systems ls on ls.id = l.lineage_system_id
+                {lineage_where_clause}
+                {child_lineages_union_query}
             ),
-            result_data as (
-                select
-                    lp.week_start,
-                    lp.lineage_name as lineage,
-                    lp.census_region,
-                    {result_admin1_expr},
-                    lp.sample_count,
-                    tp.mean_viral_load,
-                    tp.mean_catchment_size,
-                    lp.lineage_prevalence / tp.total_prevalence as mean_lineage_prevalence
-                from lineage_prevalences lp
-                join total_prevalences tp
-                    on lp.week_start = tp.week_start
-                    {lp_join_on}
+            lineage_prevalences as (
+                select {select_lineage_id}
+                       {ColumnNames.lineage_system_id},
+                       {select_date},
+                       {select_geo},
+                       sum(base.pop_weighted_prevalence) as lineage_prevalence,
+                       count(*) as lineage_sample_count
+                from match_lineages
+                inner join base using (lineage_id)
+                {group_by_for_lineage_prevalence}
             )
-            select
-                extract(year from week_start)::int as year,
-                extract(week from week_start)::int as chunk,
-                (extract(year from week_start)::text || LPAD(extract(week from week_start)::text, 2, '0'))::int as epiweek,
-                week_start as week_start,
-                (week_start + interval '6 days')::date as week_end,
-                lineage,
-                census_region,
-                admin1_name,
-                sample_count,
-                mean_viral_load,
-                mean_catchment_size,
-                mean_lineage_prevalence
-            from result_data;
-        '''
+            select {select_lineage_name_for_results} 
+                   {select_date},
+                   {select_geo},
+                   {ColumnNames.lineage_system_name},
+                   round((LP.lineage_prevalence / OP.overall_prevalence)::numeric, 10) as mean_lineage_prevalence,
+                   LP.lineage_sample_count,
+                   OP.overall_mean_viral_load, 
+                   OP.overall_mean_catchment_population
+            from lineage_prevalences LP
+            inner join overall_prevalences OP using ({', '.join(date_and_location_cols)})
+            {join_lineages_for_results}
+            inner join lineage_systems ls on ls.id = LP.lineage_system_id
+            {order_by_clause}
+            '''
 
     async with get_async_session() as session:
         res = await session.execute(text(query), params if params else {})
 
     out_data = list()
-    for r in res:
+    for r in res.mappings():
+        year = int(r[YEAR])
+        week = int(r[CHUNK])
+        epiweek = int(f'{year}{week:02}')
+        week_start = date.fromisocalendar(year, week, 1)
+        week_end = date.fromisocalendar(year, week, 7)
+
+        if is_wildcard:
+            out_lineage_name = wildcard_lineage
+        else:
+            out_lineage_name = r[ColumnNames.lineage_name]
+
+        out_admin1_name = None
+        try:
+            out_admin1_name = r[ColumnNames.admin1_name]
+        except KeyError:
+            pass
+
         info = AverageLineageAbundanceInfo(
-            year=r[0],
-            chunk=r[1],
-            epiweek=r[2],
-            week_start=r[3],
-            week_end=r[4],
-            lineage_name=f'{parent_lineage_name}*' if is_wildcard else r[5],
-            census_region=r[6],
-            geo_admin1_name=r[7] if geo_bin == 'admin1_name' else None,
-            sample_count=r[8],
-            mean_viral_load=r[9],
-            mean_catchment_size=r[10],
-            mean_lineage_prevalence=r[11]
+            year=r[YEAR],
+            chunk=r[CHUNK],
+            epiweek=epiweek,
+            week_start=week_start,
+            week_end=week_end,
+            lineage_name=out_lineage_name,
+            lineage_system_name=r[ColumnNames.lineage_system_name],
+            census_region=r[ColumnNames.census_region],
+            geo_admin1_name=out_admin1_name,
+            sample_count=r['lineage_sample_count'],
+            mean_viral_load=r['overall_mean_viral_load'],
+            mean_catchment_size=r['overall_mean_catchment_population'],
+            mean_lineage_prevalence=r['mean_lineage_prevalence']
         )
         out_data.append(info)
 

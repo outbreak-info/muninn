@@ -221,6 +221,9 @@ class AverageLineageAbundanceInfo(BaseModel):
         description="Lineage the abundance is for. When the request used a trailing '*', this is the "
                     "parent name with the '*' kept, and the value aggregates parent plus descendants."
     )
+    lineage_system_name: str | None = Field(
+        description="Name of the lineage system for this lineage. Multiple systems may have identically-named lineages."
+    )
     census_region: str | None = Field(description="US census region of the sampling site")
     geo_admin1_name: str | None = Field(
         description="Admin level 1 (state/province); always null when geo_bin=census_region"
