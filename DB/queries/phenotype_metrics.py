@@ -454,18 +454,18 @@ async def get_pheno_value_for_variants_by_sample_and_collection_date(
               group by v.{ColumnNames.amino_acid_id}
           ),
           per_sample as (
-              select ms.sample_id,
-                     ms.collection_start_date,
-                     ms.collection_end_date,
+              select s2.id as sample_id,
+                     s2.{ColumnNames.collection_start_date} as collection_start_date,
+                     s2.{ColumnNames.collection_end_date} as collection_end_date,
                      sum(sc.value) as aggregate_value,
-                     count(distinct sc.aa_id) as n_amino_acid_mutations
+                     count(*) as n_amino_acid_mutations
               from carriers c
               inner join scored sc on sc.aa_id = c.aa_id
               cross join lateral unnest(
                   rb_to_array(c.bm & (select bm from matching_bm))
               ) as u({ColumnNames.sample_id})
-              inner join matching_samples ms on ms.sample_id = u.{ColumnNames.sample_id}
-              group by ms.sample_id, ms.collection_start_date, ms.collection_end_date
+              inner join {TableNames.samples} s2 on s2.id = u.{ColumnNames.sample_id}
+              group by s2.id, s2.{ColumnNames.collection_start_date}, s2.{ColumnNames.collection_end_date}
           )'''
 
     query = f'''
