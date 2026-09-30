@@ -159,19 +159,6 @@ class DmsFileParser(FileParser):
         ColumnNames.gff_feature: 'GFF_FEATURE',
     }
 
-class Sc2DmsTsvParser(DmsFileParser):
-    def __init__(self, filename: str):
-        super().__init__(filename, '\t', '')
-
-    async def parse_and_insert(self):
-        await super().parse_and_insert()
-
-    data_column_name_map = {
-        'delta_bind': 'delta_bind',
-        'delta_expr': 'delta_expr',
-    }
-
-
 class Hu1RbdDmsCsvParser(DmsFileParser):
     """
     https://github.com/jbloomlab/SARS-CoV-2-RBD_DMS_Omicron/blob/main/results/final_variant_scores/final_variant_scores.csv

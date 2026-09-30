@@ -15,7 +15,7 @@ from DB.inserts.file_parsers.freyja_demixed_parser import FreyjaDemixedParser
 from DB.inserts.file_parsers.samples_parser import SamplesCsvParser, SamplesTsvParser
 from DB.inserts.file_parsers.sarscov2_parsers.dms_parser import Ba1RbdDmsCsvParser, \
     Ba2RbdDmsCsvParser, Ba2SpikeDmsCsvParser, Hu1RbdDmsCsvParser, Hu1SpikeEveScapeCsvParser, \
-    Kp3SpikeAntibodyEscapeCsvParser, Kp3SpikeSeraEscapeCsvParser, Sc2DmsTsvParser, \
+    Kp3SpikeAntibodyEscapeCsvParser, Kp3SpikeSeraEscapeCsvParser, \
     Xbb15RbdDmsCsvParser, Xbb15SpikeDmsCsvParser
 from DB.inserts.file_parsers.sarscov2_parsers.eve_parser import Sc2EveCsvParser
 from DB.inserts.file_parsers.sarscov2_parsers.sc2_samples_parser import Sc2SdSamplesParser, Sc2SamplesParser, \
@@ -38,7 +38,6 @@ def main():
         'ha_dms_csv': HaRegionDmsCsvParser,
         'pb2_dms_csv': Pb2RegionDmsCsvParser,
         'ha_neuac_vs_neugc_dms_csv': HaRegionDmsCsvParserNeuAcVsNeuGc,
-        'sc2_dms_tsv': Sc2DmsTsvParser,
         'sc2_hu1_rbd_dms_csv': Hu1RbdDmsCsvParser,
         'sc2_ba1_rbd_dms_csv': Ba1RbdDmsCsvParser,
         'sc2_ba2_rbd_dms_csv': Ba2RbdDmsCsvParser,
