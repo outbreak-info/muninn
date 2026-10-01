@@ -63,6 +63,49 @@ class DefaultGffFeaturesByRegion:
     PB2 = 'XAJ25426.1'
 
 
+class Sc2GffFeatures:
+    spike_hu1 = 'YP_009724390.1_NC_045512.2'
+    rbd_ba1 = 'YP_009724390.1_NC_045512.2_BA.1_rbd'
+    rbd_ba2 = 'YP_009724390.1_NC_045512.2_BA.2_rbd'
+    spike_ba2 = 'YP_009724390.1_NC_045512.2_BA.2_spike'
+    rbd_xbb15 = 'YP_009724390.1_NC_045512.2_XBB.1.5_rbd'
+    spike_xbb15 = 'YP_009724390.1_NC_045512.2_XBB.1.5_spike'
+    spike_kp3 = 'YP_009724390.1_NC_045512.2_KP.3_spike'
+
+
+class Sc2PhenoMetricNames:
+    delta_bind = 'delta_bind'
+    delta_expr = 'delta_expr'
+    evescape = 'evescape'
+
+    # BA.2 spike ACE2 binding DMS
+    ba2_spike_mediated_entry = 'ba2_spike_mediated_entry'
+    ba2_spike_ace2_binding = 'ba2_spike_ace2_binding'
+
+    # XBB.1.5 spike DMS
+    xbb15_spike_human_sera_escape = 'xbb15_spike_human_sera_escape'
+    xbb15_spike_mediated_entry = 'xbb15_spike_mediated_entry'
+    xbb15_spike_ace2_binding = 'xbb15_spike_ace2_binding'
+
+    # XBB.1.5 RBD DMS
+    xbb15_rbd_human_sera_escape = 'xbb15_rbd_human_sera_escape'
+    xbb15_rbd_spike_mediated_entry = 'xbb15_rbd_spike_mediated_entry'
+    xbb15_rbd_monomeric_ace2_binding = 'xbb15_rbd_monomeric_ace2_binding'
+    xbb15_rbd_dimeric_ace2_binding = 'xbb15_rbd_dimeric_ace2_binding'
+
+    # KP.3 spike DMS, antibody escape panel
+    kp3_spike_bd55_1205_escape = 'kp3_spike_bd55_1205_escape'
+    kp3_spike_sa55_escape = 'kp3_spike_sa55_escape'
+    kp3_spike_vyd222_escape = 'kp3_spike_vyd222_escape'
+    kp3_spike_mean_antibody_escape = 'kp3_spike_mean_antibody_escape'
+    kp3_spike_mediated_entry = 'kp3_spike_mediated_entry'
+    kp3_spike_ace2_binding = 'kp3_spike_ace2_binding'
+
+    # KP.3 spike DMS, sera group averages
+    kp3_spike_pre_vaccination_sera_escape = 'kp3_spike_pre_vaccination_sera_escape'
+    kp3_spike_post_vaccination_sera_escape = 'kp3_spike_post_vaccination_sera_escape'
+
+
 class LineageSystemNames:
     usda_genoflu = 'usda_genoflu'
     freyja_demixed = 'freyja_demixed'
