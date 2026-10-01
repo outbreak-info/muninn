@@ -20,6 +20,8 @@ class DmsFileParser(FileParser):
         gff_feature: str,
         assay_type: str = PhenotypeMetricAssayTypes.DMS
     ):
+        if not gff_feature:
+            raise ValueError(f'{type(self).__name__} must specify a gff_feature')
         self.filename = filename
         self.delimiter = delimiter
         self.gff_feature = clean_up_gff_feature(gff_feature)
@@ -36,16 +38,17 @@ class DmsFileParser(FileParser):
         }
         # format: metric_name -> id
         cache_metric_ids = dict()
-        # format: (position_aa, ref_aa, alt_aa, gff_feature) -> {amino acid ids} set
+        # format: (position_aa, ref_aa, alt_aa) -> {amino acid ids} set
         cache_amino_sub_ids = dict()
-        # format: (position_aa, ref_aa, alt_aa, gff_feature)
+        # format: (position_aa, ref_aa, alt_aa)
         cache_amino_subs_not_found = set()
         with open(self.filename, 'r') as f:
             reader = DictReader(f, delimiter=self.delimiter)
             self._verify_header(reader)
             present_data_cols = self._get_present_data_columns(reader)
 
-            gff_feature_col = self.required_column_name_map.get(ColumnNames.gff_feature)
+            # the feature is fixed per file, set by the subclass, never read off the row
+            gff_feature = self.gff_feature
 
             for row in reader:
                 if self.target_column is not None and not row.get(self.target_column) in self.targets:
@@ -59,16 +62,15 @@ class DmsFileParser(FileParser):
                     )
                     ref_aa = get_value(row, self.required_column_name_map[ColumnNames.ref_aa])
                     alt_aa = get_value(row, self.required_column_name_map[ColumnNames.alt_aa])
-                    gff_feature = get_value(row, self.required_column_name_map[ColumnNames.gff_feature])
                 except ValueError:
                     debug_info['skipped_aas_data_missing'] += 1
                     continue
 
-                if (position_aa, ref_aa, alt_aa, gff_feature) in cache_amino_subs_not_found:
+                if (position_aa, ref_aa, alt_aa) in cache_amino_subs_not_found:
                     debug_info['skipped_aas_not_found'] += 1
                     continue
                 try:
-                    amino_acid_ids = cache_amino_sub_ids[(position_aa, ref_aa, alt_aa, gff_feature)]
+                    amino_acid_ids = cache_amino_sub_ids[(position_aa, ref_aa, alt_aa)]
                 except KeyError:
                     try:
                         amino_acid_ids = await find_equivalent_amino_acids(
@@ -79,12 +81,12 @@ class DmsFileParser(FileParser):
                                 ref_aa=ref_aa
                             )
                         )
-                        cache_amino_sub_ids[(position_aa, ref_aa, alt_aa, gff_feature)] = amino_acid_ids
+                        cache_amino_sub_ids[(position_aa, ref_aa, alt_aa)] = amino_acid_ids
                     except NotFoundError:
                         # if the aas doesn't already exist, skip the record.
                         # we don't want to create orphaned aas entries just for the dms data
                         debug_info['skipped_aas_not_found'] += 1
-                        cache_amino_subs_not_found.add((position_aa, ref_aa, alt_aa, gff_feature))
+                        cache_amino_subs_not_found.add((position_aa, ref_aa, alt_aa))
                         continue
 
                 for canonical_name, input_name in present_data_cols.items():
@@ -153,11 +155,11 @@ class DmsFileParser(FileParser):
     target_column = None
     targets = frozenset()
     required_column_name_map = {
-        ColumnNames.position_aa: 'position',
+        ColumnNames.position_aa: 'site',
         ColumnNames.ref_aa: 'wildtype',
         ColumnNames.alt_aa: 'mutant',
-        ColumnNames.gff_feature: 'GFF_FEATURE',
     }
+
 
 class Hu1RbdDmsCsvParser(DmsFileParser):
     """
@@ -168,9 +170,6 @@ class Hu1RbdDmsCsvParser(DmsFileParser):
     """
     def __init__(self, filename: str):
         super().__init__(filename, ',', Sc2GffFeatures.spike_hu1)
-
-    async def parse_and_insert(self):
-        await super().parse_and_insert()
 
     target_column = 'target'
     targets = {'Wuhan-Hu-1_v1', 'Wuhan-Hu-1_v2'}
@@ -194,9 +193,6 @@ class Ba1RbdDmsCsvParser(DmsFileParser):
     def __init__(self, filename: str):
         super().__init__(filename, ',', Sc2GffFeatures.rbd_ba1)
 
-    async def parse_and_insert(self):
-        await super().parse_and_insert()
-
     target_column = 'target'
     targets = {'Omicron_BA1'}
     required_column_name_map = {
@@ -219,9 +215,6 @@ class Ba2RbdDmsCsvParser(DmsFileParser):
     def __init__(self, filename: str):
         super().__init__(filename, ',', Sc2GffFeatures.rbd_ba2)
 
-    async def parse_and_insert(self):
-        await super().parse_and_insert()
-
     target_column = 'target'
     targets = {'Omicron_BA2'}
     required_column_name_map = {
@@ -242,9 +235,6 @@ class Hu1SpikeEveScapeCsvParser(DmsFileParser):
     def __init__(self, filename: str):
         super().__init__(filename, ',', Sc2GffFeatures.spike_hu1, PhenotypeMetricAssayTypes.EVE)
 
-    async def parse_and_insert(self):
-        await super().parse_and_insert()
-
     required_column_name_map = {
         ColumnNames.position_aa: 'i',
         ColumnNames.ref_aa: 'wt',
@@ -262,14 +252,6 @@ class Ba2SpikeDmsCsvParser(DmsFileParser):
     def __init__(self, filename: str):
         super().__init__(filename, ',', Sc2GffFeatures.spike_ba2)
 
-    async def parse_and_insert(self):
-        await super().parse_and_insert()
-
-    required_column_name_map = {
-        ColumnNames.position_aa: 'site',
-        ColumnNames.ref_aa: 'wildtype',
-        ColumnNames.alt_aa: 'mutant',
-    }
     data_column_name_map = {
         Sc2PhenoMetricNames.ba2_spike_mediated_entry: 'spike mediated entry',
         Sc2PhenoMetricNames.ba2_spike_ace2_binding: 'ACE2 binding',
@@ -283,14 +265,6 @@ class Xbb15RbdDmsCsvParser(DmsFileParser):
     def __init__(self, filename: str):
         super().__init__(filename, ',', Sc2GffFeatures.rbd_xbb15)
 
-    async def parse_and_insert(self):
-        await super().parse_and_insert()
-
-    required_column_name_map = {
-        ColumnNames.position_aa: 'site',
-        ColumnNames.ref_aa: 'wildtype',
-        ColumnNames.alt_aa: 'mutant',
-    }
     data_column_name_map = {
         Sc2PhenoMetricNames.xbb15_rbd_human_sera_escape: 'human sera escape',
         Sc2PhenoMetricNames.xbb15_rbd_spike_mediated_entry: 'spike mediated entry',
@@ -306,14 +280,6 @@ class Xbb15SpikeDmsCsvParser(DmsFileParser):
     def __init__(self, filename: str):
         super().__init__(filename, ',', Sc2GffFeatures.spike_xbb15)
 
-    async def parse_and_insert(self):
-        await super().parse_and_insert()
-
-    required_column_name_map = {
-        ColumnNames.position_aa: 'site',
-        ColumnNames.ref_aa: 'wildtype',
-        ColumnNames.alt_aa: 'mutant',
-    }
     data_column_name_map = {
         Sc2PhenoMetricNames.xbb15_spike_human_sera_escape: 'human sera escape',
         Sc2PhenoMetricNames.xbb15_spike_mediated_entry: 'spike mediated entry',
@@ -328,14 +294,6 @@ class Kp3SpikeAntibodyEscapeCsvParser(DmsFileParser):
     def __init__(self, filename: str):
         super().__init__(filename, ',', Sc2GffFeatures.spike_kp3)
 
-    async def parse_and_insert(self):
-        await super().parse_and_insert()
-
-    required_column_name_map = {
-        ColumnNames.position_aa: 'site',
-        ColumnNames.ref_aa: 'wildtype',
-        ColumnNames.alt_aa: 'mutant',
-    }
     data_column_name_map = {
         Sc2PhenoMetricNames.kp3_spike_bd55_1205_escape: 'BD55-1205',
         Sc2PhenoMetricNames.kp3_spike_sa55_escape: 'SA55',
@@ -356,14 +314,6 @@ class Kp3SpikeSeraEscapeCsvParser(DmsFileParser):
     def __init__(self, filename: str):
         super().__init__(filename, ',', Sc2GffFeatures.spike_kp3)
 
-    async def parse_and_insert(self):
-        await super().parse_and_insert()
-
-    required_column_name_map = {
-        ColumnNames.position_aa: 'site',
-        ColumnNames.ref_aa: 'wildtype',
-        ColumnNames.alt_aa: 'mutant',
-    }
     data_column_name_map = {
         Sc2PhenoMetricNames.kp3_spike_pre_vaccination_sera_escape: 'Pre vaccination or infection escape',
         Sc2PhenoMetricNames.kp3_spike_post_vaccination_sera_escape: 'Post vaccination or infection escape',
