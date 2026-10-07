@@ -1,11 +1,11 @@
 from csv import DictReader
 from typing import Set, Dict
 
+from DB.inserts.amino_acids import find_equivalent_amino_acids_with_gff_pattern
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.phenotype_measurement_results import insert_pheno_measurement_result
 from DB.inserts.phenotype_metrics import find_or_insert_metric
-from DB.models import AminoAcid, PhenotypeMetric, PhenotypeMetricValues
-from DB.inserts.amino_acids import find_equivalent_amino_acids
+from DB.models import PhenotypeMetric, PhenotypeMetricValues
 from utils.constants import PhenotypeMetricAssayTypes, DefaultGffFeaturesByRegion, ColumnNames, \
     StandardPhenoMetricNames
 from utils.csv_helpers import get_value, clean_up_gff_feature
@@ -17,7 +17,7 @@ class DmsFileParser(FileParser):
     def __init__(self, filename: str, delimiter: str, gff_feature: str):
         self.filename = filename
         self.delimiter = delimiter
-        self.gff_feature = clean_up_gff_feature(gff_feature)
+        self.gff_feature = clean_up_gff_feature(gff_feature).replace('.', '\\.')
 
     async def parse_and_insert(self):
         debug_info = {
@@ -58,13 +58,11 @@ class DmsFileParser(FileParser):
                     amino_acid_ids = cache_amino_sub_ids[(position_aa, ref_aa, alt_aa)]
                 except KeyError:
                     try:
-                        amino_acid_ids = await find_equivalent_amino_acids(
-                            AminoAcid(
-                                gff_feature=self.gff_feature,
-                                position_aa=position_aa,
-                                alt_aa=alt_aa,
-                                ref_aa=ref_aa
-                            )
+                        amino_acid_ids = await find_equivalent_amino_acids_with_gff_pattern(
+                            gff_pattern=self.gff_feature,
+                            position_aa=position_aa,
+                            alt_aa=alt_aa,
+                            ref_aa=ref_aa
                         )
                         cache_amino_sub_ids[(position_aa, ref_aa, alt_aa)] = amino_acid_ids
                     except NotFoundError:
@@ -195,6 +193,7 @@ class HaRegionDmsCsvParserNeuAcVsNeuGc(DmsFileParser):
 
 class Pb2RegionDmsCsvParser(DmsFileParser):
     """Parser for DMS data for Influenza PB2 region"""
+
     def __init__(self, filename: str):
         super().__init__(filename, ',', DefaultGffFeaturesByRegion.PB2)
 
