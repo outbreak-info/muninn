@@ -75,14 +75,15 @@ async def get_averaged_lineage_abundances_by_location(
     # are we dealing with a wildcard query?
     is_wildcard = lineage_name is not None and lineage_name.endswith('*')
 
-    # lineage name
+    # lineage name: get actual lineage from wildcard
     if is_wildcard:
         wildcard_lineage = lineage_name
         lineage_name = lineage_name.rstrip('*')
     else:
         wildcard_lineage = None
 
-    # lineage where clause
+    # lineage where clause, made of two parts: lineage name and lineage system name.
+    # may contain either, both, or neither of those parts.
     params: dict = {}
     lineage_where_clause = ''
     if lineage_name is not None:
@@ -220,7 +221,7 @@ async def get_averaged_lineage_abundances_by_location(
             '''
 
     async with get_async_session() as session:
-        res = await session.execute(text(query), params if params else {})
+        res = await session.execute(text(query), params)
 
     out_data = list()
     for r in res.mappings():
