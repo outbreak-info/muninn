@@ -206,7 +206,7 @@ class HaRegionDmsCsvParser(DmsFileParser):
     async def parse_and_insert(self):
         await super().parse_and_insert()
 
-
+# todo: fix name in runinserts, fix metric name
 class HaRegionDmsCsvParserNewData(DmsFileParser):
     def __init__(self, filename: str, extra_args: list[str]):
         super().__init__(filename, ',', extra_args=extra_args)
@@ -221,6 +221,10 @@ class HaRegionDmsCsvParserNewData(DmsFileParser):
 
 
 class HaRegionDmsCsvParserNeuAcVsNeuGc(DmsFileParser):
+    """
+    https://raw.githubusercontent.com/dms-vep/Flu_H5_American-Wigeon_South-Carolina_2021-H5N1_DMS_NeuGc/refs/heads/master/results/summaries/entry_in_NeuAc_vs_NeuGc_cells.csv
+    todo: double-check that this is the file
+    """
     def __init__(self, filename: str, extra_args: list[str]):
         super().__init__(filename, ',', extra_args=extra_args)
 
@@ -235,7 +239,11 @@ class HaRegionDmsCsvParserNeuAcVsNeuGc(DmsFileParser):
 
 
 class Pb2RegionDmsCsvParser(DmsFileParser):
-    """Parser for DMS data for Influenza PB2 region"""
+    """
+    https://doi.org/10.7554/eLife.45079
+    XAJ25426.1_PB2|CY018884.1|A/green-winged_teal/Ohio/175/1986(H2N1)
+    todo: find dms results file
+    """
 
     def __init__(self, filename: str, extra_args: list[str]):
         super().__init__(filename, ',', extra_args=extra_args)

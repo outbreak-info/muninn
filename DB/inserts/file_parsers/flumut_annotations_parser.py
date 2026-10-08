@@ -31,6 +31,7 @@ from utils.ha_numbering import convert_mature_h5_to_sequential
 
 UNMAPPED = 'unmapped'
 
+# todo: this mapping is now broken
 gff_mapping = {
     'HA1-5': 'XAJ25415.1',
     'HA2-5': 'XAJ25415.1',

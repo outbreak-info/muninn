@@ -126,6 +126,7 @@ def main():
         if issubclass(parser_class, VariantsMutationsCombinedParser):
             parser = parser_class(args.filenames, parser_extras)
         elif issubclass(parser_class, Sc2SamplesParser) and len(args.filenames) >= 2:
+            # todo: this parser won't take two filenames anymore.
             parser = parser_class(args.filenames[0], args.filenames[1])
         elif issubclass(parser_class, LineageHierarchyYamlParser):
             parser = parser_class(args.filenames[0], parser_extras)
