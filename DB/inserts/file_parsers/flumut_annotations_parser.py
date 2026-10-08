@@ -10,7 +10,7 @@ from DB.inserts.annotations_papers import find_or_insert_annotation_paper
 from DB.inserts.effects import find_or_insert_effect
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.papers import find_or_insert_paper
-from DB.models import AminoAcid, Effect, Paper, Annotation, AnnotationPaper
+from DB.models import Effect, Paper, Annotation, AnnotationPaper
 from utils.constants import DefaultGffFeaturesByRegion
 from utils.csv_helpers import parse_change_string
 from utils.errors import NotFoundError, DuplicateAnnotationError
@@ -99,12 +99,10 @@ class FlumutParser(FileParser):
 
                     amino_acid_ids = amino_acid_ids.union(
                         await find_equivalent_amino_acids(
-                            AminoAcid(
-                                gff_feature=gff_feature,
-                                position_aa=position,
-                                ref_aa=ref,
-                                alt_aa=alt
-                            )
+                            gff_feature=gff_feature,
+                            position_aa=position,
+                            ref_aa=ref,
+                            alt_aa=alt
                         )
                     )
             except (KeyError, ValueError):

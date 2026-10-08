@@ -1,21 +1,34 @@
-from sqlalchemy import select
-
 from DB.engine import get_async_write_session
-from DB.models import PhenotypeMetric
+from DB.textutils import text
+from utils.constants import TableNames, ColumnNames
 
 
-async def find_or_insert_metric(pm: PhenotypeMetric) -> int:
+async def find_or_insert_metric(phenotype_metric_name: str, phenotype_metric_assay_type: str) -> int:
     async with get_async_write_session() as session:
         id_ = await session.scalar(
-            select(PhenotypeMetric.id)
-            .where(
-                # they are uq by name, so this is enough
-                PhenotypeMetric.phenotype_metric_name == pm.phenotype_metric_name
-            )
+            text(
+                f'''
+                select id from {TableNames.phenotype_metrics}
+                where {ColumnNames.phenotype_metric_name} = :name;
+                '''
+            ),
+            {'name': phenotype_metric_name}
         )
         if id_ is None:
-            session.add(pm)
+            id_ = await session.scalar(
+                text(
+                    f'''
+                    insert into {TableNames.phenotype_metrics} 
+                    ({ColumnNames.phenotype_metric_name}, {ColumnNames.phenotype_metric_assay_type})
+                    values 
+                    (:name, :assay_type)
+                    returning id;
+                    '''
+                ),
+                {
+                    'name': phenotype_metric_name,
+                    'assay_type': phenotype_metric_assay_type
+                }
+            )
             await session.commit()
-            await session.refresh(pm)
-            id_ = pm.id
     return id_

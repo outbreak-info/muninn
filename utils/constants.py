@@ -342,6 +342,7 @@ class ColumnNames(PgIdentifiers):
     # phenotype metrics
     phenotype_metric_name = 'phenotype_metric_name'
     phenotype_metric_assay_type = 'phenotype_metric_assay_type'
+    value = 'value'
 
     # papers
     authors = 'authors'

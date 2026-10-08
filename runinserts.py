@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any
 
 from DB.inserts.file_parsers.dms_parser import HaRegionDmsTsvParser, HaRegionDmsCsvParser, HaRegionDmsCsvParserNewData, \
-    Pb2RegionDmsCsvParser, HaRegionDmsCsvParserNeuAcVsNeuGc
+    Pb2RegionDmsCsvParser, HaRegionDmsCsvParserNeuAcVsNeuGc, DmsFileParser
 from DB.inserts.file_parsers.eve_parser import EveCsvParser
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.file_parsers.flumut_annotations_parser import FlumutTsvParser
@@ -13,7 +13,7 @@ from DB.inserts.file_parsers.lineage_hierarchy_parser import FreyjaDemixedLineag
     LineageHierarchyYamlParser
 from DB.inserts.file_parsers.freyja_demixed_parser import FreyjaDemixedParser
 from DB.inserts.file_parsers.samples_parser import SamplesCsvParser, SamplesTsvParser
-from DB.inserts.file_parsers.sarscov2_parsers.dms_parser import Ba1RbdDmsCsvParser, \
+from DB.inserts.file_parsers.sarscov2_parsers.sc2_dms_parsers import Ba1RbdDmsCsvParser, \
     Ba2RbdDmsCsvParser, Ba2SpikeDmsCsvParser, Hu1RbdDmsCsvParser, Hu1SpikeEveScapeCsvParser, \
     Kp3SpikeAntibodyEscapeCsvParser, Kp3SpikeSeraEscapeCsvParser, \
     Xbb15RbdDmsCsvParser, Xbb15SpikeDmsCsvParser
@@ -100,36 +100,39 @@ def main():
         argparser.print_help()
         sys.exit(1)
 
-    file_parser: FileParser = formats[args.format]
+    parser_class: FileParser = formats[args.format]
     filename: str = args.filenames[0]
     parser_extras: list[str] | None = args.parser_extras
     if parser_extras == list():
         parser_extras = None
 
     if len(args.filenames) > 1 and not (
-            issubclass(file_parser, VariantsMutationsCombinedParser) or
-            issubclass(file_parser, Sc2SamplesParser)
+            issubclass(parser_class, VariantsMutationsCombinedParser) or
+            issubclass(parser_class, Sc2SamplesParser)
     ):
         raise ValueError('Multiple filenames provided, but this format takes only one.')
 
     if parser_extras is not None and not (
-            issubclass(file_parser, VariantsMutationsCombinedParser) or
-            issubclass(file_parser, LineageHierarchyYamlParser)
+            issubclass(parser_class, VariantsMutationsCombinedParser) or
+            issubclass(parser_class, LineageHierarchyYamlParser) or
+            issubclass(parser_class, DmsFileParser)
     ):
         print('Warning: this format does not except extra args, the values you passed will be ignored. ')
 
     # run inserts method
     start_time = datetime.now()
     print(f'{args.filenames} {args.format} start at {start_time}')
-    if issubclass(file_parser, FileParser):
-        if issubclass(file_parser, VariantsMutationsCombinedParser):
-            parser = file_parser(args.filenames, parser_extras)
-        elif issubclass(file_parser, Sc2SamplesParser) and len(args.filenames) >= 2:
-            parser = file_parser(args.filenames[0], args.filenames[1])
-        elif issubclass(file_parser, LineageHierarchyYamlParser):
-            parser = file_parser(args.filenames[0], parser_extras)
+    if issubclass(parser_class, FileParser):
+        if issubclass(parser_class, VariantsMutationsCombinedParser):
+            parser = parser_class(args.filenames, parser_extras)
+        elif issubclass(parser_class, Sc2SamplesParser) and len(args.filenames) >= 2:
+            parser = parser_class(args.filenames[0], args.filenames[1])
+        elif issubclass(parser_class, LineageHierarchyYamlParser):
+            parser = parser_class(args.filenames[0], parser_extras)
+        elif issubclass(parser_class, DmsFileParser):
+            parser = parser_class(args.filenames[0], extra_args=parser_extras)
         else:
-            parser = file_parser(filename)
+            parser = parser_class(filename)
         asyncio.run(parser.parse_and_insert())
     end_time = datetime.now()
     print(f'{args.filenames} {args.format} end at {end_time}, elapsed: {end_time - start_time}')

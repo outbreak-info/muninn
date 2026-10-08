@@ -1,31 +1,52 @@
 from csv import DictReader
 from typing import Set, Dict
 
-from DB.inserts.amino_acids import find_equivalent_amino_acids_with_gff_pattern
+from DB.inserts.amino_acids import find_equivalent_amino_acids
 from DB.inserts.file_parsers.file_parser import FileParser
-from DB.inserts.phenotype_measurement_results import insert_pheno_measurement_result
+from DB.inserts.phenotype_measurement_results import upsert_pheno_measurement_result
 from DB.inserts.phenotype_metrics import find_or_insert_metric
-from DB.models import PhenotypeMetric, PhenotypeMetricValues
-from utils.constants import PhenotypeMetricAssayTypes, DefaultGffFeaturesByRegion, ColumnNames, \
+from utils.constants import PhenotypeMetricAssayTypes, ColumnNames, \
     StandardPhenoMetricNames
-from utils.csv_helpers import get_value, clean_up_gff_feature
+from utils.csv_helpers import get_value
 from utils.errors import NotFoundError
 
 
 class DmsFileParser(FileParser):
 
-    def __init__(self, filename: str, delimiter: str, gff_feature: str):
+    def __init__(
+        self,
+        filename: str,
+        delimiter: str = '\t',
+        gff_feature: str = None,
+        assay_type: str = PhenotypeMetricAssayTypes.DMS,
+        extra_args: list[str] = None
+    ):
+        """
+        :param filename:
+        :param delimiter:
+        :param gff_feature: str. Which gff feature to match in amino acids. If both this and extras provide a value,
+        this will take priority.
+        :param assay_type:
+        :param extra_args: list[str] may provide gff feature in format `gff_feature=value`.
+        Overridden by gff_feature param.
+        """
         self.filename = filename
         self.delimiter = delimiter
-        self.gff_feature = clean_up_gff_feature(gff_feature).replace('.', '\\.')
+        self.assay_type = assay_type
+
+        if gff_feature is None:
+            self.gff_feature = self._get_gff_from_extras(extra_args)
+        else:
+            self.gff_feature = gff_feature
 
     async def parse_and_insert(self):
         debug_info = {
-            'skipped_aas_data_missing': 0,
-            'skipped_aas_not_found': 0,
+            'skipped_aa_data_missing': 0,
+            'skipped_aa_not_found': 0,
             'value_parsing_errors': 0,
             'count_existing_updated': 0,  # only counts if the value changed
-            'count_new_records_inserted': 0
+            'count_new_records_inserted': 0,
+            'count_skipped_by_filter': 0
         }
         # format: metric_name -> id
         cache_metric_ids = dict()
@@ -39,6 +60,11 @@ class DmsFileParser(FileParser):
             present_data_cols = self._get_present_data_columns(reader)
 
             for row in reader:
+                if self.filter_columns_values is not None:
+                    for colname, allowed_values in self.filter_columns_values.items():
+                        if not row[colname] in allowed_values:
+                            debug_info['count_skipped_by_filter'] += 1
+                            continue
                 try:
                     position_aa = get_value(
                         row,
@@ -48,18 +74,18 @@ class DmsFileParser(FileParser):
                     ref_aa = get_value(row, self.required_column_name_map[ColumnNames.ref_aa])
                     alt_aa = get_value(row, self.required_column_name_map[ColumnNames.alt_aa])
                 except ValueError:
-                    debug_info['skipped_aas_info_missing'] += 1
+                    debug_info['skipped_aa_data_missing'] += 1
                     continue
 
                 if (position_aa, ref_aa, alt_aa) in cache_amino_subs_not_found:
-                    debug_info['skipped_aas_not_found'] += 1
+                    debug_info['skipped_aa_not_found'] += 1
                     continue
                 try:
                     amino_acid_ids = cache_amino_sub_ids[(position_aa, ref_aa, alt_aa)]
                 except KeyError:
                     try:
-                        amino_acid_ids = await find_equivalent_amino_acids_with_gff_pattern(
-                            gff_pattern=self.gff_feature,
+                        amino_acid_ids = await find_equivalent_amino_acids(
+                            gff_feature=self.gff_feature,
                             position_aa=position_aa,
                             alt_aa=alt_aa,
                             ref_aa=ref_aa
@@ -68,7 +94,7 @@ class DmsFileParser(FileParser):
                     except NotFoundError:
                         # if the aas doesn't already exist, skip the record.
                         # we don't want to create orphaned aas entries just for the dms data
-                        debug_info['skipped_aas_not_found'] += 1
+                        debug_info['skipped_aa_not_found'] += 1
                         cache_amino_subs_not_found.add((position_aa, ref_aa, alt_aa))
                         continue
 
@@ -83,21 +109,16 @@ class DmsFileParser(FileParser):
                         metric_id = cache_metric_ids[canonical_name]
                     except KeyError:
                         metric_id = await find_or_insert_metric(
-                            PhenotypeMetric(
-                                phenotype_metric_name=canonical_name,
-                                phenotype_metric_assay_type=PhenotypeMetricAssayTypes.DMS
-                            )
+                            phenotype_metric_name=canonical_name,
+                            phenotype_metric_assay_type=self.assay_type
                         )
                         cache_metric_ids[canonical_name] = metric_id
 
                     for aa_id in amino_acid_ids:
-                        updated = await insert_pheno_measurement_result(
-                            PhenotypeMetricValues(
-                                amino_acid_id=aa_id,
-                                phenotype_metric_id=metric_id,
-                                value=v
-                            ),
-                            upsert=True
+                        updated = await upsert_pheno_measurement_result(
+                            amino_acid_id=aa_id,
+                            phenotype_metric_id=metric_id,
+                            value=v
                         )
                         if updated:
                             debug_info['count_existing_updated'] += 1
@@ -129,7 +150,18 @@ class DmsFileParser(FileParser):
 
     @classmethod
     def get_required_column_set(cls) -> Set[str]:
-        return set(cls.required_column_name_map.values())
+        required = set(cls.required_column_name_map.values())
+        if cls.filter_columns_values is not None:
+            required = required.union(cls.filter_columns_values.keys())
+        return required
+
+    @staticmethod
+    def _get_gff_from_extras(extras: list[str]):
+        for arg in extras:
+            name, value = arg.split('=')
+            if name == ColumnNames.gff_feature:
+                return value
+        raise ValueError(f'gff feature not found in extras: {extras}')
 
     # these can be overridden as required in subclasses
     required_column_name_map = {
@@ -146,27 +178,38 @@ class DmsFileParser(FileParser):
         StandardPhenoMetricNames.ferret_sera_escape: 'ferret sera escape',
         StandardPhenoMetricNames.mouse_sera_escape: 'mouse sera escape',
     }
+    # Only ingest rows with specified values in specified columns. If None, no filtering is done.
+    # format: {col_name: {value1, value2}, ...}
+    filter_columns_values: dict[str, set[str]] = None
 
 
 class HaRegionDmsTsvParser(DmsFileParser):
-    def __init__(self, filename: str):
-        super().__init__(filename, '\t', DefaultGffFeaturesByRegion.HA)
+    """
+    https://raw.githubusercontent.com/dms-vep/Flu_H5_American-Wigeon_South-Carolina_2021-H5N1_DMS/refs/heads/main/results/summaries/all_sera_escape.csv
+    converted to tsv
+    todo: Not sure why we're using a version converted to tsv
+    """
+    def __init__(self, filename: str, extra_args: list[str]):
+        super().__init__(filename, '\t', extra_args=extra_args)
 
     async def parse_and_insert(self):
         await super().parse_and_insert()
 
 
 class HaRegionDmsCsvParser(DmsFileParser):
-    def __init__(self, filename: str):
-        super().__init__(filename, ',', DefaultGffFeaturesByRegion.HA)
+    """
+    https://raw.githubusercontent.com/dms-vep/Flu_H5_American-Wigeon_South-Carolina_2021-H5N1_DMS/refs/heads/main/results/summaries/all_sera_escape.csv
+    """
+    def __init__(self, filename: str, extra_args: list[str]):
+        super().__init__(filename, ',', extra_args=extra_args)
 
     async def parse_and_insert(self):
         await super().parse_and_insert()
 
 
 class HaRegionDmsCsvParserNewData(DmsFileParser):
-    def __init__(self, filename: str):
-        super().__init__(filename, ',', DefaultGffFeaturesByRegion.HA)
+    def __init__(self, filename: str, extra_args: list[str]):
+        super().__init__(filename, ',', extra_args=extra_args)
 
     async def parse_and_insert(self):
         await super().parse_and_insert()
@@ -178,8 +221,8 @@ class HaRegionDmsCsvParserNewData(DmsFileParser):
 
 
 class HaRegionDmsCsvParserNeuAcVsNeuGc(DmsFileParser):
-    def __init__(self, filename: str):
-        super().__init__(filename, ',', DefaultGffFeaturesByRegion.HA)
+    def __init__(self, filename: str, extra_args: list[str]):
+        super().__init__(filename, ',', extra_args=extra_args)
 
     async def parse_and_insert(self):
         await super().parse_and_insert()
@@ -194,8 +237,8 @@ class HaRegionDmsCsvParserNeuAcVsNeuGc(DmsFileParser):
 class Pb2RegionDmsCsvParser(DmsFileParser):
     """Parser for DMS data for Influenza PB2 region"""
 
-    def __init__(self, filename: str):
-        super().__init__(filename, ',', DefaultGffFeaturesByRegion.PB2)
+    def __init__(self, filename: str, extra_args: list[str]):
+        super().__init__(filename, ',', extra_args=extra_args)
 
     async def parse_and_insert(self):
         await super().parse_and_insert()

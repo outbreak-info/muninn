@@ -139,7 +139,6 @@ class AminoAcid(Base):
         ]
     )
 
-    r_pheno_metric_values: Mapped[List['PhenotypeMetricValues']] = relationship(back_populates='r_amino_acid')
     r_annotations_amino_acids: Mapped[List['AnnotationAminoAcid']] = relationship(back_populates='r_amino_acid')
 
 
@@ -162,56 +161,6 @@ class GeoLocation(Base):
     )
 
     r_samples: Mapped[List['Sample']] = relationship(back_populates='r_geo_location')
-
-
-class PhenotypeMetric(Base):
-    __tablename__ = TableNames.phenotype_metrics
-
-    id: Mapped[int] = mapped_column(sa.BigInteger, autoincrement=True)
-
-    phenotype_metric_name: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    phenotype_metric_assay_type: Mapped[str] = mapped_column(sa.Text, nullable=False)
-
-    __table_args__ = tuple(
-        [
-            PrimaryKeyConstraint('id', name=ConstraintNames.pk_phenotype_metrics),
-        ]
-    )
-
-    r_pheno_metric_values: Mapped[List['PhenotypeMetricValues']] = relationship(
-        back_populates='r_pheno_metric'
-    )
-
-
-class PhenotypeMetricValues(Base):
-    __tablename__ = TableNames.phenotype_metric_values
-
-    id: Mapped[int] = mapped_column(sa.BigInteger, autoincrement=True)
-    phenotype_metric_id: Mapped[int] = mapped_column(
-        sa.ForeignKey(
-            f'{TableNames.phenotype_metrics}.id',
-            name=ConstraintNames.fk_phenotype_metric_values_phenotype_metric_id_pheno_metrics
-        ),
-        nullable=False
-    )
-    amino_acid_id: Mapped[int] = mapped_column(
-        sa.ForeignKey(
-            f'{TableNames.amino_acids}.id',
-            name=ConstraintNames.fk_phenotype_metric_values_amino_acid_id_amino_acids
-        ),
-        nullable=False
-    )
-
-    value: Mapped[float] = mapped_column(sa.Double, nullable=False)
-
-    __table_args__ = tuple(
-        [
-            PrimaryKeyConstraint('id', name=ConstraintNames.pk_phenotype_metric_values),
-        ]
-    )
-
-    r_pheno_metric: Mapped['PhenotypeMetric'] = relationship(back_populates='r_pheno_metric_values')
-    r_amino_acid: Mapped['AminoAcid'] = relationship(back_populates='r_pheno_metric_values')
 
 
 class LineageSystem(Base):
