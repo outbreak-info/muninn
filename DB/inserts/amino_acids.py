@@ -36,37 +36,3 @@ async def find_equivalent_amino_acids(
     if len(ids) == 0:
         raise NotFoundError('No amino acids found')
     return ids
-
-
-async def find_equivalent_amino_acids_with_gff_pattern(
-    gff_pattern: str,
-    ref_aa: str,
-    position_aa: int,
-    alt_aa: str
-) -> set[int]:
-    if None in {alt_aa, ref_aa, position_aa, gff_pattern}:
-        raise ValueError('Required amino acid data absent')
-
-    async with get_async_session() as session:
-        res = await session.scalars(
-            text(
-                f'''
-                select id
-                from {TableNames.amino_acids}
-                where {ColumnNames.gff_feature} ~ :gff_pattern
-                      and {ColumnNames.ref_aa} = :ref_aa
-                      and {ColumnNames.position_aa} = :position_aa
-                      and {ColumnNames.alt_aa} = :alt_aa
-                '''
-            ),
-            {
-                'gff_pattern': gff_pattern,
-                'ref_aa': ref_aa,
-                'position_aa': position_aa,
-                'alt_aa': alt_aa
-            }
-        )
-    ids = set(res.all())
-    if len(ids) == 0:
-        raise NotFoundError('No amino acids found')
-    return ids
