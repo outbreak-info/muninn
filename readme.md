@@ -104,8 +104,18 @@ When using the default docker compose file, `MUNINN_PG_DATA_BIND_DIR` is ingored
 
 The alternate compose file `docker-compose.bind-pg-data.yml` gives us the option to store Postgres data in a directory of our choosing.
 This directory will be bound to the Postgres container. 
+The primary motivation for this is to put Postgres data on a partition with more free space than `/`, which is the default location for docker volumes.
 Set the directory using `MUNINN_PG_DATA_BIND_DIR`, and modify commands to use the alternate compose file: `docker-compose -f docker-compose.bind-pg-data.yml ...`
 Data stored in a bound directory will not be cleared with `docker compose down -v`.
+
+We frequently destroy and replace docker containers while leaving the Postgres data intact.
+When spinning up a new database container using a preexisting PG data directory, some Postrges internal state is lost.
+Before putting your new database container to work, it's a good idea to run:
+```
+analyze;
+vacuum freeze;
+```
+
 
 ## Troubleshooting Tools
 
@@ -212,5 +222,20 @@ A       A.1.2
 (Lineage names are used here for simplicity. In the actual implementation, only IDs are used.)
 Lineages are allowed to form a directed acyclic graph, and a `BEFORE INSERT` trigger prevents any cycle-producing entries from being added to `lineages_immediate_children`.
 
+## Caches
+
+Some endpoints depend on cached intermediate results to reduce query time.
+Caches are implemented as materialized views in Postgres.
+
+To set up caches:
+```commandline
+docker exec -it name_of_server_container bash -c "python3 caches.py create" 
+```
+
+Materialized views do not update automatically when data is updated. 
+To refresh caches:
+```commandline
+docker exec -it name_of_server_container bash -c "python3 caches.py refresh" 
+```
 
 Have fun!

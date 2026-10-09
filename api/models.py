@@ -414,6 +414,7 @@ class PhenotypeMetricAggregateByDateInfo(BaseModel):
     )
     n_aa_median: float | None = Field(description="Median of the per-sample scored-change count")
     n_aa_q3: float | None = Field(description="Third quartile of the per-sample scored-change count")
+    gff_feature: str = Field(description='GFF feature for mutation calls and phenotype metric values')
 
 
 class AnnotationProportionByDateInfo(BaseModel):

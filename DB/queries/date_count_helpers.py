@@ -71,3 +71,13 @@ def get_date_column_names(date_bin: DateBinOpt) -> str:
             return ', '.join([BIN_START, BIN_END])
         case _:
             raise NotImplementedError
+
+
+def get_date_result_col_names(date_bin: DateBinOpt) -> tuple[str, str]:
+    match date_bin:
+        case DateBinOpt.week | DateBinOpt.month:
+            return YEAR, CHUNK
+        case DateBinOpt.day:
+            return BIN_START, BIN_END
+        case _:
+            raise NotImplementedError
