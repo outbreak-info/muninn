@@ -764,6 +764,7 @@ async def get_phenotype_metric_values_for_variants_by_sample_and_collection_date
     days: DaysParam = DEFAULT_DAYS,
     where: str | None = filter_query('Optional: over all `samples` columns plus the joined `geo_locations` columns (raw names, e.g. admin1_name/country_name) and `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name). alleles/amino_acids columns are NOT joined and cannot be filtered on.', required=False),
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
+    min_alt_freq: float = 0
 ):
     return await DB.queries.phenotype_metrics.get_pheno_value_for_variants_by_sample_and_collection_date(
         date_bin,
@@ -771,6 +772,7 @@ async def get_phenotype_metric_values_for_variants_by_sample_and_collection_date
         days,
         max_span_days,
         where,
+        min_alt_freq
     )
 
 @router.get(

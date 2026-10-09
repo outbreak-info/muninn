@@ -330,8 +330,7 @@ class ColumnNames(PgIdentifiers):
 
     # variants / mutations bitmap
     samples_present = 'samples_present'
-    alleles_present = 'alleles_present'
-    amino_acids_present = 'amino_acids_present'
+    alt_freq_range = 'alt_freq_range'
 
     # geo locations
     country_name = 'country_name'

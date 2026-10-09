@@ -431,6 +431,7 @@ async def get_pheno_value_for_variants_by_sample_and_collection_date(
     days: int,
     max_span_days: int,
     where: str | None,
+    min_alt_freq: float
 ) -> List[Dict]:
     user_where_clause = ''
     if where is not None:
@@ -457,6 +458,7 @@ async def get_pheno_value_for_variants_by_sample_and_collection_date(
                      rb_or_agg(v.{ColumnNames.samples_present}) as bm
               from {TableNames.ih_samples_by_amino_acid} v
               inner join scored sc on sc.aa_id = v.{ColumnNames.amino_acid_id}
+              where lower({ColumnNames.alt_freq_range}) >= :min_alt_freq
               group by v.{ColumnNames.amino_acid_id}
           ),
           per_sample as (
@@ -524,6 +526,7 @@ async def get_pheno_value_for_variants_by_sample_and_collection_date(
             {
                 'pm_name': phenotype_metric_name,
                 'max_span_days': max_span_days,
+                'min_alt_freq': min_alt_freq
             }
         )
         rows = res.mappings().all()
