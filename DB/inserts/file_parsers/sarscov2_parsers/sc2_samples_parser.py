@@ -236,3 +236,26 @@ class Sc2NcbiSamplesParser(Sc2SamplesParser):
         ColumnNames.ww_site_id: 'site_id',
         ColumnNames.ww_collected_by: 'collected_by',
     }
+
+class Sc2BjornClinicalSamplesParser(Sc2SamplesParser):
+    def __init__(self, samples_filename: str, unique_sequences_filename: str | None = None):
+        super().__init__(samples_filename, geo_location_levels_delimiter=':')
+
+    def fill_missing_required_cols(self, samples_input: pl.LazyFrame) -> pl.LazyFrame:
+        return samples_input.with_columns(
+            pl.lit(False).alias(ColumnNames.is_retracted),
+            pl.lit(False).alias(ColumnNames.is_ww_sample),
+        )
+
+    column_name_map = {
+        ColumnNames.accession: 'Accession',
+        ColumnNames.bio_project: 'BioProjects',
+        ColumnNames.bio_sample: 'BioSample accession',
+        ColumnNames.host: 'Host Name',
+        ColumnNames.isolate: 'Virus Infraspecific Names Isolate',
+        ColumnNames.organism: 'Virus Name',
+        ColumnNames.isolation_source: 'Isolate Lineage source',
+        COLLECTION_DATE: 'Isolate Collection date',
+        GEO_LOCATION: 'Geographic Location',
+        ColumnNames.bases: 'Length',
+    }

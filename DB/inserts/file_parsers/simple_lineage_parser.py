@@ -140,3 +140,15 @@ class Sc2LineageParser(SimpleLineageParser):
         ColumnNames.accession: 'taxon',
         ColumnNames.lineage_name: 'lineage'
     }
+
+class Sc2BjornClinicalPangoParser(SimpleLineageParser):
+    def __init__(self, filename: str):
+        super().__init__(filename, '\t', LineageSystemNames.pango)
+
+    async def parse_and_insert(self):
+        await super().parse_and_insert()
+
+    column_name_map = {
+        ColumnNames.accession: 'Accession',
+        ColumnNames.lineage_name: 'Virus Pangolin Classification'
+    }
