@@ -11,7 +11,7 @@ from DB.inserts.geo_locations import find_or_insert_geo_location
 from DB.inserts.samples import copy_insert_samples, batch_upsert_samples, get_samples_accession_and_id_as_pl_df
 from DB.models import GeoLocation
 from utils.constants import ColumnNames, COLLECTION_DATE, GEO_LOCATION
-from utils.dates_and_times import parse_collection_start_and_end, parse_collection_start_and_end_polars_edition
+from utils.dates_and_times import parse_collection_start_and_end
 
 
 class Sc2SamplesParser(FileParser):
@@ -48,7 +48,7 @@ class Sc2SamplesParser(FileParser):
             .drop(pl.col(GEO_LOCATION))
             .with_columns(
                 pl.col(COLLECTION_DATE).map_elements(
-                    parse_collection_start_and_end_polars_edition,
+                    parse_collection_start_and_end,
                     return_dtype=pl.List(pl.Date)
                 )
             )
