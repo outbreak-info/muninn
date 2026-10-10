@@ -774,12 +774,12 @@ class VariantsMutationsCombinedParser(FileParser):
 
     def _get_header_order(self, filename, column_name_mapping):
         proper_col_names = {
-            v: k for k, v in column_name_mapping.items()
+            v.lower(): k for k, v in column_name_mapping.items()
         }
         ordered_header = []
         with open(filename, 'r') as f:
             header = f.readline().split(self.delimiter)
-            ordered_header = [proper_col_names[h.strip()] for h in header]
+            ordered_header = [proper_col_names[h.strip().lower()] for h in header]
         if len(ordered_header) != len(proper_col_names.keys()):
             raise ValueError('mutations header bad')
         return ordered_header

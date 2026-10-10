@@ -58,6 +58,17 @@ def parse_collection_start_and_end(datestr: str) -> tuple[date, date]:
     return d0, d1
 
 
+def parse_collection_start_and_end_polars_edition(datestr: str) -> tuple[date, date]:
+    """
+    I hate polars.
+    :param datestr:
+    :return:
+    """
+    try:
+        parse_collection_start_and_end(datestr)
+    except:
+        return None, None
+
 def format_iso_week(year: int, week: int):
     """
     Put year and week number into iso format.
