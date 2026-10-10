@@ -772,18 +772,6 @@ class VariantsMutationsCombinedParser(FileParser):
 
             await session.commit()
 
-    def _get_header_order(self, filename, column_name_mapping):
-        proper_col_names = {
-            v.lower(): k for k, v in column_name_mapping.items()
-        }
-        ordered_header = []
-        with open(filename, 'r') as f:
-            header = f.readline().split(self.delimiter)
-            ordered_header = [proper_col_names[h.strip().lower()] for h in header]
-        if len(ordered_header) != len(proper_col_names.keys()):
-            raise ValueError('mutations header bad')
-        return ordered_header
-
     def _parse_extra_args(self, extra_args: list[str]):
         for arg in extra_args:
             try:
@@ -1020,13 +1008,19 @@ class VariantsMutationsCombinedParser(FileParser):
             self.header_order: List[str] = self._get_header_order()
 
         def _choose_record_type(self):
-            mutations_columns = set(VariantsMutationsCombinedParser.mutations_column_mapping.values())
-            intrahost_nts_columns = set(VariantsMutationsCombinedParser.intrahost_nts_column_mapping.values())
-            intrahost_codons_columns = set(VariantsMutationsCombinedParser.intrahost_codons_column_mapping.values())
+            mutations_columns = {
+                v.lower() for v in VariantsMutationsCombinedParser.mutations_column_mapping.values()
+            }
+            intrahost_nts_columns = {
+                v.lower() for v in VariantsMutationsCombinedParser.intrahost_nts_column_mapping.values()
+            }
+            intrahost_codons_columns = {
+                v.lower() for v in VariantsMutationsCombinedParser.intrahost_codons_column_mapping.values()
+            }
 
             with open(self.local_name, 'r') as f:
                 reader = csv.DictReader(f, delimiter=self.delimiter)
-                fieldnames = set(reader.fieldnames)
+                fieldnames = {fn.lower() for fn in reader.fieldnames}
 
                 if fieldnames == intrahost_nts_columns:
                     return RecordType.ih_nts
@@ -1048,12 +1042,12 @@ class VariantsMutationsCombinedParser(FileParser):
                     column_name_mapping = VariantsMutationsCombinedParser.intrahost_codons_column_mapping
 
             proper_col_names = {
-                v: k for k, v in column_name_mapping.items()
+                v.lower(): k for k, v in column_name_mapping.items()
             }
             ordered_header = []
             with open(self.local_name, 'r') as f:
                 header = f.readline().split(self.delimiter)
-                ordered_header = [proper_col_names[h.strip()] for h in header]
+                ordered_header = [proper_col_names[h.strip().lower()] for h in header]
             if len(ordered_header) != len(proper_col_names.keys()):
                 raise ValueError(f'Failed to construct header ordering for file: {self.raw_name}')
             return ordered_header
