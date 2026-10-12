@@ -145,6 +145,7 @@ async def get_pheno_values_and_mutation_counts(
             left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
             inner join {TableNames.samples_lineages} sl on sl.{ColumnNames.sample_id} = s.id
             inner join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id}
+            inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
             {user_where_clause}
         ),
         matching_samples_bm as (
