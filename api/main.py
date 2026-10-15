@@ -534,7 +534,7 @@ async def get_mutation_count_by_collection_date_and_lineage(
     region: str = Query(..., description='For change_bin=nt: the genomic region/segment (alleles.region). For change_bin=aa: the GFF feature / gene (amino_acids.gff_feature).'),
     date_bin: DateBinParam = DateBinOpt.month,
     days: DaysParam = DEFAULT_DAYS,
-    where: str | None = filter_query('Optional, restricting which samples are counted: over all columns of the `samples` table, plus the joined `lineages` columns (e.g. lineage_name). No geo columns are joined here.', required=False),
+    where: str | None = filter_query('Optional, restricting which samples are counted: over all columns of the `samples` table, plus the joined `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name). No geo columns are joined here.', required=False),
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
 ):
     if change_bin == NtOrAa.nt:
@@ -617,13 +617,14 @@ async def get_lineage_counts_over_time(
         required=False,
     ),
     lineage: str | None = Query(None, description='Optional: restrict to a single lineage (lineages.lineage_name); omit for all lineages'),
+    lineage_system_name: str | None = Query(None, description='Optional: restrict to one lineage nomenclature system (lineage_systems.lineage_system_name, e.g. PANGO). A lineage name is only unique within its system, so pass this alongside lineage to disambiguate. Narrows the returned rows only; the per-bin totals and prevalences stay over all lineages (use filter=lineage_system_name = ... to narrow those too).'),
     date_bin: DateBinParam = DateBinOpt.month,
     days: DaysParam = DEFAULT_DAYS,
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
     days_before_today: int | None = Query(None, gt=0, description='Optional: only count samples whose collection midpoint is within this many days before today'),
 ):
     return await DB.queries.lineages.get_lineage_counts_over_time(
-        date_bin, days, where, max_span_days, days_before_today, lineage
+        date_bin, days, where, max_span_days, days_before_today, lineage, lineage_system_name
     )
 
 @router.get(
@@ -924,8 +925,8 @@ async def get_wastewater_lineage_abundances_by_sample(
     where: str | None = filter_query(
         'Optional: over all `samples` columns (including the wastewater ones: ww_viral_load, '
         'ww_catchment_population, ww_site_id, ww_collected_by, census_region), the joined '
-        '`geo_locations` columns (raw names, e.g. admin1_name, country_name) and the `lineages` '
-        'columns (lineage_name).',
+        '`geo_locations` columns (raw names, e.g. admin1_name, country_name) and the `lineages`/'
+        '`lineage_systems` columns (lineage_name, lineage_system_name).',
         required=False,
     ),
 ):
@@ -954,10 +955,16 @@ async def get_wastewater_average_lineage_abundances_by_location(
                     "lineage together with all of its descendants into one series, and the response's "
                     "lineage_name keeps the '*'. Omit to get every lineage separately."
     ),
+    lineage_system_name: str | None = Query(
+        None,
+        description='Optional lineage nomenclature system to restrict to '
+                    '(lineage_systems.lineage_system_name, e.g. PANGO). A lineage name is only '
+                    'unique within its system, so pass this alongside lineage to disambiguate.'
+    ),
     where: str | None = filter_query(
         'Optional: over all `samples` columns (including the wastewater ones), the joined '
-        '`geo_locations` columns (raw names, e.g. admin1_name, country_name) and the `lineages` '
-        'columns (lineage_name).',
+        '`geo_locations` columns (raw names, e.g. admin1_name, country_name) and the `lineages`/'
+        '`lineage_systems` columns (lineage_name, lineage_system_name).',
         required=False,
     ),
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
@@ -973,6 +980,7 @@ async def get_wastewater_average_lineage_abundances_by_location(
             geo_bin.value,
             max_span_days,
             lineage,
+            lineage_system_name,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -986,7 +994,7 @@ async def get_wastewater_average_lineage_abundances_by_location(
 async def get_wastewater_lineage_counts(
     where: str | None = filter_query(
         'Optional: over all `samples` columns (including the wastewater ones), the joined '
-        '`geo_locations`, `samples_lineages` and `lineages` columns.',
+        '`geo_locations`, `samples_lineages`, `lineages` and `lineage_systems` columns.',
         required=False,
     ),
 ):

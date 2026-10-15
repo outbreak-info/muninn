@@ -301,6 +301,7 @@ async def get_lineage_counts_over_time(
     max_span_days: int,
     days_before_today: int | None = None,
     lineage: str | None = None,
+    lineage_system_name: str | None = None,
 ) -> Dict[str, List[LineageCountWithPrevalenceInfo]]:
     """
     Per-collection-date-bin sample counts per lineage over consensus lineage calls only, optionally
@@ -311,11 +312,17 @@ async def get_lineage_counts_over_time(
     if where is not None:
         user_where_clause = f'and ({parser.parse(where)})'
 
+    # Applied to the final select, so the per-bin totals (and therefore prevalence) stay over all
+    # lineages. Use the `where` filter instead to narrow the denominator too.
     query_params = {}
-    lineage_clause = ''
+    lineage_conditions = []
     if lineage is not None:
-        lineage_clause = f'where {ColumnNames.lineage_name} = :input_lineage'
+        lineage_conditions.append(f'{ColumnNames.lineage_name} = :input_lineage')
         query_params['input_lineage'] = lineage
+    if lineage_system_name is not None:
+        lineage_conditions.append(f'{ColumnNames.lineage_system_name} = :input_lineage_system_name')
+        query_params['input_lineage_system_name'] = lineage_system_name
+    lineage_clause = f'where {" and ".join(lineage_conditions)}' if lineage_conditions else ''
 
     # Recency window: keep bins whose collection midpoint is no older than `days_before_today` days.
     # mid_collection_date is a column of the CTE, so this filters before the group-by.

@@ -32,6 +32,7 @@ async def get_lineage_abundances_by_sample(
                     s.collection_start_date
                 from samples_lineages sl
                 inner join lineages l on l.id = sl.lineage_id
+                inner join lineage_systems ls on ls.id = l.lineage_system_id
                 inner join samples s on s.id = sl.sample_id
                 inner join geo_locations gl on gl.id = s.geo_location_id
                 where {ColumnNames.is_ww_sample}
@@ -61,7 +62,8 @@ async def get_averaged_lineage_abundances_by_location(
     where: str,
     geo_bin: str,
     max_span_days: int = DEFAULT_MAX_SPAN_DAYS,
-    lineage_name: str | None = None
+    lineage_name: str | None = None,
+    lineage_system_name: str | None = None
 ) -> List[AverageLineageAbundanceInfo]:
     user_where_clause = ''
     if where is not None:
@@ -93,10 +95,25 @@ async def get_averaged_lineage_abundances_by_location(
     group_by_clause = f'group by {", ".join(group_by_cols)}'
 
     params: dict = {}
+
+    lineage_system_condition = ''
+    if lineage_system_name is not None:
+        lineage_system_condition = 'lineage_system_name = :lineage_system_name'
+        params['lineage_system_name'] = lineage_system_name
+
+    # The wildcard branch picks the parent lineage straight out of `lineages`, before any
+    # filtering on base_data, so it needs its own copy of the condition.
+    wildcard_system_clause = f'and ls.{lineage_system_condition}' if lineage_system_condition else ''
+
     lineage_where = ''
     if lineage_name is not None and not is_wildcard:
-        lineage_where = 'where lineage_name = :lineage_name'
+        conditions = ['lineage_name = :lineage_name']
         params['lineage_name'] = lineage_name
+        if lineage_system_condition:
+            conditions.append(lineage_system_condition)
+        lineage_where = f'where {" and ".join(conditions)}'
+    elif lineage_system_condition:
+        lineage_where = f'where {lineage_system_condition}'
 
     if is_wildcard:
         params['parent_lineage_name'] = parent_lineage_name
@@ -104,14 +121,18 @@ async def get_averaged_lineage_abundances_by_location(
             with lineage_filter as (
                 select l.id as lineage_id
                 from lineages l
+                inner join lineage_systems ls on ls.id = l.lineage_system_id
                 where l.lineage_name = :parent_lineage_name
+                      {wildcard_system_clause}
 
                 union
 
                 select ldc.child_id as lineage_id
                 from lineages l
+                inner join lineage_systems ls on ls.id = l.lineage_system_id
                 inner join lineages_deep_children ldc on ldc.parent_id = l.id
                 where l.lineage_name = :parent_lineage_name
+                      {wildcard_system_clause}
             ),
             all_base_data as (
                 select
@@ -126,6 +147,7 @@ async def get_averaged_lineage_abundances_by_location(
                     s.ww_catchment_population
                 from samples_lineages sl
                 inner join lineages l on l.id = sl.lineage_id
+                inner join lineage_systems ls on ls.id = l.lineage_system_id
                 inner join samples s on s.id = sl.sample_id
                 left join geo_locations gl on gl.id = s.geo_location_id
                 where (s.collection_end_date - s.collection_start_date) <= {max_span_days}
@@ -143,6 +165,8 @@ async def get_averaged_lineage_abundances_by_location(
                     sl.abundance * s.ww_catchment_population as pop_weighted_prevalence
                 from lineage_filter lf
                 inner join samples_lineages sl on sl.lineage_id = lf.lineage_id
+                inner join lineages l on l.id = sl.lineage_id
+                inner join lineage_systems ls on ls.id = l.lineage_system_id
                 inner join samples s on s.id = sl.sample_id
                 left join geo_locations gl on gl.id = s.geo_location_id
                 where (s.collection_end_date - s.collection_start_date) <= {max_span_days}
@@ -209,6 +233,7 @@ async def get_averaged_lineage_abundances_by_location(
                         ((s.collection_end_date - s.collection_start_date) / 2)
                     )::timestamp)::date as week_start,
                     l.lineage_name,
+                    ls.lineage_system_name,
                     gl.admin1_name,
                     s.census_region as census_region,
                     sl.abundance * s.ww_catchment_population as pop_weighted_prevalence,
@@ -216,6 +241,7 @@ async def get_averaged_lineage_abundances_by_location(
                     s.ww_catchment_population
                 from samples_lineages sl
                 inner join lineages l on l.id = sl.lineage_id
+                inner join lineage_systems ls on ls.id = l.lineage_system_id
                 inner join samples s on s.id = sl.sample_id
                 left join geo_locations gl on gl.id = s.geo_location_id
                 where (s.collection_end_date - s.collection_start_date) <= {max_span_days}
@@ -345,11 +371,11 @@ async def count_samples_with_lineage_data(by_col: str, where: str | None = None)
         res = await session.execute(
             text(
                 f'''
-                SELECT {by_col}, 
-                       count(*) AS count1 
-                FROM {TableNames.samples} s 
-                LEFT OUTER JOIN {TableNames.geo_locations} gl ON gl.id = s.{ColumnNames.geo_location_id} 
-                LEFT OUTER JOIN {TableNames.samples_lineages} sl ON sl.{ColumnNames.sample_id} = s.id 
+                SELECT {by_col},
+                       count(*) AS count1
+                FROM {TableNames.samples} s
+                LEFT OUTER JOIN {TableNames.geo_locations} gl ON gl.id = s.{ColumnNames.geo_location_id}
+                LEFT OUTER JOIN {TableNames.samples_lineages} sl ON sl.{ColumnNames.sample_id} = s.id
                 WHERE sl.{ColumnNames.abundance} IS NOT NULL
                       and {ColumnNames.is_ww_sample}
                       {user_where_clause}
@@ -374,16 +400,17 @@ async def count_lineages_by_sample_data(where: str | None = None):
         res = await session.execute(
             text(
             f'''
-            SELECT l.{ColumnNames.lineage_name}, 
+            SELECT l.{ColumnNames.lineage_name},
                    count(*) AS count1
             FROM {TableNames.samples} s
-            LEFT OUTER JOIN {TableNames.geo_locations} gl ON gl.id = s.{ColumnNames.geo_location_id} 
-            LEFT OUTER JOIN {TableNames.samples_lineages} sl ON sl.{ColumnNames.sample_id} = s.id 
+            LEFT OUTER JOIN {TableNames.geo_locations} gl ON gl.id = s.{ColumnNames.geo_location_id}
+            LEFT OUTER JOIN {TableNames.samples_lineages} sl ON sl.{ColumnNames.sample_id} = s.id
             LEFT OUTER JOIN {TableNames.lineages} l ON l.id = sl.{ColumnNames.lineage_id}
+            LEFT OUTER JOIN {TableNames.lineage_systems} ls ON ls.id = l.{ColumnNames.lineage_system_id}
             WHERE sl.{ColumnNames.abundance} IS NOT NULL
                   and {ColumnNames.is_ww_sample}
-                  {user_where_clause} 
-            GROUP BY l.{ColumnNames.lineage_name} 
+                  {user_where_clause}
+            GROUP BY l.{ColumnNames.lineage_name}
             ORDER BY count1 desc;
             '''
             )
