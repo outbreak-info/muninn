@@ -33,7 +33,7 @@ services:
       - type: bind
         source: ${MUNINN_SERVER_DATA_INPUT_DIR}
         target: /muninn/data
-        read_only: true
+        read_only: false
     shm_size: 8g
 
   server:
