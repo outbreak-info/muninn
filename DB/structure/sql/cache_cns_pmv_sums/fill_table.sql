@@ -1,4 +1,4 @@
-create materialized view cache_cns_pmv_sums as
+insert into cache_cns_pmv_sums (pmv_value_sum, n_scored_mutations, sample_id, phenotype_metric_id, gff_feature)
 with scored as (
     select pmv.phenotype_metric_id,
            pmv.value as value,
