@@ -1,4 +1,5 @@
 import csv
+from collections import defaultdict
 from enum import Enum
 from typing import Set, List
 
@@ -11,7 +12,7 @@ from DB.inserts.effects import find_or_insert_effect
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.papers import find_or_insert_paper
 from DB.models import Effect, Paper, Annotation, AnnotationPaper
-from utils.constants import DefaultGffFeaturesByRegion
+from utils.constants import DefaultGffFeaturesByRegion, ColumnNames
 from utils.csv_helpers import parse_change_string
 from utils.errors import NotFoundError, DuplicateAnnotationError
 from utils.ha_numbering import convert_mature_h5_to_sequential
@@ -30,30 +31,40 @@ from utils.ha_numbering import convert_mature_h5_to_sequential
 # where me.subtype = 'H5N1';
 
 UNMAPPED = 'unmapped'
+GFF_MAPPING_FILE = 'gff_mapping_file'
+PROTEIN = 'protein'
 
 # todo: this mapping is now broken
 gff_mapping = {
-    'HA1-5': 'XAJ25415.1',
-    'HA2-5': 'XAJ25415.1',
-    'M1': 'XAJ25416.1',
-    'M2': 'XAJ25417.1',
-    'NA-1': 'XAJ25418.1',  # todo: ?
-    'NP': 'XAJ25419.1',
-    'NS-1': 'XAJ25420.1',
-    'NS-2': UNMAPPED,
-    'PA': ' XAJ25422.1',
-    'PB1': 'XAJ25424.1',
-    'PB1-F2': UNMAPPED,  # todo: ?
-    'PB2': 'XAJ25426.1',
+    'HA1-5': ['XAJ25415.1'],
+    'HA2-5': ['XAJ25415.1'],
+    'M1': ['XAJ25416.1'],
+    'M2': ['XAJ25417.1'],
+    'NA-1': ['XAJ25418.1'],  # todo: ?
+    'NP': ['XAJ25419.1'],
+    'NS-1': ['XAJ25420.1'],
+    'NS-2': [UNMAPPED],
+    'PA': [' XAJ25422.1'],
+    'PB1': ['XAJ25424.1'],
+    'PB1-F2': [UNMAPPED],  # todo: ?
+    'PB2': ['XAJ25426.1'],
 }
 
 
 class FlumutParser(FileParser):
+    takes_extras = True
 
-    def __init__(self, filename: str, delimiter: str):
+    def __init__(self, filename: str, delimiter: str, extra_args: list[str] = None):
         self.filename = filename
         self.delimiter = delimiter
         self._verify_header()
+
+        if extra_args is not None:
+            self._parse_extras(extra_args)
+            self._parse_gff_mapping()
+        else:
+            # backup, almost guaranteed to fail
+            self.gff_mapping = gff_mapping
 
     async def parse_and_insert(self):
         annotation_id_by_marker_id = dict()
@@ -61,7 +72,9 @@ class FlumutParser(FileParser):
         debug_info = {
             'count_skipped_misc': 0,
             'count_skipped_duplicate_annotation': 0,
-            'count_skipped_aa_not_found': 0
+            'count_skipped_aa_not_found': 0,
+            'count_skipped_no_gff_mapping': 0,
+            'unmapped_proteins': set()
         }
 
         annotations_input = pl.scan_csv(
@@ -92,20 +105,25 @@ class FlumutParser(FileParser):
             try:
                 for aa_change in one_annotation.select(pl.col(ColNameMapping.aa_change.name)).rows():
                     protein, ref, position, alt = parse_change_string(aa_change[0])
-                    gff_feature = gff_mapping[protein]
+                    try:
+                        for gff in self.gff_mapping[protein]:
+                            # adjust position for HA
+                            # todo: hacky
+                            if DefaultGffFeaturesByRegion.HA in gff:
+                                position = convert_mature_h5_to_sequential(position)
 
-                    # adjust position for HA
-                    if gff_feature == DefaultGffFeaturesByRegion.HA:
-                        position = convert_mature_h5_to_sequential(position)
+                            amino_acid_ids = amino_acid_ids.union(
+                                await find_equivalent_amino_acids(
+                                    gff_feature=gff,
+                                    position_aa=position,
+                                    ref_aa=ref,
+                                    alt_aa=alt
+                                )
+                            )
+                    except KeyError:
+                        debug_info['count_skipped_no_gff_mapping'] += 1
+                        debug_info['unmapped_proteins'].add(protein)
 
-                    amino_acid_ids = amino_acid_ids.union(
-                        await find_equivalent_amino_acids(
-                            gff_feature=gff_feature,
-                            position_aa=position,
-                            ref_aa=ref,
-                            alt_aa=alt
-                        )
-                    )
             except (KeyError, ValueError):
                 debug_info['count_skipped_misc'] += 1
                 continue
@@ -179,6 +197,37 @@ class FlumutParser(FileParser):
             if not len(diff) == 0:
                 raise ValueError(f'The following required columns were not found: {diff}')
 
+    def _parse_extras(self, extra_args: list[str]):
+        for arg in extra_args:
+            try:
+                name, value = arg.split('=')
+                if name == GFF_MAPPING_FILE:
+                    self.gff_mapping_file = value
+                    print(f'using gff mapping file: {value}')
+            except ValueError:
+                print(f'Warning: unable to parse extra parameter: {arg}')
+
+    def _parse_gff_mapping(self):
+        """
+        expected format of gff mapping file:
+        protein, gff_feature
+        foo, bar
+        foo, baz
+        Use same delimiter as flumut data file.
+        "protein" matches to flumut records
+        "gff_feature" matches to DB
+        If multiple mappings are provided for the same protein, they will all be applied.
+        :return:
+        """
+        self.gff_mapping: dict[str, list[str]] = dict()
+        with open(self.gff_mapping_file, 'r') as f:
+            reader = csv.DictReader(f, delimiter=self.delimiter)
+            for row in reader:
+                try:
+                    self.gff_mapping[row[PROTEIN]].append(row[ColumnNames.gff_feature])
+                except KeyError:
+                    self.gff_mapping[row[PROTEIN]] = [row[ColumnNames.gff_feature]]
+
 
 class ColNameMapping(Enum):
     aa_change = 'mutation_name'
@@ -190,5 +239,5 @@ class ColNameMapping(Enum):
 
 
 class FlumutTsvParser(FlumutParser):
-    def __init__(self, filename: str):
-        super().__init__(filename, '\t')
+    def __init__(self, filename: str, extra_args: list[str] = None):
+        super().__init__(filename, '\t', extra_args)
