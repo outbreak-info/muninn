@@ -59,15 +59,14 @@ class FlumutParser(FileParser):
         self.delimiter = delimiter
         self._verify_header()
 
+        # backup, almost guaranteed to fail
+        self.gff_mapping = gff_mapping
+
         if extra_args is not None:
-            self._parse_extras(extra_args)
-            self._parse_gff_mapping()
-        else:
-            # backup, almost guaranteed to fail
-            self.gff_mapping = gff_mapping
+            gff_mapping_file = self._parse_extras(extra_args)
+            self.gff_mapping = self._parse_gff_mapping(gff_mapping_file)
 
     async def parse_and_insert(self):
-        annotation_id_by_marker_id = dict()
 
         debug_info = {
             'count_skipped_misc': 0,
@@ -197,17 +196,18 @@ class FlumutParser(FileParser):
             if not len(diff) == 0:
                 raise ValueError(f'The following required columns were not found: {diff}')
 
-    def _parse_extras(self, extra_args: list[str]):
+    @staticmethod
+    def _parse_extras(extra_args: list[str]) -> str:
         for arg in extra_args:
             try:
                 name, value = arg.split('=')
                 if name == GFF_MAPPING_FILE:
-                    self.gff_mapping_file = value
-                    print(f'using gff mapping file: {value}')
+                    return value
             except ValueError:
                 print(f'Warning: unable to parse extra parameter: {arg}')
+        raise ValueError(f'no gff mapping file found')
 
-    def _parse_gff_mapping(self):
+    def _parse_gff_mapping(self, gff_mapping_file: str) -> dict[str, list[str]]:
         """
         expected format of gff mapping file:
         protein, gff_feature
@@ -219,14 +219,15 @@ class FlumutParser(FileParser):
         If multiple mappings are provided for the same protein, they will all be applied.
         :return:
         """
-        self.gff_mapping: dict[str, list[str]] = dict()
-        with open(self.gff_mapping_file, 'r') as f:
+        mapping: dict[str, list[str]] = dict()
+        with open(gff_mapping_file, 'r') as f:
             reader = csv.DictReader(f, delimiter=self.delimiter)
             for row in reader:
                 try:
-                    self.gff_mapping[row[PROTEIN]].append(row[ColumnNames.gff_feature])
+                    mapping[row[PROTEIN]].append(row[ColumnNames.gff_feature])
                 except KeyError:
-                    self.gff_mapping[row[PROTEIN]] = [row[ColumnNames.gff_feature]]
+                    mapping[row[PROTEIN]] = [row[ColumnNames.gff_feature]]
+        return mapping
 
 
 class ColNameMapping(Enum):
