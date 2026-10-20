@@ -395,7 +395,7 @@ async def get_lineage_counts_over_time(
             lineage=r[2],
             lineage_system=r[3],
             total=total,
-            prevalence=(r[4] / total) if total else 0.0,
+            prevalence=(r[4] / total) if total else 0.0, # todo: this should be removed
         )
         out_data.setdefault(date, []).append(info)
     return out_data
