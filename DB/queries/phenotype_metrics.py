@@ -485,9 +485,9 @@ async def get_pheno_value_for_variants_by_sample_and_collection_date(
                          s.{ColumnNames.collection_end_date} as collection_end_date
                   from {TableNames.samples} s
                   left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
-                  inner join {TableNames.samples_lineages} sl on sl.{ColumnNames.sample_id} = s.id
-                  inner join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id}
-                  inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
+                  left join {TableNames.samples_lineages} sl on sl.{ColumnNames.sample_id} = s.id
+                  left join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id}
+                  left join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
                   where num_nulls(s.{ColumnNames.collection_end_date}, s.{ColumnNames.collection_start_date}) = 0
                     and (s.{ColumnNames.collection_end_date} - s.{ColumnNames.collection_start_date}) <= :max_span_days
                     {user_where_clause}
