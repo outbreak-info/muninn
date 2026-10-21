@@ -97,13 +97,13 @@ async def get_averaged_lineage_abundances_by_location(
     params: dict = {}
 
     lineage_system_condition = ''
+    wildcard_system_clause = ''
     if lineage_system_name is not None:
         lineage_system_condition = 'lineage_system_name = :lineage_system_name'
+        # The wildcard branch filters `lineages` directly instead of base_data, so it needs the
+        # same condition written against that query's aliases.
+        wildcard_system_clause = 'and ls.lineage_system_name = :lineage_system_name'
         params['lineage_system_name'] = lineage_system_name
-
-    # The wildcard branch picks the parent lineage straight out of `lineages`, before any
-    # filtering on base_data, so it needs its own copy of the condition.
-    wildcard_system_clause = f'and ls.{lineage_system_condition}' if lineage_system_condition else ''
 
     lineage_where = ''
     if lineage_name is not None and not is_wildcard:
@@ -371,11 +371,11 @@ async def count_samples_with_lineage_data(by_col: str, where: str | None = None)
         res = await session.execute(
             text(
                 f'''
-                SELECT {by_col},
-                       count(*) AS count1
-                FROM {TableNames.samples} s
-                LEFT OUTER JOIN {TableNames.geo_locations} gl ON gl.id = s.{ColumnNames.geo_location_id}
-                LEFT OUTER JOIN {TableNames.samples_lineages} sl ON sl.{ColumnNames.sample_id} = s.id
+                SELECT {by_col}, 
+                       count(distinct s.id) AS count1 
+                FROM {TableNames.samples} s 
+                LEFT OUTER JOIN {TableNames.geo_locations} gl ON gl.id = s.{ColumnNames.geo_location_id} 
+                LEFT OUTER JOIN {TableNames.samples_lineages} sl ON sl.{ColumnNames.sample_id} = s.id 
                 WHERE sl.{ColumnNames.abundance} IS NOT NULL
                       and {ColumnNames.is_ww_sample}
                       {user_where_clause}
@@ -400,17 +400,17 @@ async def count_lineages_by_sample_data(where: str | None = None):
         res = await session.execute(
             text(
             f'''
-            SELECT l.{ColumnNames.lineage_name},
+            SELECT l.{ColumnNames.lineage_name}, 
                    count(*) AS count1
             FROM {TableNames.samples} s
-            LEFT OUTER JOIN {TableNames.geo_locations} gl ON gl.id = s.{ColumnNames.geo_location_id}
-            LEFT OUTER JOIN {TableNames.samples_lineages} sl ON sl.{ColumnNames.sample_id} = s.id
+            LEFT OUTER JOIN {TableNames.geo_locations} gl ON gl.id = s.{ColumnNames.geo_location_id} 
+            LEFT OUTER JOIN {TableNames.samples_lineages} sl ON sl.{ColumnNames.sample_id} = s.id 
             LEFT OUTER JOIN {TableNames.lineages} l ON l.id = sl.{ColumnNames.lineage_id}
             LEFT OUTER JOIN {TableNames.lineage_systems} ls ON ls.id = l.{ColumnNames.lineage_system_id}
             WHERE sl.{ColumnNames.abundance} IS NOT NULL
                   and {ColumnNames.is_ww_sample}
-                  {user_where_clause}
-            GROUP BY l.{ColumnNames.lineage_name}
+                  {user_where_clause} 
+            GROUP BY l.{ColumnNames.lineage_name} 
             ORDER BY count1 desc;
             '''
             )

@@ -312,8 +312,8 @@ async def get_lineage_counts_over_time(
     if where is not None:
         user_where_clause = f'and ({parser.parse(where)})'
 
-    # Applied to the final select, so the per-bin totals (and therefore prevalence) stay over all
-    # lineages. Use the `where` filter instead to narrow the denominator too.
+    # These are applied to the final select, so the per-bin totals (and therefore prevalence) stay
+    # over every lineage in the system. Use the `where` filter instead to narrow the denominator too.
     query_params = {}
     lineage_conditions = []
     if lineage is not None:

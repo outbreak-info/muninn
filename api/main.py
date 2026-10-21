@@ -617,7 +617,7 @@ async def get_lineage_counts_over_time(
         required=False,
     ),
     lineage: str | None = Query(None, description='Optional: restrict to a single lineage (lineages.lineage_name); omit for all lineages'),
-    lineage_system_name: str | None = Query(None, description='Optional: restrict to one lineage nomenclature system (lineage_systems.lineage_system_name, e.g. PANGO). A lineage name is only unique within its system, so pass this alongside lineage to disambiguate. Narrows the returned rows only; the per-bin totals and prevalences stay over all lineages (use filter=lineage_system_name = ... to narrow those too).'),
+    lineage_system_name: str | None = Query(None, description='Optional: restrict to one lineage nomenclature system (lineage_systems.lineage_system_name, e.g. PANGO). A lineage name is only unique within its system, so pass this alongside lineage to disambiguate. Narrows the returned rows only; the per-bin totals and prevalences stay over every lineage in the system.'),
     date_bin: DateBinParam = DateBinOpt.month,
     days: DaysParam = DEFAULT_DAYS,
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
