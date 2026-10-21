@@ -369,7 +369,7 @@ async def get_lineage_counts_over_time(
                 {ColumnNames.lineage_name},
                 {ColumnNames.lineage_system_name},
                 cnt,
-                sum(cnt) over (partition by {bin_cols}) as total
+                sum(cnt) over (partition by {bin_cols}, {ColumnNames.lineage_system_name}) as total
             from binned
         )
         select
