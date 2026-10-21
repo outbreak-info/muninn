@@ -115,11 +115,7 @@ def main():
     ):
         raise ValueError('Multiple filenames provided, but this format takes only one.')
 
-    if parser_extras is not None and not (
-            issubclass(parser_class, VariantsMutationsCombinedParser) or
-            issubclass(parser_class, LineageHierarchyYamlParser) or
-            issubclass(parser_class, DmsFileParser)
-    ):
+    if parser_extras is not None and not parser_class.takes_extras:
         print('Warning: this format does not except extra args, the values you passed will be ignored. ')
 
     # run inserts method
@@ -128,12 +124,7 @@ def main():
     if issubclass(parser_class, FileParser):
         if issubclass(parser_class, VariantsMutationsCombinedParser):
             parser = parser_class(args.filenames, parser_extras)
-        elif issubclass(parser_class, Sc2SamplesParser) and len(args.filenames) >= 2:
-            # todo: this parser won't take two filenames anymore.
-            parser = parser_class(args.filenames[0], args.filenames[1])
-        elif issubclass(parser_class, LineageHierarchyYamlParser):
-            parser = parser_class(args.filenames[0], parser_extras)
-        elif issubclass(parser_class, DmsFileParser):
+        elif parser_class.takes_extras:
             parser = parser_class(args.filenames[0], extra_args=parser_extras)
         else:
             parser = parser_class(filename)

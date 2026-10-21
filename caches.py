@@ -3,8 +3,6 @@ import asyncio
 from enum import StrEnum
 
 from DB.structure import cache_cns_pmv_sums
-from DB.structure.utils import refresh_matview
-from utils.constants import TableNames
 
 
 class Commands(StrEnum):
@@ -30,8 +28,9 @@ def main():
 def create_caches():
     asyncio.run(cache_cns_pmv_sums.create_all())
 
+
 def refresh_caches():
-    asyncio.run(refresh_matview(TableNames.cache_cns_pmv_sums))
+    asyncio.run(cache_cns_pmv_sums.refresh_cache())
 
 
 if __name__ == '__main__':

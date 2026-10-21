@@ -12,6 +12,7 @@ from utils.errors import NotFoundError
 
 
 class DmsFileParser(FileParser):
+    takes_extras = True
 
     def __init__(
         self,
@@ -189,6 +190,7 @@ class HaRegionDmsTsvParser(DmsFileParser):
     converted to tsv
     todo: Not sure why we're using a version converted to tsv
     """
+
     def __init__(self, filename: str, extra_args: list[str]):
         super().__init__(filename, '\t', extra_args=extra_args)
 
@@ -200,11 +202,13 @@ class HaRegionDmsCsvParser(DmsFileParser):
     """
     https://raw.githubusercontent.com/dms-vep/Flu_H5_American-Wigeon_South-Carolina_2021-H5N1_DMS/refs/heads/main/results/summaries/all_sera_escape.csv
     """
+
     def __init__(self, filename: str, extra_args: list[str]):
         super().__init__(filename, ',', extra_args=extra_args)
 
     async def parse_and_insert(self):
         await super().parse_and_insert()
+
 
 # todo: fix name in runinserts, fix metric name
 class HaRegionDmsCsvParserNewData(DmsFileParser):
@@ -225,6 +229,7 @@ class HaRegionDmsCsvParserNeuAcVsNeuGc(DmsFileParser):
     https://raw.githubusercontent.com/dms-vep/Flu_H5_American-Wigeon_South-Carolina_2021-H5N1_DMS_NeuGc/refs/heads/master/results/summaries/entry_in_NeuAc_vs_NeuGc_cells.csv
     todo: double-check that this is the file
     """
+
     def __init__(self, filename: str, extra_args: list[str]):
         super().__init__(filename, ',', extra_args=extra_args)
 

@@ -33,8 +33,8 @@ services:
       - type: bind
         source: ${MUNINN_SERVER_DATA_INPUT_DIR}
         target: /muninn/data
-        read_only: true
-    shm_size: 8g
+        read_only: false
+    shm_size: "${MUNINN_PG_SHM_SIZE:-8g}"
 
   server:
     container_name: "${MUNINN_INSTANCE_NAME}_server"

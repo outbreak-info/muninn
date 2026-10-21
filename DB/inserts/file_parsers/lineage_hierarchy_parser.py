@@ -16,11 +16,12 @@ CHILD_NAME = 'child_name'
 
 
 class LineageHierarchyYamlParser(FileParser):
+    takes_extras = True
 
-    def __init__(self, filename: str, extras: list[str]):
+    def __init__(self, filename: str, extra_args: list[str]):
         self.filename = filename
 
-        for arg in extras:
+        for arg in extra_args:
             name, value = arg.split('=')
             if name == ColumnNames.lineage_system_name:
                 self.lineage_system_name = value
@@ -141,8 +142,8 @@ class LineageHierarchyYamlParser(FileParser):
 
 
 class FreyjaDemixedLineageHierarchyYamlParser(LineageHierarchyYamlParser):
-    def __init__(self, filename: str, extras: list[str] = None):
-        if extras is not None:
+    def __init__(self, filename: str, extra_args: list[str] = None):
+        if extra_args is not None:
             print('Warning: FreyjaDemixedLineageHierarchyYamlParser will ignore provided value of lineage_system_name')
         super().__init__(filename, [f'{ColumnNames.lineage_system_name}={LineageSystemNames.freyja_demixed}'])
 

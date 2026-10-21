@@ -60,6 +60,9 @@ The compose file defines two services, each of which will run in their own conta
     # if not set, the default is 4. 
     # when setting this, consider also the number of database connections that will be created.
     export MUNINN_N_API_WORKERS=4
+   
+   # Optional: defaults to 8g
+    export MUNINN_PG_SHM_SIZE="8g"
     ```
     - Change the value for `MUNINN_SERVER_DATA_INPUT_DIR` to allow the server to read input data from a host directory.
     - For local testing, `MUNINN_PG_DATA_BIND_DIR` does not need to be set. 

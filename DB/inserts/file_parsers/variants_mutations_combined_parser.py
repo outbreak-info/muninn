@@ -143,6 +143,10 @@ class VariantsMutationsCombinedParser(FileParser):
                 text('delete from tmp_mutations where ref_nt is null;')
             )
 
+            await session.execute(
+                text('delete from tmp_mutations where alt_nt = ref_nt;')
+            )
+
             await session.execute(text('create index ix_tmp_mutations_accession on tmp_mutations (accession);'))
 
             await session.commit()

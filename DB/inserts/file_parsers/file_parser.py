@@ -11,6 +11,7 @@ What is it that all the insertion systems will share?
 '''
 
 class FileParser(ABC):
+    takes_extras: bool = False
 
     @abstractmethod
     def __init__(self, filename: str):
