@@ -136,7 +136,7 @@ async def count_samples_by_simple_date(
                 f'''
                 select
                 {extract_clause},
-                count(*)
+                count(distinct s.id)
                 from samples s
                 left join geo_locations gl on gl.id = s.geo_location_id
                 left join {TableNames.samples_lineages} sl on sl.{ColumnNames.sample_id} = s.id
@@ -181,9 +181,11 @@ async def count_samples_by_collection_date(
                     select
                     {MID_COLLECTION_DATE_CALCULATION}
                     from (
-                        select
-                        *,
-                        collection_end_date - collection_start_date as collection_span
+                        select distinct
+                        s.id,
+                        s.collection_start_date,
+                        s.collection_end_date,
+                        s.collection_end_date - s.collection_start_date as collection_span
                         from samples s
                         left join geo_locations gl on gl.id = s.geo_location_id
                         left join {TableNames.samples_lineages} sl on sl.{ColumnNames.sample_id} = s.id
