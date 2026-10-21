@@ -1,29 +1,32 @@
-from sqlalchemy import select, and_
-
 from DB.engine import get_async_write_session
-from DB.models import PhenotypeMetricValues
+from DB.textutils import text
+from utils.constants import TableNames, ColumnNames
 
 
-async def insert_pheno_measurement_result(pmr: PhenotypeMetricValues, upsert: bool = False) -> bool:
-    updated_existing = False
+async def upsert_pheno_measurement_result(
+    amino_acid_id: int,
+    phenotype_metric_id: int,
+    value: float
+) -> bool:
     async with get_async_write_session() as session:
-        existing: PhenotypeMetricValues = await session.scalar(
-            select(PhenotypeMetricValues)
-            .where(
-                and_(
-                    PhenotypeMetricValues.amino_acid_id == pmr.amino_acid_id,
-                    PhenotypeMetricValues.phenotype_metric_id == pmr.phenotype_metric_id
-                )
-            )
+        # info on the magic at the end of this query, see: https://stackoverflow.com/q/39058213
+        updated_existing = await session.scalar(
+            text(
+                f'''
+                insert into {TableNames.phenotype_metric_values} 
+                ({ColumnNames.phenotype_metric_id}, {ColumnNames.amino_acid_id}, {ColumnNames.value})
+                values (:metric_id, :aa_id, :value)
+                on conflict ({ColumnNames.phenotype_metric_id}, {ColumnNames.amino_acid_id}) 
+                do update set {ColumnNames.value} = excluded.{ColumnNames.value}
+                returning xmax <> 0 as updated;
+                '''
+            ),
+            {
+                'metric_id': phenotype_metric_id,
+                'aa_id': amino_acid_id,
+                'value': value
+            }
         )
-        if existing is None:
-            session.add(pmr)
-            await session.commit()
-        elif existing.value != pmr.value:
-            if upsert:
-                updated_existing = True
-                existing.value = pmr.value
-                await session.commit()
-            else:
-                raise ValueError('phenotype measurement result value mismatch')
-        return updated_existing
+        await session.commit()
+
+    return updated_existing

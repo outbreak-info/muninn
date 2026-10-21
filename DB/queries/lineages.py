@@ -369,7 +369,7 @@ async def get_lineage_counts_over_time(
                 {ColumnNames.lineage_name},
                 {ColumnNames.lineage_system_name},
                 cnt,
-                sum(cnt) over (partition by {bin_cols}) as total
+                sum(cnt) over (partition by {bin_cols}, {ColumnNames.lineage_system_name}) as total
             from binned
         )
         select
@@ -395,7 +395,7 @@ async def get_lineage_counts_over_time(
             lineage=r[2],
             lineage_system=r[3],
             total=total,
-            prevalence=(r[4] / total) if total else 0.0,
+            prevalence=(r[4] / total) if total else 0.0, # todo: this should be removed
         )
         out_data.setdefault(date, []).append(info)
     return out_data

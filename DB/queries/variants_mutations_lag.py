@@ -5,16 +5,19 @@ from DB.textutils import text
 
 from DB.engine import get_async_session
 from api.models import VariantMutationLagInfo
+from parser.parser import parser
 from utils.constants import TableNames, ColumnNames
 
 
 async def get_mutations_before_variants(
     lineage: str,
-    lineage_system_name: str
+    lineage_system_name: str,
+    where: str | None = None
 ) -> Dict[str, List[VariantMutationLagInfo]]:
     return await _get_lag_variants_mutations(
         lineage,
         lineage_system_name,
+        where,
         'fm.start_date < fv.start_date',
         'fv.start_date::date - fm.start_date::date'
     )
@@ -22,11 +25,13 @@ async def get_mutations_before_variants(
 
 async def get_variants_before_mutations(
     lineage: str,
-    lineage_system_name: str
+    lineage_system_name: str,
+    where: str | None = None
 ) -> Dict[str, List[VariantMutationLagInfo]]:
     return await _get_lag_variants_mutations(
         lineage,
         lineage_system_name,
+        where,
         'fv.start_date < fm.start_date',
         'fm.start_date::date - fv.start_date::date'
     )
@@ -35,9 +40,14 @@ async def get_variants_before_mutations(
 async def _get_lag_variants_mutations(
     lineage: str,
     lineage_system_name: str,
+    where: str | None,
     lag_condition: str,
     lag_calculation: str
 ) -> Dict[str, List[VariantMutationLagInfo]]:
+    user_where_clause = ''
+    if where is not None:
+        user_where_clause = f'and ({parser.parse(where)})'
+
     async with get_async_session() as session:
         res = await session.execute(
             text(
@@ -45,14 +55,16 @@ async def _get_lag_variants_mutations(
                 WITH sample_subset AS (
                     SELECT s.id, s.{ColumnNames.collection_start_date}
                     from samples s
+                    LEFT JOIN {TableNames.geo_locations} gl ON gl.id = s.{ColumnNames.geo_location_id}
                     INNER JOIN {TableNames.samples_lineages} sl ON s.id = sl.sample_id
                     INNER JOIN {TableNames.lineages} l ON sl.lineage_id = l.id
                     INNER JOIN {TableNames.lineage_systems} ls ON l.lineage_system_id = ls.id
                     WHERE l.lineage_name = :lineage AND ls.lineage_system_name = :lineage_system_name
-                      and {ColumnNames.collection_end_date} - {ColumnNames.collection_start_date} <= 30
+                      and s.{ColumnNames.collection_end_date} - s.{ColumnNames.collection_start_date} <= 30
+                      {user_where_clause}
                 ),
                 sample_subset_bm AS (
-                    SELECT rb_build_agg(id) AS bm
+                    SELECT coalesce(rb_build_agg(id), rb_build('{{}}')) AS bm
                     FROM sample_subset
                 ),
                 first_mutations AS (
@@ -61,8 +73,13 @@ async def _get_lag_variants_mutations(
                            aa.{ColumnNames.position_aa},
                            aa.{ColumnNames.alt_aa},
                            aa.{ColumnNames.gff_feature}
-                    FROM sample_subset ss
-                    inner join {TableNames.cns_samples_by_amino_acid} csaa on csaa.{ColumnNames.samples_present} @> ss.id
+                    FROM {TableNames.cns_samples_by_amino_acid} csaa
+                    CROSS JOIN LATERAL unnest(
+                                rb_to_array(csaa.{ColumnNames.samples_present} & (
+                                    SELECT bm
+                                    FROM sample_subset_bm
+                                ))) AS u(sample_id)
+                    INNER JOIN sample_subset ss ON ss.id = u.sample_id
                     INNER JOIN {TableNames.amino_acids} aa ON aa.id = csaa.{ColumnNames.amino_acid_id}
                     GROUP BY aa.{ColumnNames.ref_aa}, aa.{ColumnNames.position_aa}, aa.{ColumnNames.alt_aa}, aa.{ColumnNames.gff_feature}
                 ),

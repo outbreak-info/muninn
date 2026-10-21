@@ -4,7 +4,7 @@ from DB.textutils import text
 
 from DB.engine import get_async_session
 from DB.queries.date_count_helpers import get_extract_clause, get_group_by_clause, get_order_by_cause, \
-    MID_COLLECTION_DATE_CALCULATION, YEAR, CHUNK, BIN_START, BIN_END
+    MID_COLLECTION_DATE_CALCULATION, YEAR, CHUNK, BIN_START, BIN_END, get_date_result_col_names
 from DB.queries.helpers import get_appropriate_translations_table_and_id
 from api.models import PhenotypeMetricInfo
 from parser.parser import parser
@@ -147,9 +147,9 @@ async def count_mutations_gte_pheno_value_by_collection_date(
                 {MID_COLLECTION_DATE_CALCULATION}
             from {TableNames.samples} s
             left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
-            inner join {TableNames.samples_lineages} sl on sl.{ColumnNames.sample_id} = s.id
-            inner join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id}
-            inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
+            left join {TableNames.samples_lineages} sl on sl.{ColumnNames.sample_id} = s.id
+            left join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id}
+            left join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
             where num_nulls({ColumnNames.collection_end_date}, {ColumnNames.collection_start_date}) = 0
               and ({ColumnNames.collection_end_date} - {ColumnNames.collection_start_date}) <= :max_span_days
               {user_where_clause}
@@ -237,9 +237,9 @@ async def count_variants_gte_pheno_value_by_collection_date(
                 {MID_COLLECTION_DATE_CALCULATION}
             from {TableNames.samples} s
             left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
-            inner join {TableNames.samples_lineages} sl on sl.{ColumnNames.sample_id} = s.id
-            inner join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id}
-            inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
+            left join {TableNames.samples_lineages} sl on sl.{ColumnNames.sample_id} = s.id
+            left join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id}
+            left join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
             where num_nulls({ColumnNames.collection_end_date}, {ColumnNames.collection_start_date}) = 0
               and ({ColumnNames.collection_end_date} - {ColumnNames.collection_start_date}) <= :max_span_days
               {user_where_clause}
@@ -365,33 +365,37 @@ async def get_pheno_value_for_mutations_by_sample_and_collection_date(
         user_where_clause = f'and ({parser.parse(where)})'
 
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
-    group_by_clause = get_group_by_clause(date_bin)
+    group_by_clause = get_group_by_clause(date_bin, extra_cols=[ColumnNames.gff_feature])
     order_by_clause = get_order_by_cause(date_bin)
 
     query = (
-        f'with matching_samples as (\n'
-        f'    select s.id as sample_id,\n'
-        f'           {MID_COLLECTION_DATE_CALCULATION}\n'
-        f'    from samples s\n'
-        f'    left join geo_locations gl on gl.id = s.geo_location_id\n'
-        f'    inner join samples_lineages sl on sl.sample_id = s.id\n'
-        f'    inner join lineages l on l.id = sl.lineage_id\n'
-        f'    inner join lineage_systems ls on ls.id = l.lineage_system_id\n'
-        f'    where (s.collection_end_date - s.collection_start_date) <= :max_span_days {user_where_clause}\n'
-        f')\n'
-        f'select {extract_clause},\n'
-        f'       percentile_cont(0.25) within group (order by pmv_value_sum) as pmv_sum_q1,\n'
-        f'       percentile_cont(0.5) within group (order by pmv_value_sum) as pmv_sum_median,\n'
-        f'       percentile_cont(0.75) within group (order by pmv_value_sum) as pmv_sum_q3,\n'
-        f'       percentile_cont(0.25) within group (order by n_scored_mutations) as n_scores_q1,\n'
-        f'       percentile_cont(0.5) within group (order by n_scored_mutations) as n_scores_median,\n'
-        f'       percentile_cont(0.75) within group (order by n_scored_mutations) as n_scores_q3\n'
-        f'from matching_samples\n'
-        f'inner join {TableNames.cache_cns_pmv_sums} cache using (sample_id)\n'
-        f'inner join phenotype_metrics pm on pm.id = cache.phenotype_metric_id\n'
-        f'where pm.phenotype_metric_name = :pm_name\n'
-        f'{group_by_clause}\n'
-        f'{order_by_clause};'
+        f'''
+        with matching_samples as (
+            select distinct s.id as sample_id,
+                   {MID_COLLECTION_DATE_CALCULATION}
+            from samples s
+            left join geo_locations gl on gl.id = s.geo_location_id
+            left join samples_lineages sl on sl.sample_id = s.id
+            left join lineages l on l.id = sl.lineage_id
+            left join lineage_systems ls on ls.id = l.lineage_system_id
+            where (s.collection_end_date - s.collection_start_date) <= :max_span_days 
+            {user_where_clause}
+        )
+        select {extract_clause},
+               {ColumnNames.gff_feature},
+               percentile_cont(0.25) within group (order by pmv_value_sum) as pmv_sum_q1,
+               percentile_cont(0.5) within group (order by pmv_value_sum) as pmv_sum_median,
+               percentile_cont(0.75) within group (order by pmv_value_sum) as pmv_sum_q3,
+               percentile_cont(0.25) within group (order by n_scored_mutations) as n_scores_q1,
+               percentile_cont(0.5) within group (order by n_scored_mutations) as n_scores_median,
+               percentile_cont(0.75) within group (order by n_scored_mutations) as n_scores_q3
+        from matching_samples
+        inner join {TableNames.cache_cns_pmv_sums} cache using (sample_id)
+        inner join phenotype_metrics pm on pm.id = cache.phenotype_metric_id
+        where pm.phenotype_metric_name = :pm_name
+        {group_by_clause}
+        {order_by_clause};
+        '''
     )
     async with get_async_session() as session:
         res = await session.execute(
@@ -401,19 +405,21 @@ async def get_pheno_value_for_mutations_by_sample_and_collection_date(
                 'max_span_days': max_span_days,
             }
         )
-        rows = res.all()
+        rows = res.mappings().all()
     out_data = []
     for r in rows:
-        date = date_bin.format_iso_chunk(r[0], r[1])
+        datecol1, datecol2 = get_date_result_col_names(date_bin)
+        date = date_bin.format_iso_chunk(r[datecol1], r[datecol2])
         out_data.append(
             {
                 "date": date,
-                "aggregate_value_q1": r[2],
-                "aggregate_value_median": r[3],
-                "aggregate_value_q3": r[4],
-                "n_aa_q1": r[5],
-                "n_aa_median": r[6],
-                "n_aa_q3": r[7],
+                ColumnNames.gff_feature: r[ColumnNames.gff_feature],
+                "aggregate_value_q1": r['pmv_sum_q1'],
+                "aggregate_value_median": r['pmv_sum_median'],
+                "aggregate_value_q3": r['pmv_sum_q3'],
+                "n_aa_q1": r['n_scores_q1'],
+                "n_aa_median": r['n_scores_median'],
+                "n_aa_q3": r['n_scores_q3'],
             }
         )
     return out_data
@@ -425,6 +431,7 @@ async def get_pheno_value_for_variants_by_sample_and_collection_date(
     days: int,
     max_span_days: int,
     where: str | None,
+    min_alt_freq: float
 ) -> List[Dict]:
     user_where_clause = ''
     if where is not None:
@@ -435,7 +442,7 @@ async def get_pheno_value_for_variants_by_sample_and_collection_date(
     # there from opposite directions.
 
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
-    group_by_clause = get_group_by_clause(date_bin)
+    group_by_clause = get_group_by_clause(date_bin, extra_cols=[ColumnNames.gff_feature])
     order_by_clause = get_order_by_cause(date_bin)
 
     # There is no by-sample transposition of the intra-host data, so the per-sample view has to be
@@ -451,21 +458,24 @@ async def get_pheno_value_for_variants_by_sample_and_collection_date(
                      rb_or_agg(v.{ColumnNames.samples_present}) as bm
               from {TableNames.ih_samples_by_amino_acid} v
               inner join scored sc on sc.aa_id = v.{ColumnNames.amino_acid_id}
+              where lower({ColumnNames.alt_freq_range}) >= :min_alt_freq
               group by v.{ColumnNames.amino_acid_id}
           ),
           per_sample as (
-              select ms.sample_id,
-                     ms.collection_start_date,
-                     ms.collection_end_date,
+              select s2.id as sample_id,
+                     {ColumnNames.gff_feature},
+                     s2.{ColumnNames.collection_start_date} as collection_start_date,
+                     s2.{ColumnNames.collection_end_date} as collection_end_date,
                      sum(sc.value) as aggregate_value,
-                     count(distinct sc.aa_id) as n_amino_acid_mutations
+                     count(*) as n_amino_acid_mutations
               from carriers c
-              inner join scored sc on sc.aa_id = c.aa_id
+              inner join scored sc using (aa_id)
               cross join lateral unnest(
                   rb_to_array(c.bm & (select bm from matching_bm))
               ) as u({ColumnNames.sample_id})
-              inner join matching_samples ms on ms.sample_id = u.{ColumnNames.sample_id}
-              group by ms.sample_id, ms.collection_start_date, ms.collection_end_date
+              inner join {TableNames.samples} s2 on s2.id = u.{ColumnNames.sample_id}
+              inner join {TableNames.amino_acids} aa on aa.id = aa_id
+              group by s2.id, s2.{ColumnNames.collection_start_date}, s2.{ColumnNames.collection_end_date}, {ColumnNames.gff_feature}
           )'''
 
     query = f'''
@@ -475,9 +485,9 @@ async def get_pheno_value_for_variants_by_sample_and_collection_date(
                          s.{ColumnNames.collection_end_date} as collection_end_date
                   from {TableNames.samples} s
                   left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
-                  inner join {TableNames.samples_lineages} sl on sl.{ColumnNames.sample_id} = s.id
-                  inner join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id}
-                  inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
+                  left join {TableNames.samples_lineages} sl on sl.{ColumnNames.sample_id} = s.id
+                  left join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id}
+                  left join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
                   where num_nulls(s.{ColumnNames.collection_end_date}, s.{ColumnNames.collection_start_date}) = 0
                     and (s.{ColumnNames.collection_end_date} - s.{ColumnNames.collection_start_date}) <= :max_span_days
                     {user_where_clause}
@@ -492,6 +502,7 @@ async def get_pheno_value_for_variants_by_sample_and_collection_date(
               {per_sample_cte}
               select
               {extract_clause},
+              {ColumnNames.gff_feature},
               percentile_cont(0.25) within group (order by aggregate_value) as q1,
               percentile_cont(0.5) within group (order by aggregate_value) as median,
               percentile_cont(0.75) within group (order by aggregate_value) as q3,
@@ -502,6 +513,7 @@ async def get_pheno_value_for_variants_by_sample_and_collection_date(
                   select
                   aggregate_value,
                   n_amino_acid_mutations,
+                  {ColumnNames.gff_feature},
                   {MID_COLLECTION_DATE_CALCULATION}
                   from per_sample
               ) binned
@@ -514,21 +526,24 @@ async def get_pheno_value_for_variants_by_sample_and_collection_date(
             {
                 'pm_name': phenotype_metric_name,
                 'max_span_days': max_span_days,
+                'min_alt_freq': min_alt_freq
             }
         )
-        rows = res.all()
+        rows = res.mappings().all()
     out_data = []
     for r in rows:
-        date = date_bin.format_iso_chunk(r[0], r[1])
+        datecol1, datecol2 = get_date_result_col_names(date_bin)
+        date = date_bin.format_iso_chunk(r[datecol1], r[datecol2])
         out_data.append(
             {
                 "date": date,
-                "aggregate_value_q1": r[2],
-                "aggregate_value_median": r[3],
-                "aggregate_value_q3": r[4],
-                "n_aa_q1": r[5],
-                "n_aa_median": r[6],
-                "n_aa_q3": r[7],
+                "aggregate_value_q1": r['q1'],
+                "aggregate_value_median": r['median'],
+                "aggregate_value_q3": r['q3'],
+                "n_aa_q1": r['q1_aa'],
+                "n_aa_median": r['median_aa'],
+                "n_aa_q3": r['q3_aa'],
+                ColumnNames.gff_feature: r[ColumnNames.gff_feature]
             }
         )
     return out_data

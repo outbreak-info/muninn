@@ -4,9 +4,8 @@ from typing import Set
 
 from DB.inserts.amino_acids import find_equivalent_amino_acids
 from DB.inserts.file_parsers.file_parser import FileParser
-from DB.inserts.phenotype_measurement_results import insert_pheno_measurement_result
+from DB.inserts.phenotype_measurement_results import upsert_pheno_measurement_result
 from DB.inserts.phenotype_metrics import find_or_insert_metric
-from DB.models import PhenotypeMetricValues, PhenotypeMetric, AminoAcid
 from utils.constants import PhenotypeMetricAssayTypes, DefaultGffFeaturesByRegion
 from utils.csv_helpers import get_value, int_from_decimal_str
 from utils.errors import NotFoundError
@@ -41,13 +40,11 @@ class EveParser(FileParser):
                     continue
 
                 try:
-                    amino_acid_ids: set[int]  = await find_equivalent_amino_acids(
-                        AminoAcid(
-                            gff_feature=self.gff_feature,
-                            position_aa=position_aa,
-                            alt_aa=alt_aa,
-                            ref_aa=ref_aa
-                        )
+                    amino_acid_ids: set[int] = await find_equivalent_amino_acids(
+                        gff_feature=self.gff_feature,
+                        position_aa=position_aa,
+                        alt_aa=alt_aa,
+                        ref_aa=ref_aa
                     )
 
                 except NotFoundError:
@@ -65,21 +62,16 @@ class EveParser(FileParser):
                         metric_id = cache_phenotype_metrics[col.name]
                     except KeyError:
                         metric_id = await find_or_insert_metric(
-                            PhenotypeMetric(
-                                phenotype_metric_name=col.name,
-                                phenotype_metric_assay_type=PhenotypeMetricAssayTypes.EVE
-                            )
+                            phenotype_metric_name=col.name,
+                            phenotype_metric_assay_type=PhenotypeMetricAssayTypes.EVE
                         )
                         cache_phenotype_metrics[col.name] = metric_id
 
                     for aa_id in amino_acid_ids:
-                        updated = await insert_pheno_measurement_result(
-                            PhenotypeMetricValues(
-                                amino_acid_id=aa_id,
-                                phenotype_metric_id=metric_id,
-                                value=v
-                            ),
-                            upsert=True
+                        updated = await upsert_pheno_measurement_result(
+                            amino_acid_id=aa_id,
+                            phenotype_metric_id=metric_id,
+                            value=v
                         )
                         if updated:
                             debug_info['count_existing_updated'] += 1

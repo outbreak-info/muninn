@@ -36,12 +36,9 @@ async def count_variants_by_column(
 ) -> Dict[str, int]:
     ih_table, change_id_col, catalog_table, *_ = get_ih_table_and_change_cols(change_bin)
 
-    # Counts are of (sample, change) observations. The frequency bins of a single change are collapsed
-    # with rb_or_agg *before* counting, so a sample that appears in two bins for the same change is
-    # counted once; summing rb_cardinality per bin would count it twice.
     if where is None:
         subset_cte = ''
-        per_change_count = f'rb_or_cardinality_agg(v.{ColumnNames.samples_present})'
+        per_row_count = f'rb_cardinality(v.{ColumnNames.samples_present})'
         having_clause = ''
     else:
         subset_cte = f'''
@@ -55,20 +52,16 @@ async def count_variants_by_column(
                 where {parser.parse(where)}
             )
         '''
-        per_change_count = \
-            f'rb_and_cardinality(rb_or_agg(v.{ColumnNames.samples_present}), (select bm from sample_subset_bm))'
+        per_row_count = f'rb_and_cardinality(v.{ColumnNames.samples_present}, (select bm from sample_subset_bm))'
         having_clause = 'having sum(n) > 0'
 
-    # the group key is cast to text in the database: group_by=alt_freq_range is a numrange, and
-    # str()-ing the driver's Range object client-side gives "<Range [Decimal('0'), ...]>" as the key
     query = f'''
         {subset_cte}
         select {by_col}::text, sum(n)::bigint as count1
         from (
-            select {by_col}, {per_change_count} as n
+            select {by_col}, {per_row_count} as n
             from {ih_table} v
             inner join {catalog_table} t on t.id = v.{change_id_col}
-            group by v.{change_id_col}, {by_col}
         )
         group by {by_col}
         {having_clause}
@@ -105,7 +98,7 @@ async def count_mutations_by_column(by_col: str, change_bin: NtOrAa = NtOrAa.aa,
                 samples_bm as (
                     select rb_build_agg(id) as bitmap from matching_samples
                 )
-                select {by_col}, 
+                select {by_col},
                        sum(rb_cardinality(samples_bm.bitmap & CNS.{ColumnNames.samples_present}))::bigint as count1
                 from {cns_table} CNS
                 inner join {join_table} JT on JT.id = CNS.{join_key}
@@ -143,7 +136,7 @@ async def count_samples_by_simple_date(
                 f'''
                 select
                 {extract_clause},
-                count(*)
+                count(distinct s.id)
                 from samples s
                 left join geo_locations gl on gl.id = s.geo_location_id
                 left join {TableNames.samples_lineages} sl on sl.{ColumnNames.sample_id} = s.id
@@ -188,9 +181,11 @@ async def count_samples_by_collection_date(
                     select
                     {MID_COLLECTION_DATE_CALCULATION}
                     from (
-                        select
-                        *,
-                        collection_end_date - collection_start_date as collection_span
+                        select distinct
+                        s.id,
+                        s.collection_start_date,
+                        s.collection_end_date,
+                        s.collection_end_date - s.collection_start_date as collection_span
                         from samples s
                         left join geo_locations gl on gl.id = s.geo_location_id
                         left join {TableNames.samples_lineages} sl on sl.{ColumnNames.sample_id} = s.id

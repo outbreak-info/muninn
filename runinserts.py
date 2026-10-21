@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any
 
 from DB.inserts.file_parsers.dms_parser import HaRegionDmsTsvParser, HaRegionDmsCsvParser, HaRegionDmsCsvParserNewData, \
-    Pb2RegionDmsCsvParser, HaRegionDmsCsvParserNeuAcVsNeuGc
+    Pb2RegionDmsCsvParser, HaRegionDmsCsvParserNeuAcVsNeuGc, DmsFileParser
 from DB.inserts.file_parsers.eve_parser import EveCsvParser
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.file_parsers.flumut_annotations_parser import FlumutTsvParser
@@ -13,11 +13,15 @@ from DB.inserts.file_parsers.lineage_hierarchy_parser import FreyjaDemixedLineag
     LineageHierarchyYamlParser
 from DB.inserts.file_parsers.freyja_demixed_parser import FreyjaDemixedParser
 from DB.inserts.file_parsers.samples_parser import SamplesCsvParser, SamplesTsvParser
-from DB.inserts.file_parsers.sarscov2_parsers.dms_parser import Sc2DmsTsvParser
+from DB.inserts.file_parsers.sarscov2_parsers.sc2_dms_parsers import Ba1RbdDmsCsvParser, \
+    Ba2RbdDmsCsvParser, Ba2SpikeDmsCsvParser, Hu1RbdDmsCsvParser, Hu1SpikeEveScapeCsvParser, \
+    Kp3SpikeAntibodyEscapeCsvParser, Kp3SpikeSeraEscapeCsvParser, \
+    Xbb15RbdDmsCsvParser, Xbb15SpikeDmsCsvParser
 from DB.inserts.file_parsers.sarscov2_parsers.eve_parser import Sc2EveCsvParser
 from DB.inserts.file_parsers.sarscov2_parsers.sc2_samples_parser import Sc2SdSamplesParser, Sc2SamplesParser, \
-    Sc2WastewaterSamplesParser, Sc2NcbiSamplesParser
-from DB.inserts.file_parsers.simple_lineage_parser import GenofluLineageParser, Sc2LineageParser
+    Sc2WastewaterSamplesParser, Sc2NcbiSamplesParser, Sc2BjornClinicalSamplesParser
+from DB.inserts.file_parsers.simple_lineage_parser import GenofluLineageParser, Sc2LineageParser, \
+    Sc2BjornClinicalPangoParser
 from DB.inserts.file_parsers.variants_mutations_combined_parser import VariantsMutationsCombinedParser, \
     VariantsMutationsCombinedParserBig
 
@@ -35,7 +39,15 @@ def main():
         'ha_dms_csv': HaRegionDmsCsvParser,
         'pb2_dms_csv': Pb2RegionDmsCsvParser,
         'ha_neuac_vs_neugc_dms_csv': HaRegionDmsCsvParserNeuAcVsNeuGc,
-        'sc2_dms_tsv': Sc2DmsTsvParser,
+        'sc2_hu1_rbd_dms_csv': Hu1RbdDmsCsvParser,
+        'sc2_ba1_rbd_dms_csv': Ba1RbdDmsCsvParser,
+        'sc2_ba2_rbd_dms_csv': Ba2RbdDmsCsvParser,
+        'sc2_hu1_spike_evescape_csv': Hu1SpikeEveScapeCsvParser,
+        'sc2_ba2_spike_dms_csv': Ba2SpikeDmsCsvParser,
+        'sc2_xbb15_rbd_dms_csv': Xbb15RbdDmsCsvParser,
+        'sc2_xbb15_spike_dms_csv': Xbb15SpikeDmsCsvParser,
+        'sc2_kp3_spike_antibody_escape_csv': Kp3SpikeAntibodyEscapeCsvParser,
+        'sc2_kp3_spike_sera_escape_csv': Kp3SpikeSeraEscapeCsvParser,
         'freyja_demixed': FreyjaDemixedParser,
         'variants_mutations_combined_tsv': VariantsMutationsCombinedParser,
         'variants_mutations_combined_big_tsv': VariantsMutationsCombinedParserBig,
@@ -47,6 +59,8 @@ def main():
         'dms_tmp_csv': HaRegionDmsCsvParserNewData,
         'freyja_demixed_hierarchy_yaml': FreyjaDemixedLineageHierarchyYamlParser,
         'lineage_hierarchy_yaml': LineageHierarchyYamlParser,
+        'sc2_bjorn_clinical_samples': Sc2BjornClinicalSamplesParser,
+        'sc2_bjorn_clinical_pango': Sc2BjornClinicalPangoParser,
     }
 
     ## Parse and verify args ##
@@ -89,36 +103,31 @@ def main():
         argparser.print_help()
         sys.exit(1)
 
-    file_parser: FileParser = formats[args.format]
+    parser_class: FileParser = formats[args.format]
     filename: str = args.filenames[0]
     parser_extras: list[str] | None = args.parser_extras
     if parser_extras == list():
         parser_extras = None
 
     if len(args.filenames) > 1 and not (
-            issubclass(file_parser, VariantsMutationsCombinedParser) or
-            issubclass(file_parser, Sc2SamplesParser)
+            issubclass(parser_class, VariantsMutationsCombinedParser) or
+            issubclass(parser_class, Sc2SamplesParser)
     ):
         raise ValueError('Multiple filenames provided, but this format takes only one.')
 
-    if parser_extras is not None and not (
-            issubclass(file_parser, VariantsMutationsCombinedParser) or
-            issubclass(file_parser, LineageHierarchyYamlParser)
-    ):
+    if parser_extras is not None and not parser_class.takes_extras:
         print('Warning: this format does not except extra args, the values you passed will be ignored. ')
 
     # run inserts method
     start_time = datetime.now()
     print(f'{args.filenames} {args.format} start at {start_time}')
-    if issubclass(file_parser, FileParser):
-        if issubclass(file_parser, VariantsMutationsCombinedParser):
-            parser = file_parser(args.filenames, parser_extras)
-        elif issubclass(file_parser, Sc2SamplesParser) and len(args.filenames) >= 2:
-            parser = file_parser(args.filenames[0], args.filenames[1])
-        elif issubclass(file_parser, LineageHierarchyYamlParser):
-            parser = file_parser(args.filenames[0], parser_extras)
+    if issubclass(parser_class, FileParser):
+        if issubclass(parser_class, VariantsMutationsCombinedParser):
+            parser = parser_class(args.filenames, parser_extras)
+        elif parser_class.takes_extras:
+            parser = parser_class(args.filenames[0], extra_args=parser_extras)
         else:
-            parser = file_parser(filename)
+            parser = parser_class(filename)
         asyncio.run(parser.parse_and_insert())
     end_time = datetime.now()
     print(f'{args.filenames} {args.format} end at {end_time}, elapsed: {end_time - start_time}')

@@ -309,7 +309,7 @@ async def count_samples_with_lineage_data(by_col: str, where: str | None = None)
             text(
                 f'''
                 SELECT {by_col}, 
-                       count(*) AS count1 
+                       count(distinct s.id) AS count1 
                 FROM {TableNames.samples} s 
                 LEFT OUTER JOIN {TableNames.geo_locations} gl ON gl.id = s.{ColumnNames.geo_location_id} 
                 LEFT OUTER JOIN {TableNames.samples_lineages} sl ON sl.{ColumnNames.sample_id} = s.id 

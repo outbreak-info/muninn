@@ -663,12 +663,10 @@ async def get_mutation_counts(
 )
 async def get_mutations_before_variants(
     lineage: str = Query(..., description='Lineage name to restrict samples to (e.g. BA.1)'),
-    lineage_system_name: str = Query(
-        ...,
-        description='Name of the lineage nomenclature system the lineage belongs to (e.g. a Pango/Nextstrain lineage)'
-        )
+    lineage_system_name: str = Query(..., description='Name of the lineage nomenclature system the lineage belongs to (e.g. a Pango/Nextstrain lineage)'),
+    where: str | None = filter_query('Optional, restricting which of the lineage\'s samples are considered: over all columns of the `samples` table, plus the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names).', required=False),
 ):
-    return await DB.queries.variants_mutations_lag.get_mutations_before_variants(lineage, lineage_system_name)
+    return await DB.queries.variants_mutations_lag.get_mutations_before_variants(lineage, lineage_system_name, where)
 
 
 @router.get(
@@ -679,12 +677,10 @@ async def get_mutations_before_variants(
 )
 async def get_variants_before_mutations(
     lineage: str = Query(..., description='Lineage name to restrict samples to (e.g. BA.1)'),
-    lineage_system_name: str = Query(
-        ...,
-        description='Name of the lineage nomenclature system the lineage belongs to (e.g. a Pango/Nextstrain lineage)'
-        ),
+    lineage_system_name: str = Query(..., description='Name of the lineage nomenclature system the lineage belongs to (e.g. a Pango/Nextstrain lineage)'),
+    where: str | None = filter_query('Optional, restricting which of the lineage\'s samples are considered: over all columns of the `samples` table, plus the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names).', required=False),
 ):
-    return await DB.queries.variants_mutations_lag.get_variants_before_mutations(lineage, lineage_system_name)
+    return await DB.queries.variants_mutations_lag.get_variants_before_mutations(lineage, lineage_system_name, where)
 
 
 @router.get(
@@ -1076,6 +1072,7 @@ async def get_phenotype_metric_values_for_variants_by_sample_and_collection_date
         required=False
         ),
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
+    min_alt_freq: float = 0
 ):
     return await DB.queries.phenotype_metrics.get_pheno_value_for_variants_by_sample_and_collection_date(
         date_bin,
@@ -1083,6 +1080,7 @@ async def get_phenotype_metric_values_for_variants_by_sample_and_collection_date
         days,
         max_span_days,
         where,
+        min_alt_freq
     )
 
 

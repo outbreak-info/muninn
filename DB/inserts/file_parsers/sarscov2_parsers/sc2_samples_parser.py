@@ -13,6 +13,7 @@ from DB.models import GeoLocation
 from utils.constants import ColumnNames, COLLECTION_DATE, GEO_LOCATION
 from utils.dates_and_times import parse_collection_start_and_end
 
+
 class Sc2SamplesParser(FileParser):
     def __init__(
         self,
@@ -25,7 +26,6 @@ class Sc2SamplesParser(FileParser):
         self.geo_location_levels_delimiter = geo_location_levels_delimiter
         self._verify_header()
 
-
     async def parse_and_insert(self):
         start = perf_counter()
         # Scan file, rename columns, drop unused cols, drop rows with null collection date
@@ -33,8 +33,8 @@ class Sc2SamplesParser(FileParser):
             pl.scan_csv(self.samples_filename, separator=self.samples_delimiter)
             .rename({old: new for new, old in self.column_name_map.items()})
             .select(set(self.column_name_map.keys()))
-            .drop_nulls([pl.col(COLLECTION_DATE)])
         )
+        samples_input = self.filter_samples(samples_input)
         samples_input = self.fill_missing_required_cols(samples_input)
         # unique by accession? No, leave it out for now to force errors on conflict.
 
@@ -156,6 +156,9 @@ class Sc2SamplesParser(FileParser):
     def fill_missing_required_cols(self, samples_input: pl.LazyFrame) -> pl.LazyFrame:
         raise NotImplementedError
 
+    def filter_samples(self, samples_input: pl.LazyFrame) -> pl.LazyFrame:
+        return samples_input.drop_nulls([pl.col(COLLECTION_DATE)])
+
     column_name_map = dict()
 
 
@@ -235,4 +238,31 @@ class Sc2NcbiSamplesParser(Sc2SamplesParser):
         ColumnNames.ww_catchment_population: 'population',
         ColumnNames.ww_site_id: 'site_id',
         ColumnNames.ww_collected_by: 'collected_by',
+    }
+
+
+class Sc2BjornClinicalSamplesParser(Sc2SamplesParser):
+    def __init__(self, samples_filename: str, unique_sequences_filename: str | None = None):
+        super().__init__(samples_filename, geo_location_levels_delimiter=':')
+
+    def fill_missing_required_cols(self, samples_input: pl.LazyFrame) -> pl.LazyFrame:
+        return samples_input.with_columns(
+            pl.lit(False).alias(ColumnNames.is_retracted),
+            pl.lit(False).alias(ColumnNames.is_ww_sample),
+        )
+
+    def filter_samples(self, samples_input: pl.LazyFrame) -> pl.LazyFrame:
+        return samples_input
+
+    column_name_map = {
+        ColumnNames.accession: 'Accession',
+        ColumnNames.bio_project: 'BioProjects',
+        ColumnNames.bio_sample: 'BioSample accession',
+        ColumnNames.host: 'Host Name',
+        ColumnNames.isolate: 'Virus Infraspecific Names Isolate',
+        ColumnNames.organism: 'Virus Name',
+        ColumnNames.isolation_source: 'Isolate Lineage source',
+        COLLECTION_DATE: 'Isolate Collection date',
+        GEO_LOCATION: 'Geographic Location',
+        ColumnNames.bases: 'Length',
     }
