@@ -365,6 +365,26 @@ async def get_sample_counts(
         raise HTTPException(status_code=501, detail=str(e))
 
 
+async def get_sample_counts_for_lineage(
+    group_by: Annotated[str, Query(
+        pattern=COMMA_SEP_WORDLIKE_PATTERN.pattern,
+        description='Column(s) to group counts by'
+        )],
+    lineage_name: str,
+    lineage_system_name: str | None = None,
+    where: str | None = filter_query(
+        'Optional: over all columns of the `samples` table, plus the joined `geo_locations` columns. '
+        'Note excluded samples will be excluded from totals count.',
+        required=False
+    ),
+):
+    return DB.queries.samples.get_sample_counts_for_lineage(
+        group_by,
+        lineage_name,
+        lineage_system_name,
+        where
+    )
+
 ############
 # VARIANTS #
 ############
@@ -1337,31 +1357,6 @@ async def get_wastewater_lineage_counts(
     ),
 ):
     return await DB.queries.wastewater.count_lineages_by_sample_data(where)
-
-
-@router.get(
-    '/wastewater/samples:count',
-    response_model=Dict[str, int],
-    tags=[TAG_WASTEWATER],
-    summary='Count the samples that carry abundance data, grouped by a column'
-)
-async def get_wastewater_sample_counts(
-    group_by: Annotated[str, Query(
-        pattern=COMMA_SEP_WORDLIKE_PATTERN.pattern,
-        description='Column to group counts by: any `samples` or joined `geo_locations` column, e.g. '
-                    'admin1_name or ww_site_id.'
-    )],
-    where: str | None = filter_query(
-        'Optional: over all `samples` columns (including the wastewater ones), the joined '
-        '`geo_locations` and `samples_lineages` columns.',
-        required=False,
-    ),
-):
-    """
-    Only samples with a non-null abundance are counted, i.e. those with an abundance-based lineage
-    call. Use /v1/samples:count to count samples without that restriction.
-    """
-    return await DB.queries.wastewater.count_samples_with_lineage_data(group_by, where)
 
 
 @router.get(

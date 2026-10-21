@@ -151,7 +151,7 @@ async def get_averaged_lineage_abundances_by_location(
         group_by_for_lineage_prevalence = f"group by {', '.join(lin_prev_group_cols)}"
         select_lineage_id = ColumnNames.lineage_id + ','
         select_lineage_name_for_results = ColumnNames.lineage_name + ','
-        join_lineages_for_results ='inner join lineages l on l.id = LP.lineage_id'
+        join_lineages_for_results = 'inner join lineages l on l.id = LP.lineage_id'
 
     query = f'''
             with match_samples as (
@@ -297,33 +297,6 @@ async def get_latest_sample(where: str | None) -> List[SampleInfo]:
         return [SampleInfo(**row) for row in res.mappings().all()]
 
 
-async def count_samples_with_lineage_data(by_col: str, where: str | None = None):
-    user_where_clause = ''
-    if where is not None and where.strip():
-        user_where_clause = f' and {parser.parse(where)}'
-
-    ColumnNames.assert_name_exists(by_col)
-
-    async with get_async_session() as session:
-        res = await session.execute(
-            text(
-                f'''
-                SELECT {by_col}, 
-                       count(distinct s.id) AS count1 
-                FROM {TableNames.samples} s 
-                LEFT OUTER JOIN {TableNames.geo_locations} gl ON gl.id = s.{ColumnNames.geo_location_id} 
-                LEFT OUTER JOIN {TableNames.samples_lineages} sl ON sl.{ColumnNames.sample_id} = s.id 
-                WHERE sl.{ColumnNames.abundance} IS NOT NULL
-                      and {ColumnNames.is_ww_sample}
-                      {user_where_clause}
-                GROUP BY {by_col}
-                ORDER BY count1 desc
-                '''
-            ),
-        )
-        return await _package_count_by_column(res)
-
-
 async def _package_count_by_column(query_result: Result[tuple[Any, int]] | List[tuple]) -> Dict[str, int]:
     return {str(r[0]): r[1] for r in query_result}
 
@@ -336,7 +309,7 @@ async def count_lineages_by_sample_data(where: str | None = None):
     async with get_async_session() as session:
         res = await session.execute(
             text(
-            f'''
+                f'''
             SELECT l.{ColumnNames.lineage_name}, 
                    count(*) AS count1
             FROM {TableNames.samples} s

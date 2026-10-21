@@ -384,7 +384,7 @@ async def count_mutations_by_collection_date(
     return out_data
 
 
-async def count_lineages_by_simple_date(
+async def count_samples_by_lineage_and_simple_date(
     group_by: str,
     date_bin: DateBinOpt,
     where: str | None,
@@ -445,7 +445,7 @@ async def count_lineages_by_simple_date(
     return out_data
 
 
-async def count_lineages_by_collection_date(
+async def count_samples_by_lineage_and_collection_date(
     date_bin: DateBinOpt,
     where: str | None,
     days: int,

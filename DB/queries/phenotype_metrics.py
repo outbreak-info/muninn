@@ -4,7 +4,7 @@ from DB.textutils import text
 
 from DB.engine import get_async_session
 from DB.queries.date_count_helpers import get_extract_clause, get_group_by_clause, get_order_by_cause, \
-    MID_COLLECTION_DATE_CALCULATION, YEAR, CHUNK, BIN_START, BIN_END, get_date_result_col_names
+    MID_COLLECTION_DATE_CALCULATION, YEAR, CHUNK, BIN_START, BIN_END, get_date_column_names
 from DB.queries.helpers import get_appropriate_translations_table_and_id
 from api.models import PhenotypeMetricInfo
 from parser.parser import parser
@@ -408,7 +408,7 @@ async def get_pheno_value_for_mutations_by_sample_and_collection_date(
         rows = res.mappings().all()
     out_data = []
     for r in rows:
-        datecol1, datecol2 = get_date_result_col_names(date_bin)
+        datecol1, datecol2 = get_date_column_names(date_bin)
         date = date_bin.format_iso_chunk(r[datecol1], r[datecol2])
         out_data.append(
             {
@@ -532,7 +532,7 @@ async def get_pheno_value_for_variants_by_sample_and_collection_date(
         rows = res.mappings().all()
     out_data = []
     for r in rows:
-        datecol1, datecol2 = get_date_result_col_names(date_bin)
+        datecol1, datecol2 = get_date_column_names(date_bin)
         date = date_bin.format_iso_chunk(r[datecol1], r[datecol2])
         out_data.append(
             {
