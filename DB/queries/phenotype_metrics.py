@@ -371,13 +371,13 @@ async def get_pheno_value_for_mutations_by_sample_and_collection_date(
     query = (
         f'''
         with matching_samples as (
-            select s.id as sample_id,
+            select distinct s.id as sample_id,
                    {MID_COLLECTION_DATE_CALCULATION}
             from samples s
             left join geo_locations gl on gl.id = s.geo_location_id
-            inner join samples_lineages sl on sl.sample_id = s.id
-            inner join lineages l on l.id = sl.lineage_id
-            inner join lineage_systems ls on ls.id = l.lineage_system_id
+            left join samples_lineages sl on sl.sample_id = s.id
+            left join lineages l on l.id = sl.lineage_id
+            left join lineage_systems ls on ls.id = l.lineage_system_id
             where (s.collection_end_date - s.collection_start_date) <= :max_span_days 
             {user_where_clause}
         )
