@@ -237,9 +237,9 @@ async def count_variants_gte_pheno_value_by_collection_date(
                 {MID_COLLECTION_DATE_CALCULATION}
             from {TableNames.samples} s
             left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
-            inner join {TableNames.samples_lineages} sl on sl.{ColumnNames.sample_id} = s.id
-            inner join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id}
-            inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
+            left join {TableNames.samples_lineages} sl on sl.{ColumnNames.sample_id} = s.id
+            left join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id}
+            left join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
             where num_nulls({ColumnNames.collection_end_date}, {ColumnNames.collection_start_date}) = 0
               and ({ColumnNames.collection_end_date} - {ColumnNames.collection_start_date}) <= :max_span_days
               {user_where_clause}
