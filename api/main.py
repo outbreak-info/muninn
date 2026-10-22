@@ -364,7 +364,10 @@ async def get_sample_counts(
     except NotImplementedError as e:
         raise HTTPException(status_code=501, detail=str(e))
 
-
+@router.get(
+    '/samples:countForLineage',
+    tags=[TAG_SAMPLES]
+)
 async def get_sample_counts_for_lineage(
     group_by: Annotated[str, Query(
         pattern=COMMA_SEP_WORDLIKE_PATTERN.pattern,
@@ -378,7 +381,7 @@ async def get_sample_counts_for_lineage(
         required=False
     ),
 ):
-    return DB.queries.samples.get_sample_counts_for_lineage(
+    return await DB.queries.samples.get_sample_counts_for_lineage(
         group_by,
         lineage_name,
         lineage_system_name,

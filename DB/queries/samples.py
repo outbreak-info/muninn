@@ -257,7 +257,7 @@ async def get_sample_counts_for_lineage(
                 {user_where_clause}
             ),
             total_samples as (
-                select count(distinct sample_id) as n_date_location_samples,
+                select count(distinct sample_id) as n_total_samples,
                        {simple_group_by_cols}
                 from matching_samples
                 group by {simple_group_by_cols}
@@ -281,7 +281,7 @@ async def get_sample_counts_for_lineage(
                 inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
                 group by {simple_group_by_cols}, {ColumnNames.lineage_name}, {ColumnNames.lineage_system_name}
             )
-            select {simple_group_by_cols}
+            select {simple_group_by_cols},
                    {ColumnNames.lineage_name},
                    {ColumnNames.lineage_system_name},
                    n_lineage_samples,
@@ -302,11 +302,12 @@ async def get_sample_counts_for_lineage(
     out = []
     for r in res.mappings():
         o = {
-            {ColumnNames.lineage_name}: r[{ColumnNames.lineage_name}],
-            {ColumnNames.lineage_system_name}: r[{ColumnNames.lineage_system_name}],
+            ColumnNames.lineage_name: r[ColumnNames.lineage_name],
+            ColumnNames.lineage_system_name: r[ColumnNames.lineage_system_name],
             'n_lineage_samples': r['n_lineage_samples'],
             'n_total_samples': r['n_total_samples']
         }
-        for gb in simple_group_by_cols:
+        for gb in group_by_set:
             o[gb] = r[gb]
         out.append(o)
+    return out
