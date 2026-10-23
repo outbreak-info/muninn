@@ -1205,13 +1205,17 @@ async def get_annotations_by_variants_and_collection_date(
         'lineage_system_name). alleles/amino_acids columns are NOT joined and cannot be filtered on.',
         required=False,
     ),
+    min_alt_freq: MinAltFreqParam = 0,
+    max_alt_freq: MaxAltFreqParam = 1
 ):
     return await DB.queries.annotations.get_annotations_by_variants_and_collection_date(
         effect_detail,
         date_bin,
         days,
         max_span_days,
-        where
+        where,
+        min_alt_freq,
+        max_alt_freq
     )
 
 
@@ -1239,8 +1243,15 @@ async def get_annotations_by_variants_and_amino_acid_position(
         'lineage_system_name). alleles/amino_acids columns are NOT joined and cannot be filtered on.',
         required=False,
     ),
+    min_alt_freq: MinAltFreqParam = 0,
+    max_alt_freq: MaxAltFreqParam = 1
 ):
-    return await DB.queries.annotations.get_annotations_by_variants_and_amino_acid_position(effect_detail, where)
+    return await DB.queries.annotations.get_annotations_by_variants_and_amino_acid_position(
+        effect_detail,
+        where,
+        min_alt_freq,
+        max_alt_freq
+    )
 
 
 @router.get(

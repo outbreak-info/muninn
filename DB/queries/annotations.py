@@ -1,6 +1,7 @@
 from collections import defaultdict
 from typing import List, Dict
 
+from DB.queries.intrahost_helpers import get_alt_freq_where
 from DB.textutils import text
 
 from DB.engine import get_async_session
@@ -25,27 +26,27 @@ async def _annotations_by_collection_date(
     max_span_days: int,
     where: str | None,
     intra_host: bool,
+    min_alt_freq: float = 0,
+    max_alt_freq: float = 1
 ) -> List[Dict]:
     user_where_clause = ''
     if where is not None:
         user_where_clause = f'and ({parser.parse(where)})'
 
-    # Which samples carry each annotated change, as (aa_id, bitmap). This is the only thing that
-    # separates the consensus and intra-host halves of this endpoint; the rest of the query is shared.
+    alt_freq_params = dict()
+    # carriers_cte will return columns (aa_id, bitmap)
     if intra_host:
-        # This table is keyed (amino_acid_id, alt_freq_range) — one row per 0.05-wide frequency bin —
-        # so the bins are OR-ed into one bitmap per change first. Summing per-bin cardinalities would
-        # count a sample seen in two bins twice, and would inflate the denominator below by treating
-        # each bin as its own change.
+        alt_freq_where, alt_freq_params = get_alt_freq_where(min_alt_freq, max_alt_freq)
+        # rb_or_agg to collapse into one bin per amino acid
         carriers_cte = f'''carriers as (
             select v.{ColumnNames.amino_acid_id} as aa_id,
                    rb_or_agg(v.{ColumnNames.samples_present}) as bm
             from {TableNames.ih_samples_by_amino_acid} v
             inner join annotated ann on ann.aa_id = v.{ColumnNames.amino_acid_id}
+            where {alt_freq_where}
             group by v.{ColumnNames.amino_acid_id}
         )'''
     else:
-        # The cns table already has one row per change, so it needs no aggregation.
         carriers_cte = f'''carriers as (
             select m.{ColumnNames.amino_acid_id} as aa_id,
                    m.{ColumnNames.samples_present} as bm
@@ -118,7 +119,7 @@ async def _annotations_by_collection_date(
             {
                 'effect_detail': effect_detail,
                 'max_span_days': max_span_days,
-            }
+            } | alt_freq_params
         )
         rows = res.all()
     out_data = []
@@ -153,6 +154,8 @@ async def get_annotations_by_variants_and_collection_date(
     days: int,
     max_span_days: int,
     where: str | None,
+    min_alt_freq: float,
+    max_alt_freq: float
 ) -> List[Dict]:
     """
     The intra-host counterpart of :byMutationsAndCollectionDate. Identical shape and denominator —
@@ -161,7 +164,14 @@ async def get_annotations_by_variants_and_collection_date(
     sub-consensus rather than fixed in the consensus sequence.
     """
     return await _annotations_by_collection_date(
-        effect_detail, date_bin, days, max_span_days, where, intra_host=True
+        effect_detail,
+        date_bin,
+        days,
+        max_span_days,
+        where,
+        intra_host=True,
+        min_alt_freq=min_alt_freq,
+        max_alt_freq=max_alt_freq
     )
 
 
@@ -169,22 +179,22 @@ async def _annotations_by_amino_acid_position(
     effect_detail: str,
     where: str | None,
     intra_host: bool,
+    min_alt_freq: float = 0,
+    max_alt_freq: float = 1
 ) -> Dict:
     user_where_clause = ''
     if where is not None:
         user_where_clause = f'and ({parser.parse(where)})'
 
-    # Which samples carry each annotated change, as (aa_id, bitmap). This is the only thing that
-    # separates the consensus and intra-host halves of this endpoint; the rest of the query is shared.
+    alt_freq_params = dict()
     if intra_host:
-        # This table is keyed (amino_acid_id, alt_freq_range) — one row per 0.05-wide frequency bin —
-        # so the bins are OR-ed into one bitmap per change first. Summing per-bin cardinalities would
-        # count a sample seen in two bins twice.
+        alt_freq_where, alt_freq_params = get_alt_freq_where(min_alt_freq, max_alt_freq)
         carriers_cte = f'''carriers as (
             select v.{ColumnNames.amino_acid_id} as aa_id,
                    rb_or_agg(v.{ColumnNames.samples_present}) as bm
             from {TableNames.ih_samples_by_amino_acid} v
             inner join annotated ann on ann.aa_id = v.{ColumnNames.amino_acid_id}
+            where {alt_freq_where}
             group by v.{ColumnNames.amino_acid_id}
         )'''
     else:
@@ -233,7 +243,7 @@ async def _annotations_by_amino_acid_position(
         having sum(card) > 0
     '''
     async with get_async_session() as session:
-        res = await session.execute(text(query), {'effect_detail': effect_detail})
+        res = await session.execute(text(query), {'effect_detail': effect_detail} | alt_freq_params)
         rows = res.all()
     out = defaultdict(list)
     for r in rows:
@@ -251,14 +261,22 @@ async def _annotations_by_amino_acid_position(
 
 async def get_annotations_by_variants_and_amino_acid_position(
     effect_detail: str,
-    where: str | None
+    where: str | None,
+    min_alt_freq: float,
+    max_alt_freq: float
 ) -> Dict:
     """
     The intra-host counterpart of :byMutationsAndAminoAcidPosition. Same shape, same counting rule —
     a sample is counted once per annotated change it carries — but read off the intra-host table
     instead of the consensus one, so it counts samples carrying the change sub-consensus.
     """
-    return await _annotations_by_amino_acid_position(effect_detail, where, intra_host=True)
+    return await _annotations_by_amino_acid_position(
+        effect_detail,
+        where,
+        intra_host=True,
+        min_alt_freq=min_alt_freq,
+        max_alt_freq=max_alt_freq
+        )
 
 
 async def get_annotations_by_mutations_and_amino_acid_position(
