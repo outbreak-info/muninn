@@ -49,7 +49,7 @@ async def count_variants_or_mutations_gte_pheno_value_by_collection_date(
     days: int,
     max_span_days: int,
     where: str,
-    table # Type[IntraHostVariant] | Type[Mutation]
+    table  # Type[IntraHostVariant] | Type[Mutation]
 ):
     # todo: needs to be updated or removed
     user_where_clause = ''
@@ -309,11 +309,17 @@ async def _phenotype_metric_value_quantile(
     phenotype_metric_name: str,
     quantile: float,
     intra_host: bool,
+    min_alt_freq: float = 0,
+    max_alt_freq: float = 1
 ) -> Dict[str, float | None]:
     if intra_host:
         carrier_table = TableNames.ih_samples_by_amino_acid
+        alt_freq_where, alt_freq_params = get_alt_freq_where(min_alt_freq, max_alt_freq)
+        alt_freq_where = f'and {alt_freq_where}'
     else:
         carrier_table = TableNames.cns_samples_by_amino_acid
+        alt_freq_where = ''
+        alt_freq_params = dict()
 
     query = f"""
         select percentile_disc(:quantile) within group (order by pmv.value)
@@ -325,12 +331,13 @@ async def _phenotype_metric_value_quantile(
               select 1
               from {carrier_table} c
               where c.{ColumnNames.amino_acid_id} = pmv.{ColumnNames.amino_acid_id}
+              {alt_freq_where}
           )
     """
     async with get_async_session() as session:
         res = await session.scalars(
             text(query),
-            {'pm_name': phenotype_metric_name, 'quantile': quantile}
+            {'pm_name': phenotype_metric_name, 'quantile': quantile} | alt_freq_params
         )
         value = res.first()
     return {
@@ -341,9 +348,17 @@ async def _phenotype_metric_value_quantile(
 
 async def get_phenotype_metric_value_by_variant_quantile(
     phenotype_metric_name: str,
-    quantile: float
+    quantile: float,
+    min_alt_freq: float,
+    max_alt_freq: float
 ) -> Dict[str, float | None]:
-    return await _phenotype_metric_value_quantile(phenotype_metric_name, quantile, intra_host=True)
+    return await _phenotype_metric_value_quantile(
+        phenotype_metric_name,
+        quantile,
+        intra_host=True,
+        min_alt_freq=min_alt_freq,
+        max_alt_freq=max_alt_freq
+    )
 
 
 async def get_phenotype_metric_value_by_mutation_quantile(

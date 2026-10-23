@@ -102,7 +102,10 @@ async def get_variant_frequency_by_collection_date(
     change_bin: NtOrAa,
     days: int,
     max_span_days: int,
-    where: str | None = None
+    where: str,
+    min_alt_freq: float,
+    max_alt_freq: float,
+    include_refs: bool
 ) -> List[Dict]:
     ih_table, change_id_col, catalog_table, feature_col, ref_col, pos_col, alt_col = \
         get_ih_table_and_change_cols(change_bin)
@@ -117,6 +120,11 @@ async def get_variant_frequency_by_collection_date(
         prefix_cols=[feature_col, ref_col, pos_col, alt_col]
     )
     order_by_clause = get_order_by_cause(date_bin)
+
+    alt_freq_where, alt_freq_params = get_alt_freq_where(min_alt_freq, max_alt_freq)
+    refs_filter = f'and ({alt_col} <> {ref_col})'
+    if include_refs:
+        refs_filter = ''
 
     async with get_async_session() as session:
         res = await session.execute(
@@ -157,8 +165,6 @@ async def get_variant_frequency_by_collection_date(
                         c.{ref_col},
                         c.{pos_col},
                         c.{alt_col},
-                        -- every observation in a bin is represented by that bin's midpoint
-                        -- which makes these quartiles bin-resolution approximations
                         (((lower(v.alt_freq_range) + upper(v.alt_freq_range)) / 2))::double precision as alt_freq,
                         {MID_COLLECTION_DATE_CALCULATION}
                     from {ih_table} v
@@ -167,11 +173,13 @@ async def get_variant_frequency_by_collection_date(
                         rb_to_array(v.{ColumnNames.samples_present} & (select bm from sample_subset_bm))
                     ) as u({ColumnNames.sample_id})
                     inner join sample_subset ss on ss.{ColumnNames.sample_id} = u.{ColumnNames.sample_id}
+                    where {alt_freq_where} {refs_filter}
                 )
                 {group_by_clause}
                 {order_by_clause}
                 '''
-            )
+            ),
+            alt_freq_params
         )
     out_data = []
     for r in res:

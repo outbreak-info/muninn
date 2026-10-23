@@ -442,23 +442,25 @@ async def get_variant_counts(
     group_by: Annotated[str, Query(
         pattern=WORDLIKE_PATTERN.pattern,
         description='Grouping key: "collection_date" for a date-binned time series of per-change counts, or a column name to group by. The column must belong to the change_bin catalog: nt=alleles columns (region, position_nt, ref_nt, alt_nt); aa=amino_acids columns (gff_feature, ref_aa, position_aa, alt_aa, ref_codon, alt_codon). "alt_freq_range" also works, to count observations per intra-host frequency bin.'
-        )],
+    )],
     change_bin: NtOrAa = Query(
         NtOrAa.aa,
         description='Whether counts are over nucleotide (nt) allele variants or amino-acid (aa) variants.'
-        ),
+    ),
     date_bin: DateBinParam = DateBinOpt.month,
     days: DaysParam = DEFAULT_DAYS,
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
     where: str | None = filter_query(
         'Optional. Selects which *samples* are counted: over all columns of the `samples` table, the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names), and the lineage columns (lineage_name, lineage_system_name). filter can only narrow the sample side. Use group_by to slice the change side.',
         required=False
-        ),
+    ),
     variants_where: str | None = filter_query(
         f'Optional. Only used when group_by={COLLECTION_DATE}. Applied to columns of alleles or amino acids, as appropriate.',
         required=False,
         alias='variants_filter'
-        )
+    ),
+    min_alt_freq: MinAltFreqParam = 0,
+    max_alt_freq: MaxAltFreqParam = 1
 ):
     """
     Counts are of (sample, change) observations: a change is counted once per sample carrying it at
@@ -471,9 +473,11 @@ async def get_variant_counts(
             days,
             max_span_days,
             where,
-            variants_where
-            )
-    return await DB.queries.counts.count_variants_by_column(group_by, change_bin, where)
+            variants_where,
+            min_alt_freq,
+            max_alt_freq
+        )
+    return await DB.queries.counts.count_variants_by_column(group_by, change_bin, where, min_alt_freq, max_alt_freq)
 
 
 @router.get(
@@ -487,14 +491,17 @@ async def get_variant_frequency_by_collection_date(
     change_bin: NtOrAa = Query(
         NtOrAa.aa,
         description='Whether quartiles are reported per nucleotide (nt) allele variant or per amino-acid (aa) variant.'
-        ),
+    ),
     date_bin: DateBinParam = DateBinOpt.month,
     days: DaysParam = DEFAULT_DAYS,
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
     where: str | None = filter_query(
         'Optional. Selects which *samples* are included: over all columns of the `samples` table, the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names), and the lineage columns (lineage_name, lineage_system_name). Variant/change columns are not filterable here — an intra-host variant is stored per change, not per sample, so the filter can only narrow the sample side.',
         required=False
-        ),
+    ),
+    min_alt_freq: MinAltFreqParam = 0,
+    max_alt_freq: MaxAltFreqParam = 1,
+    include_refs: bool = False
 ):
     return await DB.queries.variants.get_variant_frequency_by_collection_date(
         date_bin,
@@ -502,9 +509,12 @@ async def get_variant_frequency_by_collection_date(
         days,
         max_span_days,
         where,
+        min_alt_freq,
+        max_alt_freq,
+        include_refs
     )
 
-
+# todo: broken for flu. check if in use
 @router.get(
     '/variants:sampleFrequency',
     response_model=List[VariantFreqInfo],
@@ -515,27 +525,28 @@ async def get_variant_sample_frequency(
     aa: Annotated[str | None, Query(
         pattern=CHANGE_PATTERN,
         description='Amino-acid change to report, as gff_feature:ref<pos>alt (e.g. S:E484K). Provide aa or nt, not both.'
-        )] = None,
+    )] = None,
     nt: Annotated[str | None, Query(
         pattern=CHANGE_PATTERN,
         description='Nucleotide change to report, as region:ref<pos>alt (e.g. NC_045512.2:C21T). Provide aa or nt, not both.'
-        )] = None,
+    )] = None,
+    min_alt_freq: MinAltFreqParam = 0,
+    max_alt_freq: MaxAltFreqParam = 1
 ):
     """
     The per-sample counterpart of /v1/mutations:sampleCount, which counts samples rather than listing
-    them. Frequency is a 0.05-wide bin, not an exact value: the database stopped recording exact
-    alt_freq. Ingestion also discards intra-host calls below frequency 0.2, so a sample that carries
-    the change more faintly than that is absent rather than present with a low frequency.
+    them. Frequency is a 0.05-wide bin, not an exact value. Ingestion also discards intra-host calls below a frequency
+    cutoff (default 0.2).
     """
     if aa is not None and nt is not None:
         raise HTTPException(
             status_code=400,
             detail='Provide either an amino-acid (aa) or nucleotide (nt) change, not both'
-            )
+        )
     if aa is not None:
-        return await DB.queries.prevalence.get_samples_variant_freq_by_aa_change(aa)
+        return await DB.queries.prevalence.get_samples_variant_freq_by_aa_change(aa, min_alt_freq, max_alt_freq)
     if nt is not None:
-        return await DB.queries.prevalence.get_samples_variant_freq_by_nt_change(nt)
+        return await DB.queries.prevalence.get_samples_variant_freq_by_nt_change(nt, min_alt_freq, max_alt_freq)
     raise HTTPException(status_code=400, detail='Provide an amino-acid (aa) or nucleotide (nt) change')
 
 
@@ -551,14 +562,23 @@ async def get_variant_counts_by_phenotype_score(
     include_refs: bool = Query(
         False,
         description='If true, also include changes where reference amino acid equals alternative amino acid; default false excludes them'
-        ),
+    ),
     where: str | None = filter_query(
-        'Optional, restricting which samples are counted: over all columns of the `samples` table, plus the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names).',
+        'Optional, restricting which samples are counted: over all columns of the `samples` table, plus the '
+        'joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names).',
         required=False
-        ),
+    ),
+    min_alt_freq: MinAltFreqParam = 0,
+    max_alt_freq: MaxAltFreqParam = 1
 ):
-    return await DB.queries.prevalence.get_pheno_values_and_variant_counts(metric, region, include_refs, where)
-
+    return await DB.queries.prevalence.get_pheno_values_and_variant_counts(
+        metric,
+        region,
+        include_refs,
+        where,
+        min_alt_freq,
+        max_alt_freq
+    )
 
 #############
 # MUTATIONS #
@@ -1150,10 +1170,14 @@ async def get_phenotype_metric_value_by_variant_quantile(
         le=1.0,
         description='Quantile in [0,1] (e.g. 0.5 for the median), evaluated with percentile_disc over the non-zero scored-substitution values'
         ),
+    min_alt_freq: MinAltFreqParam = 0,
+    max_alt_freq: MaxAltFreqParam = 1
 ):
     return await DB.queries.phenotype_metrics.get_phenotype_metric_value_by_variant_quantile(
         phenotype_metric_name,
         quantile,
+        min_alt_freq,
+        max_alt_freq
     )
 
 

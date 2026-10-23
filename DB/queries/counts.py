@@ -3,6 +3,7 @@ from typing import List, Any, Dict
 from sqlalchemy import Result
 
 from DB.engine import get_async_session
+from DB.queries.intrahost_helpers import get_alt_freq_where
 from DB.textutils import text
 from DB.queries.helpers import get_ih_table_and_change_cols
 from DB.queries.date_count_helpers import get_extract_clause, get_group_by_clause, get_order_by_cause, \
@@ -32,9 +33,13 @@ async def count_samples_by_column(by_col: str, where: str | None = None):
 async def count_variants_by_column(
     by_col: str,
     change_bin: NtOrAa = NtOrAa.aa,
-    where: str | None = None
+    where: str | None = None,
+    min_alt_freq: float = 0,
+    max_alt_freq: float = 1
 ) -> Dict[str, int]:
     ih_table, change_id_col, catalog_table, *_ = get_ih_table_and_change_cols(change_bin)
+
+    alt_freq_where, alt_freq_params = get_alt_freq_where(min_alt_freq, max_alt_freq)
 
     if where is None:
         subset_cte = ''
@@ -62,6 +67,7 @@ async def count_variants_by_column(
             select {by_col}, {per_row_count} as n
             from {ih_table} v
             inner join {catalog_table} t on t.id = v.{change_id_col}
+            where {alt_freq_where}
         )
         group by {by_col}
         {having_clause}
@@ -69,7 +75,7 @@ async def count_variants_by_column(
     '''
 
     async with get_async_session() as session:
-        res = await session.execute(text(query))
+        res = await session.execute(text(query), alt_freq_params)
         return await _package_count_by_column(res)
 
 
@@ -213,7 +219,9 @@ async def count_variants_by_collection_date(
     days: int,
     max_span_days: int,
     where: str | None = None,
-    variants_where: str = None
+    variants_where: str = None,
+    min_alt_freq: float = 0,
+    max_alt_freq: float = 1
 ) -> Dict[str, Dict[str, int]]:
     ih_table, change_id_col, catalog_table, feature_col, ref_col, pos_col, alt_col = \
         get_ih_table_and_change_cols(change_bin)
@@ -224,7 +232,10 @@ async def count_variants_by_collection_date(
 
     variants_where_clause = ''
     if variants_where is not None:
-        variants_where_clause = f'where ({parser.parse(variants_where)})'
+        variants_where_clause = f'and ({parser.parse(variants_where)})'
+
+    alt_freq_where, alt_freq_params = get_alt_freq_where(min_alt_freq, max_alt_freq)
+    alt_freq_where = f' {alt_freq_where}'
 
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(date_bin, [feature_col, ref_col, pos_col, alt_col])
@@ -258,7 +269,8 @@ async def count_variants_by_collection_date(
                     select *
                     from {ih_table} IH
                     inner join {catalog_table} C on C.id = IH.{change_id_col}
-                    {variants_where_clause}
+                    where {alt_freq_where} 
+                          {variants_where_clause}
                 )
                 select {date_col_names},
                        {feature_col},
@@ -271,7 +283,8 @@ async def count_variants_by_collection_date(
                 {group_by_clause}
                 {order_by_clause};
                 '''
-            )
+            ),
+            alt_freq_params
         )
     out_data = dict()
     for r in res:
