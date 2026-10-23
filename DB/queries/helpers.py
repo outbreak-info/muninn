@@ -149,4 +149,4 @@ async def get_distinct_values(
 def get_appropriate_translations_table_and_id(
     table
 ) -> (str, str):
-   raise NotImplemented('This function is defunct and will soon be removed')
+    raise NotImplemented('This function is defunct and will soon be removed')
