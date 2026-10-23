@@ -1,76 +1,12 @@
 from typing import List
 
+from DB.engine import get_async_session
 from DB.queries.intrahost_helpers import get_alt_freq_where
 from DB.textutils import text
-
-from DB.engine import get_async_session
-from DB.queries.helpers import get_ih_table_and_change_cols
-from api.models import VariantFreqInfo, VariantCountPhenoScoreInfo, MutationCountInfo
+from api.models import VariantCountPhenoScoreInfo, MutationCountInfo
 from parser.parser import parser
-from utils.constants import ColumnNames, NtOrAa, TableNames
+from utils.constants import ColumnNames, TableNames
 from utils.csv_helpers import parse_change_string
-
-
-async def get_samples_variant_freq_by_aa_change(
-    change: str,
-    min_alt_freq: float,
-    max_alt_freq: float
-) -> List[VariantFreqInfo]:
-    return await _get_samples_variant_freq(change, NtOrAa.aa, min_alt_freq, max_alt_freq)
-
-
-async def get_samples_variant_freq_by_nt_change(
-    change: str,
-    min_alt_freq: float,
-    max_alt_freq: float
-) -> List[VariantFreqInfo]:
-    return await _get_samples_variant_freq(change, NtOrAa.nt, min_alt_freq, max_alt_freq)
-
-
-async def _get_samples_variant_freq(
-    change: str,
-    change_bin: NtOrAa,
-    min_alt_freq: float,
-    max_alt_freq: float
-) -> List[VariantFreqInfo]:
-    feature, ref, position, alt = parse_change_string(change)
-    ih_table, change_id_col, catalog_table, feature_col, ref_col, pos_col, alt_col = \
-        get_ih_table_and_change_cols(change_bin)
-    alt_freq_where, alt_freq_params = get_alt_freq_where(min_alt_freq, max_alt_freq)
-
-    async with get_async_session() as session:
-        res = await session.execute(
-            text(
-                f"""
-                select
-                    s.id,
-                    s.accession,
-                    v.alt_freq_range::text,
-                    lower(v.alt_freq_range)::double precision,
-                    upper(v.alt_freq_range)::double precision
-                from {ih_table} v
-                inner join {catalog_table} c on c.id = v.{change_id_col}
-                cross join lateral unnest(rb_to_array(v.{ColumnNames.samples_present})) as u({ColumnNames.sample_id})
-                inner join {TableNames.samples} s on s.id = u.{ColumnNames.sample_id}
-                where c.{feature_col} = :feature
-                  and c.{ref_col} = :ref
-                  and c.{pos_col} = :position
-                  and c.{alt_col} = :alt
-                order by lower(v.alt_freq_range), s.id
-                """
-            ),
-            {'feature': feature, 'ref': ref, 'position': position, 'alt': alt} | alt_freq_params,
-        )
-    return [
-        VariantFreqInfo(
-            sample_id=r[0],
-            accession=r[1],
-            alt_freq_range=r[2],
-            alt_freq_lower=r[3],
-            alt_freq_upper=r[4],
-        )
-        for r in res
-    ]
 
 
 async def get_mutation_sample_count_by_nt(change: str) -> List[MutationCountInfo]:

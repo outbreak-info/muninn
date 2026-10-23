@@ -1,12 +1,11 @@
 import logging
+import re
 from typing import List, Annotated, Dict
 
-import re
-
 from fastapi import APIRouter, FastAPI, HTTPException, Path, Query, Request
-from fastapi.routing import APIRoute
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.routing import APIRoute
 from fastmcp import FastMCP
 from sqlalchemy.exc import DBAPIError
 
@@ -29,7 +28,7 @@ from api.models import VariantNucleotideInfo, VariantAminoAcidInfo, SampleInfo, 
     LineageCountWithPrevalenceInfo, MutationProfileWithPrevalenceInfo, \
     SampleCollectionReleaseLagInfo, MutationIncidenceInfo, \
     VariantAminoAcidFrequencyByCollectionDateInfo, VariantNucleotideFrequencyByCollectionDateInfo, \
-    VariantFreqInfo, MutationNucleotideCountByDateAndLineageInfo, \
+    MutationNucleotideCountByDateAndLineageInfo, \
     MutationAminoAcidCountByDateAndLineageInfo, PhenotypeMetricDateCountInfo, \
     PhenotypeMetricAggregateByDateInfo, AnnotationProportionByDateInfo, AnnotatedPositionCountInfo, \
     LineageAbundanceWithSampleInfo, AverageLineageAbundanceInfo, LineageRelationshipsInfo
@@ -513,42 +512,6 @@ async def get_variant_frequency_by_collection_date(
         max_alt_freq,
         include_refs
     )
-
-# todo: broken for flu. check if in use
-@router.get(
-    '/variants:sampleFrequency',
-    response_model=List[VariantFreqInfo],
-    tags=[TAG_VARIANTS],
-    summary='Get the intra-host frequency of one change in each sample carrying it'
-)
-async def get_variant_sample_frequency(
-    aa: Annotated[str | None, Query(
-        pattern=CHANGE_PATTERN,
-        description='Amino-acid change to report, as gff_feature:ref<pos>alt (e.g. S:E484K). Provide aa or nt, not both.'
-    )] = None,
-    nt: Annotated[str | None, Query(
-        pattern=CHANGE_PATTERN,
-        description='Nucleotide change to report, as region:ref<pos>alt (e.g. NC_045512.2:C21T). Provide aa or nt, not both.'
-    )] = None,
-    min_alt_freq: MinAltFreqParam = 0,
-    max_alt_freq: MaxAltFreqParam = 1
-):
-    """
-    The per-sample counterpart of /v1/mutations:sampleCount, which counts samples rather than listing
-    them. Frequency is a 0.05-wide bin, not an exact value. Ingestion also discards intra-host calls below a frequency
-    cutoff (default 0.2).
-    """
-    if aa is not None and nt is not None:
-        raise HTTPException(
-            status_code=400,
-            detail='Provide either an amino-acid (aa) or nucleotide (nt) change, not both'
-        )
-    if aa is not None:
-        return await DB.queries.prevalence.get_samples_variant_freq_by_aa_change(aa, min_alt_freq, max_alt_freq)
-    if nt is not None:
-        return await DB.queries.prevalence.get_samples_variant_freq_by_nt_change(nt, min_alt_freq, max_alt_freq)
-    raise HTTPException(status_code=400, detail='Provide an amino-acid (aa) or nucleotide (nt) change')
-
 
 @router.get(
     '/variants:countByPhenotypeScore',
