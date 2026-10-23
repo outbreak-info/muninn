@@ -1,5 +1,6 @@
 from typing import Dict, List
 
+from DB.queries.intrahost_helpers import get_alt_freq_where
 from DB.textutils import text
 
 from DB.engine import get_async_session
@@ -14,8 +15,8 @@ from utils.constants import ColumnNames, DateBinOpt, NtOrAa, TableNames, COLLECT
 async def get_variants(
     change_bin: NtOrAa = NtOrAa.nt,
     where: str = "",
-    min_alt_freq: float | None = None,
-    max_alt_freq: float | None = None
+    min_alt_freq: float = 0,
+    max_alt_freq: float = 1
 ) -> List['VariantNucleotideInfo'] | List['VariantAminoAcidInfo']:
     user_where_clause = parser.parse(where)
     ih_table, change_id_col, catalog_table, *_ = get_ih_table_and_change_cols(change_bin)
@@ -25,6 +26,8 @@ async def get_variants(
     else:
         model = VariantAminoAcidInfo
         change_columns = 'c.position_aa, c.ref_aa, c.alt_aa, c.gff_feature, c.ref_codon, c.alt_codon'
+
+    alt_freq_where, alt_freq_params = get_alt_freq_where(min_alt_freq, max_alt_freq)
 
     variants_query = f'''
         select
@@ -37,13 +40,13 @@ async def get_variants(
         inner join {catalog_table} c on c.id = v.{change_id_col}
         cross join lateral unnest(rb_to_array(v.{ColumnNames.samples_present})) as u({ColumnNames.sample_id})
         where {user_where_clause}
-        and v.alt_freq_range && numrange(:min_alt_freq, :max_alt_freq, '[]')
+        and {alt_freq_where}
     '''
 
     async with get_async_session() as session:
         result = await session.execute(
             text(variants_query),
-            {'min_alt_freq': min_alt_freq, 'max_alt_freq': max_alt_freq}
+            alt_freq_params
         )
         return [model(**row) for row in result.mappings().all()]
 
@@ -51,8 +54,8 @@ async def get_variants(
 async def get_variants_by_sample(
     change_bin: NtOrAa = NtOrAa.nt,
     where: str = "",
-    min_alt_freq: float | None = None,
-    max_alt_freq: float | None = None
+    min_alt_freq: float = 0,
+    max_alt_freq: float = 1
 ) -> List['VariantNucleotideInfo'] | List['VariantAminoAcidInfo']:
     user_where_clause = parser.parse(where)
     ih_table, change_id_col, catalog_table, *_ = get_ih_table_and_change_cols(change_bin)
@@ -62,6 +65,8 @@ async def get_variants_by_sample(
     else:
         model = VariantAminoAcidInfo
         change_columns = 'c.position_aa, c.ref_aa, c.alt_aa, c.gff_feature, c.ref_codon, c.alt_codon'
+
+    alt_freq_where, alt_freq_params = get_alt_freq_where(min_alt_freq, max_alt_freq)
 
     variants_query = f'''
         with sample_subset_bm as (
@@ -81,13 +86,13 @@ async def get_variants_by_sample(
         cross join lateral unnest(
             rb_to_array(v.{ColumnNames.samples_present} & (select bm from sample_subset_bm))
         ) as u({ColumnNames.sample_id})
-        where v.alt_freq_range && numrange(:min_alt_freq, :max_alt_freq, '[]')
+        where {alt_freq_where}
     '''
 
     async with get_async_session() as session:
         result = await session.execute(
             text(variants_query),
-            {'min_alt_freq': min_alt_freq, 'max_alt_freq': max_alt_freq}
+            alt_freq_params
         )
         return [model(**row) for row in result.mappings().all()]
 

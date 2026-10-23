@@ -121,17 +121,17 @@ MaxSpanParam = Annotated[int, Query(
     description='Exclude samples whose collection window (end - start) exceeds this many days. Applies '
                 'only where collection-date binning is in effect.'
 )]
-MinAltFreqParam = Annotated[float | None, Query(
-    ge=0, le=1,
+MinAltFreqParam = Annotated[float, Query(
+    ge=0,
+    le=1,
     description='Optional lower bound on the intra-host alternate-allele frequency. Frequency is stored '
-                'as a 0.05-wide bin, so this selects observations whose bin overlaps the requested '
-                'window: 0.9 and 0.92 both return the [0.9,0.95) and [0.95,1] bins, because the database '
-                'cannot resolve within a bin. Ingestion discards calls below 0.2.'
+                'as a 0.05-wide bin. For value v, this will select bins [a, b) with a >= v.'
 )]
-MaxAltFreqParam = Annotated[float | None, Query(
-    ge=0, le=1,
-    description='Optional upper bound on the intra-host alternate-allele frequency, with the same '
-                'bin-overlap semantics as min_alt_freq.'
+MaxAltFreqParam = Annotated[float, Query(
+    ge=0,
+    le=1,
+    description='Optional upper bound on the intra-host alternate-allele frequency. For value v, this will '
+                'select bins [a, b) with b <= v.'
 )]
 
 
@@ -332,8 +332,8 @@ async def get_samples_by_variant(
     where: str = filter_query(
         'Over the change catalog. change_bin=nt: all columns of the `alleles` table (region, position_nt, ref_nt, alt_nt); change_bin=aa: all columns of the `amino_acids` table (position_aa, ref_aa, alt_aa, gff_feature, ref_codon, alt_codon).'
         ),
-    min_alt_freq: MinAltFreqParam = None,
-    max_alt_freq: MaxAltFreqParam = None,
+    min_alt_freq: MinAltFreqParam = 0,
+    max_alt_freq: MaxAltFreqParam = 1,
 ):
     return await DB.queries.samples.get_samples_by_variant(change_bin, where, min_alt_freq, max_alt_freq)
 
@@ -406,8 +406,8 @@ async def get_variants_query(
     where: str = filter_query(
         'Over the change catalog. change_bin=nt: all columns of the `alleles` table (region, position_nt, ref_nt, alt_nt); change_bin=aa: all columns of the `amino_acids` table (position_aa, ref_aa, alt_aa, gff_feature, ref_codon, alt_codon). Read depths and the exact alt_freq are no longer stored, so they cannot be filtered on; use min_alt_freq/max_alt_freq for frequency, since the bin column is a range type the filter language cannot express.'
         ),
-    min_alt_freq: MinAltFreqParam = None,
-    max_alt_freq: MaxAltFreqParam = None,
+    min_alt_freq: MinAltFreqParam = 0,
+    max_alt_freq: MaxAltFreqParam = 1,
 ):
     return await DB.queries.variants.get_variants(change_bin, where, min_alt_freq, max_alt_freq)
 
@@ -426,8 +426,8 @@ async def get_variants_by_sample(
     where: str = filter_query(
         'Selects which samples to return variants for: over all columns of the `samples` table, plus the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names).'
         ),
-    min_alt_freq: MinAltFreqParam = None,
-    max_alt_freq: MaxAltFreqParam = None,
+    min_alt_freq: MinAltFreqParam = 0,
+    max_alt_freq: MaxAltFreqParam = 1,
 ):
     return await DB.queries.variants.get_variants_by_sample(change_bin, where, min_alt_freq, max_alt_freq)
 
@@ -1032,8 +1032,8 @@ async def get_phenotype_metric_count_variants_by_collection_date(
         required=False
         ),
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
-    min_alt_freq: MinAltFreqParam = None,
-    max_alt_freq: MaxAltFreqParam = None,
+    min_alt_freq: MinAltFreqParam = 0,
+    max_alt_freq: MaxAltFreqParam = 1,
 ):
     return await DB.queries.phenotype_metrics.count_variants_gte_pheno_value_by_collection_date(
         date_bin,
@@ -1095,7 +1095,8 @@ async def get_phenotype_metric_values_for_variants_by_sample_and_collection_date
         required=False
         ),
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
-    min_alt_freq: float = 0
+    min_alt_freq: MinAltFreqParam = 0,
+    max_alt_freq: MaxAltFreqParam = 1
 ):
     return await DB.queries.phenotype_metrics.get_pheno_value_for_variants_by_sample_and_collection_date(
         date_bin,
@@ -1103,7 +1104,8 @@ async def get_phenotype_metric_values_for_variants_by_sample_and_collection_date
         days,
         max_span_days,
         where,
-        min_alt_freq
+        min_alt_freq,
+        max_alt_freq
     )
 
 

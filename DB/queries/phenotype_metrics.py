@@ -1,5 +1,6 @@
 from typing import List, Type, Dict
 
+from DB.queries.intrahost_helpers import get_alt_freq_where
 from DB.textutils import text
 
 from DB.engine import get_async_session
@@ -212,8 +213,8 @@ async def count_variants_gte_pheno_value_by_collection_date(
     days: int,
     max_span_days: int,
     where: str | None,
-    min_alt_freq: float | None = None,
-    max_alt_freq: float | None = None,
+    min_alt_freq: float,
+    max_alt_freq: float,
 ) -> List[Dict]:
     user_where_clause = ''
     if where is not None:
@@ -222,6 +223,7 @@ async def count_variants_gte_pheno_value_by_collection_date(
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(date_bin)
     order_by_clause = get_order_by_cause(date_bin)
+    alt_freq_where, alt_freq_params = get_alt_freq_where(min_alt_freq, max_alt_freq)
 
     match date_bin:
         case DateBinOpt.week | DateBinOpt.month:
@@ -261,7 +263,7 @@ async def count_variants_gte_pheno_value_by_collection_date(
                    rb_or_agg(v.{ColumnNames.samples_present}) as bm
             from {TableNames.ih_samples_by_amino_acid} v
             inner join scored sc on sc.aa_id = v.{ColumnNames.amino_acid_id}
-            where v.alt_freq_range && numrange(:min_alt_freq, :max_alt_freq, '[]')
+            where {alt_freq_where}
             group by v.{ColumnNames.amino_acid_id}
         ),
         per as (
@@ -287,9 +289,7 @@ async def count_variants_gte_pheno_value_by_collection_date(
                 'pm_name': phenotype_metric_name,
                 'threshold': phenotype_metric_value_threshold,
                 'max_span_days': max_span_days,
-                'min_alt_freq': min_alt_freq,
-                'max_alt_freq': max_alt_freq,
-            }
+            } | alt_freq_params
         )
         rows = res.all()
     out_data = []
@@ -431,19 +431,17 @@ async def get_pheno_value_for_variants_by_sample_and_collection_date(
     days: int,
     max_span_days: int,
     where: str | None,
-    min_alt_freq: float
+    min_alt_freq: float,
+    max_alt_freq: float
 ) -> List[Dict]:
     user_where_clause = ''
     if where is not None:
         user_where_clause = f'and ({parser.parse(where)})'
 
-    # Per sample: the summed metric value over the scored changes it carries, and how many it carries.
-    # This is the only part that differs between the consensus and intra-host halves, and the two get
-    # there from opposite directions.
-
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(date_bin, extra_cols=[ColumnNames.gff_feature])
     order_by_clause = get_order_by_cause(date_bin)
+    alt_freq_where, alt_freq_params = get_alt_freq_where(min_alt_freq, max_alt_freq)
 
     # There is no by-sample transposition of the intra-host data, so the per-sample view has to be
     # rebuilt: collapse each scored change's frequency bins into one bitmap, intersect that with
@@ -458,7 +456,7 @@ async def get_pheno_value_for_variants_by_sample_and_collection_date(
                      rb_or_agg(v.{ColumnNames.samples_present}) as bm
               from {TableNames.ih_samples_by_amino_acid} v
               inner join scored sc on sc.aa_id = v.{ColumnNames.amino_acid_id}
-              where lower({ColumnNames.alt_freq_range}) >= :min_alt_freq
+              where {alt_freq_where}
               group by v.{ColumnNames.amino_acid_id}
           ),
           per_sample as (
@@ -525,9 +523,8 @@ async def get_pheno_value_for_variants_by_sample_and_collection_date(
             text(query),
             {
                 'pm_name': phenotype_metric_name,
-                'max_span_days': max_span_days,
-                'min_alt_freq': min_alt_freq
-            }
+                'max_span_days': max_span_days
+            } | alt_freq_params
         )
         rows = res.mappings().all()
     out_data = []

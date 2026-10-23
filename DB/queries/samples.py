@@ -1,5 +1,6 @@
 from typing import List, Dict
 
+from DB.queries.intrahost_helpers import get_alt_freq_where
 from DB.textutils import text
 
 from DB.engine import get_async_session
@@ -104,13 +105,15 @@ async def get_samples_by_variant(
     user_where_clause = parser.parse(where)
     ih_table, change_id_col, catalog_table, *_ = get_ih_table_and_change_cols(change_bin)
 
+    alt_freq_where, alt_freq_params = get_alt_freq_where(min_alt_freq, max_alt_freq)
+
     samples_query = f"""
     with matching_bm as (
         select rb_or_agg(v.{ColumnNames.samples_present}) as bm
         from {ih_table} v
         inner join {catalog_table} c on c.id = v.{change_id_col}
         where {user_where_clause}
-        and v.alt_freq_range && numrange(:min_alt_freq, :max_alt_freq, '[]')
+        and {alt_freq_where}
     )
     select s.*,
         g.country_name as geo_country_name,
@@ -125,7 +128,7 @@ async def get_samples_by_variant(
     async with get_async_session() as session:
         samples = await session.execute(
             text(samples_query),
-            {'min_alt_freq': min_alt_freq, 'max_alt_freq': max_alt_freq}
+            alt_freq_params
         )
         return [SampleInfo(**row) for row in samples.mappings().all()]
 
