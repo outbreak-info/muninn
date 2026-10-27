@@ -234,11 +234,11 @@ async def get_sample_counts_for_lineage(
         user_where_clause = f'where {parser.parse(where)}'
 
     include_descendants = lineage_name.endswith('*')
-    lineage_name.rstrip('*')
+    lineage_name = lineage_name.rstrip('*')
 
     lineage_system_where = ''
     if lineage_system_name is not None:
-        lineage_system_where = f'and lineage_system_name = :lineage_system_name'
+        lineage_system_where = f'and ls.{ColumnNames.lineage_system_name} = :lineage_system_name'
 
     descendants_union = ''
     if include_descendants:
@@ -247,6 +247,7 @@ async def get_sample_counts_for_lineage(
                             select {ColumnNames.child_id} as lineage_id
                             from {TableNames.lineages_deep_children} ldc
                             inner join {TableNames.lineages} l on l.id = ldc.{ColumnNames.parent_id}
+                            inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
                             where l.{ColumnNames.lineage_name} = :lineage_name
                                   {lineage_system_where}
                             '''
@@ -266,9 +267,10 @@ async def get_sample_counts_for_lineage(
                 group by {simple_group_by_cols}
             ),
             lineage_and_descendants as (
-                select id as lineage_id
-                from {TableNames.lineages}
-                where {ColumnNames.lineage_name} = :lineage_name
+                select l.id as lineage_id
+                from {TableNames.lineages} l
+                inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
+                where l.{ColumnNames.lineage_name} = :lineage_name
                       {lineage_system_where}
                 {descendants_union}
             ),
