@@ -423,7 +423,7 @@ async def get_pheno_value_for_mutations_by_sample_and_collection_date(
         rows = res.mappings().all()
     out_data = []
     for r in rows:
-        datecol1, datecol2 = get_date_column_names(date_bin)
+        datecol1, datecol2 = get_date_column_names(date_bin, joined=False)
         date = date_bin.format_iso_chunk(r[datecol1], r[datecol2])
         out_data.append(
             {
@@ -544,7 +544,7 @@ async def get_pheno_value_for_variants_by_sample_and_collection_date(
         rows = res.mappings().all()
     out_data = []
     for r in rows:
-        datecol1, datecol2 = get_date_column_names(date_bin)
+        datecol1, datecol2 = get_date_column_names(date_bin, joined=False)
         date = date_bin.format_iso_chunk(r[datecol1], r[datecol2])
         out_data.append(
             {
