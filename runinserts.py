@@ -4,8 +4,8 @@ import sys
 from datetime import datetime
 from typing import Any
 
-from DB.inserts.file_parsers.dms_parser import HaRegionDmsTsvParser, HaRegionDmsCsvParser, HaRegionDmsCsvParserNewData, \
-    Pb2RegionDmsCsvParser, HaRegionDmsCsvParserNeuAcVsNeuGc, DmsFileParser
+from DB.inserts.file_parsers.dms_parser import HaRegionDmsCsvParser, HaRegionDmsCsvParserLowSera, \
+    Pb2RegionDmsCsvParser, HaRegionDmsCsvParserNeuAcVsNeuGc, HaRegionDmsCsvParserSa26VsSa23, DmsFileParser
 from DB.inserts.file_parsers.eve_parser import EveCsvParser
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.file_parsers.flumut_annotations_parser import FlumutTsvParser
@@ -35,10 +35,10 @@ def main():
         'sc2_eve_dms_csv': Sc2EveCsvParser,
         'genoflu_lineages': GenofluLineageParser,
         'sc2_lineages': Sc2LineageParser,
-        'ha_dms_tsv': HaRegionDmsTsvParser,
         'ha_dms_csv': HaRegionDmsCsvParser,
         'pb2_dms_csv': Pb2RegionDmsCsvParser,
         'ha_neuac_vs_neugc_dms_csv': HaRegionDmsCsvParserNeuAcVsNeuGc,
+        'ha_sa26_vs_sa23_entry_diffs_dms_csv': HaRegionDmsCsvParserSa26VsSa23,
         'sc2_hu1_rbd_dms_csv': Hu1RbdDmsCsvParser,
         'sc2_ba1_rbd_dms_csv': Ba1RbdDmsCsvParser,
         'sc2_ba2_rbd_dms_csv': Ba2RbdDmsCsvParser,
@@ -56,7 +56,7 @@ def main():
         'sc2_sd_samples': Sc2SdSamplesParser,
         'sc2_ncbi_samples': Sc2NcbiSamplesParser,
         'flumut_tsv': FlumutTsvParser,
-        'dms_tmp_csv': HaRegionDmsCsvParserNewData,
+        'ha_low_sera_dms_csv': HaRegionDmsCsvParserLowSera,
         'freyja_demixed_hierarchy_yaml': FreyjaDemixedLineageHierarchyYamlParser,
         'lineage_hierarchy_yaml': LineageHierarchyYamlParser,
         'sc2_bjorn_clinical_samples': Sc2BjornClinicalSamplesParser,

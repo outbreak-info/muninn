@@ -10,6 +10,8 @@ from utils.constants import PhenotypeMetricAssayTypes, ColumnNames, \
 from utils.csv_helpers import get_value
 from utils.errors import NotFoundError
 
+SITE_NUMBERING_MAP_FILE = 'site_numbering_map_file'
+
 
 class DmsFileParser(FileParser):
     takes_extras = True
@@ -70,7 +72,7 @@ class DmsFileParser(FileParser):
                     position_aa = get_value(
                         row,
                         self.required_column_name_map[ColumnNames.position_aa],
-                        transform=int
+                        transform=self._parse_position
                     )
                     ref_aa = get_value(row, self.required_column_name_map[ColumnNames.ref_aa])
                     alt_aa = get_value(row, self.required_column_name_map[ColumnNames.alt_aa])
@@ -141,6 +143,13 @@ class DmsFileParser(FileParser):
             )
         return data_cols_present
 
+    def _parse_position(self, position: str) -> int:
+        """
+        Positions are stored in sequential numbering, which is what most of these files give us.
+        Override where a file uses another numbering scheme. ValueError skips the row.
+        """
+        return int(position)
+
     @classmethod
     def _verify_header(cls, reader: DictReader):
         required_cols = cls.get_required_column_set()
@@ -174,7 +183,6 @@ class DmsFileParser(FileParser):
         StandardPhenoMetricNames.species_sera_escape: 'species sera escape',
         StandardPhenoMetricNames.entry_in_293t_cells: 'entry in 293T cells',
         StandardPhenoMetricNames.stability: 'stability',
-        StandardPhenoMetricNames.sa26_usage_increase: 'SA26 usage increase',
         StandardPhenoMetricNames.mature_h5_site: 'mature_H5_site',
         StandardPhenoMetricNames.ferret_sera_escape: 'ferret sera escape',
         StandardPhenoMetricNames.mouse_sera_escape: 'mouse sera escape',
@@ -182,20 +190,6 @@ class DmsFileParser(FileParser):
     # Only ingest rows with specified values in specified columns. If None, no filtering is done.
     # format: {col_name: {value1, value2}, ...}
     filter_columns_values: dict[str, set[str]] = None
-
-
-class HaRegionDmsTsvParser(DmsFileParser):
-    """
-    https://raw.githubusercontent.com/dms-vep/Flu_H5_American-Wigeon_South-Carolina_2021-H5N1_DMS/refs/heads/main/results/summaries/all_sera_escape.csv
-    converted to tsv
-    todo: Not sure why we're using a version converted to tsv
-    """
-
-    def __init__(self, filename: str, extra_args: list[str]):
-        super().__init__(filename, '\t', extra_args=extra_args)
-
-    async def parse_and_insert(self):
-        await super().parse_and_insert()
 
 
 class HaRegionDmsCsvParser(DmsFileParser):
@@ -210,8 +204,11 @@ class HaRegionDmsCsvParser(DmsFileParser):
         await super().parse_and_insert()
 
 
-# todo: fix name in runinserts, fix metric name
-class HaRegionDmsCsvParserNewData(DmsFileParser):
+class HaRegionDmsCsvParserLowSera(DmsFileParser):
+    """
+    26_increase_low_sera.csv
+    """
+
     def __init__(self, filename: str, extra_args: list[str]):
         super().__init__(filename, ',', extra_args=extra_args)
 
@@ -219,15 +216,57 @@ class HaRegionDmsCsvParserNewData(DmsFileParser):
         await super().parse_and_insert()
 
     data_column_name_map = {
-        'sa26_usage_increase_new': 'SA26 usage increase',
+        StandardPhenoMetricNames.sa26_usage_increase: 'SA26 usage increase',
         StandardPhenoMetricNames.entry_in_sa26_and_sa23_293t_cells: 'entry in SA26 and SA23 293T cells',
+    }
+
+
+class HaRegionDmsCsvParserSa26VsSa23(DmsFileParser):
+    """
+    https://raw.githubusercontent.com/dms-vep/Flu_H5_American-Wigeon_South-Carolina_2021-H5N1_DMS/refs/heads/main/results/func_effect_diffs/SA26_vs_SA23_entry_diffs.csv
+
+    No sequential_site column in this one, 'site' is H3 numbering. Converted using
+    https://github.com/dms-vep/Flu_H5_American-Wigeon_South-Carolina_2021-H5N1_DMS/blob/main/data/site_numbering_map.csv
+    which is given as an extra arg: `site_numbering_map_file=value`
+    """
+
+    def __init__(self, filename: str, extra_args: list[str]):
+        super().__init__(filename, ',', extra_args=extra_args)
+        self.site_numbering_map = self._get_site_numbering_map(extra_args)
+
+    def _parse_position(self, position: str) -> int:
+        try:
+            return self.site_numbering_map[position]
+        except KeyError:
+            raise ValueError(f'site not found in the site numbering map: {position}')
+
+    @staticmethod
+    def _get_site_numbering_map(extras: list[str]) -> dict[str, int]:
+        """
+        format: reference_site -> sequential_site
+        """
+        for arg in extras:
+            name, value = arg.split('=')
+            if name == SITE_NUMBERING_MAP_FILE:
+                with open(value, 'r') as f:
+                    return {r['reference_site']: int(r['sequential_site']) for r in DictReader(f)}
+        raise ValueError(f'site numbering map file not found in extras: {extras}')
+
+    required_column_name_map = {
+        ColumnNames.position_aa: 'site',
+        ColumnNames.ref_aa: 'wildtype',
+        ColumnNames.alt_aa: 'mutant',
+    }
+
+    data_column_name_map = {
+        StandardPhenoMetricNames.entry_in_sa23_293t_cells: 'SA23 entry effect',
+        StandardPhenoMetricNames.entry_in_sa26_293t_cells: 'SA26 entry effect',
     }
 
 
 class HaRegionDmsCsvParserNeuAcVsNeuGc(DmsFileParser):
     """
     https://raw.githubusercontent.com/dms-vep/Flu_H5_American-Wigeon_South-Carolina_2021-H5N1_DMS_NeuGc/refs/heads/master/results/summaries/entry_in_NeuAc_vs_NeuGc_cells.csv
-    todo: double-check that this is the file
     """
 
     def __init__(self, filename: str, extra_args: list[str]):
@@ -245,9 +284,9 @@ class HaRegionDmsCsvParserNeuAcVsNeuGc(DmsFileParser):
 
 class Pb2RegionDmsCsvParser(DmsFileParser):
     """
+    https://raw.githubusercontent.com/jbloomlab/PB2-DMS/master/results/diffsel/summary_A549vCCL141-meanmutdiffsel.csv
     https://doi.org/10.7554/eLife.45079
     XAJ25426.1_PB2|CY018884.1|A/green-winged_teal/Ohio/175/1986(H2N1)
-    todo: find dms results file
     """
 
     def __init__(self, filename: str, extra_args: list[str]):
