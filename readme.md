@@ -198,6 +198,27 @@ Auto-generated documentation for the API can be found at `<host>:8000/docs`.
 
 In general, parameters called `q` are expected to use the query syntax outlined above.
 
+## MCP Server
+
+The same API is served to AI agents over the [Model Context Protocol](https://modelcontextprotocol.io)
+at `<host>:8000/mcp`, over streamable HTTP. Point a client at that URL:
+
+```json
+{
+  "mcpServers": {
+    "muninn": {
+      "type": "http",
+      "url": "http://localhost:8000/mcp"
+    }
+  }
+}
+```
+
+Every endpoint except the health check is exposed as a read-only tool, generated from the same
+OpenAPI spec that `/docs` renders, so the tools cannot drift away from the REST API.
+The server keeps no session state between requests, so it works unchanged behind the several
+uvicorn workers the container runs.
+
 ## Lineage Hierarchy
 
 The lineage hierarchy system allows us to store relationships between lineages in our database.

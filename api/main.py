@@ -1,4 +1,6 @@
 import logging
+from contextlib import asynccontextmanager
+
 import re
 from typing import List, Annotated, Dict
 
@@ -7,7 +9,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from fastmcp import FastMCP
+from fastmcp.server.providers.openapi import MCPType, OpenAPIResource, OpenAPIResourceTemplate, \
+    OpenAPITool, RouteMap
+from fastmcp.utilities.openapi import HTTPRoute
+from mcp_types import ToolAnnotations
 from sqlalchemy.exc import DBAPIError
+from starlette.routing import Route
 
 import DB.queries.annotations
 import DB.queries.counts
@@ -20,6 +27,7 @@ import DB.queries.samples
 import DB.queries.variants
 import DB.queries.variants_mutations_lag
 import DB.queries.wastewater
+from DB.engine import READ_STATEMENT_TIMEOUT_MS
 from api.models import VariantNucleotideInfo, VariantAminoAcidInfo, SampleInfo, \
     MutationNucleotideInfo, MutationAminoAcidInfo, \
     VariantCountPhenoScoreInfo, \
@@ -89,11 +97,26 @@ TAGS_METADATA = [
     },
 ]
 
+
+@asynccontextmanager
+async def lifespan(app_: FastAPI):
+    """
+    Start the MCP session manager alongside the API. FastMCP will not answer a request until its
+    lifespan has run, so skipping this leaves /mcp returning errors.
+
+    `mcp_app` is built at the bottom of this module, once every route it reads exists, so it can
+    only be named lazily here; startup happens long after import, by which time the name resolves.
+    """
+    async with mcp_app.lifespan(app_):
+        yield
+
+
 app = FastAPI(
     title='Muninn API',
     description=API_DESCRIPTION,
     version='0.1.0',
     openapi_tags=TAGS_METADATA,
+    lifespan=lifespan,
 )
 
 
@@ -1390,9 +1413,66 @@ app.include_router(router)
 # MCP #
 #######
 
-mcp = FastMCP.from_fastapi(app=app, name='Muninn MCP')
+# The MCP server is generated from the FastAPI app above, so every /v1 route is exposed as a tool
+# whose name, arguments and documentation come from the same OpenAPI spec that /docs renders, and
+# the two interfaces cannot drift apart. Tool calls re-enter this app over an in-process ASGI
+# transport, which means they pass through the middleware and exception handlers registered above:
+# a bad filter reaches the model as this API's own 400 message rather than a bare failure.
 
-mcp_app = mcp.http_app(path='/')
+MCP_INSTRUCTIONS = f"""{API_DESCRIPTION}
 
-app.router.lifespan_context = mcp_app.lifespan
-app.mount('/mcp', mcp_app)
+**Using these tools.**
+- Tool names mirror the REST paths: `samples_byMutation` is `GET /v1/samples:byMutation`.
+- Before filtering on an unfamiliar column, call `distinctValues` to see which values exist.
+  Matching is literal, not semantic: the host column holds "Bos taurus", never "cattle".
+- Write filter values exactly as they are stored, unquoted and unencoded. The percent-encoding note
+  in the filter syntax applies only to a filter typed into a URL, not to a tool argument.
+- `change_bin` selects the coordinate system: nt for nucleotide changes, aa for amino-acid changes.
+  Which columns a filter may reference differs between the two, and is listed on each tool.
+- Prefer a `*_count` tool over a listing tool when a total is what you need; the listing tools can
+  return very large result sets.
+"""
+
+MCP_REQUEST_TIMEOUT_SECONDS = READ_STATEMENT_TIMEOUT_MS / 1000 + 30
+
+
+def annotate_mcp_component(
+    route: HTTPRoute,
+    component: OpenAPITool | OpenAPIResource | OpenAPIResourceTemplate,
+) -> None:
+    """
+    Advertise every tool as safe to call and safe to repeat. Each one is a GET run as the read-only
+    database user, so it changes nothing and reaches no world outside this database. Clients read
+    these hints to decide what they may call without stopping to ask the user.
+    """
+    if isinstance(component, OpenAPITool):
+        component.annotations = ToolAnnotations(
+            read_only_hint=True,
+            idempotent_hint=True,
+            open_world_hint=False,
+        )
+
+
+mcp = FastMCP.from_fastapi(
+    app=app,
+    name='Muninn MCP',
+    instructions=MCP_INSTRUCTIONS,
+    version=app.version,
+    route_maps=[
+        # The health check exists for the container orchestrator and tells a model nothing.
+        RouteMap(pattern=r'^/v1/health$', mcp_type=MCPType.EXCLUDE),
+    ],
+    mcp_component_fn=annotate_mcp_component,
+    httpx_client_kwargs={'timeout': MCP_REQUEST_TIMEOUT_SECONDS},
+    # Let clients reuse the component listings for a few minutes instead of re-fetching 46 tool
+    # descriptions every time. This covers tools/list and the other listing methods only, never a
+    # tools/call result, so no query answer or error is ever served from a cache. The listing is
+    # the same for everyone, since nothing here is behind auth, hence a shared scope.
+    cache_ttl=300,
+    cache_scope='public',
+)
+
+mcp_app = mcp.http_app(path='/mcp', stateless_http=True, json_response=True)
+
+for mcp_route in mcp_app.routes:
+    app.router.routes.append(Route(mcp_route.path, mcp_app, methods=sorted(mcp_route.methods)))

@@ -1,4 +1,4 @@
-from typing import List, Type, Dict
+from typing import List, Dict
 
 from DB.queries.intrahost_helpers import get_alt_freq_where
 from DB.textutils import text
