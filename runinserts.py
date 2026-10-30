@@ -5,8 +5,8 @@ from datetime import datetime
 from typing import Any
 
 from DB.inserts.file_parsers.dms_parser import HaRegionDmsCsvParser, HaRegionDmsCsvParserLowSera, \
-    Pb2RegionDmsCsvParser, HaRegionDmsCsvParserNeuAcVsNeuGc, HaRegionDmsCsvParserSa26VsSa23, DmsFileParser
-from DB.inserts.file_parsers.eve_parser import EveCsvParser
+    Pb2RegionDmsCsvParser, HaRegionDmsCsvParserNeuAcVsNeuGc, HaRegionDmsCsvParserSa26VsSa23, EveCsvParser
+
 from DB.inserts.file_parsers.file_parser import FileParser
 from DB.inserts.file_parsers.flumut_annotations_parser import FlumutTsvParser
 from DB.inserts.file_parsers.lineage_hierarchy_parser import FreyjaDemixedLineageHierarchyYamlParser, \

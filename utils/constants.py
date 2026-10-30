@@ -208,6 +208,8 @@ class StandardPhenoMetricNames:
     entry_in_neugc = 'entry_in_neugc'
     neugc_usage_increase = 'neugc_usage_increase'
     mutdiffsel = 'mutdiffsel'
+    evescape = 'evescape'
+    evescape_sigmoid = 'evescape_sigmoid'
 
 
 class PgIdentifiers(object):

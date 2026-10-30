@@ -304,3 +304,20 @@ class Pb2RegionDmsCsvParser(DmsFileParser):
     data_column_name_map = {
         StandardPhenoMetricNames.mutdiffsel: 'mutdiffsel'
     }
+
+class EveCsvParser(DmsFileParser):
+    def __init__(self, filename: str, extra_args: list[str]):
+        super().__init__(filename, ',', extra_args=extra_args)
+
+    required_column_name_map = {
+        ColumnNames.position_aa: 'i',
+        ColumnNames.ref_aa: 'wildtype',
+        ColumnNames.alt_aa: 'mutant'
+    }
+    data_column_name_map = {
+        StandardPhenoMetricNames.evescape: StandardPhenoMetricNames.evescape,
+        StandardPhenoMetricNames.evescape_sigmoid: StandardPhenoMetricNames.evescape_sigmoid
+    }
+
+    def _parse_position(self, position: str) -> int:
+        return int(float(position))
