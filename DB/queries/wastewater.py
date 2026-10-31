@@ -86,20 +86,18 @@ async def get_averaged_lineage_abundances_by_location(
     # lineage where clause, made of two parts: lineage name and lineage system name.
     # may contain either, both, or neither of those parts.
     params: dict = {}
-    lineage_where_clause = ''
+    lineage_conditions = []
     if lineage_name is not None:
-        lineage_where_clause = f'{ColumnNames.lineage_name} = :{ColumnNames.lineage_name}'
+        lineage_conditions.append(f'{ColumnNames.lineage_name} = :{ColumnNames.lineage_name}')
         params[ColumnNames.lineage_name] = lineage_name
     if lineage_system_name is not None:
-        lineage_where_clause = ' and '.join(
-            [
-                lineage_where_clause,
-                f'{ColumnNames.lineage_system_name} = :{ColumnNames.lineage_system_name}'
-            ]
+        lineage_conditions.append(
+            f'{ColumnNames.lineage_system_name} = :{ColumnNames.lineage_system_name}'
         )
         params[ColumnNames.lineage_system_name] = lineage_system_name
-    if lineage_where_clause != '':
-        lineage_where_clause = 'where ' + lineage_where_clause
+    lineage_where_clause = ''
+    if lineage_conditions:
+        lineage_where_clause = 'where ' + ' and '.join(lineage_conditions)
 
     # union to select descendants for wildcard queries
     if is_wildcard:
