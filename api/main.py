@@ -753,7 +753,7 @@ async def get_mutation_count_by_collection_date_and_lineage(
     date_bin: DateBinParam = DateBinOpt.month,
     days: DaysParam = DEFAULT_DAYS,
     where: str | None = filter_query(
-        'Optional, restricting which samples are counted: over all columns of the `samples` table, plus the joined `lineages` columns (e.g. lineage_name). No geo columns are joined here.',
+        'Optional, restricting which samples are counted: over all columns of the `samples` table, plus the joined `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name). No geo columns are joined here.',
         required=False
         ),
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
@@ -887,6 +887,13 @@ async def get_lineage_counts_over_time(
         None,
         description='Optional: restrict to a single lineage (lineages.lineage_name); omit for all lineages'
         ),
+    lineage_system_name: str | None = Query(
+        None,
+        description='Optional: restrict to one lineage nomenclature system (lineage_systems.lineage_system_name, '
+                    'e.g. PANGO). A lineage name is only unique within its system, so pass this alongside lineage '
+                    'to disambiguate. Narrows the returned rows only; the per-bin totals and prevalences stay over '
+                    'every lineage in the system.'
+        ),
     date_bin: DateBinParam = DateBinOpt.month,
     days: DaysParam = DEFAULT_DAYS,
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
@@ -897,7 +904,7 @@ async def get_lineage_counts_over_time(
         ),
 ):
     return await DB.queries.lineages.get_lineage_counts_over_time(
-        date_bin, days, where, max_span_days, days_before_today, lineage
+        date_bin, days, where, max_span_days, days_before_today, lineage, lineage_system_name
     )
 
 
@@ -1310,8 +1317,8 @@ async def get_wastewater_lineage_abundances_by_sample(
     where: str | None = filter_query(
         'Optional: over all `samples` columns (including the wastewater ones: ww_viral_load, '
         'ww_catchment_population, ww_site_id, ww_collected_by, census_region), the joined '
-        '`geo_locations` columns (raw names, e.g. admin1_name, country_name) and the `lineages` '
-        'columns (lineage_name).',
+        '`geo_locations` columns (raw names, e.g. admin1_name, country_name) and the `lineages`/'
+        '`lineage_systems` columns (lineage_name, lineage_system_name).',
         required=False,
     ),
 ):
@@ -1343,8 +1350,8 @@ async def get_wastewater_average_lineage_abundances_by_location(
     ),
     where: str | None = filter_query(
         'Optional: over all `samples` columns (including the wastewater ones), the joined '
-        '`geo_locations` columns (raw names, e.g. admin1_name, country_name) and the `lineages` '
-        'columns (lineage_name).',
+        '`geo_locations` columns (raw names, e.g. admin1_name, country_name) and the `lineages`/'
+        '`lineage_systems` columns (lineage_name, lineage_system_name).',
         required=False,
     ),
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
@@ -1360,13 +1367,16 @@ async def get_wastewater_average_lineage_abundances_by_location(
     catchment counts for more than a small one. Bins are ISO weeks over the collection-window
     midpoint. mean_lineage_prevalence is this lineage's share of the bin's total weighted abundance.
     """
-    return await DB.queries.wastewater.get_averaged_lineage_abundances_by_location(
-        where,
-        geo_bin.value,
-        max_span_days,
-        lineage,
-        lineage_system_name
-    )
+    try:
+        return await DB.queries.wastewater.get_averaged_lineage_abundances_by_location(
+            where,
+            geo_bin.value,
+            max_span_days,
+            lineage,
+            lineage_system_name
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get(
@@ -1378,7 +1388,7 @@ async def get_wastewater_average_lineage_abundances_by_location(
 async def get_wastewater_lineage_counts(
     where: str | None = filter_query(
         'Optional: over all `samples` columns (including the wastewater ones), the joined '
-        '`geo_locations`, `samples_lineages` and `lineages` columns.',
+        '`geo_locations`, `samples_lineages`, `lineages` and `lineage_systems` columns.',
         required=False,
     ),
 ):
