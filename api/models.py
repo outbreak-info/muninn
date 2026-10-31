@@ -140,16 +140,6 @@ class PhenotypeMetricInfo(BaseModel):
     assay_type: str = Field(description="Assay type the metric was measured with (phenotype_metrics.phenotype_metric_assay_type)")
 
 
-class VariantFreqInfo(BaseModel):
-    sample_id: int = Field(description="samples.id of the sample carrying this change intra-host")
-    accession: str = Field(description="Accession of that sample")
-    alt_freq_range: str = Field(
-        description="The frequency bin as a range literal, e.g. '[0.2,0.25)', [0.8,1.0], etc."
-    )
-    alt_freq_lower: float = Field(description="Lower bound of the frequency bin")
-    alt_freq_upper: float = Field(description="Upper bound of the frequency bin")
-
-
 class MutationCountInfo(BaseModel):
     sample_count: int = Field(description="Number of samples carrying this consensus mutation")
     amino_sub_id: int | None = Field(description="amino_acids.id of the matched amino-acid change for aa lookups; null for nt lookups")
@@ -220,6 +210,9 @@ class AverageLineageAbundanceInfo(BaseModel):
     lineage_name: str = Field(
         description="Lineage the abundance is for. When the request used a trailing '*', this is the "
                     "parent name with the '*' kept, and the value aggregates parent plus descendants."
+    )
+    lineage_system_name: str | None = Field(
+        description="Name of the lineage system for this lineage. Multiple systems may have identically-named lineages."
     )
     census_region: str | None = Field(description="US census region of the sampling site")
     geo_admin1_name: str | None = Field(

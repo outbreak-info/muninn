@@ -1,5 +1,6 @@
 from typing import List, Dict
 
+from DB.queries.intrahost_helpers import get_alt_freq_where
 from DB.textutils import text
 
 from DB.engine import get_async_session
@@ -8,7 +9,8 @@ from parser.parser import parser
 from DB.queries.date_count_helpers import get_extract_clause, get_group_by_clause, get_order_by_cause, \
     MID_COLLECTION_DATE_CALCULATION
 from DB.queries.counts import count_samples_by_column, count_samples_by_simple_date, \
-    count_samples_by_collection_date, count_lineages_by_simple_date, count_lineages_by_collection_date
+    count_samples_by_collection_date, count_samples_by_lineage_and_simple_date, \
+    count_samples_by_lineage_and_collection_date
 from DB.queries.lineages import get_sample_counts_by_lineage
 from DB.queries.helpers import get_ih_table_and_change_cols
 from utils.constants import DateBinOpt, NtOrAa, TableNames, ColumnNames, COLLECTION_DATE, DEFAULT_DAYS, \
@@ -103,13 +105,15 @@ async def get_samples_by_variant(
     user_where_clause = parser.parse(where)
     ih_table, change_id_col, catalog_table, *_ = get_ih_table_and_change_cols(change_bin)
 
+    alt_freq_where, alt_freq_params = get_alt_freq_where(min_alt_freq, max_alt_freq)
+
     samples_query = f"""
     with matching_bm as (
         select rb_or_agg(v.{ColumnNames.samples_present}) as bm
         from {ih_table} v
         inner join {catalog_table} c on c.id = v.{change_id_col}
         where {user_where_clause}
-        and v.alt_freq_range && numrange(:min_alt_freq, :max_alt_freq, '[]')
+        and {alt_freq_where}
     )
     select s.*,
         g.country_name as geo_country_name,
@@ -124,7 +128,7 @@ async def get_samples_by_variant(
     async with get_async_session() as session:
         samples = await session.execute(
             text(samples_query),
-            {'min_alt_freq': min_alt_freq, 'max_alt_freq': max_alt_freq}
+            alt_freq_params
         )
         return [SampleInfo(**row) for row in samples.mappings().all()]
 
@@ -143,9 +147,9 @@ async def get_sample_counts(
         if LINEAGE in group_by_set:
             date_field = group_by_set.difference({LINEAGE}).pop()
             if date_field in SIMPLE_DATE_FIELDS:
-                return await count_lineages_by_simple_date(date_field, date_bin, where, days)
+                return await count_samples_by_lineage_and_simple_date(date_field, date_bin, where, days)
             elif date_field == COLLECTION_DATE:
-                return await count_lineages_by_collection_date(date_bin, where, days, max_span_days)
+                return await count_samples_by_lineage_and_collection_date(date_bin, where, days, max_span_days)
 
         raise NotImplementedError(
             'Grouping by multiple fields is currently only supported for lineage plus a date field'
@@ -204,3 +208,111 @@ async def get_sample_collection_release_lag(
         }
         for row in rows
     ]
+
+
+async def get_sample_counts_for_lineage(
+    group_by: str,
+    lineage_name: str,
+    lineage_system_name: str,
+    where: str,
+) -> list[dict[str, str]]:
+    if lineage_name is None:
+        raise ValueError('Lineage name is required')
+
+
+    group_by_set = set()
+    if group_by is not None:
+        group_by_set = set(group_by.split(','))
+    for gb in group_by_set:
+        ColumnNames.assert_name_exists(gb)
+
+    # "simple" as opposed to date columns, which we might want to add at some point
+    simple_group_by_cols = ','.join(group_by_set)
+
+    user_where_clause = ''
+    if where is not None:
+        user_where_clause = f'where {parser.parse(where)}'
+
+    include_descendants = lineage_name.endswith('*')
+    lineage_name = lineage_name.rstrip('*')
+
+    lineage_system_where = ''
+    if lineage_system_name is not None:
+        lineage_system_where = f'and ls.{ColumnNames.lineage_system_name} = :lineage_system_name'
+
+    descendants_union = ''
+    if include_descendants:
+        descendants_union = f'''
+                            union all
+                            select {ColumnNames.child_id} as lineage_id
+                            from {TableNames.lineages_deep_children} ldc
+                            inner join {TableNames.lineages} l on l.id = ldc.{ColumnNames.parent_id}
+                            inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
+                            where l.{ColumnNames.lineage_name} = :lineage_name
+                                  {lineage_system_where}
+                            '''
+
+    query = f'''
+            with matching_samples as (
+                select s.id as sample_id,
+                       {simple_group_by_cols}
+                from {TableNames.samples} s
+                left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
+                {user_where_clause}
+            ),
+            total_samples as (
+                select count(distinct sample_id) as n_total_samples,
+                       {simple_group_by_cols}
+                from matching_samples
+                group by {simple_group_by_cols}
+            ),
+            lineage_and_descendants as (
+                select l.id as lineage_id
+                from {TableNames.lineages} l
+                inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
+                where l.{ColumnNames.lineage_name} = :lineage_name
+                      {lineage_system_where}
+                {descendants_union}
+            ),
+            lineage_samples as (
+                select count(distinct sample_id) as n_lineage_samples,
+                       {simple_group_by_cols},
+                       {ColumnNames.lineage_name},
+                       {ColumnNames.lineage_system_name}
+                from matching_samples
+                inner join {TableNames.samples_lineages} sl using (sample_id)
+                inner join lineage_and_descendants using (lineage_id)
+                inner join {TableNames.lineages} l on l.id = lineage_id
+                inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
+                group by {simple_group_by_cols}, {ColumnNames.lineage_name}, {ColumnNames.lineage_system_name}
+            )
+            select {simple_group_by_cols},
+                   {ColumnNames.lineage_name},
+                   {ColumnNames.lineage_system_name},
+                   n_lineage_samples,
+                   n_total_samples
+            from lineage_samples
+            inner join total_samples using ({simple_group_by_cols});
+            '''
+
+    async with get_async_session() as session:
+        res = await session.execute(
+            text(query),
+            {
+                'lineage_name': lineage_name,
+                'lineage_system_name': lineage_system_name
+            }
+        )
+
+    out = []
+    for r in res.mappings():
+        o = {
+            ColumnNames.lineage_name: r[ColumnNames.lineage_name],
+            ColumnNames.lineage_system_name: r[ColumnNames.lineage_system_name],
+            'n_lineage_samples': r['n_lineage_samples'],
+            'n_total_samples': r['n_total_samples']
+        }
+        for gb in group_by_set:
+            o[gb] = r[gb]
+        out.append(o)
+    return out
