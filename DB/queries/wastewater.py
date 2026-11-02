@@ -35,6 +35,7 @@ async def get_lineage_abundances_by_sample(
                     s.collection_start_date
                 from samples_lineages sl
                 inner join lineages l on l.id = sl.lineage_id
+                inner join lineage_systems ls on ls.id = l.lineage_system_id
                 inner join samples s on s.id = sl.sample_id
                 inner join geo_locations gl on gl.id = s.geo_location_id
                 where {ColumnNames.is_ww_sample}
@@ -85,20 +86,18 @@ async def get_averaged_lineage_abundances_by_location(
     # lineage where clause, made of two parts: lineage name and lineage system name.
     # may contain either, both, or neither of those parts.
     params: dict = {}
-    lineage_where_clause = ''
+    lineage_conditions = []
     if lineage_name is not None:
-        lineage_where_clause = f'{ColumnNames.lineage_name} = :{ColumnNames.lineage_name}'
+        lineage_conditions.append(f'{ColumnNames.lineage_name} = :{ColumnNames.lineage_name}')
         params[ColumnNames.lineage_name] = lineage_name
     if lineage_system_name is not None:
-        lineage_where_clause = ' and '.join(
-            [
-                lineage_where_clause,
-                f'{ColumnNames.lineage_system_name} = :{ColumnNames.lineage_system_name}'
-            ]
+        lineage_conditions.append(
+            f'{ColumnNames.lineage_system_name} = :{ColumnNames.lineage_system_name}'
         )
         params[ColumnNames.lineage_system_name] = lineage_system_name
-    if lineage_where_clause != '':
-        lineage_where_clause = 'where ' + lineage_where_clause
+    lineage_where_clause = ''
+    if lineage_conditions:
+        lineage_where_clause = 'where ' + ' and '.join(lineage_conditions)
 
     # union to select descendants for wildcard queries
     if is_wildcard:
@@ -316,6 +315,7 @@ async def count_lineages_by_sample_data(where: str | None = None):
             LEFT OUTER JOIN {TableNames.geo_locations} gl ON gl.id = s.{ColumnNames.geo_location_id} 
             LEFT OUTER JOIN {TableNames.samples_lineages} sl ON sl.{ColumnNames.sample_id} = s.id 
             LEFT OUTER JOIN {TableNames.lineages} l ON l.id = sl.{ColumnNames.lineage_id}
+            LEFT OUTER JOIN {TableNames.lineage_systems} ls ON ls.id = l.{ColumnNames.lineage_system_id}
             WHERE sl.{ColumnNames.abundance} IS NOT NULL
                   and {ColumnNames.is_ww_sample}
                   {user_where_clause} 

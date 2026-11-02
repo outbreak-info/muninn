@@ -140,6 +140,7 @@ async def get_aa_mutation_count_by_collection_date(
                 from {TableNames.samples} s
                 inner join {TableNames.samples_lineages} sl on sl.sample_id = s.id
                 inner join {TableNames.lineages} l on l.id = sl.lineage_id
+                inner join {TableNames.lineage_systems} ls on ls.id = l.lineage_system_id
                 {user_where_clause}
             ),
             sample_subset_bm as (
@@ -209,6 +210,7 @@ async def get_aa_mutation_count_by_collection_date(
                         inner join {TableNames.samples} s on s.id = ts.target_sample_id
                         inner join {TableNames.samples_lineages} sl on sl.sample_id = s.id
                         inner join {TableNames.lineages} l on l.id = sl.lineage_id
+                        inner join {TableNames.lineage_systems} ls on ls.id = l.lineage_system_id
                         {user_where_clause}
                     )
                     where collection_span <= {max_span_days}
@@ -264,6 +266,7 @@ async def get_nt_mutation_count_by_collection_date(
                 from {TableNames.samples} s
                 inner join {TableNames.samples_lineages} sl on sl.sample_id = s.id
                 inner join {TableNames.lineages} l on l.id = sl.lineage_id
+                inner join {TableNames.lineage_systems} ls on ls.id = l.lineage_system_id
                 {user_where_clause}
             ),
             sample_subset_bm as (
@@ -333,6 +336,7 @@ async def get_nt_mutation_count_by_collection_date(
                         inner join {TableNames.samples} s on s.id = ms.target_sample_id
                         inner join {TableNames.samples_lineages} sl on sl.sample_id = s.id
                         inner join {TableNames.lineages} l on l.id = sl.lineage_id
+                        inner join {TableNames.lineage_systems} ls on ls.id = l.lineage_system_id
                         {user_where_clause}
                     )
                     where collection_span <= {max_span_days}
