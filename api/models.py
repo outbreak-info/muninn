@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import List, Dict
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 """
 These models define the shapes for data returned by the api.
@@ -162,6 +162,16 @@ class LineageCountInfo(BaseModel):
 class LineageCountWithPrevalenceInfo(LineageCountInfo):
     total: int = Field(description="Total number of samples in this collection-date bin across all lineages (denominator; not affected by the `lineage` filter).")
     prevalence: float = Field(description="Fraction of this bin's samples assigned to this lineage (count / total)")
+
+
+class LineageSampleCountInfo(BaseModel):
+    # each row also carries one key per group_by column, holding that group's value
+    model_config = ConfigDict(extra='allow')
+
+    lineage_name: str = Field(description="Lineage name")
+    lineage_system_name: str = Field(description="Lineage system the lineage belongs to")
+    n_lineage_samples: int = Field(description="Samples in this group assigned to this lineage")
+    n_total_samples: int = Field(description="All samples in this group matching the filter (the denominator)")
 
 
 class LineageInfo(BaseModel):

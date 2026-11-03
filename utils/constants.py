@@ -147,11 +147,9 @@ class NtOrAa(Enum):
 
 
 class WastewaterGeoBin(Enum):
-    """
-    Geographic grouping for the averaged wastewater abundances. v0 took this as a bare string and
-    raised ValueError (a 500) on anything else; as an enum a bad value is a 422 and the two legal
-    values show up in the schema.
-    """
+    # Geographic grouping for the averaged wastewater abundances. v0 took this as a bare string and
+    # raised ValueError (a 500) on anything else; as an enum a bad value is a 422 and the two legal
+    # values show up in the schema.
     admin1_name = 'admin1_name'
     census_region = 'census_region'
 
@@ -160,11 +158,10 @@ class WastewaterGeoBin(Enum):
 
 
 class DistinctValueField(Enum):
-    """
-    Whitelist of columns whose distinct values can be enumerated via GET /v1/distinctValues.
-    These are the high-value, bounded-cardinality string columns an LLM/user needs when building
-    a `filter` query. The value <-> (table, column) mapping lives in DB.queries.helpers.
-    """
+    # Whitelist of columns whose distinct values can be enumerated via GET /v1/distinctValues.
+    # These are the high-value, bounded-cardinality string columns an LLM/user needs when building
+    # a `filter` query. The value <-> (table, column) mapping lives in DB.queries.helpers.
+
     # samples metadata
     host = 'host'
     organism = 'organism'
