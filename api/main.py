@@ -41,7 +41,7 @@ from api.models import VariantNucleotideInfo, VariantAminoAcidInfo, SampleInfo, 
     MutationNucleotideCountByDateAndLineageInfo, \
     MutationAminoAcidCountByDateAndLineageInfo, PhenotypeMetricDateCountInfo, \
     PhenotypeMetricAggregateByDateInfo, AnnotationProportionByDateInfo, AnnotatedPositionCountInfo, \
-    LineageAbundanceWithSampleInfo, AverageLineageAbundanceInfo, LineageRelationshipsInfo
+    LineageAbundanceWithSampleInfo, AverageLineageAbundanceInfo, LineageRelationshipsInfo, LineageSampleCountInfo
 from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, NtOrAa, \
     DEFAULT_MAX_SPAN_DAYS, COLLECTION_DATE, DEFAULT_DAYS, COMMA_SEP_WORDLIKE_PATTERN, \
     DEFAULT_PREVALENCE_THRESHOLD, MIN_PREVALENCE_THRESHOLD, FILTER_SYNTAX_HELP, DistinctValueField, \
@@ -392,6 +392,7 @@ async def get_sample_counts(
 
 @router.get(
     '/samples:countForLineage',
+    response_model=List[LineageSampleCountInfo],
     tags=[TAG_SAMPLES],
     summary='Count samples assigned to a lineage, and all samples, per group of sample columns'
 )
