@@ -9,6 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from fastmcp import FastMCP
+from fastmcp.exceptions import ToolError
+from fastmcp.server.middleware import Middleware
 from fastmcp.server.providers.openapi import MCPType, OpenAPIResource, OpenAPIResourceTemplate, \
     OpenAPITool, RouteMap
 from fastmcp.utilities.openapi import HTTPRoute
@@ -264,12 +266,14 @@ async def get_distinct_values(
         max_length=100,
         description='Optional fuzzy search over the values, returning the plausible matches best-first '
                     'instead of the whole sorted list. Case-insensitive and typo-tolerant, so '
-                    'search=califrnia finds California. It matches spelling, not meaning: searching host '
-                    'for "cattle" finds nothing, because the value is "Bos taurus".'
+                    'search=califrnia finds California. It matches spelling, not meaning: a host stored as '
+                    '"Bos taurus" is not found by searching "cattle", nor the reverse, so try both the common '
+                    'and the scientific name.'
     ),
     where: str | None = filter_query(
-        'Optional: narrows which rows contribute values, e.g. field=admin1_name with '
-        'filter=country_name = USA lists only US states. Over all columns of the `samples` table plus the '
+        'Optional: narrows which rows contribute values, e.g. field=admin1_name with a country_name '
+        "filter lists only that country's states or provinces (list country_name first: the stored "
+        'name may be "United States" rather than "USA"). Over all columns of the `samples` table plus the '
         'joined `geo_locations` columns (raw names, e.g. country_name, admin1_name). Only supported for the '
         'sample-metadata and geography fields; region, gff_feature and lineage_system_name live outside '
         'that join and return 400 if a filter is given.',
@@ -388,15 +392,22 @@ async def get_sample_counts(
 
 @router.get(
     '/samples:countForLineage',
-    tags=[TAG_SAMPLES]
+    tags=[TAG_SAMPLES],
+    summary='Count samples assigned to a lineage, and all samples, per group of sample columns'
 )
 async def get_sample_counts_for_lineage(
     group_by: Annotated[str, Query(
         pattern=COMMA_SEP_WORDLIKE_PATTERN.pattern,
-        description='Column(s) to group counts by'
+        description='Comma-separated sample column(s) to group counts by, e.g. host or host,admin1_name'
         )],
-    lineage_name: str,
-    lineage_system_name: str | None = None,
+    lineage_name: str = Query(
+        ...,
+        description="Lineage name; a trailing '*' also counts its descendants, one row each"
+    ),
+    lineage_system_name: str | None = Query(
+        None,
+        description='Optional lineage system; a lineage name is only unique within its system'
+    ),
     where: str | None = filter_query(
         'Optional: over all columns of the `samples` table, plus the joined `geo_locations` columns. '
         'Note excluded samples will be excluded from totals count.',
@@ -523,7 +534,10 @@ async def get_variant_frequency_by_collection_date(
     ),
     min_alt_freq: MinAltFreqParam = 0,
     max_alt_freq: MaxAltFreqParam = 1,
-    include_refs: bool = False
+    include_refs: bool = Query(
+        False,
+        description='If true, also include changes where ref equals alt; default false excludes them'
+    )
 ):
     return await DB.queries.variants.get_variant_frequency_by_collection_date(
         date_bin,
@@ -1434,9 +1448,11 @@ MCP_INSTRUCTIONS = f"""{API_DESCRIPTION}
 **Using these tools.**
 - Tool names mirror the REST paths: `samples_byMutation` is `GET /v1/samples:byMutation`.
 - Before filtering on an unfamiliar column, call `distinctValues` to see which values exist.
-  Matching is literal, not semantic: the host column holds "Bos taurus", never "cattle".
+  Matching is literal, not semantic: a host may be stored as "cattle" or as "Bos taurus".
 - Write filter values exactly as they are stored, unquoted and unencoded. The percent-encoding note
   in the filter syntax applies only to a filter typed into a URL, not to a tool argument.
+- Unknown metric, lineage or effect names return empty results, not errors: check them first with
+  `phenotypeMetrics`, `lineages` or `annotations_effects`.
 - `change_bin` selects the coordinate system: nt for nucleotide changes, aa for amino-acid changes.
   Which columns a filter may reference differs between the two, and is listed on each tool.
 - Prefer a `*_count` tool over a listing tool when a total is what you need; the listing tools can
@@ -1461,6 +1477,28 @@ def annotate_mcp_component(
             idempotent_hint=True,
             open_world_hint=False,
         )
+        # FastMCP uses the docstring instead of the summary when both exist; keep both
+        if route.summary and route.description:
+            component.description = f'{route.summary}.\n\n{route.description}'
+
+
+class UpstreamErrorMiddleware(Middleware):
+    """Show the model the API's own error message, not FastMCP's "HTTP error 400: ... {repr of body}"."""
+
+    async def on_call_tool(self, context, call_next):
+        try:
+            return await call_next(context)
+        except ToolError as e:
+            response = getattr(e.__cause__, 'response', None)
+            if response is None:  # not an HTTP error answer, e.g. an unknown tool or a timeout
+                raise
+            try:
+                detail = response.json()['detail']
+            except (ValueError, KeyError, TypeError):
+                detail = response.text
+            if isinstance(detail, list):  # FastAPI 422: one entry per invalid argument
+                detail = '; '.join(f"{d['loc'][-1]}: {d['msg']}" for d in detail)
+            raise ToolError(f'{response.status_code} {response.reason_phrase}: {detail}') from e
 
 
 mcp = FastMCP.from_fastapi(
@@ -1481,6 +1519,7 @@ mcp = FastMCP.from_fastapi(
     cache_ttl=300,
     cache_scope='public',
 )
+mcp.add_middleware(UpstreamErrorMiddleware())
 
 mcp_app = mcp.http_app(path='/mcp', stateless_http=True, json_response=True)
 
