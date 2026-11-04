@@ -110,6 +110,7 @@ async def count_mutations_by_column(by_col: str, change_bin: NtOrAa = NtOrAa.aa,
                 inner join {join_table} JT on JT.id = CNS.{join_key}
                 cross join samples_bm
                 group by {by_col}
+                having sum(rb_cardinality(samples_bm.bitmap & CNS.{ColumnNames.samples_present})) > 0
                 order by count1 desc;
                 '''
 
