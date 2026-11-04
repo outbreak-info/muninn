@@ -29,10 +29,11 @@ import DB.queries.samples
 import DB.queries.variants
 import DB.queries.variants_mutations_lag
 import DB.queries.wastewater
+import DB.queries.dN_dS
 from DB.engine import READ_STATEMENT_TIMEOUT_MS
 from api.models import VariantNucleotideInfo, VariantAminoAcidInfo, SampleInfo, \
     MutationNucleotideInfo, MutationAminoAcidInfo, \
-    VariantCountPhenoScoreInfo, \
+    VariantCountPhenoScoreInfo, VariantDivPerSiteInfo, \
     MutationCountInfo, PhenotypeMetricInfo, LineageCountInfo, LineageAbundanceInfo, LineageAbundanceSummaryInfo, \
     LineageInfo, VariantMutationLagInfo, \
     LineageCountWithPrevalenceInfo, MutationProfileWithPrevalenceInfo, \
@@ -580,6 +581,28 @@ async def get_variant_counts_by_phenotype_score(
         min_alt_freq,
         max_alt_freq
     )
+
+@router.get(
+    '/variants:dNdS',
+    response_model=List[VariantDivPerSiteInfo],
+    tags=[TAG_VARIANTS],
+    summary='Calculate divergence per site of non-synonymous and synonymous mutation'
+)
+async def get_divergence_per_site(
+    region: str = Query(..., description="GFF feature to restrict amino-acid variants to (e.g. YP_009724390.1_NC_045512.2)"),
+    lineage: str = Query(..., description='Lineage name, matched against lineages.lineage_name (e.g. BA.2)'),
+    host: str = Query(..., description='Host name, matched against samples.host (e.g. cattle)'),
+    location: str = Query(..., description='Geo-location, matched against geo_locations.admin1_name (e.g. California)'),
+    n_samples: int = Query(100, ge=1, description='Number of samples to compute dN/dS on')
+):
+    return await DB.queries.dN_dS.get_divergence_per_site(
+        region,
+        lineage,
+        host,
+        location,
+        n_samples,
+    )
+
 
 #############
 # MUTATIONS #

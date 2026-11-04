@@ -153,6 +153,19 @@ class VariantCountPhenoScoreInfo(BaseModel):
     count: int = Field(description="Number of distinct samples carrying this amino-acid change (after any sample filter)")
 
 
+class VariantDivPerSiteInfo(BaseModel):
+    region: str = Field(description="GFF feature (gene/product) divergence was computed on")
+    lineage: str = Field(description="Lineage name (e.g. 'D1.1')")
+    host: str = Field(description="Host name (e.g. 'cattle')")
+    location: str = Field(description="Geo-location (e.g. 'California')")
+    n_samples: int = Field(description="Number of samples actually used (may be fewer than requested)")
+    level: str = Field(description="'Host' (intra-host variants) or 'Population' (consensus mutations)")
+    metric: str = Field(description="'dn' (non-synonymous), 'ds' (synonymous) or 'dstop' (stop) divergence per site")
+    mean: float | None = Field(description="Mean per-sample divergence per site; null when no samples were used")
+    se: float | None = Field(description="Standard error of the mean; null when fewer than 2 samples were used")
+    n: int = Field(description="Number of samples the mean is taken over")
+
+
 class LineageCountInfo(BaseModel):
     count: int = Field(description="Number of distinct samples assigned to this lineage")
     lineage_system: str | None = Field(description="Name of the lineage nomenclature system; null when the lineage has no associated system")
