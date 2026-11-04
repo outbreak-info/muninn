@@ -69,14 +69,13 @@ class _AaRow(NamedTuple):
 async def get_divergence_per_site(
     region: str,
     lineage: str,
-    location: str,
     where: str | None = None,
     n_samples: int = DEFAULT_N_SAMPLES,
     seed: int = 42
 ) -> List['VariantDivPerSiteInfo']:
     gff_feature = _REGION_PATTERN.match(region)["gff_feature"]
 
-    ihv_rows, cns_rows = await _fetch_rows(region, lineage, location, where, n_samples, seed)
+    ihv_rows, cns_rows = await _fetch_rows(region, lineage, where, n_samples, seed)
     ihv_rows = _reconstruct_ref_rows(ihv_rows)
     ihv_rows, cns_rows, day_by_sample = _cal_relative_day(ihv_rows, cns_rows)
 
@@ -86,7 +85,6 @@ async def get_divergence_per_site(
     # samples at relative day 0 are dropped to avoid div by 0
     # relative day is not used in calculation for now
     samples = sorted(acc for acc, day in day_by_sample.items() if day != 0)
-    n_used = len(samples)
 
     out = []
     for level, rows in ((HOST, ihv_rows), (POPULATION, cns_rows)):
@@ -94,8 +92,6 @@ async def get_divergence_per_site(
         for cls, per_site in res.items():
             out.append(VariantDivPerSiteInfo(
                 region=region,
-                location=location,
-                n_samples=n_used,
                 level=level,
                 metric=METRIC_NAMES[cls],
                 **_mean_and_ci(per_site),
@@ -112,7 +108,6 @@ def _mean_and_ci(values: List[float]) -> Dict[str, float | None]:
 async def _fetch_rows(
     region: str,
     lineage: str,
-    location: str,
     where: str | None,
     n_samples: int,
     seed: int,
@@ -140,8 +135,7 @@ async def _fetch_rows(
                 s.{ColumnNames.collection_start_date} as collection_date
             from {TableNames.samples} s
             left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
-            where gl.{ColumnNames.admin1_name} = :location
-            and s.{ColumnNames.collection_start_date} is not null
+            where s.{ColumnNames.collection_start_date} is not null
             and not (
                 extract(month from s.{ColumnNames.collection_start_date}) = 1
                 and extract(day from s.{ColumnNames.collection_start_date}) = 1
@@ -187,7 +181,6 @@ async def _fetch_rows(
         where c.{ColumnNames.gff_feature} = :region
     '''
     params = {
-        'location': location,
         'lineage': lineage,
         'seed': str(seed),
         'n_samples': n_samples,

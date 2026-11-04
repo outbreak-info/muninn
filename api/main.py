@@ -589,9 +589,8 @@ async def get_variant_counts_by_phenotype_score(
     summary='Calculate divergence per site of non-synonymous and synonymous mutation'
 )
 async def get_divergence_per_site(
-    region: str = Query(..., description="GFF feature to restrict amino-acid variants to (e.g. YP_009724390.1_NC_045512.2)"),
-    lineage: str = Query(..., description='Lineage name, matched against lineages.lineage_name (e.g. BA.2)'),
-    location: str = Query(..., description='Geo-location, matched against geo_locations.admin1_name (e.g. California)'),
+    region: str = Query(..., description="GFF feature to restrict amino-acid variants to"),
+    lineage: str = Query(..., description='Lineage name, matched against lineages.lineage_name'),
     where: str | None = filter_query(
         'Optional, restricting which samples are counted: over all columns of the `samples` table, plus the '
         'joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names).',
@@ -601,7 +600,6 @@ async def get_divergence_per_site(
     return await DB.queries.dN_dS.get_divergence_per_site(
         region,
         lineage,
-        location,
         where,
     )
 

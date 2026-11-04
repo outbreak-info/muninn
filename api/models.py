@@ -155,8 +155,6 @@ class VariantCountPhenoScoreInfo(BaseModel):
 
 class VariantDivPerSiteInfo(BaseModel):
     region: str = Field(description="GFF feature (gene/product) divergence was computed on")
-    location: str = Field(description="Geo-location (e.g. 'California')")
-    n_samples: int = Field(description="Number of samples actually used (may be fewer than requested)")
     level: str = Field(description="'Host' (intra-host variants) or 'Population' (consensus mutations)")
     metric: str = Field(description="'dn' (non-synonymous), 'ds' (synonymous) or 'dstop' (stop) divergence per site")
     mean: float | None = Field(description="Mean per-sample divergence per site; null when no samples were used")
