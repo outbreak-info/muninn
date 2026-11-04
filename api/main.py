@@ -591,22 +591,18 @@ async def get_variant_counts_by_phenotype_score(
 async def get_divergence_per_site(
     region: str = Query(..., description="GFF feature to restrict amino-acid variants to (e.g. YP_009724390.1_NC_045512.2)"),
     lineage: str = Query(..., description='Lineage name, matched against lineages.lineage_name (e.g. BA.2)'),
-    host: str = Query(
-        ...,
-        description='Comma-separated host name(s), each matched exactly against samples.host (e.g. cattle, or mallard duck,chicken,canada goose)'
-    ),
     location: str = Query(..., description='Geo-location, matched against geo_locations.admin1_name (e.g. California)'),
-    n_samples: int = Query(100, ge=1, description='Number of samples to compute dN/dS on')
+    where: str | None = filter_query(
+        'Optional, restricting which samples are counted: over all columns of the `samples` table, plus the '
+        'joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names).',
+        required=False
+    ),
 ):
-    hosts = [h.strip() for h in host.split(',') if h.strip()]
-    if not hosts:
-        raise HTTPException(status_code=400, detail='Provide at least one host')
     return await DB.queries.dN_dS.get_divergence_per_site(
         region,
         lineage,
-        hosts,
         location,
-        n_samples,
+        where,
     )
 
 

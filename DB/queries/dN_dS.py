@@ -9,6 +9,7 @@ from DB.textutils import text
 
 from DB.engine import get_async_session
 from api.models import VariantDivPerSiteInfo
+from parser.parser import parser
 from utils.constants import ColumnNames, TableNames, CODONS_AMINO_ACIDS
 
 CODON_TO_AA = dict(CODONS_AMINO_ACIDS)
@@ -17,6 +18,7 @@ S, NS, STOP = 'S', 'NS', 'Stop'
 CLASSES = (NS, S, STOP)
 METRIC_NAMES = {NS: 'dn', S: 'ds', STOP: 'dstop'}
 HOST, POPULATION = 'Host', 'Population'
+DEFAULT_N_SAMPLES = 100
 
 # Number of non-synonymous / synonymous / stop sites per GFF feature: {gff_feature: (NS, S, Stop)}.
 N_SITES: Dict[str, Tuple[float, float, float]] = {
@@ -67,14 +69,14 @@ class _AaRow(NamedTuple):
 async def get_divergence_per_site(
     region: str,
     lineage: str,
-    hosts: List[str],
     location: str,
-    n_samples: int,
+    where: str | None = None,
+    n_samples: int = DEFAULT_N_SAMPLES,
     seed: int = 42
 ) -> List['VariantDivPerSiteInfo']:
     gff_feature = _REGION_PATTERN.match(region)["gff_feature"]
 
-    ihv_rows, cns_rows = await _fetch_rows(region, lineage, hosts, location, n_samples, seed)
+    ihv_rows, cns_rows = await _fetch_rows(region, lineage, location, where, n_samples, seed)
     ihv_rows = _reconstruct_ref_rows(ihv_rows)
     ihv_rows, cns_rows, day_by_sample = _cal_relative_day(ihv_rows, cns_rows)
 
@@ -92,26 +94,28 @@ async def get_divergence_per_site(
         for cls, per_site in res.items():
             out.append(VariantDivPerSiteInfo(
                 region=region,
-                lineage=lineage,
-                host=hosts,
                 location=location,
                 n_samples=n_used,
                 level=level,
                 metric=METRIC_NAMES[cls],
-                mean=statistics.fmean(per_site) if per_site else None,
-                se=statistics.stdev(per_site) / math.sqrt(len(per_site)) if len(per_site) > 1 else None,
-                n=len(per_site),
+                **_mean_and_ci(per_site),
             ))
     return out
+
+
+def _mean_and_ci(values: List[float]) -> Dict[str, float | None]:
+    mean = statistics.fmean(values) 
+    half_width = statistics.NormalDist().inv_cdf(0.975) * statistics.stdev(values) / math.sqrt(len(values))
+    return {'mean': mean, 'ci_lower': mean - half_width, 'ci_upper': mean + half_width}
 
 
 async def _fetch_rows(
     region: str,
     lineage: str,
-    hosts: List[str],
     location: str,
+    where: str | None,
     n_samples: int,
-    seed: int = 42,
+    seed: int,
 ) -> Tuple[List[_AaRow], List[_AaRow]]:
     aa_columns = '''
         p.accession,
@@ -124,6 +128,10 @@ async def _fetch_rows(
         c.alt_codon
     '''
 
+    user_where_clause = ''
+    if where is not None:
+        user_where_clause = f'and ({parser.parse(where)})'
+
     query = f'''
         with picked as (
             select
@@ -132,8 +140,7 @@ async def _fetch_rows(
                 s.{ColumnNames.collection_start_date} as collection_date
             from {TableNames.samples} s
             left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
-            where s.{ColumnNames.host} = any(:hosts)
-            and gl.{ColumnNames.admin1_name} = :location
+            where gl.{ColumnNames.admin1_name} = :location
             and s.{ColumnNames.collection_start_date} is not null
             and not (
                 extract(month from s.{ColumnNames.collection_start_date}) = 1
@@ -145,6 +152,7 @@ async def _fetch_rows(
                 inner join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id}
                 where l.{ColumnNames.lineage_name} = :lineage
             )
+            {user_where_clause}
             order by md5(s.{ColumnNames.accession} || :seed)
             limit :n_samples
         ),
@@ -179,7 +187,6 @@ async def _fetch_rows(
         where c.{ColumnNames.gff_feature} = :region
     '''
     params = {
-        'hosts': hosts,
         'location': location,
         'lineage': lineage,
         'seed': str(seed),

@@ -155,15 +155,13 @@ class VariantCountPhenoScoreInfo(BaseModel):
 
 class VariantDivPerSiteInfo(BaseModel):
     region: str = Field(description="GFF feature (gene/product) divergence was computed on")
-    lineage: str = Field(description="Lineage name (e.g. 'D1.1')")
-    host: List[str] = Field(description="Host name(s) samples were drawn from (e.g. ['cattle'] or ['mallard duck', 'chicken'])")
     location: str = Field(description="Geo-location (e.g. 'California')")
     n_samples: int = Field(description="Number of samples actually used (may be fewer than requested)")
     level: str = Field(description="'Host' (intra-host variants) or 'Population' (consensus mutations)")
     metric: str = Field(description="'dn' (non-synonymous), 'ds' (synonymous) or 'dstop' (stop) divergence per site")
     mean: float | None = Field(description="Mean per-sample divergence per site; null when no samples were used")
-    se: float | None = Field(description="Standard error of the mean; null when fewer than 2 samples were used")
-    n: int = Field(description="Number of samples the mean is taken over")
+    ci_lower: float | None = Field(description="Lower bound of the 95% confidence interval of the mean (normal approximation); null when fewer than 2 samples were used")
+    ci_upper: float | None = Field(description="Upper bound of the 95% confidence interval of the mean (normal approximation); null when fewer than 2 samples were used")
 
 
 class LineageCountInfo(BaseModel):
