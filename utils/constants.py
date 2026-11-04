@@ -43,9 +43,15 @@ FILTER_SYNTAX_HELP = (
     'String values are written bare/unquoted (e.g. host = Homo sapiens); numbers and dates are bare too. '
     'The words "and"/"or"/"not" are NOT operators and will raise a 400 error. There is no IN operator and '
     'no null test OR the alternatives instead. Which column names are accepted depends on the endpoint '
-    '(see the columns listed above); enumerate the valid values for a column with GET /v1/distinctValues. '
+    "(see each endpoint's filter description); enumerate the valid values for a column with GET /v1/distinctValues. "
     'Example: bases > 1000 ^ host = Homo sapiens . '
     'When placed in a URL, percent-encode the operators (space -> %20, ^ -> %5E, | -> %7C, ! -> %21, > -> %3E).'
+)
+# The one-line version repeated under every filter parameter; FILTER_SYNTAX_HELP is stated once, in the API
+# description (and so the MCP server instructions).
+FILTER_SYNTAX_SUMMARY = (
+    'Filter syntax: col = value, ^ AND, | OR, ! NOT, () to group; > < >= <= only for numbers and YYYY-MM-DD '
+    'dates; values unquoted (e.g. bases > 1000 ^ host = Homo sapiens). Full rules are in the API description.'
 )
 NUCLEOTIDE_CHARACTERS = ['A', 'C', 'G', 'T']
 # https://en.wikipedia.org/wiki/Nucleic_acid_notation

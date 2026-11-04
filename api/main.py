@@ -30,6 +30,7 @@ import DB.queries.variants
 import DB.queries.variants_mutations_lag
 import DB.queries.wastewater
 from DB.engine import READ_STATEMENT_TIMEOUT_MS
+from api.filter_columns import SAMPLE_COLUMNS, GEO_COLUMNS, LINEAGE_COLUMNS, ALLELE_COLUMNS, AMINO_ACID_COLUMNS
 from api.models import VariantNucleotideInfo, VariantAminoAcidInfo, SampleInfo, \
     MutationNucleotideInfo, MutationAminoAcidInfo, \
     VariantCountPhenoScoreInfo, \
@@ -44,8 +45,8 @@ from api.models import VariantNucleotideInfo, VariantAminoAcidInfo, SampleInfo, 
     LineageAbundanceWithSampleInfo, AverageLineageAbundanceInfo, LineageRelationshipsInfo, LineageSampleCountInfo
 from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, NtOrAa, \
     DEFAULT_MAX_SPAN_DAYS, COLLECTION_DATE, DEFAULT_DAYS, COMMA_SEP_WORDLIKE_PATTERN, \
-    DEFAULT_PREVALENCE_THRESHOLD, MIN_PREVALENCE_THRESHOLD, FILTER_SYNTAX_HELP, DistinctValueField, \
-    WastewaterGeoBin
+    DEFAULT_PREVALENCE_THRESHOLD, MIN_PREVALENCE_THRESHOLD, FILTER_SYNTAX_HELP, FILTER_SYNTAX_SUMMARY, \
+    DistinctValueField, WastewaterGeoBin
 from utils.errors import ParsingError
 
 log = logging.getLogger(__name__)
@@ -159,17 +160,19 @@ MaxAltFreqParam = Annotated[float, Query(
 )]
 
 
-def filter_query(columns_help: str, *, required: bool = True, alias: str = 'filter') -> Query:
+def filter_query(columns_help: str, *columns: str, required: bool = True, alias: str = 'filter') -> Query:
     """
-    Build the OpenAPI `Query` for a `filter` parameter. `columns_help` describes the columns that
-    are filterable *for this endpoint*; the shared filter-language grammar (FILTER_SYNTAX_HELP) is
-    appended automatically so every filter parameter documents the syntax inline. This keeps the
-    grammar in one place and ensures it survives even when the spec is split into per-endpoint tools.
+    Build the OpenAPI `Query` for a `filter` parameter. `columns_help` describes the filter *for this
+    endpoint*; `columns` are the column lists (api.filter_columns) of the tables its query joins, one per
+    line. A one-line syntax summary (FILTER_SYNTAX_SUMMARY) is appended so every filter still shows the
+    essentials inline, for MCP clients that drop the server instructions. The full grammar
+    (FILTER_SYNTAX_HELP) is stated once, in the API description.
     """
+    listed = ''.join(f'\n- {line}' for line in columns)
     return Query(
         ... if required else None,
         alias=alias,
-        description=f'{columns_help}\n\n{FILTER_SYNTAX_HELP}',
+        description=f'{columns_help}{listed}\n\n{FILTER_SYNTAX_SUMMARY}',
     )
 
 
@@ -271,12 +274,12 @@ async def get_distinct_values(
                     'and the scientific name.'
     ),
     where: str | None = filter_query(
-        'Optional: narrows which rows contribute values, e.g. field=admin1_name with a country_name '
-        "filter lists only that country's states or provinces (list country_name first: the stored "
-        'name may be "United States" rather than "USA"). Over all columns of the `samples` table plus the '
-        'joined `geo_locations` columns (raw names, e.g. country_name, admin1_name). Only supported for the '
-        'sample-metadata and geography fields; region, gff_feature and lineage_system_name live outside '
-        'that join and return 400 if a filter is given.',
+        'Optional: narrows which rows contribute values, e.g. field=admin1_name with a country_name filter '
+        "lists only that country's states or provinces (list country_name first: the stored name may be "
+        '"United States" rather than "USA"). Only supported for the sample-metadata and geography fields; '
+        'region, gff_feature and lineage_system_name are not joined to samples here and return 400 if a '
+        'filter is given.',
+        SAMPLE_COLUMNS, GEO_COLUMNS,
         required=False,
     ),
 ):
@@ -306,7 +309,8 @@ async def get_sample_by_id(sample_id: int = Path(..., description='The ID of the
 @router.get('/samples', response_model=List[SampleInfo], tags=[TAG_SAMPLES], summary='Get samples matching a query')
 async def get_samples_query(
     where: str = filter_query(
-        'Over all columns of the `samples` table, plus the joined `geo_locations` columns (use their raw names, e.g. admin1_name, country_name, not the geo_* response names).'
+        'Selects which samples to return.',
+        SAMPLE_COLUMNS, GEO_COLUMNS
         )
     ):
     return await DB.queries.samples.get_samples(where)
@@ -338,7 +342,8 @@ async def get_samples_by_mutation(
         description='Whether the query filters on nucleotide (nt) allele columns or amino-acid (aa) columns'
         ),
     where: str = filter_query(
-        'Over consensus-mutation columns. change_bin=nt: all columns of the `alleles` table (region, position_nt, ref_nt, alt_nt); change_bin=aa: all columns of the `amino_acids` table (position_aa, ref_aa, alt_aa, gff_feature, ref_codon, alt_codon).'
+        'Selects samples carrying a consensus mutation that matches.',
+        ALLELE_COLUMNS, AMINO_ACID_COLUMNS
         ),
 ):
     return await DB.queries.samples.get_samples_by_mutation(change_bin, where)
@@ -356,7 +361,8 @@ async def get_samples_by_variant(
         description='Whether the query filters on nucleotide (nt) allele columns or amino-acid (aa) columns'
         ),
     where: str = filter_query(
-        'Over the change catalog. change_bin=nt: all columns of the `alleles` table (region, position_nt, ref_nt, alt_nt); change_bin=aa: all columns of the `amino_acids` table (position_aa, ref_aa, alt_aa, gff_feature, ref_codon, alt_codon).'
+        'Selects samples carrying an intra-host variant that matches.',
+        ALLELE_COLUMNS, AMINO_ACID_COLUMNS
         ),
     min_alt_freq: MinAltFreqParam = 0,
     max_alt_freq: MaxAltFreqParam = 1,
@@ -378,7 +384,9 @@ async def get_sample_counts(
     date_bin: DateBinParam = DateBinOpt.month,
     days: DaysParam = DEFAULT_DAYS,
     where: str | None = filter_query(
-        'Optional: over all columns of the `samples` table, plus the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names).',
+        'Optional. Selects which samples are counted. The lineage columns work only when group_by is a date '
+        'field or includes lineage; with a sample-column group_by they return 400.',
+        SAMPLE_COLUMNS, GEO_COLUMNS, LINEAGE_COLUMNS,
         required=False
         ),
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
@@ -410,8 +418,8 @@ async def get_sample_counts_for_lineage(
         description='Optional lineage system; a lineage name is only unique within its system'
     ),
     where: str | None = filter_query(
-        'Optional: over all columns of the `samples` table, plus the joined `geo_locations` columns. '
-        'Note excluded samples will be excluded from totals count.',
+        'Optional. Selects which samples are counted; samples it excludes are left out of the totals too.',
+        SAMPLE_COLUMNS, GEO_COLUMNS,
         required=False
     ),
 ):
@@ -438,7 +446,10 @@ async def get_variants_query(
         description='Whether the query filters on (and returns) nucleotide (nt) allele variants or amino-acid (aa) variants'
         ),
     where: str = filter_query(
-        'Over the change catalog. change_bin=nt: all columns of the `alleles` table (region, position_nt, ref_nt, alt_nt); change_bin=aa: all columns of the `amino_acids` table (position_aa, ref_aa, alt_aa, gff_feature, ref_codon, alt_codon). Read depths and the exact alt_freq are no longer stored, so they cannot be filtered on; use min_alt_freq/max_alt_freq for frequency, since the bin column is a range type the filter language cannot express.'
+        'Selects which intra-host variants to return. Read depths and the exact alt_freq are no longer '
+        'stored, so they cannot be filtered on; use min_alt_freq/max_alt_freq for frequency, since the bin '
+        'column is a range type the filter language cannot express.',
+        ALLELE_COLUMNS, AMINO_ACID_COLUMNS
         ),
     min_alt_freq: MinAltFreqParam = 0,
     max_alt_freq: MaxAltFreqParam = 1,
@@ -458,7 +469,8 @@ async def get_variants_by_sample(
         description='Whether to return nucleotide (nt) allele variants or amino-acid (aa) variants'
         ),
     where: str = filter_query(
-        'Selects which samples to return variants for: over all columns of the `samples` table, plus the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names).'
+        'Selects which samples to return variants for.',
+        SAMPLE_COLUMNS, GEO_COLUMNS
         ),
     min_alt_freq: MinAltFreqParam = 0,
     max_alt_freq: MaxAltFreqParam = 1,
@@ -485,11 +497,14 @@ async def get_variant_counts(
     days: DaysParam = DEFAULT_DAYS,
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
     where: str | None = filter_query(
-        'Optional. Selects which *samples* are counted: over all columns of the `samples` table, the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names), and the lineage columns (lineage_name, lineage_system_name). filter can only narrow the sample side. Use group_by to slice the change side.',
+        'Optional. Selects which *samples* are counted, so it can only narrow the sample side. Use group_by '
+        'to slice the change side.',
+        SAMPLE_COLUMNS, GEO_COLUMNS, LINEAGE_COLUMNS,
         required=False
     ),
     variants_where: str | None = filter_query(
-        f'Optional. Only used when group_by={COLLECTION_DATE}. Applied to columns of alleles or amino acids, as appropriate.',
+        f'Optional. Only used when group_by={COLLECTION_DATE}; narrows which changes are counted.',
+        ALLELE_COLUMNS, AMINO_ACID_COLUMNS,
         required=False,
         alias='variants_filter'
     ),
@@ -530,7 +545,10 @@ async def get_variant_frequency_by_collection_date(
     days: DaysParam = DEFAULT_DAYS,
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
     where: str | None = filter_query(
-        'Optional. Selects which *samples* are included: over all columns of the `samples` table, the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names), and the lineage columns (lineage_name, lineage_system_name). Variant/change columns are not filterable here — an intra-host variant is stored per change, not per sample, so the filter can only narrow the sample side.',
+        'Optional. Selects which *samples* are included. Variant/change columns are not filterable here — an '
+        'intra-host variant is stored per change, not per sample, so the filter can only narrow the sample '
+        'side.',
+        SAMPLE_COLUMNS, GEO_COLUMNS, LINEAGE_COLUMNS,
         required=False
     ),
     min_alt_freq: MinAltFreqParam = 0,
@@ -565,8 +583,8 @@ async def get_variant_counts_by_phenotype_score(
         description='If true, also include changes where reference amino acid equals alternative amino acid; default false excludes them'
     ),
     where: str | None = filter_query(
-        'Optional, restricting which samples are counted: over all columns of the `samples` table, plus the '
-        'joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names).',
+        'Optional. Selects which samples are counted.',
+        SAMPLE_COLUMNS, GEO_COLUMNS,
         required=False
     ),
     min_alt_freq: MinAltFreqParam = 0,
@@ -597,7 +615,8 @@ async def get_mutations_query(
         description='Whether the query filters on (and returns) nucleotide (nt) allele mutations or amino-acid (aa) mutations'
         ),
     where: str = filter_query(
-        'Over consensus-mutation columns. change_bin=nt: all columns of the `alleles` table (region, position_nt, ref_nt, alt_nt); change_bin=aa: all columns of the `amino_acids` table (position_aa, ref_aa, alt_aa, gff_feature, ref_codon, alt_codon).'
+        'Selects which consensus mutations to return.',
+        ALLELE_COLUMNS, AMINO_ACID_COLUMNS
         ),
 ):
     return await DB.queries.mutations.get_mutations(change_bin, where)
@@ -615,7 +634,8 @@ async def get_mutations_by_sample(
         description='Whether to return nucleotide (nt) allele mutations or amino-acid (aa) mutations'
         ),
     where: str = filter_query(
-        'Selects which samples to return mutations for: over all columns of the `samples` table, plus the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names).'
+        'Selects which samples to return mutations for.',
+        SAMPLE_COLUMNS, GEO_COLUMNS
         ),
 ):
     return await DB.queries.mutations.get_mutations_by_sample(change_bin, where)
@@ -678,11 +698,14 @@ async def get_mutation_counts(
     days: DaysParam = DEFAULT_DAYS,
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
     where: str | None = filter_query(
-        'Optional. Filter by all `samples` columns and joined `geo_locations` columns. With group_by=collection_date, lineage columns (lineage_name, lineage_system_name) become available. With any other group_by lineage columns return 400.',
+        'Optional. Selects which samples are counted. The lineage columns work only with '
+        'group_by=collection_date; with any other group_by they return 400.',
+        SAMPLE_COLUMNS, GEO_COLUMNS, LINEAGE_COLUMNS,
         required=False
         ),
     mutations_where: str | None = filter_query(
-        'Optional. With group_by=collection_date: over the change columns (nt: region, ref_nt, position_nt, alt_nt; aa: gff_feature, ref_aa, position_aa, alt_aa, ref_codon, alt_codon). With any other group_by this parameter is not used.',
+        'Optional. Only used when group_by=collection_date; narrows which changes are counted.',
+        ALLELE_COLUMNS, AMINO_ACID_COLUMNS,
         required=False,
         alias='mutations_filter'
         ),
@@ -708,7 +731,10 @@ async def get_mutation_counts(
 async def get_mutations_before_variants(
     lineage: str = Query(..., description='Lineage name to restrict samples to (e.g. BA.1)'),
     lineage_system_name: str = Query(..., description='Name of the lineage nomenclature system the lineage belongs to (e.g. a Pango/Nextstrain lineage)'),
-    where: str | None = filter_query('Optional, restricting which of the lineage\'s samples are considered: over all columns of the `samples` table, plus the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names).', required=False),
+    where: str | None = filter_query(
+        "Optional. Narrows which of the lineage's samples are considered.",
+        SAMPLE_COLUMNS, GEO_COLUMNS, LINEAGE_COLUMNS,
+        required=False),
 ):
     return await DB.queries.variants_mutations_lag.get_mutations_before_variants(lineage, lineage_system_name, where)
 
@@ -722,7 +748,10 @@ async def get_mutations_before_variants(
 async def get_variants_before_mutations(
     lineage: str = Query(..., description='Lineage name to restrict samples to (e.g. BA.1)'),
     lineage_system_name: str = Query(..., description='Name of the lineage nomenclature system the lineage belongs to (e.g. a Pango/Nextstrain lineage)'),
-    where: str | None = filter_query('Optional, restricting which of the lineage\'s samples are considered: over all columns of the `samples` table, plus the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names).', required=False),
+    where: str | None = filter_query(
+        "Optional. Narrows which of the lineage's samples are considered.",
+        SAMPLE_COLUMNS, GEO_COLUMNS, LINEAGE_COLUMNS,
+        required=False),
 ):
     return await DB.queries.variants_mutations_lag.get_variants_before_mutations(lineage, lineage_system_name, where)
 
@@ -741,7 +770,8 @@ async def get_mutation_counts_by_phenotype_score(
         description='If true, also include changes where reference amino acid equals alternative amino acid; default false excludes them'
         ),
     where: str | None = filter_query(
-        'Optional, restricting which samples are counted: over all columns of the `samples` table, plus the joined `geo_locations` columns (raw names, e.g. admin1_name, country_name, not the geo_* response names)  and the joined `lineages`/`lineage_systems`/`samples_lineages` columns (e.g. lineage_name, lineage_system_name).',
+        'Optional. Selects which samples are counted.',
+        SAMPLE_COLUMNS, GEO_COLUMNS, LINEAGE_COLUMNS,
         required=False
         ),
 ):
@@ -768,7 +798,8 @@ async def get_mutation_count_by_collection_date_and_lineage(
     date_bin: DateBinParam = DateBinOpt.month,
     days: DaysParam = DEFAULT_DAYS,
     where: str | None = filter_query(
-        'Optional, restricting which samples are counted: over all columns of the `samples` table, plus the joined `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name). No geo columns are joined here.',
+        'Optional. Selects which samples are counted. The geo_locations columns are not joined here.',
+        SAMPLE_COLUMNS, LINEAGE_COLUMNS,
         required=False
         ),
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
@@ -858,7 +889,8 @@ async def get_lineage_abundance(
     date_bin: DateBinParam = DateBinOpt.month,
     days: DaysParam = DEFAULT_DAYS,
     where: str | None = filter_query(
-        'Optional: over all `samples` columns, plus joined `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name) and `samples_lineages` (abundance); geo columns join in via their raw names too. Only abundance-based (non-consensus) lineage calls are ever included.',
+        'Optional. Only abundance-based (non-consensus) lineage calls are ever included.',
+        SAMPLE_COLUMNS, GEO_COLUMNS, LINEAGE_COLUMNS,
         required=False
         ),
     summary: bool = Query(
@@ -893,9 +925,8 @@ async def get_lineage_abundance(
 )
 async def get_lineage_counts_over_time(
     where: str | None = filter_query(
-        'Optional: over `samples`, joined `geo_locations` (raw names, e.g. country_name, admin1_name) and '
-        '`lineages`/`lineage_systems` (lineage_name, lineage_system_name) columns. Counts consensus lineage '
-        'calls only (abundance/wastewater calls excluded).',
+        'Optional. Counts consensus lineage calls only (abundance/wastewater calls excluded).',
+        SAMPLE_COLUMNS, GEO_COLUMNS, LINEAGE_COLUMNS,
         required=False,
     ),
     lineage: str | None = Query(
@@ -948,7 +979,8 @@ async def get_mutation_incidence(
         description='If false (default) exclude changes where ref == alt; if true include them'
         ),
     where: str | None = filter_query(
-        'Optional: over all `samples` columns plus the joined `lineages`/`lineage_systems`/`samples_lineages` columns (e.g. lineage_name, lineage_system_name). Note: geo_locations columns are NOT joined here and cannot be filtered on.',
+        'Optional. The geo_locations columns are not joined here and cannot be filtered on.',
+        SAMPLE_COLUMNS, LINEAGE_COLUMNS,
         required=False
         ),
 ):
@@ -984,7 +1016,8 @@ async def get_mutation_profile(
         description='Lineage nomenclature system the lineage belongs to, matched against lineage_systems.lineage_system_name (e.g. PANGO)'
         ),
     where: str | None = filter_query(
-        'Optional: over all `samples` columns plus the joined `lineages`/`lineage_systems`/`samples_lineages` columns (e.g. lineage_name, lineage_system_name). Note: geo_locations and alleles columns are NOT joined here and cannot be filtered on.',
+        'Optional. The geo_locations and alleles columns are not joined here and cannot be filtered on.',
+        SAMPLE_COLUMNS, LINEAGE_COLUMNS,
         required=False
         ),
 ):
@@ -1023,7 +1056,8 @@ async def get_phenotype_metric_count_mutations_by_collection_date(
     date_bin: DateBinParam = DateBinOpt.month,
     days: DaysParam = DEFAULT_DAYS,
     where: str | None = filter_query(
-        'Optional: over all `samples` columns plus the joined `geo_locations` columns (raw names, e.g. admin1_name/country_name) and `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name). alleles/amino_acids columns are NOT joined and cannot be filtered on.',
+        'Optional. The alleles/amino_acids columns are not joined here and cannot be filtered on.',
+        SAMPLE_COLUMNS, GEO_COLUMNS, LINEAGE_COLUMNS,
         required=False
         ),
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
@@ -1056,7 +1090,9 @@ async def get_phenotype_metric_count_variants_by_collection_date(
     date_bin: DateBinParam = DateBinOpt.month,
     days: DaysParam = DEFAULT_DAYS,
     where: str | None = filter_query(
-        'Optional, selecting which samples are binned: over all `samples` columns, the joined `geo_locations` columns (raw names, e.g. admin1_name/country_name), and `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name). Amino-acid columns are not filterable — the metric already selects which changes are counted.',
+        'Optional. Selects which samples are binned. Amino-acid columns are not filterable — the metric '
+        'already selects which changes are counted.',
+        SAMPLE_COLUMNS, GEO_COLUMNS, LINEAGE_COLUMNS,
         required=False
         ),
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
@@ -1090,7 +1126,8 @@ async def get_phenotype_metric_values_for_mutations_by_sample_and_collection_dat
     date_bin: DateBinParam = DateBinOpt.month,
     days: DaysParam = DEFAULT_DAYS,
     where: str | None = filter_query(
-        'Optional: over all `samples` columns plus the joined `geo_locations` columns (raw names, e.g. admin1_name/country_name) and `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name). alleles/amino_acids columns are NOT joined and cannot be filtered on.',
+        'Optional. The alleles/amino_acids columns are not joined here and cannot be filtered on.',
+        SAMPLE_COLUMNS, GEO_COLUMNS, LINEAGE_COLUMNS,
         required=False
         ),
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
@@ -1119,7 +1156,8 @@ async def get_phenotype_metric_values_for_variants_by_sample_and_collection_date
     date_bin: DateBinParam = DateBinOpt.month,
     days: DaysParam = DEFAULT_DAYS,
     where: str | None = filter_query(
-        'Optional: over all `samples` columns plus the joined `geo_locations` columns (raw names, e.g. admin1_name/country_name) and `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name). alleles/amino_acids columns are NOT joined and cannot be filtered on.',
+        'Optional. The alleles/amino_acids columns are not joined here and cannot be filtered on.',
+        SAMPLE_COLUMNS, GEO_COLUMNS, LINEAGE_COLUMNS,
         required=False
         ),
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
@@ -1220,7 +1258,8 @@ async def get_annotations_by_mutations_and_collection_date(
     days: DaysParam = DEFAULT_DAYS,
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
     where: str | None = filter_query(
-        'Optional: over all `samples` columns plus the joined `geo_locations` columns (raw names, e.g. admin1_name/country_name) and `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name). alleles/amino_acids columns are NOT joined and cannot be filtered on.',
+        'Optional. The alleles/amino_acids columns are not joined here and cannot be filtered on.',
+        SAMPLE_COLUMNS, GEO_COLUMNS, LINEAGE_COLUMNS,
         required=False
         ),
 ):
@@ -1245,9 +1284,8 @@ async def get_annotations_by_variants_and_collection_date(
     days: DaysParam = DEFAULT_DAYS,
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
     where: str | None = filter_query(
-        'Optional: over all `samples` columns plus the joined `geo_locations` columns (raw names, e.g. '
-        'admin1_name/country_name) and `lineages`/`lineage_systems` columns (lineage_name, '
-        'lineage_system_name). alleles/amino_acids columns are NOT joined and cannot be filtered on.',
+        'Optional. The alleles/amino_acids columns are not joined here and cannot be filtered on.',
+        SAMPLE_COLUMNS, GEO_COLUMNS, LINEAGE_COLUMNS,
         required=False,
     ),
     min_alt_freq: MinAltFreqParam = 0,
@@ -1283,9 +1321,8 @@ async def get_annotation_effects() -> List[str]:
 async def get_annotations_by_variants_and_amino_acid_position(
     effect_detail: str = Query(..., description='Annotation effect to match, compared against effects.detail'),
     where: str | None = filter_query(
-        'Optional: over all `samples` columns plus the joined `geo_locations` columns (raw names, e.g. '
-        'admin1_name/country_name) and `lineages`/`lineage_systems` columns (lineage_name, '
-        'lineage_system_name). alleles/amino_acids columns are NOT joined and cannot be filtered on.',
+        'Optional. The alleles/amino_acids columns are not joined here and cannot be filtered on.',
+        SAMPLE_COLUMNS, GEO_COLUMNS, LINEAGE_COLUMNS,
         required=False,
     ),
     min_alt_freq: MinAltFreqParam = 0,
@@ -1308,7 +1345,8 @@ async def get_annotations_by_variants_and_amino_acid_position(
 async def get_annotations_by_mutations_and_amino_acid_position(
     effect_detail: str = Query(..., description='Annotation effect to match, compared against effects.detail'),
     where: str | None = filter_query(
-        'Optional: over all `samples` columns plus the joined `geo_locations` columns (raw names, e.g. admin1_name/country_name) and `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name). alleles/amino_acids columns are NOT joined and cannot be filtered on.',
+        'Optional. The alleles/amino_acids columns are not joined here and cannot be filtered on.',
+        SAMPLE_COLUMNS, GEO_COLUMNS, LINEAGE_COLUMNS,
         required=False
         ),
 ):
@@ -1330,10 +1368,8 @@ async def get_annotations_by_mutations_and_amino_acid_position(
 )
 async def get_wastewater_lineage_abundances_by_sample(
     where: str | None = filter_query(
-        'Optional: over all `samples` columns (including the wastewater ones: ww_viral_load, '
-        'ww_catchment_population, ww_site_id, ww_collected_by, census_region), the joined '
-        '`geo_locations` columns (raw names, e.g. admin1_name, country_name) and the `lineages`/'
-        '`lineage_systems` columns (lineage_name, lineage_system_name).',
+        'Optional. Selects which samples to return.',
+        SAMPLE_COLUMNS, GEO_COLUMNS, LINEAGE_COLUMNS,
         required=False,
     ),
 ):
@@ -1364,9 +1400,9 @@ async def get_wastewater_average_lineage_abundances_by_location(
                     "lineage_name keeps the '*'. Omit to get every lineage separately."
     ),
     where: str | None = filter_query(
-        'Optional: over all `samples` columns (including the wastewater ones), the joined '
-        '`geo_locations` columns (raw names, e.g. admin1_name, country_name) and the `lineages`/'
-        '`lineage_systems` columns (lineage_name, lineage_system_name).',
+        'Optional. Selects which samples are averaged. The lineage columns are not filterable here; use the '
+        'lineage and lineage_system_name parameters instead.',
+        SAMPLE_COLUMNS, GEO_COLUMNS,
         required=False,
     ),
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
@@ -1402,8 +1438,8 @@ async def get_wastewater_average_lineage_abundances_by_location(
 )
 async def get_wastewater_lineage_counts(
     where: str | None = filter_query(
-        'Optional: over all `samples` columns (including the wastewater ones), the joined '
-        '`geo_locations`, `samples_lineages`, `lineages` and `lineage_systems` columns.',
+        'Optional. Selects which samples are counted.',
+        SAMPLE_COLUMNS, GEO_COLUMNS, LINEAGE_COLUMNS,
         required=False,
     ),
 ):
@@ -1418,10 +1454,9 @@ async def get_wastewater_lineage_counts(
 )
 async def get_wastewater_latest_sample(
     where: str | None = filter_query(
-        'Optional: over all columns of the `samples` table, plus the joined `geo_locations` columns '
-        '(raw names, e.g. admin1_name, country_name, not the geo_* response names). The filter '
-        'narrows the field the maximum is taken over, so filter=admin1_name = California returns '
+        'Optional. Narrows the field the maximum is taken over, so filter=admin1_name = California returns '
         "California's latest sample rather than nothing.",
+        SAMPLE_COLUMNS, GEO_COLUMNS,
         required=False,
     ),
 ):
