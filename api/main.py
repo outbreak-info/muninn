@@ -44,8 +44,8 @@ from api.models import VariantNucleotideInfo, VariantAminoAcidInfo, SampleInfo, 
     LineageAbundanceWithSampleInfo, AverageLineageAbundanceInfo, LineageRelationshipsInfo, LineageSampleCountInfo
 from utils.constants import CHANGE_PATTERN, WORDLIKE_PATTERN, DateBinOpt, NtOrAa, \
     DEFAULT_MAX_SPAN_DAYS, COLLECTION_DATE, DEFAULT_DAYS, COMMA_SEP_WORDLIKE_PATTERN, \
-    DEFAULT_PREVALENCE_THRESHOLD, MIN_PREVALENCE_THRESHOLD, FILTER_SYNTAX_HELP, DistinctValueField, \
-    WastewaterGeoBin
+    DEFAULT_PREVALENCE_THRESHOLD, MIN_PREVALENCE_THRESHOLD, FILTER_SYNTAX_HELP, FILTER_SYNTAX_SUMMARY, \
+    DistinctValueField, WastewaterGeoBin
 from utils.errors import ParsingError
 
 log = logging.getLogger(__name__)
@@ -162,14 +162,14 @@ MaxAltFreqParam = Annotated[float, Query(
 def filter_query(columns_help: str, *, required: bool = True, alias: str = 'filter') -> Query:
     """
     Build the OpenAPI `Query` for a `filter` parameter. `columns_help` describes the columns that
-    are filterable *for this endpoint*; the shared filter-language grammar (FILTER_SYNTAX_HELP) is
-    appended automatically so every filter parameter documents the syntax inline. This keeps the
-    grammar in one place and ensures it survives even when the spec is split into per-endpoint tools.
+    are filterable *for this endpoint*; a one-line syntax summary (FILTER_SYNTAX_SUMMARY) is appended
+    so every filter still shows the essentials inline, for MCP clients that drop the server
+    instructions. The full grammar (FILTER_SYNTAX_HELP) is stated once, in the API description.
     """
     return Query(
         ... if required else None,
         alias=alias,
-        description=f'{columns_help}\n\n{FILTER_SYNTAX_HELP}',
+        description=f'{columns_help}\n\n{FILTER_SYNTAX_SUMMARY}',
     )
 
 
