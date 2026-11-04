@@ -156,7 +156,7 @@ class VariantCountPhenoScoreInfo(BaseModel):
 class VariantDivPerSiteInfo(BaseModel):
     region: str = Field(description="GFF feature (gene/product) divergence was computed on")
     lineage: str = Field(description="Lineage name (e.g. 'D1.1')")
-    host: str = Field(description="Host name (e.g. 'cattle')")
+    host: List[str] = Field(description="Host name(s) samples were drawn from (e.g. ['cattle'] or ['mallard duck', 'chicken'])")
     location: str = Field(description="Geo-location (e.g. 'California')")
     n_samples: int = Field(description="Number of samples actually used (may be fewer than requested)")
     level: str = Field(description="'Host' (intra-host variants) or 'Population' (consensus mutations)")

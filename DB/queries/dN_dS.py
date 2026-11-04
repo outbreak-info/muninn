@@ -67,38 +67,33 @@ class _AaRow(NamedTuple):
 async def get_divergence_per_site(
     region: str,
     lineage: str,
-    host: str,
+    hosts: List[str],
     location: str,
     n_samples: int,
     seed: int = 42
 ) -> List['VariantDivPerSiteInfo']:
-    """
-    Mean per-sample divergence per site for non-synonymous (dn), synonymous (ds) and stop (dstop)
-    changes in `region`, at the
-    intra-host (Host) and consensus (Population) levels, over a seeded random subset of up to
-    `n_samples` samples matching lineage / host / location.
-    """
     gff_feature = _REGION_PATTERN.match(region)["gff_feature"]
 
-    ihv_rows, cns_rows = await _fetch_rows(region, lineage, host, location, n_samples, seed)
-    ihv_rows, cns_rows, day_by_sample = _prepare(_reconstruct_ref_rows(ihv_rows), cns_rows)
-    if not day_by_sample:
-        return []
+    ihv_rows, cns_rows = await _fetch_rows(region, lineage, hosts, location, n_samples, seed)
+    ihv_rows = _reconstruct_ref_rows(ihv_rows)
+    ihv_rows, cns_rows, day_by_sample = _cal_relative_day(ihv_rows, cns_rows)
 
     ihv_rows = _call_against_consensus(ihv_rows, cns_rows)
     cns_rows = [r._replace(alt_freq=1.0) for r in cns_rows if r.ref_aa != 'X' and r.alt_aa != 'X']
 
-    # samples at relative day 0 are dropped, carried over from the per-day rate calculation
+    # samples at relative day 0 are dropped to avoid div by 0
+    # relative day is not used in calculation for now
     samples = sorted(acc for acc, day in day_by_sample.items() if day != 0)
     n_used = len(samples)
 
     out = []
     for level, rows in ((HOST, ihv_rows), (POPULATION, cns_rows)):
-        for cls, per_site in _divergence_per_site(rows, samples, gff_feature).items():
+        res = _cal_divergence_per_site(rows, samples, gff_feature)
+        for cls, per_site in res.items():
             out.append(VariantDivPerSiteInfo(
                 region=region,
                 lineage=lineage,
-                host=host,
+                host=hosts,
                 location=location,
                 n_samples=n_used,
                 level=level,
@@ -113,10 +108,10 @@ async def get_divergence_per_site(
 async def _fetch_rows(
     region: str,
     lineage: str,
-    host: str,
+    hosts: List[str],
     location: str,
     n_samples: int,
-    seed: int
+    seed: int = 42,
 ) -> Tuple[List[_AaRow], List[_AaRow]]:
     aa_columns = '''
         p.accession,
@@ -137,7 +132,7 @@ async def _fetch_rows(
                 s.{ColumnNames.collection_start_date} as collection_date
             from {TableNames.samples} s
             left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
-            where s.{ColumnNames.host} = :host
+            where s.{ColumnNames.host} = any(:hosts)
             and gl.{ColumnNames.admin1_name} = :location
             and s.{ColumnNames.collection_start_date} is not null
             and not (
@@ -184,7 +179,7 @@ async def _fetch_rows(
         where c.{ColumnNames.gff_feature} = :region
     '''
     params = {
-        'host': host,
+        'hosts': hosts,
         'location': location,
         'lineage': lineage,
         'seed': str(seed),
@@ -202,7 +197,7 @@ async def _fetch_rows(
 
 
 def _reconstruct_ref_rows(ihv_rows: List[_AaRow]) -> List[_AaRow]:
-    """Add a ref -> ref row per (sample, feature, position, ref codon) carrying 1 - sum(alt freqs)."""
+    """Add a ref -> ref row per (sample, feature, position, ref codon) carrying ref_freq = 1 - sum(alt freqs)."""
     groups: Dict[tuple, List[_AaRow]] = defaultdict(list)
     for r in ihv_rows:
         groups[(r.accession, r.gff_feature, r.position_aa, r.ref_codon)].append(r)
@@ -218,7 +213,7 @@ def _reconstruct_ref_rows(ihv_rows: List[_AaRow]) -> List[_AaRow]:
     return ihv_rows + ref_rows
 
 
-def _prepare(
+def _cal_relative_day(
     ihv_rows: List[_AaRow],
     cns_rows: List[_AaRow]
 ) -> Tuple[List[_AaRow], List[_AaRow], Dict[str, int]]:
@@ -230,10 +225,7 @@ def _prepare(
 
 
 def _call_against_consensus(ihv_rows: List[_AaRow], cns_rows: List[_AaRow]) -> List[_AaRow]:
-    """
-    Minor variants are called against the sample's consensus codon, falling back to the reference
-    codon where the consensus has no change. 
-    """
+    """Minor variants are called against the sample's consensus codon, use ref if no consensus codon."""
     cns_codon: Dict[tuple, str] = {}
     for r in cns_rows:
         key = (r.accession, r.gff_feature, r.position_aa)
@@ -258,7 +250,7 @@ def _annotate(r: _AaRow) -> str:
     return NS
 
 
-def _divergence_per_site(rows: List[_AaRow], samples: List[str], gff_feature: str) -> Dict[str, List[float]]:
+def _cal_divergence_per_site(rows: List[_AaRow], samples: List[str], gff_feature: str) -> Dict[str, List[float]]:
     sample_set = set(samples)
     sums: Dict[str, Dict[str, float]] = {sra: dict.fromkeys(CLASSES, 0.0) for sra in samples}
     for r in rows:
