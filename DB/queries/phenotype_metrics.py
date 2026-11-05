@@ -374,7 +374,8 @@ async def get_pheno_value_for_mutations_by_sample_and_collection_date(
     days: int,
     max_span_days: int,
     samples_where: str | None,
-    lineages_where: str | None
+    lineages_where: str | None,
+    gff_feature: str | None
 ) -> List[Dict]:
     user_where_clause = ''
     if samples_where is not None:
@@ -394,6 +395,12 @@ async def get_pheno_value_for_mutations_by_sample_and_collection_date(
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(date_bin, extra_cols=[ColumnNames.gff_feature])
     order_by_clause = get_order_by_cause(date_bin)
+
+    gff_where_clause = ''
+    gff_param = dict()
+    if gff_feature is not None:
+        gff_where_clause = f'and {ColumnNames.gff_feature} = :{ColumnNames.gff_feature}'
+        gff_param = {ColumnNames.gff_feature: gff_feature}
 
     query = (
         f'''
@@ -423,6 +430,7 @@ async def get_pheno_value_for_mutations_by_sample_and_collection_date(
         inner join {TableNames.cache_cns_pmv_sums} cache using (sample_id)
         inner join phenotype_metrics pm on pm.id = cache.phenotype_metric_id
         where pm.phenotype_metric_name = :pm_name
+        {gff_where_clause}
         {group_by_clause}
         {order_by_clause};
         '''
@@ -433,7 +441,7 @@ async def get_pheno_value_for_mutations_by_sample_and_collection_date(
             {
                 'pm_name': phenotype_metric_name,
                 'max_span_days': max_span_days,
-            }
+            } | gff_param
         )
         rows = res.mappings().all()
     out_data = []

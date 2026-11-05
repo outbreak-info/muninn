@@ -1098,6 +1098,7 @@ async def get_phenotype_metric_values_for_mutations_by_sample_and_collection_dat
         required=False,
         alias='lineages_filter'
     ),
+    gff_feature: str | None = None,
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
 ):
     return await DB.queries.phenotype_metrics.get_pheno_value_for_mutations_by_sample_and_collection_date(
@@ -1106,7 +1107,8 @@ async def get_phenotype_metric_values_for_mutations_by_sample_and_collection_dat
         days,
         max_span_days,
         where,
-        lineages_where
+        lineages_where,
+        gff_feature
     )
 
 
