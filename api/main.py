@@ -185,6 +185,7 @@ _USER_QUERY_SQLSTATES = frozenset(
     {
         '42703',  # undefined_column
         '42702',  # ambiguous_column (e.g. a bare `id` where two joined tables both have one)
+        '42P01',  # undefined_table (e.g. alleles.region where this query doesn't join alleles)
         '42883',  # undefined_function / no operator matches the given types
         '42804',  # datatype_mismatch
         '22P02',  # invalid_text_representation (e.g. a non-numeric value for a numeric column)
