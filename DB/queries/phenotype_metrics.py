@@ -373,11 +373,23 @@ async def get_pheno_value_for_mutations_by_sample_and_collection_date(
     phenotype_metric_name: str,
     days: int,
     max_span_days: int,
-    where: str | None,
+    samples_where: str | None,
+    lineages_where: str | None
 ) -> List[Dict]:
     user_where_clause = ''
-    if where is not None:
-        user_where_clause = f'and ({parser.parse(where)})'
+    if samples_where is not None:
+        user_where_clause = f'and ({parser.parse(samples_where)})'
+
+    lineages_join_and_where = ''
+    if lineages_where is not None:
+        lineages_join_and_where = \
+            f'''
+            inner join samples_lineages sl using (sample_id)
+            inner join lineages l on l.id = sl.lineage_id
+            inner join lineage_systems ls on ls.id = l.lineage_system_id
+            where {parser.parse(lineages_where)}
+            group by sample_id, mid_collection_date
+            '''
 
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(date_bin, extra_cols=[ColumnNames.gff_feature])
@@ -390,11 +402,14 @@ async def get_pheno_value_for_mutations_by_sample_and_collection_date(
                    {MID_COLLECTION_DATE_CALCULATION}
             from samples s
             left join geo_locations gl on gl.id = s.geo_location_id
-            left join samples_lineages sl on sl.sample_id = s.id
-            left join lineages l on l.id = sl.lineage_id
-            left join lineage_systems ls on ls.id = l.lineage_system_id
             where (s.collection_end_date - s.collection_start_date) <= :max_span_days 
             {user_where_clause}
+        ),
+        match_lineages as (
+            select sample_id,
+                   mid_collection_date
+            from matching_samples ms
+            {lineages_join_and_where} 
         )
         select {extract_clause},
                {ColumnNames.gff_feature},
@@ -404,7 +419,7 @@ async def get_pheno_value_for_mutations_by_sample_and_collection_date(
                percentile_cont(0.25) within group (order by n_scored_mutations) as n_scores_q1,
                percentile_cont(0.5) within group (order by n_scored_mutations) as n_scores_median,
                percentile_cont(0.75) within group (order by n_scored_mutations) as n_scores_q3
-        from matching_samples
+        from match_lineages
         inner join {TableNames.cache_cns_pmv_sums} cache using (sample_id)
         inner join phenotype_metrics pm on pm.id = cache.phenotype_metric_id
         where pm.phenotype_metric_name = :pm_name

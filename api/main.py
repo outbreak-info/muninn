@@ -1090,9 +1090,14 @@ async def get_phenotype_metric_values_for_mutations_by_sample_and_collection_dat
     date_bin: DateBinParam = DateBinOpt.month,
     days: DaysParam = DEFAULT_DAYS,
     where: str | None = filter_query(
-        'Optional: over all `samples` columns plus the joined `geo_locations` columns (raw names, e.g. admin1_name/country_name) and `lineages`/`lineage_systems` columns (lineage_name, lineage_system_name). alleles/amino_acids columns are NOT joined and cannot be filtered on.',
+        'Optional: over all `samples` columns plus the joined `geo_locations` columns (raw names, e.g. admin1_name/country_name). alleles/amino_acids columns are NOT joined and cannot be filtered on.',
         required=False
         ),
+    lineages_where: str | None = filter_query(
+        'Optional: over columns of lineage tables. `lineage_name` and `lineage_system_name` are what you want.',
+        required=False,
+        alias='lineages_filter'
+    ),
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
 ):
     return await DB.queries.phenotype_metrics.get_pheno_value_for_mutations_by_sample_and_collection_date(
@@ -1101,6 +1106,7 @@ async def get_phenotype_metric_values_for_mutations_by_sample_and_collection_dat
         days,
         max_span_days,
         where,
+        lineages_where
     )
 
 
