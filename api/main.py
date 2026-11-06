@@ -597,11 +597,14 @@ async def get_divergence_per_site(
         required=False
     ),
 ):
-    return await DB.queries.dN_dS.get_divergence_per_site(
-        region,
-        lineage,
-        where,
-    )
+    try:
+        return await DB.queries.dN_dS.get_divergence_per_site(
+            region,
+            lineage,
+            where,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 #############

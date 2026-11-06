@@ -18,7 +18,8 @@ S, NS, STOP = 'S', 'NS', 'Stop'
 CLASSES = (NS, S, STOP)
 METRIC_NAMES = {NS: 'dn', S: 'ds', STOP: 'dstop'}
 HOST, POPULATION = 'Host', 'Population'
-DEFAULT_N_SAMPLES = 10
+MIN_N_SAMPLES = 10 # if n_eligible < min, return error; else compare with max
+MAX_N_SAMPLES = 100 # if n_eligible > max, return max; else return n_eligible
 
 # Number of non-synonymous / synonymous / stop sites per GFF feature: {gff_feature: (NS, S, Stop)}.
 N_SITES: Dict[str, Tuple[float, float, float]] = {
@@ -70,19 +71,25 @@ async def get_divergence_per_site(
     region: str,
     lineage: str,
     where: str | None = None,
-    n_samples: int = DEFAULT_N_SAMPLES,
     seed: int = 42
 ) -> List['VariantDivPerSiteInfo']:
-    gff_feature = _REGION_PATTERN.match(region)["gff_feature"]
+    m = _REGION_PATTERN.match(region)
+    if m is None:
+        raise ValueError(f"Unknown region {region!r}; must be one of the known GFF features followed by '_<reference>'")
+    gff_feature = m["gff_feature"]
 
-    ihv_rows, cns_rows = await _fetch_rows(region, lineage, where, n_samples, seed)
+    accessions = await _fetch_eligible_accessions(lineage, where, seed)
+    if len(accessions) < MIN_N_SAMPLES:
+        raise ValueError(f"Only {len(accessions)} sample(s) match the query; at least {MIN_N_SAMPLES} are required.")
+
+    ihv_rows, cns_rows = await _fetch_rows(region, accessions)
     ihv_rows = _reconstruct_ref_rows(ihv_rows)
     ihv_rows, cns_rows, day_by_sample = _cal_relative_day(ihv_rows, cns_rows)
 
     ihv_rows = _call_against_consensus(ihv_rows, cns_rows)
     cns_rows = [r._replace(alt_freq=1.0) for r in cns_rows if r.ref_aa != 'X' and r.alt_aa != 'X']
 
-    #   samples = sorted(acc for acc, day in day_by_sample.items() if day != 0)
+    # samples = sorted(acc for acc, day in day_by_sample.items() if day != 0)
     samples = sorted(day_by_sample)
 
     out = []
@@ -99,17 +106,43 @@ async def get_divergence_per_site(
 
 
 def _mean_and_ci(values: List[float]) -> Dict[str, float | None]:
-    mean = statistics.fmean(values) 
+    mean = statistics.fmean(values)
     half_width = statistics.NormalDist().inv_cdf(0.975) * statistics.stdev(values) / math.sqrt(len(values))
     return {'mean': mean, 'ci_lower': mean - half_width, 'ci_upper': mean + half_width}
 
 
+async def _fetch_eligible_accessions(lineage: str, where: str | None, seed: int) -> List[str]:
+    user_where_clause = ''
+    if where is not None:
+        user_where_clause = f'and ({parser.parse(where)})'
+
+    query = f'''
+        select s.{ColumnNames.accession} as accession
+        from {TableNames.samples} s
+        left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
+        where s.{ColumnNames.collection_start_date} is not null
+        and not (
+            extract(month from s.{ColumnNames.collection_start_date}) = 1
+            and extract(day from s.{ColumnNames.collection_start_date}) = 1
+        )
+        and s.id in (
+            select sl.{ColumnNames.sample_id}
+            from {TableNames.samples_lineages} sl
+            inner join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id}
+            where l.{ColumnNames.lineage_name} = :lineage
+        )
+        {user_where_clause}
+        order by md5(s.{ColumnNames.accession} || :seed)
+        limit :max_samples
+    '''
+    async with get_async_session() as session:
+        res = await session.execute(text(query), {'lineage': lineage, 'seed': str(seed), 'max_samples': MAX_N_SAMPLES})
+        return [row['accession'] for row in res.mappings().all()]
+
+
 async def _fetch_rows(
     region: str,
-    lineage: str,
-    where: str | None,
-    n_samples: int,
-    seed: int,
+    accessions: List[str],
 ) -> Tuple[List[_AaRow], List[_AaRow]]:
     aa_columns = '''
         p.accession,
@@ -122,10 +155,6 @@ async def _fetch_rows(
         c.alt_codon
     '''
 
-    user_where_clause = ''
-    if where is not None:
-        user_where_clause = f'and ({parser.parse(where)})'
-
     query = f'''
         with picked as (
             select
@@ -133,21 +162,7 @@ async def _fetch_rows(
                 s.{ColumnNames.accession} as accession,
                 s.{ColumnNames.collection_start_date} as collection_date
             from {TableNames.samples} s
-            left join {TableNames.geo_locations} gl on gl.id = s.{ColumnNames.geo_location_id}
-            where s.{ColumnNames.collection_start_date} is not null
-            and not (
-                extract(month from s.{ColumnNames.collection_start_date}) = 1
-                and extract(day from s.{ColumnNames.collection_start_date}) = 1
-            )
-            and s.id in (
-                select sl.{ColumnNames.sample_id}
-                from {TableNames.samples_lineages} sl
-                inner join {TableNames.lineages} l on l.id = sl.{ColumnNames.lineage_id}
-                where l.{ColumnNames.lineage_name} = :lineage
-            )
-            {user_where_clause}
-            order by md5(s.{ColumnNames.accession} || :seed)
-            limit :n_samples
+            where s.{ColumnNames.accession} = any(:accessions)
         ),
         picked_bm as (
             select coalesce(rb_build_agg(id), rb_build('{{}}')) as bm
@@ -179,15 +194,9 @@ async def _fetch_rows(
         inner join picked p on p.id = u.{ColumnNames.sample_id}
         where c.{ColumnNames.gff_feature} = :region
     '''
-    params = {
-        'lineage': lineage,
-        'seed': str(seed),
-        'n_samples': n_samples,
-        'region': region,
-    }
 
     async with get_async_session() as session:
-        res = await session.execute(text(query), params)
+        res = await session.execute(text(query), {'accessions': accessions, 'region': region})
         ihv_rows, cns_rows = [], []
         for row in res.mappings().all():
             target = ihv_rows if row['level'] == HOST else cns_rows
