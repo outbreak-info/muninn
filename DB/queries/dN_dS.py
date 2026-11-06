@@ -18,7 +18,7 @@ S, NS, STOP = 'S', 'NS', 'Stop'
 CLASSES = (NS, S, STOP)
 METRIC_NAMES = {NS: 'dn', S: 'ds', STOP: 'dstop'}
 HOST, POPULATION = 'Host', 'Population'
-DEFAULT_N_SAMPLES = 100
+DEFAULT_N_SAMPLES = 10
 
 # Number of non-synonymous / synonymous / stop sites per GFF feature: {gff_feature: (NS, S, Stop)}.
 N_SITES: Dict[str, Tuple[float, float, float]] = {
@@ -82,9 +82,8 @@ async def get_divergence_per_site(
     ihv_rows = _call_against_consensus(ihv_rows, cns_rows)
     cns_rows = [r._replace(alt_freq=1.0) for r in cns_rows if r.ref_aa != 'X' and r.alt_aa != 'X']
 
-    # samples at relative day 0 are dropped to avoid div by 0
-    # relative day is not used in calculation for now
-    samples = sorted(acc for acc, day in day_by_sample.items() if day != 0)
+    #   samples = sorted(acc for acc, day in day_by_sample.items() if day != 0)
+    samples = sorted(day_by_sample)
 
     out = []
     for level, rows in ((HOST, ihv_rows), (POPULATION, cns_rows)):
