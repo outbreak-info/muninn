@@ -160,7 +160,8 @@ MaxAltFreqParam = Annotated[float, Query(
 GffFeatureParam = Annotated[str | None, Query(
     description='Optional: return only this GFF feature (amino_acids.gff_feature, e.g. '
                 'YP_009724390.1_NC_045512.2 for SARS-CoV-2 spike); omit for one row per feature. List '
-                'valid values with GET /v1/mutations:gffFeatures. An unknown feature returns an empty list.'
+                'valid values with GET /v1/mutations:gffFeatures, or only those a given phenotype metric '
+                'scores with GET /v1/phenotypeMetrics:gffFeature. An unknown feature returns an empty list.'
 )]
 
 
@@ -1017,6 +1018,24 @@ async def get_mutation_profile(
 )
 async def get_all_phenotype_metrics():
     return await DB.queries.phenotype_metrics.get_all_pheno_metrics()
+
+
+@router.get(
+    '/phenotypeMetrics:gffFeature',
+    response_model=List[str],
+    tags=[TAG_PHENOTYPE],
+    summary='List the GFF features (genes/products) that a phenotype metric has scores for'
+)
+async def get_phenotype_metric_gff_features(
+    phenotype_metric_name: str = Query(
+        ...,
+        description='Phenotype metric, matched against phenotype_metrics.phenotype_metric_name (e.g. delta_bind). '
+                    'Returns the distinct amino_acids.gff_feature values of the amino-acid changes this metric '
+                    'scores, usable as the gff_feature param of the phenotypeMetricValues aggregate endpoints. '
+                    'Empty list if the metric name is unknown.'
+    ),
+):
+    return await DB.queries.phenotype_metrics.get_gff_features_for_pheno_metric(phenotype_metric_name)
 
 
 @router.get(

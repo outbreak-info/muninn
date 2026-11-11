@@ -42,6 +42,20 @@ async def get_min_max_pheno_metric_value(phenotype_metric_name: str) -> List:
     return [min_val, max_val]
 
 
+async def get_gff_features_for_pheno_metric(phenotype_metric_name: str) -> List[str]:
+    query = f"""
+        select distinct aa.{ColumnNames.gff_feature}
+        from {TableNames.phenotype_metric_values} pmv
+        inner join {TableNames.phenotype_metrics} pm on pm.id = pmv.{ColumnNames.phenotype_metric_id}
+        inner join {TableNames.amino_acids} aa on aa.id = pmv.{ColumnNames.amino_acid_id}
+        where pm.{ColumnNames.phenotype_metric_name} = :pm_name
+        order by aa.{ColumnNames.gff_feature}
+    """
+    async with get_async_session() as session:
+        res = await session.execute(text(query), {'pm_name': phenotype_metric_name})
+    return [row[0] for row in res.all()]
+
+
 async def count_variants_or_mutations_gte_pheno_value_by_collection_date(
     date_bin: DateBinOpt,
     phenotype_metric_name: str,
