@@ -59,3 +59,25 @@ class TestTokenizer(unittest.TestCase):
             while True:
                 if not lexer.token():
                     break
+
+    def test_wildcard_words(self):
+        for w in ['XFG*', 'XFG.3*', 'B.1.1.7*', 'A*', 'foo_bar*']:
+            with self.subTest(word=w):
+                lexer.input(w)
+                tok = lexer.token()
+                self.assertEqual(('WILDCARD_WORD', w), (tok.type, tok.value))
+                self.assertIsNone(lexer.token())
+
+        # a value without '*' is still a plain WORD
+        lexer.input('XFG.3')
+        self.assertEqual('WORD', lexer.token().type)
+
+    def test_wildcards_not_allowed(self):
+        def tester(s):
+            lexer.input(s)
+            while lexer.token():
+                pass
+
+        for w in ['*', 'XFG**', 'foo-*', '*XFG', 'XFG *']:
+            with self.subTest(word=w):
+                self.assertRaises(ParsingError, tester, w)

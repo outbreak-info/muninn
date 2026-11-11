@@ -11,40 +11,43 @@ Rule 5     expression -> LPAREN expression RPAREN
 Rule 6     term -> LPAREN term RPAREN
 Rule 7     term -> field EQUALS value
 Rule 8     term -> field NOT_EQUALS value
-Rule 9     term -> field GT comparable
-Rule 10    term -> field LT comparable
-Rule 11    term -> field GTE comparable
-Rule 12    term -> field LTE comparable
-Rule 13    term -> field
-Rule 14    value -> WORD
-Rule 15    field -> WORD
-Rule 16    value -> comparable
-Rule 17    comparable -> NUMBER
-Rule 18    comparable -> DATE
+Rule 9     term -> field EQUALS WILDCARD_WORD
+Rule 10    term -> field NOT_EQUALS WILDCARD_WORD
+Rule 11    term -> field GT comparable
+Rule 12    term -> field LT comparable
+Rule 13    term -> field GTE comparable
+Rule 14    term -> field LTE comparable
+Rule 15    term -> field
+Rule 16    value -> WORD
+Rule 17    field -> WORD
+Rule 18    value -> comparable
+Rule 19    comparable -> NUMBER
+Rule 20    comparable -> DATE
 
 Terminals, with rules where they appear
 
 AND                  : 1
-DATE                 : 18
-EQUALS               : 7
-GT                   : 9
-GTE                  : 11
+DATE                 : 20
+EQUALS               : 7 9
+GT                   : 11
+GTE                  : 13
 LPAREN               : 5 6
-LT                   : 10
-LTE                  : 12
+LT                   : 12
+LTE                  : 14
 NOT                  : 3
-NOT_EQUALS           : 8
-NUMBER               : 17
+NOT_EQUALS           : 8 10
+NUMBER               : 19
 OR                   : 2
 RPAREN               : 5 6
-WORD                 : 14 15
+WILDCARD_WORD        : 9 10
+WORD                 : 16 17
 error                : 
 
 Nonterminals, with rules where they appear
 
-comparable           : 9 10 11 12 16
+comparable           : 11 12 13 14 18
 expression           : 1 1 2 2 3 5 0
-field                : 7 8 9 10 11 12 13
+field                : 7 8 9 10 11 12 13 14 15
 term                 : 4 6
 value                : 7 8
 
@@ -61,12 +64,14 @@ state 0
     (6) term -> . LPAREN term RPAREN
     (7) term -> . field EQUALS value
     (8) term -> . field NOT_EQUALS value
-    (9) term -> . field GT comparable
-    (10) term -> . field LT comparable
-    (11) term -> . field GTE comparable
-    (12) term -> . field LTE comparable
-    (13) term -> . field
-    (15) field -> . WORD
+    (9) term -> . field EQUALS WILDCARD_WORD
+    (10) term -> . field NOT_EQUALS WILDCARD_WORD
+    (11) term -> . field GT comparable
+    (12) term -> . field LT comparable
+    (13) term -> . field GTE comparable
+    (14) term -> . field LTE comparable
+    (15) term -> . field
+    (17) field -> . WORD
 
     NOT             shift and go to state 2
     LPAREN          shift and go to state 4
@@ -97,12 +102,14 @@ state 2
     (6) term -> . LPAREN term RPAREN
     (7) term -> . field EQUALS value
     (8) term -> . field NOT_EQUALS value
-    (9) term -> . field GT comparable
-    (10) term -> . field LT comparable
-    (11) term -> . field GTE comparable
-    (12) term -> . field LTE comparable
-    (13) term -> . field
-    (15) field -> . WORD
+    (9) term -> . field EQUALS WILDCARD_WORD
+    (10) term -> . field NOT_EQUALS WILDCARD_WORD
+    (11) term -> . field GT comparable
+    (12) term -> . field LT comparable
+    (13) term -> . field GTE comparable
+    (14) term -> . field LTE comparable
+    (15) term -> . field
+    (17) field -> . WORD
 
     NOT             shift and go to state 2
     LPAREN          shift and go to state 4
@@ -134,12 +141,14 @@ state 4
     (6) term -> . LPAREN term RPAREN
     (7) term -> . field EQUALS value
     (8) term -> . field NOT_EQUALS value
-    (9) term -> . field GT comparable
-    (10) term -> . field LT comparable
-    (11) term -> . field GTE comparable
-    (12) term -> . field LTE comparable
-    (13) term -> . field
-    (15) field -> . WORD
+    (9) term -> . field EQUALS WILDCARD_WORD
+    (10) term -> . field NOT_EQUALS WILDCARD_WORD
+    (11) term -> . field GT comparable
+    (12) term -> . field LT comparable
+    (13) term -> . field GTE comparable
+    (14) term -> . field LTE comparable
+    (15) term -> . field
+    (17) field -> . WORD
 
     NOT             shift and go to state 2
     LPAREN          shift and go to state 4
@@ -153,11 +162,13 @@ state 5
 
     (7) term -> field . EQUALS value
     (8) term -> field . NOT_EQUALS value
-    (9) term -> field . GT comparable
-    (10) term -> field . LT comparable
-    (11) term -> field . GTE comparable
-    (12) term -> field . LTE comparable
-    (13) term -> field .
+    (9) term -> field . EQUALS WILDCARD_WORD
+    (10) term -> field . NOT_EQUALS WILDCARD_WORD
+    (11) term -> field . GT comparable
+    (12) term -> field . LT comparable
+    (13) term -> field . GTE comparable
+    (14) term -> field . LTE comparable
+    (15) term -> field .
 
     EQUALS          shift and go to state 12
     NOT_EQUALS      shift and go to state 13
@@ -165,26 +176,26 @@ state 5
     LT              shift and go to state 15
     GTE             shift and go to state 16
     LTE             shift and go to state 17
-    AND             reduce using rule 13 (term -> field .)
-    OR              reduce using rule 13 (term -> field .)
-    $end            reduce using rule 13 (term -> field .)
-    RPAREN          reduce using rule 13 (term -> field .)
+    AND             reduce using rule 15 (term -> field .)
+    OR              reduce using rule 15 (term -> field .)
+    $end            reduce using rule 15 (term -> field .)
+    RPAREN          reduce using rule 15 (term -> field .)
 
 
 state 6
 
-    (15) field -> WORD .
+    (17) field -> WORD .
 
-    EQUALS          reduce using rule 15 (field -> WORD .)
-    NOT_EQUALS      reduce using rule 15 (field -> WORD .)
-    GT              reduce using rule 15 (field -> WORD .)
-    LT              reduce using rule 15 (field -> WORD .)
-    GTE             reduce using rule 15 (field -> WORD .)
-    LTE             reduce using rule 15 (field -> WORD .)
-    AND             reduce using rule 15 (field -> WORD .)
-    OR              reduce using rule 15 (field -> WORD .)
-    $end            reduce using rule 15 (field -> WORD .)
-    RPAREN          reduce using rule 15 (field -> WORD .)
+    EQUALS          reduce using rule 17 (field -> WORD .)
+    NOT_EQUALS      reduce using rule 17 (field -> WORD .)
+    GT              reduce using rule 17 (field -> WORD .)
+    LT              reduce using rule 17 (field -> WORD .)
+    GTE             reduce using rule 17 (field -> WORD .)
+    LTE             reduce using rule 17 (field -> WORD .)
+    AND             reduce using rule 17 (field -> WORD .)
+    OR              reduce using rule 17 (field -> WORD .)
+    $end            reduce using rule 17 (field -> WORD .)
+    RPAREN          reduce using rule 17 (field -> WORD .)
 
 
 state 7
@@ -198,12 +209,14 @@ state 7
     (6) term -> . LPAREN term RPAREN
     (7) term -> . field EQUALS value
     (8) term -> . field NOT_EQUALS value
-    (9) term -> . field GT comparable
-    (10) term -> . field LT comparable
-    (11) term -> . field GTE comparable
-    (12) term -> . field LTE comparable
-    (13) term -> . field
-    (15) field -> . WORD
+    (9) term -> . field EQUALS WILDCARD_WORD
+    (10) term -> . field NOT_EQUALS WILDCARD_WORD
+    (11) term -> . field GT comparable
+    (12) term -> . field LT comparable
+    (13) term -> . field GTE comparable
+    (14) term -> . field LTE comparable
+    (15) term -> . field
+    (17) field -> . WORD
 
     NOT             shift and go to state 2
     LPAREN          shift and go to state 4
@@ -224,12 +237,14 @@ state 8
     (6) term -> . LPAREN term RPAREN
     (7) term -> . field EQUALS value
     (8) term -> . field NOT_EQUALS value
-    (9) term -> . field GT comparable
-    (10) term -> . field LT comparable
-    (11) term -> . field GTE comparable
-    (12) term -> . field LTE comparable
-    (13) term -> . field
-    (15) field -> . WORD
+    (9) term -> . field EQUALS WILDCARD_WORD
+    (10) term -> . field NOT_EQUALS WILDCARD_WORD
+    (11) term -> . field GT comparable
+    (12) term -> . field LT comparable
+    (13) term -> . field GTE comparable
+    (14) term -> . field LTE comparable
+    (15) term -> . field
+    (17) field -> . WORD
 
     NOT             shift and go to state 2
     LPAREN          shift and go to state 4
@@ -281,76 +296,80 @@ state 11
 state 12
 
     (7) term -> field EQUALS . value
-    (14) value -> . WORD
-    (16) value -> . comparable
-    (17) comparable -> . NUMBER
-    (18) comparable -> . DATE
+    (9) term -> field EQUALS . WILDCARD_WORD
+    (16) value -> . WORD
+    (18) value -> . comparable
+    (19) comparable -> . NUMBER
+    (20) comparable -> . DATE
 
-    WORD            shift and go to state 23
-    NUMBER          shift and go to state 25
-    DATE            shift and go to state 26
+    WILDCARD_WORD   shift and go to state 23
+    WORD            shift and go to state 24
+    NUMBER          shift and go to state 26
+    DATE            shift and go to state 27
 
     value                          shift and go to state 22
-    comparable                     shift and go to state 24
+    comparable                     shift and go to state 25
 
 state 13
 
     (8) term -> field NOT_EQUALS . value
-    (14) value -> . WORD
-    (16) value -> . comparable
-    (17) comparable -> . NUMBER
-    (18) comparable -> . DATE
+    (10) term -> field NOT_EQUALS . WILDCARD_WORD
+    (16) value -> . WORD
+    (18) value -> . comparable
+    (19) comparable -> . NUMBER
+    (20) comparable -> . DATE
 
-    WORD            shift and go to state 23
-    NUMBER          shift and go to state 25
-    DATE            shift and go to state 26
+    WILDCARD_WORD   shift and go to state 29
+    WORD            shift and go to state 24
+    NUMBER          shift and go to state 26
+    DATE            shift and go to state 27
 
-    value                          shift and go to state 27
-    comparable                     shift and go to state 24
+    value                          shift and go to state 28
+    comparable                     shift and go to state 25
 
 state 14
 
-    (9) term -> field GT . comparable
-    (17) comparable -> . NUMBER
-    (18) comparable -> . DATE
+    (11) term -> field GT . comparable
+    (19) comparable -> . NUMBER
+    (20) comparable -> . DATE
 
-    NUMBER          shift and go to state 25
-    DATE            shift and go to state 26
-
-    comparable                     shift and go to state 28
-
-state 15
-
-    (10) term -> field LT . comparable
-    (17) comparable -> . NUMBER
-    (18) comparable -> . DATE
-
-    NUMBER          shift and go to state 25
-    DATE            shift and go to state 26
-
-    comparable                     shift and go to state 29
-
-state 16
-
-    (11) term -> field GTE . comparable
-    (17) comparable -> . NUMBER
-    (18) comparable -> . DATE
-
-    NUMBER          shift and go to state 25
-    DATE            shift and go to state 26
+    NUMBER          shift and go to state 26
+    DATE            shift and go to state 27
 
     comparable                     shift and go to state 30
 
-state 17
+state 15
 
-    (12) term -> field LTE . comparable
-    (17) comparable -> . NUMBER
-    (18) comparable -> . DATE
+    (12) term -> field LT . comparable
+    (19) comparable -> . NUMBER
+    (20) comparable -> . DATE
 
-    NUMBER          shift and go to state 25
-    DATE            shift and go to state 26
+    NUMBER          shift and go to state 26
+    DATE            shift and go to state 27
 
     comparable                     shift and go to state 31
+
+state 16
+
+    (13) term -> field GTE . comparable
+    (19) comparable -> . NUMBER
+    (20) comparable -> . DATE
+
+    NUMBER          shift and go to state 26
+    DATE            shift and go to state 27
+
+    comparable                     shift and go to state 32
+
+state 17
+
+    (14) term -> field LTE . comparable
+    (19) comparable -> . NUMBER
+    (20) comparable -> . DATE
+
+    NUMBER          shift and go to state 26
+    DATE            shift and go to state 27
+
+    comparable                     shift and go to state 33
 
 state 18
 
@@ -414,45 +433,55 @@ state 22
 
 state 23
 
-    (14) value -> WORD .
+    (9) term -> field EQUALS WILDCARD_WORD .
 
-    AND             reduce using rule 14 (value -> WORD .)
-    OR              reduce using rule 14 (value -> WORD .)
-    $end            reduce using rule 14 (value -> WORD .)
-    RPAREN          reduce using rule 14 (value -> WORD .)
+    AND             reduce using rule 9 (term -> field EQUALS WILDCARD_WORD .)
+    OR              reduce using rule 9 (term -> field EQUALS WILDCARD_WORD .)
+    $end            reduce using rule 9 (term -> field EQUALS WILDCARD_WORD .)
+    RPAREN          reduce using rule 9 (term -> field EQUALS WILDCARD_WORD .)
 
 
 state 24
 
-    (16) value -> comparable .
+    (16) value -> WORD .
 
-    AND             reduce using rule 16 (value -> comparable .)
-    OR              reduce using rule 16 (value -> comparable .)
-    $end            reduce using rule 16 (value -> comparable .)
-    RPAREN          reduce using rule 16 (value -> comparable .)
+    AND             reduce using rule 16 (value -> WORD .)
+    OR              reduce using rule 16 (value -> WORD .)
+    $end            reduce using rule 16 (value -> WORD .)
+    RPAREN          reduce using rule 16 (value -> WORD .)
 
 
 state 25
 
-    (17) comparable -> NUMBER .
+    (18) value -> comparable .
 
-    AND             reduce using rule 17 (comparable -> NUMBER .)
-    OR              reduce using rule 17 (comparable -> NUMBER .)
-    $end            reduce using rule 17 (comparable -> NUMBER .)
-    RPAREN          reduce using rule 17 (comparable -> NUMBER .)
+    AND             reduce using rule 18 (value -> comparable .)
+    OR              reduce using rule 18 (value -> comparable .)
+    $end            reduce using rule 18 (value -> comparable .)
+    RPAREN          reduce using rule 18 (value -> comparable .)
 
 
 state 26
 
-    (18) comparable -> DATE .
+    (19) comparable -> NUMBER .
 
-    AND             reduce using rule 18 (comparable -> DATE .)
-    OR              reduce using rule 18 (comparable -> DATE .)
-    $end            reduce using rule 18 (comparable -> DATE .)
-    RPAREN          reduce using rule 18 (comparable -> DATE .)
+    AND             reduce using rule 19 (comparable -> NUMBER .)
+    OR              reduce using rule 19 (comparable -> NUMBER .)
+    $end            reduce using rule 19 (comparable -> NUMBER .)
+    RPAREN          reduce using rule 19 (comparable -> NUMBER .)
 
 
 state 27
+
+    (20) comparable -> DATE .
+
+    AND             reduce using rule 20 (comparable -> DATE .)
+    OR              reduce using rule 20 (comparable -> DATE .)
+    $end            reduce using rule 20 (comparable -> DATE .)
+    RPAREN          reduce using rule 20 (comparable -> DATE .)
+
+
+state 28
 
     (8) term -> field NOT_EQUALS value .
 
@@ -462,44 +491,54 @@ state 27
     RPAREN          reduce using rule 8 (term -> field NOT_EQUALS value .)
 
 
-state 28
-
-    (9) term -> field GT comparable .
-
-    AND             reduce using rule 9 (term -> field GT comparable .)
-    OR              reduce using rule 9 (term -> field GT comparable .)
-    $end            reduce using rule 9 (term -> field GT comparable .)
-    RPAREN          reduce using rule 9 (term -> field GT comparable .)
-
-
 state 29
 
-    (10) term -> field LT comparable .
+    (10) term -> field NOT_EQUALS WILDCARD_WORD .
 
-    AND             reduce using rule 10 (term -> field LT comparable .)
-    OR              reduce using rule 10 (term -> field LT comparable .)
-    $end            reduce using rule 10 (term -> field LT comparable .)
-    RPAREN          reduce using rule 10 (term -> field LT comparable .)
+    AND             reduce using rule 10 (term -> field NOT_EQUALS WILDCARD_WORD .)
+    OR              reduce using rule 10 (term -> field NOT_EQUALS WILDCARD_WORD .)
+    $end            reduce using rule 10 (term -> field NOT_EQUALS WILDCARD_WORD .)
+    RPAREN          reduce using rule 10 (term -> field NOT_EQUALS WILDCARD_WORD .)
 
 
 state 30
 
-    (11) term -> field GTE comparable .
+    (11) term -> field GT comparable .
 
-    AND             reduce using rule 11 (term -> field GTE comparable .)
-    OR              reduce using rule 11 (term -> field GTE comparable .)
-    $end            reduce using rule 11 (term -> field GTE comparable .)
-    RPAREN          reduce using rule 11 (term -> field GTE comparable .)
+    AND             reduce using rule 11 (term -> field GT comparable .)
+    OR              reduce using rule 11 (term -> field GT comparable .)
+    $end            reduce using rule 11 (term -> field GT comparable .)
+    RPAREN          reduce using rule 11 (term -> field GT comparable .)
 
 
 state 31
 
-    (12) term -> field LTE comparable .
+    (12) term -> field LT comparable .
 
-    AND             reduce using rule 12 (term -> field LTE comparable .)
-    OR              reduce using rule 12 (term -> field LTE comparable .)
-    $end            reduce using rule 12 (term -> field LTE comparable .)
-    RPAREN          reduce using rule 12 (term -> field LTE comparable .)
+    AND             reduce using rule 12 (term -> field LT comparable .)
+    OR              reduce using rule 12 (term -> field LT comparable .)
+    $end            reduce using rule 12 (term -> field LT comparable .)
+    RPAREN          reduce using rule 12 (term -> field LT comparable .)
+
+
+state 32
+
+    (13) term -> field GTE comparable .
+
+    AND             reduce using rule 13 (term -> field GTE comparable .)
+    OR              reduce using rule 13 (term -> field GTE comparable .)
+    $end            reduce using rule 13 (term -> field GTE comparable .)
+    RPAREN          reduce using rule 13 (term -> field GTE comparable .)
+
+
+state 33
+
+    (14) term -> field LTE comparable .
+
+    AND             reduce using rule 14 (term -> field LTE comparable .)
+    OR              reduce using rule 14 (term -> field LTE comparable .)
+    $end            reduce using rule 14 (term -> field LTE comparable .)
+    RPAREN          reduce using rule 14 (term -> field LTE comparable .)
 
 WARNING: 
 WARNING: Conflicts:

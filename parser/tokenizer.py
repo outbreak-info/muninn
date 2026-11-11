@@ -18,6 +18,7 @@ tokens = (
     'LT',
     'GTE',
     'LTE',
+    'WILDCARD_WORD',
 )
 
 
@@ -34,6 +35,14 @@ t_LT = r'<'
 t_GTE = r'>='
 t_LTE = r'<='
 
+
+
+# Function tokens are tried before string tokens (in definition order), so this must stay a
+# function for 'XFG*' to lex as one WILDCARD_WORD rather than WORD 'XFG' plus an illegal '*'.
+# Same characters as WORD, ending in a word character and a single trailing '*'.
+def t_WILDCARD_WORD(t):
+    r'\b[a-zA-Z]([\w\-:\. ]*\w)?\*'
+    return t
 
 
 def t_DATE(t):

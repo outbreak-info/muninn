@@ -1,5 +1,7 @@
 import ply.yacc as yacc
 
+from DB.queries.lineage_helpers import get_lineage_filter_sql
+from utils.constants import ColumnNames
 from utils.errors import ParsingError
 from .tokenizer import tokens
 
@@ -49,6 +51,25 @@ def p_term_eq(p):
 def p_term_neq(p):
     'term : field NOT_EQUALS value'
     p[0] = f'{p[1]} <> {p[3]}'
+
+
+# Not prefixed with p_, so PLY doesn't take it for a grammar rule.
+def _wildcard_lineage_term(field: str, value: str, negate: bool) -> str:
+    if field != ColumnNames.lineage_name:
+        raise ParsingError(
+            f"The '*' wildcard is only supported on {ColumnNames.lineage_name} (got '{field}')."
+        )
+    return get_lineage_filter_sql(value, negate=negate)
+
+
+def p_term_eq_wildcard(p):
+    'term : field EQUALS WILDCARD_WORD'
+    p[0] = _wildcard_lineage_term(p[1], p[3], negate=False)
+
+
+def p_term_neq_wildcard(p):
+    'term : field NOT_EQUALS WILDCARD_WORD'
+    p[0] = _wildcard_lineage_term(p[1], p[3], negate=True)
 
 
 def p_term_gt(p):

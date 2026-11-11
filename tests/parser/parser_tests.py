@@ -1,6 +1,7 @@
 import unittest
 
 from utils.errors import ParsingError
+from DB.queries.lineage_helpers import get_lineage_filter_sql
 from parser.parser import parser
 
 
@@ -170,3 +171,42 @@ class TestParser(unittest.TestCase):
         self.assertRaises(ParsingError, parser.parse, 'is_ww_sample=')
         self.assertRaises(ParsingError, parser.parse, '!is_ww_sample=')
         self.assertRaises(ParsingError, parser.parse, '=is_ww_sample')
+
+    def test_lineage_wildcard(self):
+        res = parser.parse('lineage_name = XFG*')
+        self.assertEqual(res, get_lineage_filter_sql('XFG*'))
+        self.assertTrue(res.startswith('((lineage_name, lineage_system_name) in ('))
+        self.assertIn("l.lineage_name = 'XFG'", res)
+        self.assertIn('lineages_deep_children', res)
+        self.assertNotIn('*', res)
+
+        res = parser.parse('lineage_name != B.1.1.7*')
+        self.assertEqual(res, get_lineage_filter_sql('B.1.1.7*', negate=True))
+        self.assertTrue(res.startswith('((lineage_name, lineage_system_name) not in ('))
+
+    def test_lineage_wildcard_composes(self):
+        wild = get_lineage_filter_sql('XFG*')
+        res = parser.parse('lineage_name = XFG* ^ lineage_system_name = PANGO')
+        self.assertEqual(f"{wild} AND lineage_system_name = 'PANGO'", res)
+
+        res = parser.parse('host = cat ^ !(lineage_name = XFG* | lineage_name = BA.2)')
+        self.assertEqual(f"host = 'cat' AND NOT ({wild} OR lineage_name = 'BA.2')", res)
+
+    def test_wildcard_only_on_lineage_name(self):
+        self.assertRaises(ParsingError, parser.parse, 'host = cat*')
+        self.assertRaises(ParsingError, parser.parse, 'lineage_system_name = PANGO*')
+
+    def test_bad_wildcards(self):
+        for f in [
+            'lineage_name = *',
+            'lineage_name = XFG**',
+            'lineage_name = X*G',
+            'lineage_name = XFG *',
+            'lineage_name = foo-*',
+            'lineage_name* = XFG',
+            'lineage_name > XFG*',
+            'lineage_name <= XFG*',
+            "lineage_name = XFG'*",
+        ]:
+            with self.subTest(filter=f):
+                self.assertRaises(ParsingError, parser.parse, f)
