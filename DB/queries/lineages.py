@@ -8,6 +8,7 @@ from DB.queries.date_count_helpers import get_extract_clause, get_group_by_claus
     YEAR, CHUNK, BIN_START, BIN_END, MID_COLLECTION_DATE_CALCULATION
 from api.models import LineageCountInfo, LineageAbundanceInfo, LineageInfo, LineageAbundanceSummaryInfo, \
     LineageCountWithPrevalenceInfo, MutationProfileWithPrevalenceInfo, LineageRelationshipsInfo
+from DB.queries.lineage_helpers import get_lineage_ids_query, parse_lineage_name
 from parser.parser import parser
 from utils.constants import DateBinOpt, NtOrAa, NUCLEOTIDE_CHARACTERS, TableNames, ColumnNames, COLLECTION_DATE
 
@@ -306,23 +307,25 @@ async def get_lineage_counts_over_time(
     """
     Per-collection-date-bin sample counts per lineage over consensus lineage calls only, optionally
     restricted to a single lineage and/or to samples whose collection midpoint is within the last
-    `days_before_today` days.
+    `days_before_today` days. A trailing '*' on `lineage` (e.g. 'XFG*') sums the lineage and all its
+    descendants into one row per bin and lineage system, reported under the requested name.
     """
     user_where_clause = ''
     if where is not None:
         user_where_clause = f'and ({parser.parse(where)})'
 
-    # These are applied to the final select, so the per-bin totals (and therefore prevalence) stay
-    # over every lineage in the system. Use the `where` filter instead to narrow the denominator too.
+    # The lineage restriction is applied to the final select, so the per-bin totals (and therefore
+    # prevalence) stay over every lineage in the system. Use the `where` filter instead to narrow the
+    # denominator too. A trailing '*' on `lineage` selects it plus all its descendants, which are then
+    # summed into one row per bin and lineage system.
+    is_wildcard = lineage is not None and parse_lineage_name(lineage)[1]
     query_params = {}
-    lineage_conditions = []
-    if lineage is not None:
-        lineage_conditions.append(f'{ColumnNames.lineage_name} = :input_lineage')
-        query_params['input_lineage'] = lineage
-    if lineage_system_name is not None:
-        lineage_conditions.append(f'{ColumnNames.lineage_system_name} = :input_lineage_system_name')
-        query_params['input_lineage_system_name'] = lineage_system_name
-    lineage_clause = f'where {" and ".join(lineage_conditions)}' if lineage_conditions else ''
+    selected_lineages_cte = ''
+    lineage_clause = ''
+    if lineage is not None or lineage_system_name is not None:
+        lineage_ids_query, query_params = get_lineage_ids_query(lineage, lineage_system_name)
+        selected_lineages_cte = f'selected_lineages as ({lineage_ids_query}),'
+        lineage_clause = f'where {ColumnNames.lineage_id} in (select lineage_id from selected_lineages)'
 
     # Recency window: keep bins whose collection midpoint is no older than `days_before_today` days.
     # mid_collection_date is a column of the CTE, so this filters before the group-by.
@@ -333,7 +336,7 @@ async def get_lineage_counts_over_time(
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(
         date_bin,
-        [ColumnNames.lineage_name, ColumnNames.lineage_system_name]
+        [ColumnNames.lineage_id, ColumnNames.lineage_name, ColumnNames.lineage_system_name]
     )
     order_by_clause = get_order_by_cause(date_bin)
 
@@ -345,9 +348,37 @@ async def get_lineage_counts_over_time(
         case _:
             raise NotImplementedError
 
+    # Same column order either way, so the rows below are read positionally regardless.
+    if is_wildcard:
+        # total is identical on every row of a (bin, system) partition, so max() just carries it.
+        final_select = f'''
+        select
+            {bin_cols},
+            min({ColumnNames.lineage_name}) as {ColumnNames.lineage_name},
+            {ColumnNames.lineage_system_name},
+            sum(cnt)::bigint as cnt,
+            max(total) as total
+        from with_total
+        {lineage_clause}
+        group by {bin_cols}, {ColumnNames.lineage_system_name}
+        '''
+    else:
+        final_select = f'''
+        select
+            {bin_cols},
+            {ColumnNames.lineage_name},
+            {ColumnNames.lineage_system_name},
+            cnt,
+            total
+        from with_total
+        {lineage_clause}
+        '''
+
     query = f'''
-        with with_mid_date as (
+        with {selected_lineages_cte}
+        with_mid_date as (
             select
+                sl.{ColumnNames.lineage_id},
                 l.{ColumnNames.lineage_name},
                 ls.{ColumnNames.lineage_system_name},
                 {MID_COLLECTION_DATE_CALCULATION}
@@ -363,6 +394,7 @@ async def get_lineage_counts_over_time(
         binned as (
             select
                 {extract_clause},
+                {ColumnNames.lineage_id},
                 {ColumnNames.lineage_name},
                 {ColumnNames.lineage_system_name},
                 count(*) as cnt
@@ -373,20 +405,14 @@ async def get_lineage_counts_over_time(
         with_total as (
             select
                 {bin_cols},
+                {ColumnNames.lineage_id},
                 {ColumnNames.lineage_name},
                 {ColumnNames.lineage_system_name},
                 cnt,
                 sum(cnt) over (partition by {bin_cols}, {ColumnNames.lineage_system_name}) as total
             from binned
         )
-        select
-            {bin_cols},
-            {ColumnNames.lineage_name},
-            {ColumnNames.lineage_system_name},
-            cnt,
-            total
-        from with_total
-        {lineage_clause}
+        {final_select}
         {order_by_clause}, cnt desc
     '''
 
@@ -399,7 +425,7 @@ async def get_lineage_counts_over_time(
         total = r[5]
         info = LineageCountWithPrevalenceInfo(
             count=r[4],
-            lineage=r[2],
+            lineage=lineage if is_wildcard else r[2],
             lineage_system=r[3],
             total=total,
             prevalence=(r[4] / total) if total else 0.0, # todo: this should be removed

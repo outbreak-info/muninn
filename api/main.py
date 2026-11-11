@@ -415,12 +415,15 @@ async def get_sample_counts_for_lineage(
         required=False
     ),
 ):
-    return await DB.queries.samples.get_sample_counts_for_lineage(
-        group_by,
-        lineage_name,
-        lineage_system_name,
-        where
-    )
+    try:
+        return await DB.queries.samples.get_sample_counts_for_lineage(
+            group_by,
+            lineage_name,
+            lineage_system_name,
+            where
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 ############
 # VARIANTS #
@@ -900,7 +903,10 @@ async def get_lineage_counts_over_time(
     ),
     lineage: str | None = Query(
         None,
-        description='Optional: restrict to a single lineage (lineages.lineage_name); omit for all lineages'
+        description="Optional: restrict to a single lineage (lineages.lineage_name); omit for all lineages. "
+                    "A trailing '*' (e.g. XFG*) sums the lineage and all its descendants into one row per "
+                    "bin (and lineage system), and the response's lineage keeps the '*'. Pass "
+                    "lineage_system_name with a wildcard, since the name may exist in several systems."
         ),
     lineage_system_name: str | None = Query(
         None,
@@ -918,9 +924,12 @@ async def get_lineage_counts_over_time(
         description='Optional: only count samples whose collection midpoint is within this many days before today'
         ),
 ):
-    return await DB.queries.lineages.get_lineage_counts_over_time(
-        date_bin, days, where, max_span_days, days_before_today, lineage, lineage_system_name
-    )
+    try:
+        return await DB.queries.lineages.get_lineage_counts_over_time(
+            date_bin, days, where, max_span_days, days_before_today, lineage, lineage_system_name
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get(

@@ -6,6 +6,7 @@ from sqlalchemy import Result
 from DB.engine import get_async_session
 from DB.queries.date_count_helpers import get_extract_clause, get_group_by_clause, \
     get_date_column_names, get_order_by_cause, MID_COLLECTION_DATE_CALCULATION, YEAR, CHUNK
+from DB.queries.lineage_helpers import get_lineage_ids_query, parse_lineage_name
 from DB.textutils import text
 from api.models import LineageAbundanceWithSampleInfo, AverageLineageAbundanceInfo, SampleInfo
 from parser.parser import parser
@@ -73,46 +74,12 @@ async def get_averaged_lineage_abundances_by_location(
     if samples_where is not None:
         samples_where_clause = f'and ({parser.parse(samples_where)})'
 
-    # are we dealing with a wildcard query?
-    is_wildcard = lineage_name is not None and lineage_name.endswith('*')
+    # are we dealing with a wildcard query? ('XFG*' = XFG plus all of its descendants)
+    is_wildcard = lineage_name is not None and parse_lineage_name(lineage_name)[1]
 
-    # lineage name: get actual lineage from wildcard
-    if is_wildcard:
-        wildcard_lineage = lineage_name
-        lineage_name = lineage_name.rstrip('*')
-    else:
-        wildcard_lineage = None
-
-    # lineage where clause, made of two parts: lineage name and lineage system name.
-    # may contain either, both, or neither of those parts.
-    params: dict = {}
-    lineage_conditions = []
-    if lineage_name is not None:
-        lineage_conditions.append(f'{ColumnNames.lineage_name} = :{ColumnNames.lineage_name}')
-        params[ColumnNames.lineage_name] = lineage_name
-    if lineage_system_name is not None:
-        lineage_conditions.append(
-            f'{ColumnNames.lineage_system_name} = :{ColumnNames.lineage_system_name}'
-        )
-        params[ColumnNames.lineage_system_name] = lineage_system_name
-    lineage_where_clause = ''
-    if lineage_conditions:
-        lineage_where_clause = 'where ' + ' and '.join(lineage_conditions)
-
-    # union to select descendants for wildcard queries
-    if is_wildcard:
-        child_lineages_union_query = \
-            f'''
-            union
-            select ldc.child_id,
-                   ls.id as {ColumnNames.lineage_system_id}
-            from lineages_deep_children ldc
-            inner join lineages l on l.id = ldc.parent_id
-            inner join lineage_systems ls on ls.id = lineage_system_id
-            {lineage_where_clause}
-            '''
-    else:
-        child_lineages_union_query = ''
+    # lineages to report: the named lineage (and descendants, if wildcard), optionally restricted
+    # to one lineage system; every lineage when neither is given.
+    match_lineages_query, params = get_lineage_ids_query(lineage_name, lineage_system_name)
 
     # geo cols: always use census region, optionally use admin1_name as well.
     # this could be made significantly more flexible
@@ -186,12 +153,7 @@ async def get_averaged_lineage_abundances_by_location(
                 {group_by_clause}
             ),
             match_lineages as (
-                select l.id as lineage_id,
-                       l.{ColumnNames.lineage_system_id}
-                from lineages l
-                inner join lineage_systems ls on ls.id = l.lineage_system_id
-                {lineage_where_clause}
-                {child_lineages_union_query}
+                {match_lineages_query}
             ),
             lineage_prevalences as (
                 select {select_lineage_id}
@@ -231,7 +193,7 @@ async def get_averaged_lineage_abundances_by_location(
         week_end = date.fromisocalendar(year, week, 7)
 
         if is_wildcard:
-            out_lineage_name = wildcard_lineage
+            out_lineage_name = lineage_name
         else:
             out_lineage_name = r[ColumnNames.lineage_name]
 

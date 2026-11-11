@@ -1,6 +1,7 @@
 from typing import List, Dict
 
 from DB.queries.intrahost_helpers import get_alt_freq_where
+from DB.queries.lineage_helpers import get_lineage_ids_query
 from DB.textutils import text
 
 from DB.engine import get_async_session
@@ -233,24 +234,8 @@ async def get_sample_counts_for_lineage(
     if where is not None:
         user_where_clause = f'where {parser.parse(where)}'
 
-    include_descendants = lineage_name.endswith('*')
-    lineage_name = lineage_name.rstrip('*')
-
-    lineage_system_where = ''
-    if lineage_system_name is not None:
-        lineage_system_where = f'and ls.{ColumnNames.lineage_system_name} = :lineage_system_name'
-
-    descendants_union = ''
-    if include_descendants:
-        descendants_union = f'''
-                            union all
-                            select {ColumnNames.child_id} as lineage_id
-                            from {TableNames.lineages_deep_children} ldc
-                            inner join {TableNames.lineages} l on l.id = ldc.{ColumnNames.parent_id}
-                            inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
-                            where l.{ColumnNames.lineage_name} = :lineage_name
-                                  {lineage_system_where}
-                            '''
+    # the lineage, plus all of its descendants if the name ends in '*'
+    lineage_ids_query, lineage_ids_params = get_lineage_ids_query(lineage_name, lineage_system_name)
 
     query = f'''
             with matching_samples as (
@@ -267,12 +252,7 @@ async def get_sample_counts_for_lineage(
                 group by {simple_group_by_cols}
             ),
             lineage_and_descendants as (
-                select l.id as lineage_id
-                from {TableNames.lineages} l
-                inner join {TableNames.lineage_systems} ls on ls.id = l.{ColumnNames.lineage_system_id}
-                where l.{ColumnNames.lineage_name} = :lineage_name
-                      {lineage_system_where}
-                {descendants_union}
+                {lineage_ids_query}
             ),
             lineage_samples as (
                 select count(distinct sample_id) as n_lineage_samples,
@@ -296,13 +276,7 @@ async def get_sample_counts_for_lineage(
             '''
 
     async with get_async_session() as session:
-        res = await session.execute(
-            text(query),
-            {
-                'lineage_name': lineage_name,
-                'lineage_system_name': lineage_system_name
-            }
-        )
+        res = await session.execute(text(query), lineage_ids_params)
 
     out = []
     for r in res.mappings():

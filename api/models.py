@@ -160,6 +160,10 @@ class LineageCountInfo(BaseModel):
 
 
 class LineageCountWithPrevalenceInfo(LineageCountInfo):
+    lineage: str | None = Field(
+        description="Lineage name. When the request used a trailing '*' (e.g. XFG*), this is the requested "
+                    "name with the '*' kept, and count/prevalence cover the lineage plus all its descendants."
+    )
     total: int = Field(description="Total number of samples in this collection-date bin across all lineages (denominator; not affected by the `lineage` filter).")
     prevalence: float = Field(description="Fraction of this bin's samples assigned to this lineage (count / total)")
 
