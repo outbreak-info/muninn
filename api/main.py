@@ -157,6 +157,11 @@ MaxAltFreqParam = Annotated[float, Query(
     description='Optional upper bound on the intra-host alternate-allele frequency. For value v, this will '
                 'select bins [a, b) with b <= v.'
 )]
+GffFeatureParam = Annotated[str | None, Query(
+    description='Optional: return only this GFF feature (amino_acids.gff_feature, e.g. '
+                'YP_009724390.1_NC_045512.2 for SARS-CoV-2 spike); omit for one row per feature. List '
+                'valid values with GET /v1/mutations:gffFeatures. An unknown feature returns an empty list.'
+)]
 
 
 def filter_query(columns_help: str, *, required: bool = True, alias: str = 'filter') -> Query:
@@ -1108,6 +1113,7 @@ async def get_phenotype_metric_values_for_mutations_by_sample_and_collection_dat
         alias='lineages_filter'
     ),
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
+    gff_feature: GffFeatureParam = None,
 ):
     return await DB.queries.phenotype_metrics.get_pheno_value_for_mutations_by_sample_and_collection_date(
         date_bin,
@@ -1115,7 +1121,8 @@ async def get_phenotype_metric_values_for_mutations_by_sample_and_collection_dat
         days,
         max_span_days,
         where,
-        lineages_where
+        lineages_where,
+        gff_feature
     )
 
 
@@ -1139,7 +1146,8 @@ async def get_phenotype_metric_values_for_variants_by_sample_and_collection_date
         ),
     max_span_days: MaxSpanParam = DEFAULT_MAX_SPAN_DAYS,
     min_alt_freq: MinAltFreqParam = 0,
-    max_alt_freq: MaxAltFreqParam = 1
+    max_alt_freq: MaxAltFreqParam = 1,
+    gff_feature: GffFeatureParam = None,
 ):
     return await DB.queries.phenotype_metrics.get_pheno_value_for_variants_by_sample_and_collection_date(
         date_bin,
@@ -1148,7 +1156,8 @@ async def get_phenotype_metric_values_for_variants_by_sample_and_collection_date
         max_span_days,
         where,
         min_alt_freq,
-        max_alt_freq
+        max_alt_freq,
+        gff_feature
     )
 
 

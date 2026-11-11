@@ -374,11 +374,21 @@ async def get_pheno_value_for_mutations_by_sample_and_collection_date(
     days: int,
     max_span_days: int,
     samples_where: str | None,
-    lineages_where: str | None
+    lineages_where: str | None,
+    gff_feature: str | None = None
 ) -> List[Dict]:
     user_where_clause = ''
     if samples_where is not None:
         user_where_clause = f'and ({parser.parse(samples_where)})'
+
+    params = {
+        'pm_name': phenotype_metric_name,
+        'max_span_days': max_span_days,
+    }
+    gff_feature_clause = ''
+    if gff_feature is not None:
+        gff_feature_clause = f'and cache.{ColumnNames.gff_feature} = :gff_feature'
+        params['gff_feature'] = gff_feature
 
     lineages_join_and_where = ''
     if lineages_where is not None:
@@ -423,18 +433,13 @@ async def get_pheno_value_for_mutations_by_sample_and_collection_date(
         inner join {TableNames.cache_cns_pmv_sums} cache using (sample_id)
         inner join phenotype_metrics pm on pm.id = cache.phenotype_metric_id
         where pm.phenotype_metric_name = :pm_name
+              {gff_feature_clause}
         {group_by_clause}
         {order_by_clause};
         '''
     )
     async with get_async_session() as session:
-        res = await session.execute(
-            text(query),
-            {
-                'pm_name': phenotype_metric_name,
-                'max_span_days': max_span_days,
-            }
-        )
+        res = await session.execute(text(query), params)
         rows = res.mappings().all()
     out_data = []
     for r in rows:
@@ -462,11 +467,23 @@ async def get_pheno_value_for_variants_by_sample_and_collection_date(
     max_span_days: int,
     where: str | None,
     min_alt_freq: float,
-    max_alt_freq: float
+    max_alt_freq: float,
+    gff_feature: str | None = None
 ) -> List[Dict]:
     user_where_clause = ''
     if where is not None:
         user_where_clause = f'and ({parser.parse(where)})'
+
+    # Restrict to one feature as early as possible: everything downstream (bitmap union and
+    # intersection per change, per-sample sums) starts from `scored`.
+    gff_feature_join = ''
+    gff_feature_params = {}
+    if gff_feature is not None:
+        gff_feature_join = (
+            f'inner join {TableNames.amino_acids} aa_f on aa_f.id = pmv.{ColumnNames.amino_acid_id} '
+            f'and aa_f.{ColumnNames.gff_feature} = :gff_feature'
+        )
+        gff_feature_params['gff_feature'] = gff_feature
 
     extract_clause = get_extract_clause(COLLECTION_DATE, date_bin, days)
     group_by_clause = get_group_by_clause(date_bin, extra_cols=[ColumnNames.gff_feature])
@@ -525,6 +542,7 @@ async def get_pheno_value_for_variants_by_sample_and_collection_date(
                   select pmv.{ColumnNames.amino_acid_id} as aa_id, pmv.value as value
                   from {TableNames.phenotype_metric_values} pmv
                   inner join {TableNames.phenotype_metrics} pm on pm.id = pmv.{ColumnNames.phenotype_metric_id}
+                  {gff_feature_join}
                   where pm.{ColumnNames.phenotype_metric_name} = :pm_name
               ),
               {per_sample_cte}
@@ -554,7 +572,7 @@ async def get_pheno_value_for_variants_by_sample_and_collection_date(
             {
                 'pm_name': phenotype_metric_name,
                 'max_span_days': max_span_days
-            } | alt_freq_params
+            } | alt_freq_params | gff_feature_params
         )
         rows = res.mappings().all()
     out_data = []
